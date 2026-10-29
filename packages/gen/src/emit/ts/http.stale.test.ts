@@ -160,9 +160,10 @@ describe("stale marks cleared and kept apart", () => {
 				: Response.json({}),
 		)
 		const { sdk, seen } = await staleSdk(fetch)
-		const patched = await sdk.users.update({ json: {}, params: { id: "1" } })
+		const patched = await sdk.safe.users.update({ json: {}, params: { id: "1" } })
 		await sdk.users.get({ params: { id: "1" } })
-		expect([patched.status, patched.data, Boolean(patched.error), getsStale(seen)]).toEqual([200, null, true, [true]])
+		const outcome = [patched.response.status, patched.ok, patched.error?.name, getsStale(seen)]
+		expect(outcome).toEqual([200, false, "DecodeError", [true]])
 	})
 
 	// v0: 80774fb17b

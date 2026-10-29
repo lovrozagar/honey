@@ -2,10 +2,12 @@ import { describe, expect, it, vi } from "vitest"
 import { emittedApp, emittedSdk, recordingFetch } from "./__fixtures__/emitted.ts"
 
 type Json = Record<string, unknown>
-/** What a safe-mode call resolves to. */
-type Result = { data: unknown; error: unknown; response: Response; status: number }
-type Call = (path: string, input?: Json) => Promise<Result>
-type Api = Record<"delete" | "get" | "patch" | "post" | "put", Call>
+/** What a safe call resolves to: its Ok arm, as these cases read it. */
+type Result = { data: unknown; ok: boolean; response: Response }
+type Call = (path: string, input?: Json) => Promise<unknown>
+type Api = Record<"delete" | "get" | "patch" | "post" | "put", Call> & {
+	safe: Record<"get", (path: string, input?: Json) => Promise<Result>>
+}
 /** The slice of the onRequest context these cases touch. */
 type RequestCtx = { headers: Headers }
 
@@ -31,7 +33,7 @@ async function usersSdk(
 		TestSDK: new (config: Json) => { users: { list: (input?: Json) => Promise<unknown> } }
 	}
 	const { calls, fetch } = recordingFetch(() => Response.json([{ id: "u1" }]))
-	return { calls, sdk: new TestSDK({ baseURL: "https://api.test.com", fetch, throwOnError: true, ...config }) }
+	return { calls, sdk: new TestSDK({ baseURL: "https://api.test.com", fetch, ...config }) }
 }
 
 /** Header `name` of each recorded request. */
@@ -42,7 +44,7 @@ function sent(calls: Request[], name: string): Array<string | null> {
 describe("config headers: a record, or a function of the request resolved per call", () => {
 	// v0: b98c67a478
 	it("sends a static headers record", async () => {
-		const { api, calls } = await appClient({ headers: { "x-static": "value" }, throwOnError: true })
+		const { api, calls } = await appClient({ headers: { "x-static": "value" } })
 		await api.get("/test")
 		expect(sent(calls, "x-static")).toEqual(["value"])
 	})
@@ -51,7 +53,6 @@ describe("config headers: a record, or a function of the request resolved per ca
 	it("sends what a sync headers function returns", async () => {
 		const { api, calls } = await appClient({
 			headers: () => ({ authorization: "Bearer sync-token" }),
-			throwOnError: true,
 		})
 		await api.get("/test")
 		expect(sent(calls, "authorization")).toEqual(["Bearer sync-token"])
@@ -61,23 +62,22 @@ describe("config headers: a record, or a function of the request resolved per ca
 	it("awaits an async headers function", async () => {
 		const { api, calls } = await appClient({
 			headers: async () => ({ authorization: "Bearer async-token" }),
-			throwOnError: true,
 		})
 		await api.get("/test")
 		expect(sent(calls, "authorization")).toEqual(["Bearer async-token"])
 	})
 
 	// v0: 8281b99eda
-	it("resolves async headers in safe mode too", async () => {
+	it("resolves async headers for the safe twin too", async () => {
 		const { api, calls } = await appClient({ headers: async () => ({ "x-async": "tuple" }) })
-		const result = await api.get("/test")
-		expect([result.data, sent(calls, "x-async")]).toEqual([{ ok: true }, ["tuple"]])
+		const result = await api.safe.get("/test")
+		expect([result.ok, result.data, sent(calls, "x-async")]).toEqual([true, { ok: true }, ["tuple"]])
 	})
 
 	// v0: c0834178c7
 	it("passes the function the method and the path template", async () => {
 		const headers = vi.fn(() => ({}))
-		const { api } = await appClient({ headers, throwOnError: true })
+		const { api } = await appClient({ headers })
 		await api.post("/users/:id", { params: { id: "42" } })
 		expect(headers.mock.calls).toEqual([[{ method: "POST", path: "/users/:id" }]])
 	})
@@ -88,7 +88,7 @@ describe("config headers: resolved per call, and what overrides them", () => {
 	// v0: fdc5eda3b8
 	it("calls the function on every request, never caching its answer", async () => {
 		let count = 0
-		const { api, calls } = await appClient({ headers: () => ({ "x-count": String(++count) }), throwOnError: true })
+		const { api, calls } = await appClient({ headers: () => ({ "x-count": String(++count) }) })
 		await api.get("/a")
 		await api.get("/b")
 		expect(sent(calls, "x-count")).toEqual(["1", "2"])
@@ -99,7 +99,6 @@ describe("config headers: resolved per call, and what overrides them", () => {
 	it("lets the function choose headers by path, such as no auth on public routes", async () => {
 		const { api, calls } = await appClient({
 			headers: ({ path }: { path: string }) => (path.startsWith("/public") ? {} : { authorization: "Bearer secret" }),
-			throwOnError: true,
 		})
 		await api.get("/public/health")
 		await api.get("/users")
@@ -110,7 +109,6 @@ describe("config headers: resolved per call, and what overrides them", () => {
 	it("lets per-call headers override the function's headers, keeping the rest", async () => {
 		const { api, calls } = await appClient({
 			headers: () => ({ authorization: "Bearer dynamic", "x-from": "dynamic" }),
-			throwOnError: true,
 		})
 		await api.get("/test", { headers: { authorization: "Bearer override" } })
 		expect([sent(calls, "authorization"), sent(calls, "x-from")]).toEqual([["Bearer override"], ["dynamic"]])
@@ -121,7 +119,6 @@ describe("config headers: resolved per call, and what overrides them", () => {
 	it("lets onRequest override a per-call header", async () => {
 		const { api, calls } = await appClient({
 			onRequest: [(ctx: RequestCtx) => void ctx.headers.set("x-request-id", "hook-wins")],
-			throwOnError: true,
 		})
 		await api.get("/test", { headers: { "x-request-id": "from-call" } })
 		expect(sent(calls, "x-request-id")).toEqual(["hook-wins"])
@@ -145,7 +142,7 @@ describe("x-request-id: an auto correlation id that config, calls and hooks may 
 				ctx.headers.set("x-request-id", "from-hook")
 			},
 		]
-		const { api, calls } = await appClient({ onRequest, throwOnError: true })
+		const { api, calls } = await appClient({ onRequest })
 		await api.get("/test")
 		expect([UUID_V4.test(seen[0] ?? ""), sent(calls, "x-request-id")]).toEqual([true, ["from-hook"]])
 	})

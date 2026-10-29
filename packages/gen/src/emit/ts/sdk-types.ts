@@ -20,6 +20,10 @@ const RESERVED = [
 	"Blob",
 	"ErrorEnvelope",
 	"ErrorField",
+	"HoneyArgs",
+	"HoneyCall",
+	"HoneySafe",
+	"HoneyStream",
 	"HttpOptions",
 	"Omit",
 	"Promise",
@@ -29,8 +33,8 @@ const RESERVED = [
 	"Record",
 	"ResumableConnection",
 	"Response",
+	"Result",
 	"SDKConfig",
-	"SDKResult",
 	"SSEEvent",
 	"SseOptions",
 	"TypedWebSocket",
@@ -63,19 +67,38 @@ export type ErrorEnvelope<TStatus extends number, TKey extends string> = {
 	success: false
 }
 
-/**
- * A safe-mode result. With declared errors, the failure branch is keyed by exactly their statuses,
- * so \`if (error)\` / \`if (!error)\` narrow; with declared headers, the success branch carries them.
- */
-export type SDKResult<T, TErrorsByStatus = never, THeaders = never> =
-	| ([THeaders] extends [never]
-			? { data: T; error: null; response: Response; status: number }
-			: { data: T; error: null; headers: THeaders; response: Response; status: number })
-	| ([TErrorsByStatus] extends [never]
-			? { data: null; error: unknown; response: Response; status: number }
-			: {
-					[S in keyof TErrorsByStatus & number]: { data: null; error: TErrorsByStatus[S]; response: Response; status: S }
-				}[keyof TErrorsByStatus & number])
+/* a call's declared errors and headers, which only its safe twin reads: a type, never a value */
+declare const answer: unique symbol
+
+/** A call's input: optional when none of its fields is required. */
+type HoneyArgs<I, O> = {} extends I ? [input?: I & O] : [input: I & O]
+
+/** A REST operation: its raw overload and its value, an error status thrown; its declared errors and headers. */
+type HoneyCall<I, D, E = never, H = never> = {
+	(input: I & HttpOptions & { raw: true }): Promise<Response>
+	(...input: HoneyArgs<I, HttpOptions & { raw?: false }>): Promise<D>
+	readonly [answer]?: [E, H]
+}
+
+/** An event stream, sent when its iteration starts; its opening answer's declared errors. */
+type HoneyStream<I, V, E = never> = {
+	(...input: HoneyArgs<I, SseOptions>): AsyncIterable<V>
+	readonly [answer]?: [E, never]
+}
+
+/** \`client.safe\`: every REST and stream call answering a Result, never throwing an API answer; a connection as is. */
+export type HoneySafe<T> = {
+	[K in keyof T]: T[K] extends (...input: never[]) => ResumableConnection<infer _> | TypedWebSocket
+		? T[K]
+		: T[K] extends HoneyCall<infer I, infer D, infer E, infer H>
+			? {
+					(input: I & HttpOptions & { raw: true }): Promise<Result<Response, E>>
+					(...input: HoneyArgs<I, HttpOptions & { raw?: false }>): Promise<Result<D, E, H>>
+				}
+			: T[K] extends HoneyStream<infer I, infer V, infer E>
+				? (...input: HoneyArgs<I, SseOptions>) => Promise<Result<AsyncIterable<V>, E>>
+				: HoneySafe<T[K]>
+}
 `
 
 /** One field of an input object: required or not, by whether any of its members is. */
@@ -167,8 +190,8 @@ function headersOf(op: SdkOp): string | null {
 	return objectText(fields.map(([name, required]) => `${quoteKey(name)}${required ? "" : "?"}: string`))
 }
 
-/** The method signatures of `op` named `name`: a raw overload before the parsed one for an HTTP call. */
-function signatures(name: string, op: SdkOp, ctx: Context): string[] {
+/** `op`'s member line `name`: a REST call a HoneyCall, a stream a HoneyStream, defaults dropped; a connection its method. */
+function signature(name: string, op: SdkOp, ctx: Context): string {
 	const input = inputOf(op, ctx.types)
 	const arg = (extra: string) => {
 		const type = input.type === "{}" ? extra : `${input.type} & ${extra}`
@@ -179,26 +202,18 @@ function signatures(name: string, op: SdkOp, ctx: Context): string[] {
 	const { realtime, sse, websocket } = op.ir.extensions
 	if (realtime) {
 		const events = sseEventSchema(op.ir, ctx.resolve)
-		return [
-			`${key}(${arg("RealtimeCallOptions")}): ResumableConnection<${events ? irToTs(events, ctx.types) : "unknown"}>`,
-		]
+		return `${key}(${arg("RealtimeCallOptions")}): ResumableConnection<${events ? irToTs(events, ctx.types) : "unknown"}>`
 	}
-	if (websocket) return [`${key}(${arg("WsOptions")}): TypedWebSocket`]
+	if (websocket) return `${key}(${arg("WsOptions")}): TypedWebSocket`
+	const errors = errorsOf(op, ctx.types, ctx.resolve)
 	if (sse) {
 		const events = sseEventSchema(op.ir, ctx.resolve)
 		const event = events === undefined ? "SSEEvent" : `SSEEvent<${irToTs(events, ctx.types)}>`
-		return [`${key}(${arg("SseOptions")}): AsyncIterable<${event}>`]
+		return `${key}: HoneyStream<${[input.type, event, ...(errors === null ? [] : [errors])].join(", ")}>`
 	}
-	const data = dataOf(op, ctx.types)
-	const errors = errorsOf(op, ctx.types, ctx.resolve)
 	const headers = headersOf(op)
-	const args = headers === null ? [data, ...(errors === null ? [] : [errors])] : [data, errors ?? "never", headers]
-	const result = `SDKResult<${args.join(", ")}>`
-	const raw = `input: ${input.type === "{}" ? "" : `${input.type} & `}HttpOptions & { raw: true }`
-	return [
-		`${key}(${raw}): Promise<Response>`,
-		`${key}(${arg("HttpOptions & { raw?: false }")}): TThrow extends true ? Promise<${data}> : Promise<${result}>`,
-	]
+	const tail = headers === null ? (errors === null ? [] : [errors]) : [errors ?? "never", headers]
+	return `${key}: HoneyCall<${[input.type, dataOf(op, ctx.types), ...tail].join(", ")}>`
 }
 
 type Context = { ops: Map<string, SdkOp>; resolve: (schema: IRSchema) => IRSchema; types: TypeOptions }
@@ -229,7 +244,7 @@ function members(ns: IRNamespace, ctx: Context, indent: string): string[] {
 	return [...ns.entries].flatMap(([name, entry]) => {
 		if (entry.kind === "method") {
 			const op = ctx.ops.get(entry.op.id) as SdkOp
-			return [...opDoc(op, indent), ...signatures(name, op, ctx).map((line) => `${indent}${line}`)]
+			return [...opDoc(op, indent), `${indent}${signature(name, op, ctx)}`]
 		}
 		return [`${indent}${quoteKey(name)}: {`, ...members(entry.ns, ctx, `${indent}\t`), `${indent}}`]
 	})
@@ -250,31 +265,34 @@ export function componentNames(ir: IR, reserved: readonly string[]): (schema: st
 
 /** The config type: `baseURL` optional when the document declares a server, the first one being its default. */
 function configText(name: string, server: string | undefined): string {
-	const head = `export type ${name}Config<TThrow extends boolean = false> =`
-	if (server === undefined) return `${head} Omit<SDKConfig, "throwOnError"> & { throwOnError?: TThrow }`
-	return `${head} Omit<SDKConfig, "baseURL" | "throwOnError"> & {
+	const head = `export type ${name}Config =`
+	if (server === undefined) return `${head} SDKConfig`
+	return `${head} Omit<SDKConfig, "baseURL"> & {
 	/** Default: the document's first server, ${blockCommentText(server)} */
 	baseURL?: string
-	throwOnError?: TThrow
 }`
 }
 
 /** The `${stem}.types.gen.ts` text of `ir` for the SDK `name`, importing the runtime module `runtime`. */
 export function sdkTypesText(ir: IR, name: string, runtime: string): string {
 	const model = sdkModel(ir)
-	const types: TypeOptions = { refName: componentNames(ir, [...RESERVED, name, `${name}Config`, `${name}Operations`]) }
+	const own = [name, `${name}Config`, `${name}Operations`, `${name}Safe`]
+	const types: TypeOptions = { refName: componentNames(ir, [...RESERVED, ...own]) }
 	const ctx: Context = { ops: model.opsById, resolve: model.resolve, types }
 	const schemas = model.schemaNames.map(
 		(schema) => `export type ${types.refName?.(schema)} = ${irToTs(ir.schemas[schema] as IRSchema, types)}`,
 	)
-	return `import type { RealtimeOptions, ResumableConnection, SDKConfig, SSEEvent, TypedWebSocket } from "./${runtime}"
+	return `import type { RealtimeOptions, Result, ResumableConnection, SDKConfig, SSEEvent, TypedWebSocket } from "./${runtime}"
 
 ${schemas.length === 0 ? "" : `${schemas.join("\n")}\n\n`}${SHARED}
 ${configText(name, ir.servers[0])}
 
 /** Every operation of the SDK, by its member path. */
-export interface ${name}Operations<TThrow extends boolean = false> {
+export interface ${name}Operations {
 ${members(memberTree(ir.tree), ctx, "\t").join("\n")}
 }
+
+/** \`client.safe\`: every operation, a call answering a Result. */
+export type ${name}Safe = HoneySafe<${name}Operations>
 `
 }

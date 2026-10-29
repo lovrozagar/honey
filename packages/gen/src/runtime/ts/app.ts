@@ -3,6 +3,7 @@ import type { ClientConfig } from "./config.ts"
 import { isClientError } from "./error.ts"
 import { HTTPClient } from "./http.ts"
 import type { RequestOptions } from "./request.ts"
+import { resultOf } from "./response.ts"
 import type { SSEEvent } from "./sse.ts"
 import { createTypedWebSocket, type TypedWebSocket } from "./ws.ts"
 
@@ -23,20 +24,17 @@ function isAsyncIterable(value: unknown): value is AsyncIterable<SSEEvent> {
 /**
  * One call, one request, consumed either way:
  * - `await api.get(...)` sends it; an event-stream response resolves to an
- *   `AsyncIterable<SSEEvent>` (never buffered), anything else to the parsed body or result.
+ *   `AsyncIterable<SSEEvent>` (never buffered), anything else to the parsed body.
  * - `for await (... of api.get(...))` before the call has started sends it as a stream request
  *   (`accept: text/event-stream`, no timeout).
  * - iterating after awaiting reuses the same response instead of sending again.
  */
-function lazyCall(
-	http: HTTPClient,
-	call: { method: string; opts: RequestOptions; path: string; shouldThrow: boolean },
-) {
-	const { method, opts, path, shouldThrow } = call
+function lazyCall(http: HTTPClient, call: { method: string; opts: RequestOptions; path: string }) {
+	const { method, opts, path } = call
 	let mode: "auto" | "idle" | "sse" = "idle"
 	let auto: Promise<unknown> | undefined
 	const runAuto = (): Promise<unknown> => {
-		auto ??= http.requestAuto(method, path, opts, shouldThrow)
+		auto ??= http.requestAuto(method, path, opts).then((answer) => answer.data)
 		return auto
 	}
 	const lazy = new Promise((resolve, reject) => {
@@ -53,14 +51,9 @@ function lazyCall(
 				return http.requestStream(method, path, opts)[Symbol.asyncIterator]()
 			}
 			return (async function* () {
-				const result = await runAuto()
-				if (isAsyncIterable(result)) {
-					yield* result
-					return
-				}
-				const error = (result as { error?: unknown } | null)?.error
-				if (error) throw error instanceof Error ? error : new Error("Request failed")
-				throw new TypeError(`${method} ${path} did not respond with an event stream`)
+				const data = await runAuto()
+				if (!isAsyncIterable(data)) throw new TypeError(`${method} ${path} did not respond with an event stream`)
+				yield* data
 			})()
 		},
 	})
@@ -81,27 +74,30 @@ function helper(http: HTTPClient, prop: string): unknown {
 	}
 }
 
-export function createClient<T>(config: ClientConfig & { throwOnError: true }): HoneyClient<InferRoutes<T>, true>
-export function createClient<T>(
-	config: Omit<ClientConfig, "throwOnError"> & { throwOnError?: false },
-): HoneyClient<InferRoutes<T>, false>
-export function createClient<T, TThrow extends boolean>(
-	config: ClientConfig & { throwOnError?: TThrow },
-): HoneyClient<InferRoutes<T>, TThrow>
-export function createClient<T, TThrow extends boolean = false>(
-	config: ClientConfig & { throwOnError?: TThrow },
-): HoneyClient<InferRoutes<T>, TThrow> {
+/** `client.safe`: each method's call answering a Result, an event stream's opened before it resolves. */
+function safeMethods(http: HTTPClient): object {
+	return Object.fromEntries(
+		HTTP_METHODS.map((method) => [
+			method,
+			(path: string, input?: RequestOptions) => resultOf(http.requestAuto(method.toUpperCase(), path, input ?? {})),
+		]),
+	)
+}
+
+/** The app-typed client: each call throws an error status, and `client.safe`'s calls answer it as a Result. */
+export function createClient<T>(config: ClientConfig): HoneyClient<InferRoutes<T>> {
 	const http = new HTTPClient(config)
-	return new Proxy({} as HoneyClient<InferRoutes<T>, TThrow>, {
+	const safe = safeMethods(http)
+	return new Proxy({} as HoneyClient<InferRoutes<T>>, {
 		get(_target, prop: string | symbol) {
 			/* not a thenable, and printable: `await client` and `String(client)` must not hit the method table */
 			if (prop === Symbol.toStringTag) return "HoneyClient"
 			if (typeof prop === "symbol" || prop === "then") return undefined
 			if (prop === "toString" || prop === "toJSON") return () => "[object HoneyClient]"
+			if (prop === "safe") return safe
 			if (!HTTP_METHODS.includes(prop)) return helper(http, prop)
-			const shouldThrow = config.throwOnError === true
 			return (path: string, input?: RequestOptions) =>
-				lazyCall(http, { method: prop.toUpperCase(), opts: input ?? {}, path, shouldThrow })
+				lazyCall(http, { method: prop.toUpperCase(), opts: input ?? {}, path })
 		},
 	})
 }

@@ -1,5 +1,5 @@
 /**
- * A tool's result (bit 18 phase d, D1), from the TS SDK's safe-mode answer: JSON as text, and as structuredContent
+ * A tool's result (bit 18 phase d, D1), from the TS SDK's safe answer: JSON as text, and as structuredContent
  * when the tool has an outputSchema; text as text; bytes as image, audio or an embedded resource. A failure is
  * `isError`: an answer outside 2xx or a body the SDK refused (past 1 MiB) its status and error, no answer
  * `transport` or `timeout`. Text is cut past 100,000 characters, a note saying so.
@@ -13,14 +13,8 @@ export const TEXT_MAX = 100_000
 /** The most bytes a result or a body argument holds. */
 export const BYTES_MAX = 1 << 20
 
-/** The TS SDK's safe-mode answer to a call. */
-export type Answer = {
-	readonly data: unknown
-	readonly error: unknown
-	readonly status: number
-	readonly response?: Response
-	readonly headers?: Readonly<Record<string, string>>
-}
+/** The TS SDK's safe answer to a call: its Result. */
+export type Answer = { ok: boolean; data?: unknown; error?: unknown; response: Response; headers?: object }
 
 /** A result of one text block, cut at TEXT_MAX. */
 export const text = (value: string, isError?: true): ToolResult => ({
@@ -63,8 +57,7 @@ export function successOf(
 	scrub: Scrub,
 ): ToolResult {
 	const data = answer.data instanceof Uint8Array ? answer.data : scrub(answer.data)
-	if (data instanceof Uint8Array)
-		return bytesResult(data, answer.response?.headers.get("content-type") ?? "", tool.name)
+	if (data instanceof Uint8Array) return bytesResult(data, answer.response.headers.get("content-type") ?? "", tool.name)
 	if (tool.outputSchema === undefined) return typeof data === "string" ? text(data) : json(data)
 	const value = tool.wrap ? { result: data, ...(answer.headers ? { headers: scrub(answer.headers) } : {}) } : data
 	if (typeof value !== "object" || value === null || Array.isArray(value))
@@ -73,7 +66,7 @@ export function successOf(
 }
 
 /** The result of an `answer` outside 2xx: its status, with honey's error envelope its key and message, else its body. */
-export function failureOf({ error, status }: Answer, scrub: Scrub): ToolResult {
+export function failureOf({ error, status }: { error: unknown; status: number }, scrub: Scrub): ToolResult {
 	if (error instanceof Error)
 		return json(scrub({ status, message: error.message, body: (error as { body?: unknown }).body }), true)
 	const { error_key, message } = (error ?? {}) as { error_key?: unknown; message?: unknown }

@@ -3,9 +3,10 @@ import { beforeAll, describe, expect, it } from "vitest"
 import { emittedApp, emittedSdk, recordingFetch } from "./__fixtures__/emitted.ts"
 
 type Json = Record<string, unknown>
-type Result = { data: unknown; error: unknown; headers: Json; status: number }
+type Result = { ok: boolean; data?: unknown; headers?: Json; response: Response }
 type Call = (input?: Json) => Promise<unknown>
-type Sdk = { files: { binary: Call; pdf: Call }; reports: { get: Call } }
+type Ops = { files: { binary: Call; pdf: Call }; reports: { get: Call } }
+type Sdk = Ops & { safe: Ops }
 
 const bytesOf = (type: string) => ({
 	200: { content: { [type]: { schema: { format: "binary", type: "string" } } }, description: "" },
@@ -48,9 +49,9 @@ describe("binary responses (A1)", () => {
 	it("resolves an octet-stream or pdf body to its bytes as a Uint8Array", async () => {
 		const { client: binary } = await sdk(() => bytes("application/octet-stream"))
 		const { client: pdf } = await sdk(() => bytes("application/pdf", new Uint8Array([37, 80, 68, 70])))
-		const results = [(await binary.files.binary()) as Result, (await pdf.files.pdf()) as Result]
-		expect(results.map(({ data }) => data instanceof Uint8Array)).toEqual([true, true])
-		expect(results.map(({ data }) => [...(data as Uint8Array)])).toEqual([
+		const results = [await binary.files.binary(), await pdf.files.pdf()]
+		expect(results.map((data) => data instanceof Uint8Array)).toEqual([true, true])
+		expect(results.map((data) => [...(data as Uint8Array)])).toEqual([
 			[1, 2, 3],
 			[37, 80, 68, 70],
 		])
@@ -83,12 +84,12 @@ describe("binary responses (A1)", () => {
 })
 
 describe("typed response headers (A2)", () => {
-	it("exposes the declared response headers on the result, and only those", async () => {
+	it("exposes the declared response headers on the safe call's Ok, and only those", async () => {
 		const { client } = await sdk(() =>
 			Response.json({}, { headers: { "X-Rate-Limit-Remaining": "9", "x-internal": "secret", "x-request-id": "r" } }),
 		)
-		const result = (await client.reports.get()) as Result
-		expect(result.headers).toEqual({ "x-rate-limit-remaining": "9" })
+		const result = (await client.safe.reports.get()) as Result
+		expect([result.ok, result.headers]).toEqual([true, { "x-rate-limit-remaining": "9" }])
 	})
 })
 
@@ -99,22 +100,23 @@ const CHECKS = {
 		type IsAny<T> = 0 extends 1 & T ? true : false
 		type IsBytes<T> = IsAny<T> extends true ? false : [T] extends [Uint8Array] ? ([Uint8Array<ArrayBuffer>] extends [T] ? true : false) : false
 		type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false
-		type Data<R> = Extract<R, { error: null }> extends { data: infer D } ? D : never
+		type Data<R> = Extract<R, { ok: true }> extends { data: infer D } ? D : never
 		export async function check(): Promise<void> {
-			const safe = new TestSDK({ baseURL: "https://x" })
-			const thrower = new TestSDK({ baseURL: "https://x", throwOnError: true })
-			const binary = await safe.files.binary()
-			const pdf = await safe.files.pdf()
-			const thrownBinary = await thrower.files.binary()
-			const thrownPdf = await thrower.files.pdf()
-			const raw = await safe.files.binary({ raw: true })
+			const client = new TestSDK({ baseURL: "https://x" })
+			const binary = await client.safe.files.binary()
+			const pdf = await client.safe.files.pdf()
+			const thrownBinary = await client.files.binary()
+			const thrownPdf = await client.files.pdf()
+			const raw = await client.files.binary({ raw: true })
+			const safeRaw = await client.safe.files.binary({ raw: true })
 			const checks: [
 				IsBytes<Data<typeof binary>>,
 				IsBytes<Data<typeof pdf>>,
 				IsBytes<typeof thrownBinary>,
 				IsBytes<typeof thrownPdf>,
 				Equal<typeof raw, Response>,
-			] = [true, true, true, true, true]
+				Equal<Data<typeof safeRaw>, Response>,
+			] = [true, true, true, true, true, true]
 			void checks
 		}
 	`,
@@ -122,8 +124,8 @@ const CHECKS = {
 		import { TestSDK } from "./test-sdk.index.gen.ts"
 		type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false
 		export async function check(): Promise<void> {
-			const result = await new TestSDK({ baseURL: "https://x" }).reports.get()
-			const ok = result as Extract<typeof result, { error: null }>
+			const result = await new TestSDK({ baseURL: "https://x" }).safe.reports.get()
+			const ok = result as Extract<typeof result, { ok: true }>
 			const checks: [
 				Equal<keyof typeof ok.headers, "x-next-cursor" | "x-rate-limit-remaining">,
 				Equal<(typeof ok.headers)["x-rate-limit-remaining"], string>,
@@ -171,7 +173,7 @@ describe("SDK types: binary data and declared headers", () => {
 	// v0: 53b55c0c13
 	// v0: 1c77d518b8
 	// v0: 0e8ef19fc9
-	it("types an octet-stream or unknown-media (pdf) response as Uint8Array in safe and throw mode, and raw as Response", () => {
+	it("types an octet-stream or unknown-media (pdf) response as Uint8Array in the normal and safe calls, and raw as Response", () => {
 		expect(errors["bytes.check.ts"]).toEqual([])
 	})
 

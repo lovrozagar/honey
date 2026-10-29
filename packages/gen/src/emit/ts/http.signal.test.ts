@@ -64,7 +64,7 @@ describe("config timeout", () => {
 	// v0: 0133924867
 	it("lets a response within it resolve normally", async () => {
 		const { fetch } = recordingFetch(() => Response.json({ id: "u1" }))
-		expect(await (await sdkFor({ fetch, throwOnError: true, timeout: 5_000 })).items.list({})).toEqual({ id: "u1" })
+		expect(await (await sdkFor({ fetch, timeout: 5_000 })).items.list({})).toEqual({ id: "u1" })
 	})
 
 	// v0: 14270e4b01
@@ -153,7 +153,7 @@ describe("app front: signal and timeout", () => {
 	// v0: 336da90474
 	it("a call with a user signal under a config timeout resolves normally", async () => {
 		const { fetch } = recordingFetch(() => Response.json("ok"))
-		const api = await appFor({ fetch, throwOnError: true, timeout: 5_000 })
+		const api = await appFor({ fetch, timeout: 5_000 })
 		expect(await api.get("/health", { signal: new AbortController().signal })).toBe("ok")
 	})
 
@@ -166,8 +166,10 @@ describe("app front: signal and timeout", () => {
 	})
 
 	// v0: a664ad2b87
-	it("a timeout rejects even in result mode", async () => {
+	it("a timeout rejects from the safe twin too", async () => {
 		const { fetch } = hangingFetch()
-		await expect((await appFor({ fetch, timeout: 20 })).get("/slow")).rejects.toThrow()
+		await expect((await appFor({ fetch, timeout: 20 })).safe.get("/slow")).rejects.toMatchObject({
+			name: "TimeoutError",
+		})
 	})
 })

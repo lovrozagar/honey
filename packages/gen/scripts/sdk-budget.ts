@@ -9,24 +9,18 @@ import { join } from "node:path"
 import { compareCodeUnits } from "../src/emit/shared/lang.ts"
 
 /**
- * Each operation's signature lines in a v1 emitted `${stem}.types.gen.ts`: its raw overload and the
- * call itself, what a reader of the SDK takes in to call it once. Keyed by member name, a repeat
- * (`items.get`, `users.get`) numbered in order.
+ * Each operation's member line in a v1 emitted `${stem}.types.gen.ts`, what a reader of the SDK takes in to call it
+ * once: a REST call's `HoneyCall<…>` or a stream's `HoneyStream<…>`, which types its raw overload, its value and its
+ * safe twin's Result alike (bit 21 i1, R-i5: both styles' signatures in one line, the twin a mapped type with no
+ * per-operation text), or a connection's method. Keyed by member name, a repeat (`items.get`, `users.get`) numbered
+ * in order.
  */
 export function v1SdkSurfaces(typesSource: string): Map<string, string> {
 	const out = new Map<string, string>()
-	let raw: string | null = null
-	for (const match of typesSource.matchAll(/^\t+("[^"]+"|[\w$]+)\(input\??: .*$/gm)) {
-		const line = match[0].trim()
-		/* the raw overload comes first and belongs to the call on the next line */
-		if (line.includes("& { raw: true }): Promise<Response>")) {
-			raw = line
-			continue
-		}
+	for (const match of typesSource.matchAll(/^\t+("[^"]+"|[\w$]+)(?:: Honey(?:Call|Stream)<|\(input\??: ).*$/gm)) {
 		let key = match[1] as string
 		for (let n = 2; out.has(key); n++) key = `${match[1]}#${n}`
-		out.set(key, raw === null ? line : `${raw}\n${line}`)
-		raw = null
+		out.set(key, match[0].trim())
 	}
 	return out
 }

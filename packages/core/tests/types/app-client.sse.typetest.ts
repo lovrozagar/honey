@@ -6,7 +6,8 @@
 import { describe, expectTypeOf, it } from "vitest"
 import * as z from "zod"
 import type { createClient } from "../../../gen/src/runtime/ts/app.ts"
-import type { IsSSE, ReturnFor } from "../../../gen/src/runtime/ts/app-types.ts"
+import type { IsSSE, ReturnFor, SafeReturnFor } from "../../../gen/src/runtime/ts/app-types.ts"
+import type { Result } from "../../../gen/src/runtime/ts/response.ts"
 import type { SSEEvent } from "../../../gen/src/runtime/ts/sse.ts"
 import { honey } from "../../src/routing/app.ts"
 import type { InferRoutes } from "../../src/routing/app-types.ts"
@@ -26,7 +27,6 @@ const app = honey<{}>()
 type Routes = InferRoutes<typeof app>
 
 declare const api: ReturnType<typeof createClient<typeof app>>
-declare const thrower: ReturnType<typeof createClient<typeof app, true>>
 
 describe("which routes are streams", () => {
 	// v0: 35de9ffcf2
@@ -45,10 +45,10 @@ describe("which routes are streams", () => {
 	})
 
 	// v0: 16a0a57bd2
-	it("an SSE route returns an AsyncIterable of events in throw and result mode", () => {
-		expectTypeOf<ReturnFor<Routes, "/events", "get", true>>().toEqualTypeOf<AsyncIterable<SSEEvent>>()
-		expectTypeOf<ReturnFor<Routes, "/events", "get", false>>().toEqualTypeOf<AsyncIterable<SSEEvent>>()
-		expectTypeOf(thrower.get("/events")).toEqualTypeOf<AsyncIterable<SSEEvent>>()
+	it("an SSE route returns an AsyncIterable of events, and its safe call one opened in a Result", () => {
+		expectTypeOf<ReturnFor<Routes, "/events", "get">>().toEqualTypeOf<AsyncIterable<SSEEvent>>()
+		expectTypeOf<SafeReturnFor<Routes, "/events", "get">>().toEqualTypeOf<Promise<Result<AsyncIterable<SSEEvent>>>>()
 		expectTypeOf(api.get("/events")).toEqualTypeOf<AsyncIterable<SSEEvent>>()
+		expectTypeOf(api.safe.get("/events")).toEqualTypeOf<Promise<Result<AsyncIterable<SSEEvent>>>>()
 	})
 })

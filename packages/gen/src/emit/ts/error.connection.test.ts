@@ -1,10 +1,13 @@
 /**
  * A network failure in the TS SDK is its typed connection error (bit 19 f2), as the siblings' APIConnectionError,
  * ApiConnectionException and Transport error: a request that got no answer (a refused or reset connection, DNS, TLS)
- * throws `APIConnectionError` on both fronts and in either mode, the platform's error its `cause`; its message names
+ * throws `APIConnectionError` on both fronts, from the normal call and its safe twin alike (no answer is no Result,
+ * bit 21 i1), the platform's error its `cause`; its message names
  * the method and the URL's origin and path, never a query or a header value. An abort and a timeout keep their names,
  * and a realtime dial's connection failure stays transient: the chain backs off and redials. Bit 21 i0: a stream whose
- * connection drops after its events throws it too, through the same path, never the platform's raw TypeError.
+ * connection drops after its events throws it too, through the same path, never the platform's raw TypeError; a safe
+ * call's stream, opened Ok, throws it from its iteration. Bit 21 i1: a REST answer whose body drops mid-read is no
+ * answer as well, thrown from both styles.
  */
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { REFUSED_URL } from "../shared/__fixtures__/recording-server.ts"
@@ -43,6 +46,10 @@ type Sdk = {
 	dispose(): void
 	items: { get: Get }
 	rt: { feed(input: object): Feed }
+	safe: {
+		items: { get: Get }
+		ticks: { stream(input: object): Promise<{ ok: boolean; data?: AsyncIterable<{ data: unknown }> }> }
+	}
 	ticks: { stream(input: object): AsyncIterable<{ data: unknown }> }
 }
 
@@ -77,19 +84,31 @@ const dropped: typeof fetch = async () => {
 	return new Response(body, { headers: { "content-type": "text/event-stream" } })
 }
 
+/** A JSON answer whose connection drops mid-body: its first bytes, then the platform's TypeError. */
+const torn: typeof fetch = async () => {
+	let pulls = 0
+	const body = new ReadableStream<Uint8Array>({
+		pull(controller) {
+			if (pulls++ === 0) controller.enqueue(new TextEncoder().encode('{"id":'))
+			else controller.error(new TypeError("terminated"))
+		},
+	})
+	return new Response(body, { headers: { "content-type": "application/json" } })
+}
+
 afterEach(() => vi.unstubAllGlobals())
 
 describe("a network failure is the TS SDK's APIConnectionError (bit 19 f2)", () => {
-	it("throws it on a refused connection in either mode, the platform's error its cause, no query or header in its message", async () => {
+	it("throws it on a refused connection from the normal and the safe call, the platform's error its cause, no query or header in its message", async () => {
 		const sdk = await emittedSdk(DOC)
 		const TestSDK = sdk.TestSDK as new (config: object) => Sdk
 		const thrown = []
-		for (const throwOnError of [false, true]) {
-			const client = new TestSDK({ baseURL: REFUSED_URL, headers: SECRET.headers, throwOnError })
+		for (const safe of [false, true]) {
+			const client = new TestSDK({ baseURL: REFUSED_URL, headers: SECRET.headers })
 			thrown.push(
-				await client.items
+				await (safe ? client.safe : client).items
 					.get({ params: { id: "i1" }, search: SECRET.search })
-					.then(String, (e) => caught(e, sdk.APIConnectionError)),
+					.then(JSON.stringify, (e) => caught(e, sdk.APIConnectionError)),
 			)
 			client.dispose()
 		}
@@ -140,6 +159,25 @@ describe("a network failure is the TS SDK's APIConnectionError (bit 19 f2)", () 
 	})
 })
 
+describe("a REST body's mid-read drop is the same APIConnectionError (bit 21 i1)", () => {
+	it("throws it from the normal and the safe call, the read's error its cause, never an Err nor a DecodeError", async () => {
+		const sdk = await emittedSdk(DOC)
+		const TestSDK = sdk.TestSDK as new (config: object) => Sdk
+		const client = new TestSDK({ baseURL: "https://api.test", fetch: torn })
+		const thrown = []
+		for (const get of [client.items.get, client.safe.items.get])
+			thrown.push(await get({ params: { id: "i1" } }).then(String, (e) => caught(e, sdk.APIConnectionError)))
+		client.dispose()
+		const dropped = {
+			cause: "TypeError",
+			message: "GET https://api.test/items/i1: the connection failed",
+			name: "APIConnectionError",
+			typed: true,
+		}
+		expect(thrown).toEqual([dropped, dropped])
+	})
+})
+
 describe("a stream's mid-answer drop is the same APIConnectionError (bit 21 i0)", () => {
 	it("throws it when a stream's connection drops after its events: the read's error its cause, the event delivered", async () => {
 		const sdk = await emittedSdk(DOC)
@@ -152,6 +190,28 @@ describe("a stream's mid-answer drop is the same APIConnectionError (bit 21 i0)"
 		client.dispose()
 		expect({ events, thrown }).toEqual({
 			events: [{ n: 1 }],
+			thrown: {
+				cause: "TypeError",
+				message: "GET https://api.test/ticks: the connection failed",
+				name: "APIConnectionError",
+				typed: true,
+			},
+		})
+	})
+
+	it("throws it from a safe call's stream too: the stream opened Ok, the drop its iteration's, never an Err", async () => {
+		const sdk = await emittedSdk(DOC)
+		const TestSDK = sdk.TestSDK as new (config: object) => Sdk
+		const client = new TestSDK({ baseURL: "https://api.test", fetch: dropped })
+		const opened = await client.safe.ticks.stream({})
+		const events: unknown[] = []
+		const thrown = await (async () => {
+			for await (const event of opened.data ?? []) events.push(event.data)
+		})().then(String, (e) => caught(e, sdk.APIConnectionError))
+		client.dispose()
+		expect({ events, ok: opened.ok, thrown }).toEqual({
+			events: [{ n: 1 }],
+			ok: true,
 			thrown: {
 				cause: "TypeError",
 				message: "GET https://api.test/ticks: the connection failed",

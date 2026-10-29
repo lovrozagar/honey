@@ -29,7 +29,7 @@ const DOC = {
 
 /** A program calling `ping.get` once on the SDK at `entry`, aimed at `url`. */
 const CALL = (entry: string, url: string) => `const { TestSDK } = await import(${JSON.stringify(entry)})
-await new TestSDK({ baseURL: ${JSON.stringify(url)}, throwOnError: true }).ping.get()
+await new TestSDK({ baseURL: ${JSON.stringify(url)} }).ping.get()
 console.log("called")
 `
 

@@ -1,4 +1,4 @@
-import type { RealtimeOptions, ResumableConnection, SDKConfig, SSEEvent, TypedWebSocket } from "./api.runtime.gen"
+import type { RealtimeOptions, Result, ResumableConnection, SDKConfig, SSEEvent, TypedWebSocket } from "./api.runtime.gen"
 
 export type CreateProjectsExtractRequest = { columns?: string; file?: string; instruction?: string; schema?: string; strictness?: "strict" | "balanced" | "flexible"; text?: string }
 export type CreateProjectsExtractResponse200 = { files: { file_name: string; sha256: string; size: number }[]; status: string; texts: Record<string, string> }
@@ -29,40 +29,58 @@ export type ErrorEnvelope<TStatus extends number, TKey extends string> = {
 	success: false
 }
 
-/**
- * A safe-mode result. With declared errors, the failure branch is keyed by exactly their statuses,
- * so `if (error)` / `if (!error)` narrow; with declared headers, the success branch carries them.
- */
-export type SDKResult<T, TErrorsByStatus = never, THeaders = never> =
-	| ([THeaders] extends [never]
-			? { data: T; error: null; response: Response; status: number }
-			: { data: T; error: null; headers: THeaders; response: Response; status: number })
-	| ([TErrorsByStatus] extends [never]
-			? { data: null; error: unknown; response: Response; status: number }
-			: {
-					[S in keyof TErrorsByStatus & number]: { data: null; error: TErrorsByStatus[S]; response: Response; status: S }
-				}[keyof TErrorsByStatus & number])
+/* a call's declared errors and headers, which only its safe twin reads: a type, never a value */
+declare const answer: unique symbol
 
-export type ApiConfig<TThrow extends boolean = false> = Omit<SDKConfig, "baseURL" | "throwOnError"> & {
+/** A call's input: optional when none of its fields is required. */
+type HoneyArgs<I, O> = {} extends I ? [input?: I & O] : [input: I & O]
+
+/** A REST operation: its raw overload and its value, an error status thrown; its declared errors and headers. */
+type HoneyCall<I, D, E = never, H = never> = {
+	(input: I & HttpOptions & { raw: true }): Promise<Response>
+	(...input: HoneyArgs<I, HttpOptions & { raw?: false }>): Promise<D>
+	readonly [answer]?: [E, H]
+}
+
+/** An event stream, sent when its iteration starts; its opening answer's declared errors. */
+type HoneyStream<I, V, E = never> = {
+	(...input: HoneyArgs<I, SseOptions>): AsyncIterable<V>
+	readonly [answer]?: [E, never]
+}
+
+/** `client.safe`: every REST and stream call answering a Result, never throwing an API answer; a connection as is. */
+export type HoneySafe<T> = {
+	[K in keyof T]: T[K] extends (...input: never[]) => ResumableConnection<infer _> | TypedWebSocket
+		? T[K]
+		: T[K] extends HoneyCall<infer I, infer D, infer E, infer H>
+			? {
+					(input: I & HttpOptions & { raw: true }): Promise<Result<Response, E>>
+					(...input: HoneyArgs<I, HttpOptions & { raw?: false }>): Promise<Result<D, E, H>>
+				}
+			: T[K] extends HoneyStream<infer I, infer V, infer E>
+				? (...input: HoneyArgs<I, SseOptions>) => Promise<Result<AsyncIterable<V>, E>>
+				: HoneySafe<T[K]>
+}
+
+export type ApiConfig = Omit<SDKConfig, "baseURL"> & {
 	/** Default: the document's first server, /api */
 	baseURL?: string
-	throwOnError?: TThrow
 }
 
 /** Every operation of the SDK, by its member path. */
-export interface ApiOperations<TThrow extends boolean = false> {
+export interface ApiOperations {
 	extract: {
-		once(input: { params: { project_id: string }; form: CreateProjectsExtractRequest } & HttpOptions & { raw: true }): Promise<Response>
-		once(input: { params: { project_id: string }; form: CreateProjectsExtractRequest } & HttpOptions & { raw?: false }): TThrow extends true ? Promise<CreateProjectsExtractResponse200> : Promise<SDKResult<CreateProjectsExtractResponse200>>
-		stream(input: { params: { project_id: string }; form: CreateProjectsExtractRequest } & SseOptions): AsyncIterable<SSEEvent>
+		once: HoneyCall<{ params: { project_id: string }; form: CreateProjectsExtractRequest }, CreateProjectsExtractResponse200>
+		stream: HoneyStream<{ params: { project_id: string }; form: CreateProjectsExtractRequest }, SSEEvent>
 		table: {
-			once(input: { params: { project_id: string; table_id: string }; form: CreateProjectsSuggestSchemaRequest } & HttpOptions & { raw: true }): Promise<Response>
-			once(input: { params: { project_id: string; table_id: string }; form: CreateProjectsSuggestSchemaRequest } & HttpOptions & { raw?: false }): TThrow extends true ? Promise<CreateProjectsExtractResponse200> : Promise<SDKResult<CreateProjectsExtractResponse200>>
-			stream(input: { params: { project_id: string; table_id: string }; form: CreateProjectsSuggestSchemaRequest } & SseOptions): AsyncIterable<SSEEvent>
+			once: HoneyCall<{ params: { project_id: string; table_id: string }; form: CreateProjectsSuggestSchemaRequest }, CreateProjectsExtractResponse200>
+			stream: HoneyStream<{ params: { project_id: string; table_id: string }; form: CreateProjectsSuggestSchemaRequest }, SSEEvent>
 		}
 	}
 	suggest: {
-		schema(input: { params: { project_id: string }; form: CreateProjectsSuggestSchemaRequest } & HttpOptions & { raw: true }): Promise<Response>
-		schema(input: { params: { project_id: string }; form: CreateProjectsSuggestSchemaRequest } & HttpOptions & { raw?: false }): TThrow extends true ? Promise<CreateProjectsExtractResponse200> : Promise<SDKResult<CreateProjectsExtractResponse200>>
+		schema: HoneyCall<{ params: { project_id: string }; form: CreateProjectsSuggestSchemaRequest }, CreateProjectsExtractResponse200>
 	}
 }
+
+/** `client.safe`: every operation, a call answering a Result. */
+export type ApiSafe = HoneySafe<ApiOperations>

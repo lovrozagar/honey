@@ -53,12 +53,14 @@ const hold: Tool = {
 	name: "hold",
 }
 
-/** The SDK client `upload` calls: records each input, answers 200. */
+/** The SDK client whose safe twin `upload` calls: records each input, answers an Ok. */
 const client = {
-	docs: {
-		upload: async (input: unknown) => {
-			sent.push(input)
-			return { data: {}, error: undefined, response: new Response("{}"), status: 200 }
+	safe: {
+		docs: {
+			upload: async (input: unknown) => {
+				sent.push(input)
+				return { data: {}, ok: true, response: new Response("{}") }
+			},
 		},
 	},
 }

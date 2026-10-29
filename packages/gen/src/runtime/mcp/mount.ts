@@ -19,7 +19,6 @@ export type MountConfig = {
 	readonly maxResponseBytes: number
 	readonly onResponse?: (() => undefined)[]
 	readonly redirect: "same-origin"
-	readonly throwOnError: false
 	readonly timeout: number
 }
 
@@ -103,7 +102,6 @@ export function mountedMcp(mounting: Mounting): Mounted {
 				fetch: inner as typeof fetch,
 				maxResponseBytes: BYTES_MAX,
 				redirect: "same-origin",
-				throwOnError: false,
 				timeout,
 			}
 			const tools = bindTools(fetchFile ? mounting.specs : shown, client(config), {

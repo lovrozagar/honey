@@ -87,6 +87,46 @@ describe("the SDK class: member reads", () => {
 	})
 })
 
+describe("the SDK class: its safe twin (bit 21 i1)", () => {
+	it("is one object, its namespaces and members the same on every read, each named as its normal twin", async () => {
+		const { calls, sdk } = await client()
+		const safe = sdk.safe as Member
+		expect([
+			sdk.safe === sdk.safe,
+			safe.users === safe.users,
+			memberAt(safe, "users.list") === memberAt(safe, "users.list"),
+			memberAt(safe, "users.list") === memberAt(sdk, "users.list"),
+			memberAt(safe, "checkout.sessions.create").name,
+			safe.nonexistent,
+			calls.length,
+		]).toEqual([true, true, true, false, "checkout.sessions.create", undefined, 0])
+	})
+
+	it("keeps the twin when a root resource is named safe: that resource is safe_, on the client and its twin", async () => {
+		const { calls, sdk } = await client(undefined, {}, doc({ "/f": { get: op("safe.get") } }))
+		await memberAt(sdk, "safe_.get")()
+		const twin = (await memberAt(sdk.safe as unknown as Sdk, "safe_.get")()) as Json
+		expect([calls.map((r) => r.url), twin.ok, typeof (sdk.safe as Member).safe_]).toEqual([
+			[`${BASE}/f`, `${BASE}/f`],
+			true,
+			"object",
+		])
+	})
+
+	it("answers an error status as an Err holding the thrown error and its response, where the normal call throws it", async () => {
+		const { sdk } = await client(() => Response.json({ message: "gone" }, { status: 404 }))
+		const thrown = await memberAt(sdk, "users.list")().catch((e: unknown) => e)
+		const { error, ok, response } = (await memberAt(sdk.safe as Member, "users.list")()) as Json
+		expect([
+			(thrown as Error).name,
+			ok,
+			(error as Error).name,
+			(error as Json).status,
+			(response as Response).status,
+		]).toEqual(["NotFoundError", false, "NotFoundError", 404, 404])
+	})
+})
+
 describe("the SDK class: keys that are not operations", () => {
 	// v0: 6d397517f4
 	// v0: 910422df4f
@@ -205,26 +245,22 @@ describe("the SDK class: requests", () => {
 	})
 
 	// v0: 33e1e5e77f
-	it("resolves a safe call to { data, error: null, status, response } after one fetch", async () => {
+	it("resolves a safe call to { ok: true, data, response } after one fetch", async () => {
 		const { calls, sdk } = await client(() => Response.json(USERS))
-		const { response, ...result } = (await memberAt(sdk, "users.list")()) as Json
-		expect([calls.length, result, response instanceof Response]).toEqual([
-			1,
-			{ data: USERS, error: null, status: 200 },
-			true,
-		])
+		const { response, ...result } = (await memberAt(sdk.safe as unknown as Sdk, "users.list")()) as Json
+		expect([calls.length, result, (response as Response).status]).toEqual([1, { data: USERS, ok: true }, 200])
 	})
 
 	// v0: 3a82494215
-	it("resolves a throwOnError call with the response data", async () => {
-		const { sdk } = await client(() => Response.json(USERS), { throwOnError: true })
+	it("resolves a call with the response data", async () => {
+		const { sdk } = await client(() => Response.json(USERS))
 		expect(await memberAt(sdk, "users.list")()).toEqual(USERS)
 	})
 
 	// v0: b32bb9e005
 	it("sends a json input as a JSON body with its content type, and resolves the parsed answer", async () => {
 		const answer = { email: "a@b.com", id: "u1" }
-		const { calls, sdk } = await client(() => Response.json(answer), { throwOnError: true })
+		const { calls, sdk } = await client(() => Response.json(answer))
 		const result = await memberAt(sdk, "users.create")({ json: { email: "test@example.com" } })
 		expect(
 			await Promise.all(

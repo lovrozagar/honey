@@ -174,21 +174,21 @@ describe("onResponse hooks", () => {
 			return Response.json({ replaced: 2 })
 		}
 		const result = await (await sdkFor(USERS, { fetch, onResponse: [replyWith({ replaced: 1 }), second] })).users.list()
-		expect([seen, result.data]).toEqual([[{ replaced: 1 }], { replaced: 2 }])
+		expect([seen, result]).toEqual([[{ replaced: 1 }], { replaced: 2 }])
 	})
 
 	// v0: 4ba1fdfe9c
 	it("keeps the original response when a hook returns undefined", async () => {
 		const { fetch } = recordingFetch(() => Response.json({ original: true }))
 		const result = await (await sdkFor(USERS, { fetch, onResponse: [() => undefined] })).users.list()
-		expect(result.data).toEqual({ original: true })
+		expect(result).toEqual({ original: true })
 	})
 
 	// v0: ee80aece34
 	it("parses the Response a hook returns instead of the received one", async () => {
 		const { fetch } = recordingFetch(() => Response.json({ original: true }))
 		const result = await (await sdkFor(USERS, { fetch, onResponse: [replyWith({ replaced: true })] })).users.list()
-		expect(result.data).toEqual({ replaced: true })
+		expect(result).toEqual({ replaced: true })
 	})
 })
 
@@ -205,7 +205,7 @@ describe("ctx.retry()", () => {
 			return again
 		}
 		const result = await (await sdkFor(USERS, { fetch, onResponse: [hook] })).users.list()
-		expect([calls.length, passes, result.data]).toEqual([2, [false, true, [true, 200]], { id: "u1" }])
+		expect([calls.length, passes, result]).toEqual([2, [false, true, [true, 200]], { id: "u1" }])
 	})
 
 	// v0: 2610f1105a
@@ -213,7 +213,7 @@ describe("ctx.retry()", () => {
 		const { calls, fetch } = recordingFetch(
 			inTurn(Response.json({ message: "unauthorized" }, { status: 401 }), Response.json({ id: "u1" })),
 		)
-		const sdk = await sdkFor(USERS, { fetch, onResponse: [retryOn401], throwOnError: true })
+		const sdk = await sdkFor(USERS, { fetch, onResponse: [retryOn401] })
 		expect(await sdk.users.list()).toEqual({ id: "u1" })
 		expect(calls.map((call) => `${call.method} ${call.url}`)).toEqual([`GET ${BASE}/users`, `GET ${BASE}/users`])
 	})
@@ -221,8 +221,8 @@ describe("ctx.retry()", () => {
 	// v0: c510199f35
 	it("retries at most once per call: a hook that retries every 401 ends with the second 401", async () => {
 		const { calls, fetch } = recordingFetch(() => Response.json({ message: "nope" }, { status: 401 }))
-		const result = await (await sdkFor(USERS, { fetch, onResponse: [retryOn401] })).users.list()
-		expect([calls.length, result.status, Boolean(result.error)]).toEqual([2, 401, true])
+		const result = await (await sdkFor(USERS, { fetch, onResponse: [retryOn401] })).safe.users.list()
+		expect([calls.length, result.response.status, result.ok, result.error.status]).toEqual([2, 401, false, 401])
 	})
 })
 
@@ -233,15 +233,15 @@ describe("calls", () => {
 		const { calls, fetch } = recordingFetch(() => Response.json({ call: ++count }))
 		const sdk = await sdkFor(USERS, { fetch })
 		const results = await Promise.all([sdk.users.list(), sdk.users.list(), sdk.users.list()])
-		expect([calls.length, results.map((result: Json) => result.data.call).sort()]).toEqual([3, [1, 2, 3]])
+		expect([calls.length, results.map((result: Json) => result.call).sort()]).toEqual([3, [1, 2, 3]])
 	})
 
 	// v0: 808646da81
-	it("rejects with the fetch failure even in safe mode", async () => {
+	it("rejects with the fetch failure from the safe twin too", async () => {
 		const { fetch } = recordingFetch(() => Promise.reject(new Error("network failure")))
 		const sdk = await sdkFor(USERS, { fetch })
 		/* the fetch failure is the typed connection error's cause (bit 19 f2) */
-		await expect(sdk.users.list()).rejects.toMatchObject({
+		await expect(sdk.safe.users.list()).rejects.toMatchObject({
 			cause: new Error("network failure"),
 			name: "APIConnectionError",
 		})

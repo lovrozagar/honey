@@ -1,6 +1,6 @@
 /**
  * The TS SDK's per-operation doc comments (bit 20 c2): each operation's summary and description, as Go, Rust, Python
- * and C# write them, in a JSDoc block above its overloads, so an editor shows them. Spec text stays text: a summary
+ * and C# write them, in a JSDoc block above its member, so an editor shows them. Spec text stays text: a summary
  * that would close the comment, or hide behind a bidi or C1 control, is inert, and the block stays one comment.
  */
 import { describe, expect, it } from "vitest"
@@ -21,17 +21,17 @@ function typesText(summary?: string, description?: string): string {
 	return Object.entries(files).find(([path]) => path.endsWith(".types.gen.ts"))?.[1] ?? ""
 }
 
-/** The lines from the doc block above `list(` up to its first signature. */
+/** The lines from the doc block above `list:` up to its member line. */
 function docAbove(text: string): string[] {
 	const lines = text.split("\n")
-	const first = lines.findIndex((line) => /^\t+list\(/.test(line))
+	const first = lines.findIndex((line) => /^\t+list: /.test(line))
 	if ((lines[first - 1] ?? "").trim() !== "*/") return []
 	const start = lines.slice(0, first).findLastIndex((line) => line.trim() === "/**")
 	return lines.slice(start, first)
 }
 
 describe("the TS SDK's per-operation doc comments", () => {
-	it("writes an operation's summary and description above its overloads", () => {
+	it("writes an operation's summary and description above its member", () => {
 		expect(docAbove(typesText("List the widgets", "Newest first, 50 a page."))).toEqual([
 			"\t\t/**",
 			"\t\t * List the widgets",

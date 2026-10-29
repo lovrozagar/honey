@@ -2,9 +2,16 @@ import { describe, expect, it } from "vitest"
 import { emittedApp, emittedSdk, recordingFetch } from "./__fixtures__/emitted.ts"
 
 type Json = Record<string, unknown>
-type Result = { data: unknown; error: unknown; status: number }
-type Api = { get(path: string, input?: Json): Promise<Result> }
-type Sdk = { a(input?: Json): Promise<Result>; items: { list(input?: Json): Promise<Result> } }
+type Result = { ok: boolean; response: Response }
+type Api = {
+	get(path: string, input?: Json): Promise<unknown>
+	safe: { get(path: string, input?: Json): Promise<Result> }
+}
+type Sdk = {
+	a(input?: Json): Promise<unknown>
+	items: { list(input?: Json): Promise<unknown> }
+	safe: { a(input?: Json): Promise<Result> }
+}
 
 const OK = { 200: { content: { "application/json": { schema: { type: "object" } } }, description: "ok" } }
 const DOC = {
@@ -71,9 +78,10 @@ describe("redirects: same-origin (default)", () => {
 			return Response.json({ ok: 1 })
 		})
 		const api = await createClient({ baseURL: "https://api.example.com/v1", fetch, headers: { "x-api-key": "k" } })
-		expect((await api.get("/old")).data).toEqual({ ok: 1 })
+		expect(await api.get("/old")).toEqual({ ok: 1 })
 		expect([calls[0]?.redirect, calls[1]?.url]).toEqual(["manual", "https://api.example.com/v1/new"])
-		expect((await api.get("/leave")).status).toBe(307)
+		/* the unfollowed hop is the answer: a non-2xx, so the safe twin's Err */
+		expect(await api.safe.get("/leave")).toMatchObject({ ok: false, response: { status: 307 } })
 		expect(calls.map((call) => new URL(call.url).origin)).toEqual(Array(3).fill("https://api.example.com"))
 	})
 
@@ -85,9 +93,9 @@ describe("redirects: same-origin (default)", () => {
 			return Response.json({})
 		})
 		const client = await sdk({ baseURL: "https://api.example.com", fetch, headers: { "x-api-key": "secret" } })
-		const result = await client.a()
+		const result = await client.safe.a()
 		expect(calls.map((call) => call.url)).toEqual(["https://api.example.com/a", "https://api.example.com/a2"])
-		expect(result.status).toBe(302)
+		expect(result).toMatchObject({ ok: false, response: { status: 302 } })
 	})
 })
 

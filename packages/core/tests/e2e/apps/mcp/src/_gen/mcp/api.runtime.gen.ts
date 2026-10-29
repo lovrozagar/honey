@@ -104,6 +104,7 @@ export function crossOriginHeaders(headers: Headers): Headers {
 
 export type ClientErrorInit<TBody = unknown> = {
 	body: TBody
+	cause?: unknown
 	message: string
 	response: Response
 	status: number
@@ -116,7 +117,7 @@ export class ClientError<TBody = unknown> extends Error {
 	readonly status: number
 
 	constructor(init: ClientErrorInit<TBody>) {
-		super(init.message)
+		super(init.message, init)
 		/* V8 only, and not in every lib: read it as optional so the runtime compiles anywhere */
 		;(Error as { captureStackTrace?: (target: object, ctor?: unknown) => void }).captureStackTrace?.(this, new.target)
 		this.name = "ClientError"
@@ -158,6 +159,12 @@ export class ServiceUnavailableError<TBody = unknown> extends ClientError<TBody>
 }
 export class GatewayTimeoutError<TBody = unknown> extends ClientError<TBody> {
 	override name = "GatewayTimeoutError"
+}
+
+/** A 2xx whose body is no value of its operation: the text (null past the size cap), the parse error its cause. */
+export class DecodeError extends ClientError<string | null> {
+	/* a literal, so a declared error with a string body never reads as one */
+	override readonly name = "DecodeError"
 }
 
 const STATUS_ERRORS: Readonly<Record<number, new (init: ClientErrorInit) => ClientError>> = {
@@ -606,26 +613,41 @@ export type Sent = {
 	response: Response
 }
 
-/** A safe-mode result: `error` is truthy for every non-2xx and always carries `status`. */
-export type SafeResult = { data: unknown; error: unknown; response: Response; status: number }
+/** A REST call's answer: its value (the response itself when raw) and the response. */
+export type Answer = { data: unknown; response: Response }
+
+/** Object keys of `{ 400: ... }` are `400` or `"400"` depending on the TS version. */
+export type StatusOf<K> = K extends number ? K : K extends `${infer N extends number}` ? N : never
+
+/** The error each declared status answers with, its body typed; a ClientError when none is declared. */
+type StatusErrors<E> = [E] extends [never]
+	? ClientError
+	: [keyof E] extends [never]
+		? ClientError
+		: { [K in keyof E]: ClientError<E[K]> & { readonly status: StatusOf<K> } }[keyof E]
+
+/** A safe call's outcome: its data (and declared headers), or the answer's error; the response on both. */
+export type Result<T, TErrors = never, THeaders = never> =
+	| ([THeaders] extends [never]
+			? { ok: true; data: T; response: Response }
+			: { ok: true; data: T; headers: THeaders; response: Response })
+	| { ok: false; error: StatusErrors<TErrors> | DecodeError; response: Response }
 
 export function isEventStream(response: Response): boolean {
 	return parseMediaType(response.headers.get("content-type"))?.essence === "text/event-stream"
 }
 
-/** How a REST answer is read: thrown or as a result, parsed or raw, and which response headers to keep (A2). */
+/** How a REST answer is read: parsed or raw, by its declared media type, within the client's limits. */
 export type Reading = {
 	/**
 	 * the non-JSON media type the operation declares: its body is read as that type, empty or not.
 	 * `null` when it declares no success body: whatever arrives is discarded and reads as null.
 	 */
 	declared?: string | null
-	headers?: readonly string[]
 	/** the client's limits: an error message's characters, and the bytes a body may hold decoded */
 	limits?: Limits
 	method: string
 	raw?: boolean
-	shouldThrow: boolean
 }
 
 /** A server's message as an Error may carry it: ASCII control characters stripped, `max` characters at most. */
@@ -660,7 +682,7 @@ async function bodyBytes(response: Response, max = MAX_RESPONSE_BYTES): Promise<
 			const sent = response.headers.get("content-length")
 			const what = [response.headers.get("content-type") ?? "no content type", sent && `${sent} bytes`]
 			const message = `Response body is over the ${max}-byte cap (${what.filter(Boolean).join(", ")})`
-			throw clientErrorFor({ body: null, message, response, status: response.status })
+			throw new DecodeError({ body: null, message, response, status: response.status })
 		}
 		chunks.push(next.value)
 	}
@@ -715,12 +737,6 @@ export async function errorFromResponse(response: Response, limits: Limits = {})
 	return clientErrorFor({ body, message: text, response: preserved, status: response.status })
 }
 
-/** The safe-mode error: the server's error object when the body is a JSON object, else the ClientError. */
-function safeErrorValue(error: ClientError): unknown {
-	const body = error.body
-	return typeof body === "object" && body !== null && !Array.isArray(body) ? body : error
-}
-
 /** A body with no content to read: 204/205/304 and every answer to HEAD. */
 function hasNoBody(response: Response, method: string): boolean {
 	return response.status === 204 || response.status === 205 || response.status === 304 || method === "HEAD"
@@ -754,13 +770,9 @@ export async function parseBody(
 		if (text.length === 0) return null
 		try {
 			return JSON.parse(text)
-		} catch {
-			throw clientErrorFor({
-				body: text,
-				message: "Response body is not valid JSON",
-				response,
-				status: response.status,
-			})
+		} catch (cause) {
+			const message = "Response body is not valid JSON"
+			throw new DecodeError({ body: text, cause, message, response, status: response.status })
 		}
 	}
 	if (isTextMediaType(type)) return bodyText(response, max)
@@ -778,34 +790,33 @@ function declaredHeaders(response: Response, names: readonly string[]): Record<s
 	return out
 }
 
-/** A safe-mode success, with the declared headers when the operation declares any. */
-function success(data: unknown, response: Response, names: readonly string[] | undefined): SafeResult {
-	const result: SafeResult = { data, error: null, response, status: response.status }
-	if (names) Object.assign(result, { headers: declaredHeaders(response, names) })
-	return result
-}
-
-/** Read the answer of a REST call into its value (throw mode), a result (safe mode), or the raw response. */
-export async function finishRequest(sent: Sent, reading: Reading): Promise<unknown> {
+/**
+ * A REST answer read into its value, or the response itself when raw. A non-2xx throws its ClientError, an
+ * undecodable 2xx DecodeError, and a body read that fails no answer (f2).
+ */
+export async function finishRequest(sent: Sent, reading: Reading): Promise<Answer> {
 	const { response } = sent
-	const { method, shouldThrow } = reading
 	try {
-		if (!response.ok) {
-			if (reading.raw && !shouldThrow) return response
-			const error = await errorFromResponse(response, reading.limits)
-			if (shouldThrow) throw error
-			return { data: null, error: safeErrorValue(error), response: error.response, status: response.status }
-		}
-		if (reading.raw) return response
+		if (!response.ok) throw await errorFromResponse(response, reading.limits)
+		if (reading.raw) return { data: response, response }
 		const max = reading.limits?.maxResponseBytes
-		if (shouldThrow) return await parseBody(response, method, reading.declared, max)
-		try {
-			return success(await parseBody(response, method, reading.declared, max), response, reading.headers)
-		} catch (e) {
-			return { data: null, error: e, response, status: response.status }
-		}
+		return { data: await parseBody(response, reading.method, reading.declared, max), response }
+	} catch (e) {
+		throw e instanceof ClientError ? e : sent.failed(e)
 	} finally {
 		sent.done()
+	}
+}
+
+/** `answer` as a safe call's Result (bit 21 i): an answer's error its Err; no answer, or none sent, thrown (f2). */
+export async function resultOf(answer: Promise<Answer>, names?: readonly string[]): Promise<Result<unknown>> {
+	try {
+		const { data, response } = await answer
+		const ok: Result<unknown> = { data, ok: true, response }
+		return names ? Object.assign(ok, { headers: declaredHeaders(response, names) }) : ok
+	} catch (e) {
+		if (e instanceof ClientError && e.status !== 0) return { error: e, ok: false, response: e.response }
+		throw e
 	}
 }
 
@@ -925,7 +936,6 @@ export type ClientConfig = {
 	/** The most UTF-8 bytes one event's data may hold, its joining newlines counted. Default 8 MiB. */
 	sseMaxEventBytes?: number
 	state?: Record<string, unknown>
-	throwOnError?: boolean
 	/** Milliseconds for a whole request, including reading the body; a stream's only up to its headers. */
 	timeout?: number
 }
@@ -1969,10 +1979,18 @@ export const REFRESH_AUTH = /* @__PURE__ */ Symbol("honey.refreshAuth")
 export type Operation = Call & {
 	/** the non-JSON media type the operation declares, read as that type; null when it declares no body */
 	declared?: string | null
-	headers?: readonly string[]
 	meta?: RequestMeta
-	shouldThrow: boolean
 }
+
+/** An event stream's call: its stale view, and what runs once its answer is ok. */
+type StreamCall = Call & { meta?: RequestMeta; onOpen?: (response: Response) => void }
+
+/** An event stream sent when its iteration starts: `open`'s events. */
+export const later = (open: () => Promise<Answer>): AsyncIterable<SSEEvent> => ({
+	async *[Symbol.asyncIterator]() {
+		yield* (await open()).data as AsyncIterable<SSEEvent>
+	},
+})
 
 /** Ignore a failed cancel: the body is being discarded either way. */
 const discard = (response: Response) =>
@@ -2142,45 +2160,32 @@ export class HTTPClient {
 		}
 	}
 
-	#reading(method: string, opts: RequestOptions, shouldThrow: boolean): Reading {
-		return { limits: this.#config, method, raw: opts.raw, shouldThrow }
+	#reading(method: string, opts: RequestOptions): Reading {
+		return { limits: this.#config, method, raw: opts.raw }
 	}
 
-	/** Throw mode: the parsed body, or a ClientError (a per-status subclass) on non-2xx. */
+	/** The parsed body; a non-2xx throws its ClientError (a per-status subclass). */
 	async request(method: string, path: string, opts: RequestOptions, meta?: RequestMeta): Promise<unknown> {
-		return this.requestOperation({ meta, method, opts, path, shouldThrow: true })
+		return (await this.requestOperation({ meta, method, opts, path })).data
 	}
 
-	/** Safe mode: `{ data, error, response, status }`; `error` is truthy for every non-2xx. */
-	async requestSafe(method: string, path: string, opts: RequestOptions, meta?: RequestMeta): Promise<SafeResult> {
-		return this.requestOperation({ meta, method, opts, path, shouldThrow: false }) as Promise<SafeResult>
-	}
-
-	/** One REST operation, read as `op` says: thrown or safe, raw, with its declared response headers (A2). */
-	async requestOperation(op: Operation): Promise<unknown> {
-		const { declared, headers, meta, method, opts, shouldThrow } = op
-		let sent: Sent
-		try {
-			sent = await this.#send(op, "rest", meta)
-		} catch (e) {
-			/* a request that could not be built (status 0) is a safe-mode result like any other failure */
-			if (shouldThrow || !(e instanceof ClientError)) throw e
-			return { data: null, error: e, response: e.response, status: e.status }
-		}
-		return finishRequest(sent, { ...this.#reading(method, opts, shouldThrow), declared, headers })
+	/** One REST operation's answer, read as `op` says: parsed, or raw. */
+	async requestOperation(op: Operation): Promise<Answer> {
+		const sent = await this.#send(op, "rest", op.meta)
+		return finishRequest(sent, { ...this.#reading(op.method, op.opts), declared: op.declared })
 	}
 
 	/**
 	 * One request whose shape is decided by the answer: an event stream becomes an
 	 * `AsyncIterable<SSEEvent>` (never buffered, exempt from the timeout once headers arrive);
-	 * anything else is read as in `request` / `requestSafe`.
+	 * anything else is read as in `request`.
 	 */
-	async requestAuto(method: string, path: string, opts: RequestOptions, shouldThrow: boolean): Promise<unknown> {
+	async requestAuto(method: string, path: string, opts: RequestOptions): Promise<Answer> {
 		const sent = await this.#send({ method, opts, path }, "auto")
 		if (!sent.response.ok || !isEventStream(sent.response) || opts.raw)
-			return finishRequest(sent, this.#reading(method, opts, shouldThrow))
+			return finishRequest(sent, this.#reading(method, opts))
 		sent.exemptFromTimeout()
-		return this.#iterate(sent)
+		return { data: this.#iterate(sent), response: sent.response }
 	}
 
 	requestStream(method: string, path: string, opts: RequestOptions, meta?: RequestMeta): AsyncIterable<SSEEvent> {
@@ -2188,26 +2193,24 @@ export class HTTPClient {
 	}
 
 	/** An event stream, sent when iteration starts; `onOpen` runs once the answer is ok. */
-	streamOperation(op: Call & { meta?: RequestMeta; onOpen?: (response: Response) => void }): AsyncIterable<SSEEvent> {
-		const send = () => this.#send(op, "stream", op.meta)
-		const limits = this.#config
-		const iterate = (sent: Sent) => this.#iterate(sent)
-		return {
-			async *[Symbol.asyncIterator]() {
-				const sent = await send()
-				/* the timeout bounded the open; the stream itself is never cut by it */
-				sent.exemptFromTimeout()
-				if (!sent.response.ok) {
-					try {
-						throw await errorFromResponse(sent.response, limits)
-					} finally {
-						sent.done()
-					}
-				}
-				op.onOpen?.(sent.response)
-				yield* iterate(sent)
-			},
+	streamOperation(op: StreamCall): AsyncIterable<SSEEvent> {
+		return later(() => this.openStream(op))
+	}
+
+	/** An event stream opened: its non-2xx thrown as its ClientError, `onOpen` run, its events read as they arrive. */
+	async openStream(op: StreamCall): Promise<{ data: AsyncIterable<SSEEvent>; response: Response }> {
+		const sent = await this.#send(op, "stream", op.meta)
+		/* the timeout bounded the open; the stream itself is never cut by it */
+		sent.exemptFromTimeout()
+		if (!sent.response.ok) {
+			try {
+				throw await errorFromResponse(sent.response, this.#config)
+			} finally {
+				sent.done()
+			}
 		}
+		op.onOpen?.(sent.response)
+		return { data: this.#iterate(sent), response: sent.response }
 	}
 
 	buildUrl(path: string, opts: RequestOptions): string {
@@ -2339,12 +2342,11 @@ function pollAdapter(at: Target): TransportAdapter {
 				const cursor = { ...opts }
 				for (let polls = 0; !signal.aborted; polls++) {
 					const poll = { ...cursorOpts(at, cursor, true), signal }
-					const data = await at.http.requestOperation({
+					const { data } = await at.http.requestOperation({
 						method: "GET",
 						opts: poll,
 						path: at.path,
 						refreshes: false,
-						shouldThrow: true,
 					})
 					if (polls === 0) conn.onFrame(ready(opts))
 					if (data === null || data === undefined || data === "") continue
@@ -2621,39 +2623,20 @@ export type ErrorEnvelope<TStatus extends number = number, TKey extends string =
 /** `null` in a route's errorsByStatus means the default envelope, not a null body. */
 type ResolveErrorBody<S extends number, T> = T extends null ? ErrorEnvelope<S> : T
 
-/** Object keys of `{ 400: ... }` are `400` or `"400"` depending on the TS version. */
-type StatusCode<K> = K extends number ? K : K extends `${infer N extends number}` ? N : never
+/** Each declared status's error body, honey's envelope where the route names none. */
+type ErrorBodies<S> = { [K in keyof S]: ResolveErrorBody<StatusOf<K>, S[K]> }
 
-type HasStatusErrors<T> = [StatusCode<keyof T>] extends [never] ? false : true
+/** What a call resolves to, by transport. */
+export type ReturnFor<TRoutes, P extends string, M extends string> =
+	IsSSE<TRoutes, P, M> extends true ? AsyncIterable<SSEEvent> : Promise<OutputFor<TRoutes, P, M>>
 
-type ErrorVariants<TErrorsByStatus> = {
-	[K in keyof TErrorsByStatus]: StatusCode<K> extends never
-		? never
-		: {
-				data: null
-				error: ResolveErrorBody<StatusCode<K>, TErrorsByStatus[K]>
-				response: Response
-				status: StatusCode<K>
-			}
-}[keyof TErrorsByStatus]
-
-/**
- * A safe-mode result: `error` is the parsed body, not a ClientError. When the errors are known by
- * status, the typed branch covers every declared status, so `if (error)` / `if (!error)` narrow.
- */
-export type ClientResult<TData, TErrorsByStatus = never> =
-	| { data: TData; error: null; response: Response; status: number }
-	| (HasStatusErrors<TErrorsByStatus> extends false
-			? { data: null; error: unknown; response: Response; status: number }
-			: ErrorVariants<TErrorsByStatus>)
-
-/** What a call resolves to, by transport and throw mode. */
-export type ReturnFor<TRoutes, P extends string, M extends string, TThrow extends boolean = true> =
-	IsSSE<TRoutes, P, M> extends true
-		? AsyncIterable<SSEEvent>
-		: TThrow extends true
-			? Promise<OutputFor<TRoutes, P, M>>
-			: Promise<ClientResult<OutputFor<TRoutes, P, M>, ErrorsByStatusFor<TRoutes, P, M>>>
+/** What a safe call resolves to: its value, an event stream opened, or the answer's error; never a thrown answer. */
+export type SafeReturnFor<TRoutes, P extends string, M extends string> = Promise<
+	Result<
+		IsSSE<TRoutes, P, M> extends true ? AsyncIterable<SSEEvent> : OutputFor<TRoutes, P, M>,
+		ErrorBodies<ErrorsByStatusFor<TRoutes, P, M>>
+	>
+>
 
 /** A path's params, required whenever the pattern names one. */
 type ParamsInput<P extends string> = [ParamKeys<P>] extends [never] ? {} : { params: { [K in ParamKeys<P>]: string } }
@@ -2679,26 +2662,33 @@ type OptionalInput<T> = keyof T extends never
 		? [input?: T]
 		: [input: T]
 
-type Method<TRoutes, TThrow extends boolean, M extends string> = <P extends PathsForMethod<TRoutes, M>>(
+type Method<TRoutes, M extends string> = <P extends PathsForMethod<TRoutes, M>>(
 	path: P,
 	...input: OptionalInput<ClientInput<TRoutes, P, M>>
-) => ReturnFor<TRoutes, P, M, TThrow>
+) => ReturnFor<TRoutes, P, M>
+
+type SafeMethod<TRoutes, M extends string> = <P extends PathsForMethod<TRoutes, M>>(
+	path: P,
+	...input: OptionalInput<ClientInput<TRoutes, P, M>>
+) => SafeReturnFor<TRoutes, P, M>
 
 type PathHelper<TRoutes> = <P extends keyof TRoutes & string>(
 	path: P,
 	input?: { params?: Record<string, string>; search?: Record<string, unknown> },
 ) => string
 
-/** The typed client: `TThrow` decides whether calls resolve to values or results. */
-export type HoneyClient<TRoutes, TThrow extends boolean = false> = {
+/** The typed client: each call resolves to its value and throws an error status; `safe`'s answer a Result. */
+export type HoneyClient<TRoutes> = {
 	$isClientError: (e: unknown) => e is ClientError
 	$path: PathHelper<TRoutes>
 	$url: PathHelper<TRoutes>
-	delete: Method<TRoutes, TThrow, "delete">
-	get: Method<TRoutes, TThrow, "get">
-	patch: Method<TRoutes, TThrow, "patch">
-	post: Method<TRoutes, TThrow, "post">
-	put: Method<TRoutes, TThrow, "put">
+	delete: Method<TRoutes, "delete">
+	get: Method<TRoutes, "get">
+	patch: Method<TRoutes, "patch">
+	post: Method<TRoutes, "post">
+	put: Method<TRoutes, "put">
+	/** the same calls, each answering a Result instead of throwing an API answer (bit 21 i) */
+	safe: { [M in "delete" | "get" | "patch" | "post" | "put"]: SafeMethod<TRoutes, M> }
 	ws(
 		path: string,
 		input?: {
@@ -2727,20 +2717,17 @@ function isAsyncIterable(value: unknown): value is AsyncIterable<SSEEvent> {
 /**
  * One call, one request, consumed either way:
  * - `await api.get(...)` sends it; an event-stream response resolves to an
- *   `AsyncIterable<SSEEvent>` (never buffered), anything else to the parsed body or result.
+ *   `AsyncIterable<SSEEvent>` (never buffered), anything else to the parsed body.
  * - `for await (... of api.get(...))` before the call has started sends it as a stream request
  *   (`accept: text/event-stream`, no timeout).
  * - iterating after awaiting reuses the same response instead of sending again.
  */
-function lazyCall(
-	http: HTTPClient,
-	call: { method: string; opts: RequestOptions; path: string; shouldThrow: boolean },
-) {
-	const { method, opts, path, shouldThrow } = call
+function lazyCall(http: HTTPClient, call: { method: string; opts: RequestOptions; path: string }) {
+	const { method, opts, path } = call
 	let mode: "auto" | "idle" | "sse" = "idle"
 	let auto: Promise<unknown> | undefined
 	const runAuto = (): Promise<unknown> => {
-		auto ??= http.requestAuto(method, path, opts, shouldThrow)
+		auto ??= http.requestAuto(method, path, opts).then((answer) => answer.data)
 		return auto
 	}
 	const lazy = new Promise((resolve, reject) => {
@@ -2757,14 +2744,9 @@ function lazyCall(
 				return http.requestStream(method, path, opts)[Symbol.asyncIterator]()
 			}
 			return (async function* () {
-				const result = await runAuto()
-				if (isAsyncIterable(result)) {
-					yield* result
-					return
-				}
-				const error = (result as { error?: unknown } | null)?.error
-				if (error) throw error instanceof Error ? error : new Error("Request failed")
-				throw new TypeError(`${method} ${path} did not respond with an event stream`)
+				const data = await runAuto()
+				if (!isAsyncIterable(data)) throw new TypeError(`${method} ${path} did not respond with an event stream`)
+				yield* data
 			})()
 		},
 	})
@@ -2785,27 +2767,30 @@ function helper(http: HTTPClient, prop: string): unknown {
 	}
 }
 
-export function createClient<T>(config: ClientConfig & { throwOnError: true }): HoneyClient<InferRoutes<T>, true>
-export function createClient<T>(
-	config: Omit<ClientConfig, "throwOnError"> & { throwOnError?: false },
-): HoneyClient<InferRoutes<T>, false>
-export function createClient<T, TThrow extends boolean>(
-	config: ClientConfig & { throwOnError?: TThrow },
-): HoneyClient<InferRoutes<T>, TThrow>
-export function createClient<T, TThrow extends boolean = false>(
-	config: ClientConfig & { throwOnError?: TThrow },
-): HoneyClient<InferRoutes<T>, TThrow> {
+/** `client.safe`: each method's call answering a Result, an event stream's opened before it resolves. */
+function safeMethods(http: HTTPClient): object {
+	return Object.fromEntries(
+		HTTP_METHODS.map((method) => [
+			method,
+			(path: string, input?: RequestOptions) => resultOf(http.requestAuto(method.toUpperCase(), path, input ?? {})),
+		]),
+	)
+}
+
+/** The app-typed client: each call throws an error status, and `client.safe`'s calls answer it as a Result. */
+export function createClient<T>(config: ClientConfig): HoneyClient<InferRoutes<T>> {
 	const http = new HTTPClient(config)
-	return new Proxy({} as HoneyClient<InferRoutes<T>, TThrow>, {
+	const safe = safeMethods(http)
+	return new Proxy({} as HoneyClient<InferRoutes<T>>, {
 		get(_target, prop: string | symbol) {
 			/* not a thenable, and printable: `await client` and `String(client)` must not hit the method table */
 			if (prop === Symbol.toStringTag) return "HoneyClient"
 			if (typeof prop === "symbol" || prop === "then") return undefined
 			if (prop === "toString" || prop === "toJSON") return () => "[object HoneyClient]"
+			if (prop === "safe") return safe
 			if (!HTTP_METHODS.includes(prop)) return helper(http, prop)
-			const shouldThrow = config.throwOnError === true
 			return (path: string, input?: RequestOptions) =>
-				lazyCall(http, { method: prop.toUpperCase(), opts: input ?? {}, path, shouldThrow })
+				lazyCall(http, { method: prop.toUpperCase(), opts: input ?? {}, path })
 		},
 	})
 }
@@ -2947,34 +2932,36 @@ class SdkCore {
 		for (const target of resolveInvalidationTargets(entry.invalidate, params)) this.#stale.mark(target, selector, at)
 	}
 
-	async request(entry: ServiceEntry, input: CallInput): Promise<unknown> {
-		const shouldThrow = this.#config.throwOnError === true
+	/** A REST op's answer, its `x-invalidate` targets marked and its stale mark cleared once it is a 2xx. */
+	async request(entry: ServiceEntry, input: CallInput): Promise<Answer> {
 		const template = templateOf(entry)
 		let path: string
 		try {
 			path = interpolatePath(template, input.params)
 		} catch (e) {
-			if (!(e instanceof PathParamError)) throw e
-			const error = pathError(e, entry)
-			if (shouldThrow) throw error
-			return { data: null, error, response: error.response, status: 0 }
+			throw e instanceof PathParamError ? pathError(e, entry) : e
 		}
 		const selector = `${entry.method} ${path}`
 		const meta = this.#meta(selector, path, entry.method)
 		const opts = optionsFor(entry, input)
 		const declared = entry.empty ? null : entry.accept
-		const op = { declared, headers: entry.headers, meta, method: entry.method, opts, path: template, shouldThrow }
-		const result = await this.http.requestOperation(op)
-		const status = result instanceof Response ? result.status : (result as { status?: number } | null)?.status
-		if (shouldThrow || (status !== undefined && status >= 200 && status < 300)) {
+		const settle = () => {
 			this.#mark(entry, input.params, selector)
 			if (meta?.isStale) this.#stale?.clear(selector, path, entry.method, meta.seqSnapshot)
 		}
-		return result
+		try {
+			const answer = await this.http.requestOperation({ declared, meta, method: entry.method, opts, path: template })
+			settle()
+			return answer
+		} catch (e) {
+			/* a 2xx whose body does not decode still changed what it invalidates */
+			if (e instanceof DecodeError) settle()
+			throw e
+		}
 	}
 
-	/** An SSE op: its stale view for the hooks, and its `x-invalidate` targets marked once the answer is ok. */
-	stream(entry: ServiceEntry, input: CallInput): AsyncIterable<unknown> {
+	/** An SSE op opened: its stale view for the hooks, and its `x-invalidate` targets marked once the answer is ok. */
+	async open(entry: ServiceEntry, input: CallInput): Promise<Answer> {
 		const opts = optionsFor(entry, input)
 		const template = templateOf(entry)
 		let selector: string | undefined
@@ -2989,8 +2976,8 @@ class SdkCore {
 		const onOpen = () => {
 			if (selector !== undefined) this.#mark(entry, input.params, selector)
 		}
-		const events = this.http.streamOperation({ meta, method: entry.method, onOpen, opts, path: template })
-		return entry.sse === "json" ? jsonEvents(events) : events
+		const { data, response } = await this.http.openStream({ meta, method: entry.method, onOpen, opts, path: template })
+		return { data: entry.sse === "json" ? jsonEvents(data) : data, response }
 	}
 
 	/** An x-realtime op: one resumable connection, dialed through the client. */
@@ -3010,37 +2997,41 @@ class SdkCore {
 	}
 }
 
-/** The function an entry is called through, named by its dotted member path for stack traces. */
-function callable(core: SdkCore, entry: ServiceEntry, name: string): OperationFn {
+/** The function an entry is called through, named by its member path; a safe one's REST or SSE answer a Result. */
+function callable(core: SdkCore, entry: ServiceEntry, name: string, safe: boolean): OperationFn {
 	let fn: OperationFn
+	const open = (input?: CallInput) => core.open(entry, input ?? {})
 	/* a realtime op is one resumable connection; any other dispatches by its transport */
 	if (entry.realtime) fn = (input) => core.realtime(entry, input ?? {})
 	else if (entry.ws) fn = (input) => core.connect(entry, input ?? {})
-	else if (entry.sse) fn = (input) => core.stream(entry, input ?? {})
-	else fn = (input) => core.request(entry, input ?? {})
+	else if (entry.sse) fn = safe ? (input) => resultOf(open(input)) : (input) => later(() => open(input))
+	else if (safe) fn = (input) => resultOf(core.request(entry, input ?? {}), entry.headers)
+	else fn = async (input) => (await core.request(entry, input ?? {})).data
 	Object.defineProperty(fn, "name", { value: name })
 	return fn
 }
 
 /** A namespace of the map: each read of a key returns the same function or namespace object. */
-function namespace(core: SdkCore, node: ServiceMapNode, path: readonly string[]): object {
+function namespace(core: SdkCore, node: ServiceMapNode, path: readonly string[], safe: boolean): object {
 	const members = new Map<string, unknown>()
 	return new Proxy({} as Record<string, unknown>, {
 		get(target, key: string | symbol) {
 			if (typeof key === "symbol") return Reflect.get(target, key)
 			const child = childOf(node, key)
 			if (child === undefined) return Reflect.get(target, key)
-			return memberOf(core, members, { child, path: [...path, key] })
+			return memberOf(core, members, { child, path: [...path, key], safe })
 		},
 	})
 }
 
-/** A member, once: a callable for an entry, a namespace object otherwise. */
-function memberOf(core: SdkCore, members: Map<string, unknown>, at: { child: ServiceMapNode; path: string[] }) {
+type At = { child: ServiceMapNode; path: string[]; safe: boolean }
+
+/** A member at its node and path, the twin's or not, once: a callable for an entry, a namespace object otherwise. */
+function memberOf(core: SdkCore, members: Map<string, unknown>, at: At) {
 	const key = at.path.join(".")
 	let member = members.get(key)
 	if (member === undefined) {
-		member = isEntry(at.child) ? callable(core, at.child, key) : namespace(core, at.child, at.path)
+		member = isEntry(at.child) ? callable(core, at.child, key, at.safe) : namespace(core, at.child, at.path, at.safe)
 		members.set(key, member)
 	}
 	return member
@@ -3054,10 +3045,12 @@ export function schemeAuth<T extends ClientConfig>(config: T, headerName: string
 
 /**
  * A generated SDK's base class. The instance is a Proxy over the service map: `sdk.users.create(input)`
- * dispatches the entry at `users.create`; the client's own members (`state`, `dispose`, `toString`)
+ * dispatches the entry at `users.create`; the client's own members (`safe`, `state`, `dispose`, `toString`)
  * always win, and a key the map does not hold reads as `undefined`.
  */
 export class SDKClient {
+	/** the same operations, each answering a Result, never throwing an API answer (bit 21 i) */
+	readonly safe: object
 	state: Record<string, unknown>
 	readonly #core: SdkCore
 
@@ -3065,6 +3058,7 @@ export class SDKClient {
 		this.state = config.state ?? {}
 		this.#core = new SdkCore({ ...config, state: this.state })
 		const core = this.#core
+		this.safe = namespace(core, serviceMap, [], true)
 		const members = new Map<string, unknown>()
 		return new Proxy(this, {
 			get(target, key: string | symbol) {
@@ -3073,7 +3067,7 @@ export class SDKClient {
 					return typeof value === "function" ? value.bind(target) : value
 				}
 				const child = childOf(serviceMap, key)
-				return child === undefined ? undefined : memberOf(core, members, { child, path: [key] })
+				return child === undefined ? undefined : memberOf(core, members, { child, path: [key], safe: false })
 			},
 		})
 	}

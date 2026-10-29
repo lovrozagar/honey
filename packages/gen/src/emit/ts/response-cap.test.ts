@@ -2,7 +2,8 @@
  * The TS SDK's response cap (bit 11 fix): a body is read in the chunks it arrives in and refused past
  * `maxResponseBytes` decoded bytes (100 MiB by default), its read cancelled. A body far past the cap is pulled only to
  * the cap; a gzip bomb is refused on its decoded bytes through a real fetch; an error body past the cap reads as null,
- * its status kept. The refusal names the cap, the content type and, when the response sent one, its Content-Length.
+ * its status kept. The refusal of a 2xx is a DecodeError (bit 21 i1), the safe call's Err; it names the cap, the
+ * content type and, when the response sent one, its Content-Length.
  */
 import { execFile } from "node:child_process"
 import { writeFileSync } from "node:fs"
@@ -14,7 +15,9 @@ import { emittedApp, emittedSdk, emittedSdkEntry } from "./__fixtures__/emitted.
 import { SPAWN_TIMEOUT } from "../../gen/__fixtures__/spawn-timeout.ts"
 
 type Front = "app" | "sdk"
-type Outcome = { data?: unknown; error?: { body?: unknown; message?: string; status?: number } | null; status?: number }
+type Outcome =
+	| { ok: true; data: unknown; response: Response }
+	| { ok: false; error: { body?: unknown; message?: string; name?: string; status?: number }; response: Response }
 
 const FRONTS: readonly Front[] = ["sdk", "app"]
 const MiB = 1 << 20
@@ -39,18 +42,18 @@ const DOC = {
 	},
 }
 
-/** One safe-mode `GET /items` through `front` with `config`. */
+/** One safe `GET /items` through `front` with `config`: its Result. */
 async function get(front: Front, config: Record<string, unknown>): Promise<Outcome> {
 	if (front === "sdk") {
 		const { TestSDK } = (await emittedSdk(DOC)) as unknown as {
-			TestSDK: new (config: object) => { items: { list: () => Promise<Outcome> } }
+			TestSDK: new (config: object) => { safe: { items: { list: () => Promise<Outcome> } } }
 		}
-		return new TestSDK(config).items.list()
+		return new TestSDK(config).safe.items.list()
 	}
 	const { createClient } = (await emittedApp()) as unknown as {
-		createClient: (config: object) => { get: (path: string) => Promise<Outcome> }
+		createClient: (config: object) => { safe: { get: (path: string) => Promise<Outcome> } }
 	}
-	return createClient(config).get("/items")
+	return createClient(config).safe.get("/items")
 }
 
 /**
@@ -85,14 +88,18 @@ function pulling(total: number, headers: Record<string, string>, status = 200) {
 /** A body as its size, null as it is: a body read past the cap fails a leg on a number, never a megabytes-long diff. */
 const sized = (body: unknown) => (body == null ? body : ((body as { length?: number }).length ?? "a value"))
 
-/** What a refused read's outcome holds: its status and data, the error's status, body and message. */
-const refused = (outcome: Outcome) => [
-	outcome.status,
-	sized(outcome.data ?? null),
-	outcome.error?.status,
-	sized(outcome.error?.body),
-	outcome.error?.message,
-]
+/** What a refused read's outcome holds: its arm and response status, the error's class, status, body and message. */
+const refused = (outcome: Outcome) =>
+	outcome.ok
+		? [true, outcome.response.status, sized(outcome.data)]
+		: [
+				false,
+				outcome.response.status,
+				outcome.error.name,
+				outcome.error.status,
+				sized(outcome.error.body),
+				outcome.error.message,
+			]
 
 /* each content coding a fetch may ask for, as a bomb: 64 MiB of zeros coded whole, far under 1 MiB on the wire */
 const CODERS = {
@@ -114,7 +121,10 @@ describe.each(FRONTS)("the response cap, through the %s", (front) => {
 		const answer = pulling(64 * MiB, { "content-type": "application/octet-stream" })
 		const outcome = await get(front, { baseURL: "https://api.test", fetch: answer.fetch, maxResponseBytes: MiB })
 		const message = `Response body is over the ${MiB}-byte cap (application/octet-stream)`
-		expect([refused(outcome), answer.pulled() <= MiB + 2 * CHUNK]).toEqual([[200, null, 200, null, message], true])
+		expect([refused(outcome), answer.pulled() <= MiB + 2 * CHUNK]).toEqual([
+			[false, 200, "DecodeError", 200, null, message],
+			true,
+		])
 		await vi.waitFor(() => expect(answer.cancelled()).toBe(true), { timeout: 5_000 })
 	})
 
@@ -123,7 +133,7 @@ describe.each(FRONTS)("the response cap, through the %s", (front) => {
 		const answer = pulling(5 * MiB, { "content-length": length, "content-type": "image/png" })
 		const outcome = await get(front, { baseURL: "https://api.test", fetch: answer.fetch, maxResponseBytes: MiB })
 		const message = `Response body is over the ${MiB}-byte cap (image/png, ${length} bytes)`
-		expect(refused(outcome)).toEqual([200, null, 200, null, message])
+		expect(refused(outcome)).toEqual([false, 200, "DecodeError", 200, null, message])
 	})
 
 	it.each(["gzip", "deflate"] as const)(
@@ -140,7 +150,7 @@ describe.each(FRONTS)("the response cap, through the %s", (front) => {
 			expect([bomb.byteLength < MiB, served.encodings(), refused(outcome)]).toEqual([
 				true,
 				["gzip, deflate"],
-				[200, null, 200, null, message],
+				[false, 200, "DecodeError", 200, null, message],
 			])
 		},
 	)
@@ -148,12 +158,10 @@ describe.each(FRONTS)("the response cap, through the %s", (front) => {
 	it("reads an error body past the cap as null, its status kept, pulled only to the cap and cancelled", async () => {
 		const answer = pulling(64 * MiB, { "content-type": "text/plain" }, 500)
 		const outcome = await get(front, { baseURL: "https://api.test", fetch: answer.fetch, maxResponseBytes: MiB })
-		expect([
-			outcome.status,
-			outcome.error?.status,
-			sized(outcome.error?.body),
-			answer.pulled() <= MiB + 2 * CHUNK,
-		]).toEqual([500, 500, null, true])
+		expect([refused(outcome), answer.pulled() <= MiB + 2 * CHUNK]).toEqual([
+			[false, 500, "InternalServerError", 500, null, "HTTP 500"],
+			true,
+		])
 		await vi.waitFor(() => expect(answer.cancelled()).toBe(true), { timeout: 5_000 })
 	})
 
@@ -162,16 +170,16 @@ describe.each(FRONTS)("the response cap, through the %s", (front) => {
 		const outcome = await get(front, { baseURL: "https://api.test", fetch: answer.fetch })
 		const message = `Response body is over the ${100 * MiB}-byte cap (application/octet-stream)`
 		expect([refused(outcome), answer.pulled() <= 100 * MiB + 2 * CHUNK]).toEqual([
-			[200, null, 200, null, message],
+			[false, 200, "DecodeError", 200, null, message],
 			true,
 		])
 	})
 })
 
-/** A Bun program calling `items.list` on the SDK at `entry` under a 1 MiB cap, printing its safe-mode outcome. */
+/** A Bun program calling `items.list` on the SDK at `entry` under a 1 MiB cap, printing its safe outcome. */
 const BUN_CALL = (entry: string, url: string) => `const { TestSDK } = await import(${JSON.stringify(entry)})
-const outcome = await new TestSDK({ baseURL: ${JSON.stringify(url)}, maxResponseBytes: ${MiB} }).items.list()
-console.log(JSON.stringify({ message: outcome.error?.message ?? null, status: outcome.status }))
+const outcome = await new TestSDK({ baseURL: ${JSON.stringify(url)}, maxResponseBytes: ${MiB} }).safe.items.list()
+console.log(JSON.stringify({ message: outcome.error?.message ?? null, name: outcome.error?.name ?? null, status: outcome.response.status }))
 `
 
 describe("the response cap under Bun, whose fetch asks for gzip, deflate, br and zstd (bit 19 b1)", () => {
@@ -198,7 +206,7 @@ describe("the response cap under Bun, whose fetch asks for gzip, deflate, br and
 			expect([ran.status, served.encodings(), JSON.parse(ran.stdout || "null")], ran.stderr).toEqual([
 				0,
 				["gzip, deflate, br, zstd"],
-				{ message, status: 200 },
+				{ message, name: "DecodeError", status: 200 },
 			])
 		},
 	)

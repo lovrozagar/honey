@@ -30,7 +30,7 @@ export type ServiceEntry = {
 export type ServiceMapNode = ServiceEntry | { [key: string]: ServiceMapNode }
 
 /** Members a generated client already has; a resource of the same name would hide them. */
-const ROOT_MEMBERS: readonly string[] = ["dispose", "state"]
+const ROOT_MEMBERS: readonly string[] = ["dispose", "safe", "state"]
 
 /**
  * Names JavaScript machinery reads off any object: a `then` member makes the client a thenable,

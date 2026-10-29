@@ -1,17 +1,17 @@
 // A TypeScript program against an SDK generated from the Kitchen example API: a client, a call and its typed error,
-// safe mode, and an event stream released by leaving its loop. Type-checked against the generated SDK in the docs' tests.
-import { Kitchen, NotFoundError } from "./kitchen"
+// the call's safe twin answering a Result, and an event stream released by leaving its loop. Type-checked against the
+// generated SDK in the docs' tests.
+import { DecodeError, Kitchen, NotFoundError } from "./kitchen"
 
-export function newClient(): Kitchen<true> {
+export function newClient(): Kitchen {
 	return new Kitchen({
 		baseURL: "https://api.example.com",
 		headers: { authorization: `Bearer ${process.env.KITCHEN_TOKEN ?? ""}` },
-		throwOnError: true,
 		timeout: 10_000,
 	})
 }
 
-export async function organization(client: Kitchen<true>, orgId: string): Promise<string | null> {
+export async function organization(client: Kitchen, orgId: string): Promise<string | null> {
 	try {
 		await client.getApiV1OrganizationsByOrgId({ params: { orgId } })
 		return orgId
@@ -21,13 +21,14 @@ export async function organization(client: Kitchen<true>, orgId: string): Promis
 	}
 }
 
-export async function healthInSafeMode(): Promise<string> {
-	const client = new Kitchen({ baseURL: "https://api.example.com" })
-	const result = await client.getApiHealth()
-	return result.error === null ? "up" : `answered ${result.status}`
+export async function health(client: Kitchen): Promise<string> {
+	const result = await client.safe.getApiHealth()
+	if (result.ok) return "up"
+	if (result.error instanceof DecodeError) return `unreadable answer: ${result.error.message}`
+	return `answered ${result.error.status}`
 }
 
-export async function firstEvents(client: Kitchen<true>, limit: number): Promise<string[]> {
+export async function firstEvents(client: Kitchen, limit: number): Promise<string[]> {
 	const seen: string[] = []
 	for await (const event of client.getApiEvents()) {
 		seen.push(String(event.data))

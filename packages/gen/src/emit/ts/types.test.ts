@@ -4,63 +4,13 @@
  */
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
-import { Project, ts } from "ts-morph"
+import * as morph from "ts-morph"
 import { describe, expect, it } from "vitest"
 import { type OpenApiDocument, toIR } from "../../ir/build.ts"
-import { generateSdk, serviceMapOf } from "./sdk.ts"
+import { consumerChecker, doc, type Json, json, object, param, STRING } from "./__fixtures__/consumer-types.ts"
+import { serviceMapOf } from "./sdk.ts"
 
-type Json = Record<string, unknown>
-
-/* one project for the file: the lib files parse once, each check swaps the SDK and the consumer */
-const project = new Project({
-	compilerOptions: {
-		allowImportingTsExtensions: true,
-		lib: ["lib.es2023.d.ts", "lib.dom.d.ts", "lib.dom.iterable.d.ts"],
-		module: ts.ModuleKind.ESNext,
-		moduleResolution: ts.ModuleResolutionKind.Bundler,
-		noEmit: true,
-		skipLibCheck: true,
-		strict: true,
-		target: ts.ScriptTarget.ES2022,
-	},
-	useInMemoryFileSystem: true,
-})
-
-/** What every consumer starts with: the SDK, a safe-mode instance, and the assertion helpers. */
-const prelude = (stem: string) => `import { ClientError, TestSDK } from "./${stem}.index.gen.ts"
-type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false
-type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false
-declare function expectType<T extends true>(): void
-type Fn = (...args: never[]) => unknown
-type Result<F extends Fn> = Awaited<ReturnType<F>>
-type Data<F extends Fn> = Extract<Result<F>, { error: null }> extends { data: infer D } ? D : never
-type Failure<F extends Fn> = Exclude<Result<F>, { error: null }>
-type Input<F extends Fn> = NonNullable<Parameters<F>[0]>
-const sdk = new TestSDK({ baseURL: "https://api.example.com" })
-void ClientError
-`
-
-/** Each diagnostic of `consumer` (or, with `all`, of every emitted file too) beside the SDK of `document`. */
-function check(document: Json, consumer: string, scope: "all" | "consumer" = "consumer"): string[] {
-	for (const file of project.getSourceFiles()) project.removeSourceFile(file)
-	const { files, stem } = generateSdk(document, { name: "TestSDK" })
-	for (const [name, text] of Object.entries(files)) project.createSourceFile(`/sdk/${name}`, text)
-	const main = project.createSourceFile("/sdk/consumer.ts", `${prelude(stem)}${consumer}\n`)
-	const diagnostics = scope === "all" ? project.getPreEmitDiagnostics() : main.getPreEmitDiagnostics()
-	return diagnostics.map((d) => {
-		const text = d.getMessageText()
-		const message = typeof text === "string" ? text : text.getMessageText()
-		return `${d.getSourceFile()?.getBaseName()}:${d.getLineNumber()}: ${message}`
-	})
-}
-
-/** An OpenAPI 3.1 document of `paths`. */
-const doc = (paths: Json): Json => ({ info: { title: "T", version: "1" }, openapi: "3.1.0", paths })
-
-const json = (schema: Json) => ({ content: { "application/json": { schema } }, description: "" })
-const object = (properties: Json, required = Object.keys(properties)) => ({ properties, required, type: "object" })
-const STRING = { type: "string" }
-const param = (name: string, schema: Json = STRING, place = "path") => ({ in: place, name, required: true, schema })
+const check = consumerChecker(morph)
 
 /** honey's error envelope for `status` and its error keys. */
 const envelope = (status: number, keys: string[]) =>
@@ -106,14 +56,14 @@ describe("a call's result branches", () => {
 	// v0: c925ade565
 	// v0: b024fa9ff3
 	// v0: 955febe9dc
-	it("types the success branch as { data, error: null, response, status }, every branch with response and status", () => {
-		const consumer = `type S = Extract<Result<typeof sdk.health.check>, { error: null }>
-expectType<Equal<keyof S, "data" | "error" | "response" | "status">>()
+	it("types the Ok arm as { ok: true, data, response }, both arms with the response; the normal call the data", () => {
+		const consumer = `type S = Extract<Result<typeof safe.health.check>, { ok: true }>
+expectType<Equal<keyof S, "data" | "ok" | "response">>()
 expectType<Same<S["data"], { status: string }>>()
-expectType<Equal<S["error"], null>>()
+expectType<Equal<S["ok"], true>>()
 expectType<Equal<S["response"], Response>>()
-expectType<Equal<S["status"], number>>()
-expectType<Result<typeof sdk.health.check> extends { response: Response; status: number } ? true : false>()`
+expectType<Result<typeof safe.health.check> extends { response: Response } ? true : false>()
+expectType<Same<Result<typeof sdk.health.check>, { status: string }>>()`
 		expect(check(RESULTS, consumer)).toEqual([])
 	})
 
@@ -121,15 +71,15 @@ expectType<Result<typeof sdk.health.check> extends { response: Response; status:
 	// v0: 900fb63f15
 	// v0: 0df7403d05
 	// v0: 8ace3a444c
-	it("types the error branch of a method without declared errors as the unknown raw body, never ClientError", () => {
-		const consumer = `type F = Failure<typeof sdk.health.check>
-expectType<Equal<keyof F, "data" | "error" | "response" | "status">>()
-expectType<Equal<F["data"], null>>()
-expectType<Equal<F["error"], unknown>>()
+	it("types the Err arm of a method without declared errors as ClientError or DecodeError, never unknown", () => {
+		const consumer = `type F = Failure<typeof safe.health.check>
+expectType<Equal<keyof F, "error" | "ok" | "response">>()
+expectType<Equal<F["error"], ClientError | DecodeError>>()
+expectType<Equal<F["ok"], false>>()
 expectType<Equal<F["response"], Response>>()
-expectType<Equal<F["status"], number>>()
-expectType<Same<Extract<Failure<typeof sdk.items.get>, { status: 404 }>["error"], { reason: string }>>()
-expectType<Failure<typeof sdk.items.get>["error"] extends ClientError ? false : true>()`
+expectType<unknown extends F["error"] ? false : true>()
+expectType<Same<Extract<Declared<typeof safe.items.get>, { status: 404 }>["body"], { reason: string }>>()
+expectType<Failure<typeof safe.items.get>["error"] extends ClientError ? true : false>()`
 		expect(check(RESULTS, consumer)).toEqual([])
 	})
 })
@@ -138,31 +88,36 @@ describe("a call's declared errors", () => {
 	// v0: 0cad6a4d7a
 	// v0: 0f3e5284b9
 	// v0: 4241b50e12
-	it("narrows the error branch by status to each declared error body", () => {
-		const consumer = `type R = Result<typeof sdk.items.get>
-expectType<Same<Extract<R, { error: null }>["data"], { id: string }>>()
-expectType<Same<Extract<R, { status: 404 }>["error"], { reason: string }>>()
-expectType<Same<Extract<R, { status: 409 }>["error"], { error_key: string; message: string }>>()`
+	it("narrows the Err arm by status to each declared error body", () => {
+		const consumer = `type D = Declared<typeof safe.items.get>
+expectType<Same<Data<typeof safe.items.get>, { id: string }>>()
+expectType<Same<Extract<D, { status: 404 }>["body"], { reason: string }>>()
+expectType<Same<Extract<D, { status: 409 }>["body"], { error_key: string; message: string }>>()`
 		expect(check(RESULTS, consumer)).toEqual([])
 	})
 
 	// v0: 53e990f9e5
-	it("keys the error branch by exactly the declared statuses, with no unknown fallback arm", () => {
-		const consumer = `type F = Failure<typeof sdk.items.get>
-expectType<Equal<F["status"], 404 | 409>>()
-expectType<unknown extends F["error"] ? false : true>()`
+	it("keys the Err arm by exactly the declared statuses beside DecodeError, with no unknown fallback arm", () => {
+		const consumer = `type D = Declared<typeof safe.items.get>
+expectType<Equal<D["status"], 404 | 409>>()
+expectType<unknown extends D["body"] ? false : true>()`
 		expect(check(RESULTS, consumer)).toEqual([])
 	})
 
 	// v0: 08c896d7e4
-	it("narrows data when !error, and the error to the declared bodies otherwise", () => {
+	it("narrows data when ok, and the error to DecodeError or the declared bodies otherwise", () => {
 		const consumer = `export async function narrow() {
-	const r = await sdk.items.get({ params: { id: "1" } })
-	if (!r.error) {
+	const r = await sdk.safe.items.get({ params: { id: "1" } })
+	if (r.ok) {
 		expectType<Same<typeof r.data, { id: string }>>()
 		return
 	}
-	expectType<Same<typeof r.error, { reason: string } | { error_key: string; message: string }>>()
+	if (r.error instanceof DecodeError) {
+		expectType<Equal<typeof r.error.body, string | null>>()
+		return
+	}
+	expectType<Same<typeof r.error.body, { reason: string } | { error_key: string; message: string }>>()
+	expectType<Equal<typeof r.error.status, 404 | 409>>()
 }`
 		expect(check(RESULTS, consumer)).toEqual([])
 	})
@@ -173,24 +128,24 @@ describe("a call's errors in honey's envelope", () => {
 	// v0: b72ff2324f
 	// v0: bb594968f7
 	it("types honey's error envelope at its declared status: all six keys, the status and the key as literals", () => {
-		const consumer = `type F = Failure<typeof sdk.secure.get>
-type E = Extract<F, { status: 404 }>["error"]
-expectType<Equal<F["status"], 400 | 401 | 404>>()
+		const consumer = `type D = Declared<typeof safe.secure.get>
+type E = Extract<D, { status: 404 }>["body"]
+expectType<Equal<D["status"], 400 | 401 | 404>>()
 expectType<Equal<keyof E, "error_key" | "fields" | "message" | "status" | "status_key" | "success">>()
 expectType<Equal<[E["status"], E["error_key"], E["success"]], [404, "not_found", false]>>()
 expectType<Same<E["fields"], Record<string, { error_key: string; message: string; path: string }[]>>>()
-expectType<Equal<Extract<F, { status: 401 }>["error"]["error_key"], "unauthorized">>()`
+expectType<Equal<Extract<D, { status: 401 }>["body"]["error_key"], "unauthorized">>()`
 		expect(check(RESULTS, consumer)).toEqual([])
 	})
 
 	// v0: 67ac56ccbb
-	it("narrows on if (error) to a null data, the envelope's keys and the declared statuses", () => {
+	it("narrows on !ok, DecodeError ruled out, to the envelope's keys and the declared statuses", () => {
 		const consumer = `export async function narrow() {
-	const r = await sdk.secure.get()
-	if (r.error) {
-		expectType<Equal<typeof r.data, null>>()
-		expectType<Equal<typeof r.error.error_key, "bad_request" | "unauthorized" | "not_found">>()
-		expectType<Equal<typeof r.status, 400 | 401 | 404>>()
+	const r = await sdk.safe.secure.get()
+	if (!r.ok) {
+		if (r.error instanceof DecodeError) return
+		expectType<Equal<typeof r.error.body.error_key, "bad_request" | "unauthorized" | "not_found">>()
+		expectType<Equal<typeof r.error.status, 400 | 401 | 404>>()
 		return
 	}
 	expectType<Same<typeof r.data, { ping: "pong" }>>()
@@ -201,17 +156,20 @@ expectType<Equal<Extract<F, { status: 401 }>["error"]["error_key"], "unauthorize
 
 describe("an SDK instance's type", () => {
 	// v0: 2bf37c5bd3
-	it("resolves to the data itself under throwOnError: true", () => {
-		const consumer = `const thrown = new TestSDK({ baseURL: "https://api.example.com", throwOnError: true })
-expectType<Same<Awaited<ReturnType<typeof thrown.items.get>>, { id: string }>>()`
+	it("resolves a normal call to the data itself, and takes no throwOnError", () => {
+		const consumer = `expectType<Same<Awaited<ReturnType<typeof sdk.items.get>>, { id: string }>>()
+// @ts-expect-error the config has no throwOnError: the normal client always throws
+void new TestSDK({ baseURL: "https://api.example.com", throwOnError: true })`
 		expect(check(RESULTS, consumer)).toEqual([])
 	})
 
 	// v0: 8e55e22707
 	it("types an instance as the declared SDK: its operations and its own members, nothing else", () => {
-		const consumer = `const typed: TestSDK = sdk
+		const consumer = `import type { TestSDKSafe } from "./test-sdk.index.gen.ts"
+const typed: TestSDK = sdk
 expectType<Equal<typeof typed.state, Record<string, unknown>>>()
 expectType<Equal<ReturnType<typeof typed.dispose>, void>>()
+expectType<Equal<typeof typed.safe, TestSDKSafe>>()
 // @ts-expect-error no such operation
 void sdk.items.nope`
 		expect(check(RESULTS, consumer)).toEqual([])
@@ -252,42 +210,43 @@ describe("a call's data type, by what the operation answers", () => {
 	// v0: 37402502ed
 	// v0: e9f13f34d9
 	it("types a text/csv or text/plain answer as a string", () => {
-		const consumer = `expectType<Equal<Data<typeof sdk.files.csv>, string>>()
-expectType<Equal<Data<typeof sdk.files.text>, string>>()`
+		const consumer = `expectType<Equal<Data<typeof safe.files.csv>, string>>()
+expectType<Equal<Data<typeof safe.files.text>, string>>()`
 		expect(check(ANSWERS, consumer)).toEqual([])
 	})
 
 	// v0: c00913ed57
 	// v0: ee7fbfbf7f
 	it("types a 204, or a 200 without a body, as null, never void", () => {
-		const consumer = `expectType<Equal<Data<typeof sdk.items.delete>, null>>()
-expectType<Equal<Data<typeof sdk.project.export>, null>>()`
+		const consumer = `expectType<Equal<Data<typeof safe.items.delete>, null>>()
+expectType<Equal<Data<typeof safe.project.export>, null>>()`
 		expect(check(ANSWERS, consumer)).toEqual([])
 	})
 
-	it("types an op declaring no success body (only a 307) as null in safe and throw mode, raw as Response", () => {
-		const consumer = `const thrower = new TestSDK({ baseURL: "https://x", throwOnError: true })
-const thrown = () => thrower.moved()
+	it("types an op declaring no success body (only a 307) as null in both styles, raw as Response", () => {
+		const consumer = `const thrown = () => sdk.moved()
 const raw = () => sdk.moved({ raw: true })
-expectType<Equal<Data<typeof sdk.moved>, null>>()
+const safeRaw = () => sdk.safe.moved({ raw: true })
+expectType<Equal<Data<typeof safe.moved>, null>>()
 expectType<Equal<Result<typeof thrown>, null>>()
-expectType<Equal<Result<typeof raw>, Response>>()`
+expectType<Equal<Result<typeof raw>, Response>>()
+expectType<Equal<Data<typeof safeRaw>, Response>>()`
 		expect(check(ANSWERS, consumer)).toEqual([])
 	})
 
 	// v0: e7948c1bc6
 	it("types a default response as neither the success data nor an error status", () => {
-		const consumer = `expectType<Equal<Data<typeof sdk.a>, string>>()
-expectType<Equal<Failure<typeof sdk.a>["status"], number>>()
-expectType<Equal<Failure<typeof sdk.a>["error"], unknown>>()`
+		const consumer = `expectType<Equal<Data<typeof safe.a>, string>>()
+expectType<Equal<Failure<typeof safe.a>["error"], ClientError | DecodeError>>()
+expectType<Equal<Failure<typeof safe.a>["error"]["status"], number>>()`
 		expect(check(ANSWERS, consumer)).toEqual([])
 	})
 
 	// v0: faaa4fc03e
 	it("types a path-item param in the input, an XML answer as a string and a +json one from its schema", () => {
 		const consumer = `expectType<Equal<Input<typeof sdk.feed.get>["params"]["org"], number>>()
-expectType<Equal<Data<typeof sdk.feed.get>, string>>()
-expectType<Same<Data<typeof sdk.problems.list>, { title?: string }>>()`
+expectType<Equal<Data<typeof safe.feed.get>, string>>()
+expectType<Same<Data<typeof safe.problems.list>, { title?: string }>>()`
 		expect(check(ANSWERS, consumer)).toEqual([])
 	})
 })
@@ -439,7 +398,7 @@ describe("names and inputs the document leaves odd", () => {
 		const consumer = `import type { Response2, Schema, Schema1st } from "./test-sdk.index.gen.ts"
 expectType<Equal<Response2, { ok: boolean }>>()
 expectType<Equal<[Schema, Schema1st], [string, string]>>()
-expectType<Equal<Data<typeof sdk.modes.get>, Response2>>()`
+expectType<Equal<Data<typeof safe.modes.get>, Response2>>()`
 		expect(check(ODD, consumer)).toEqual([])
 	})
 
@@ -469,7 +428,8 @@ describe("the emitted SDK compiles", () => {
 		const consumer = `void sdk.checkout.sessions.create()
 void sdk.users.list()
 void sdk.users.profile.update({ json: { name: "n" }, params: { id: "1" } })
-expectType<Equal<Data<typeof sdk.getStatus>, string>>()
+expectType<Equal<Data<typeof safe.getStatus>, string>>()
+void sdk.safe.users.profile.update({ json: { name: "n" }, params: { id: "1" } })
 // @ts-expect-error a namespace is not callable
 void sdk.users.profile()`
 		expect(check(nested, consumer)).toEqual([])

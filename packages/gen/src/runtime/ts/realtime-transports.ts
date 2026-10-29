@@ -123,12 +123,11 @@ function pollAdapter(at: Target): TransportAdapter {
 				const cursor = { ...opts }
 				for (let polls = 0; !signal.aborted; polls++) {
 					const poll = { ...cursorOpts(at, cursor, true), signal }
-					const data = await at.http.requestOperation({
+					const { data } = await at.http.requestOperation({
 						method: "GET",
 						opts: poll,
 						path: at.path,
 						refreshes: false,
-						shouldThrow: true,
 					})
 					if (polls === 0) conn.onFrame(ready(opts))
 					if (data === null || data === undefined || data === "") continue

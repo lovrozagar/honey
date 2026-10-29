@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest"
 import { emittedApp, emittedSdk, recordingFetch } from "./__fixtures__/emitted.ts"
 
 type Front = "app" | "sdk"
-type Result = { data: unknown; error: unknown; response: Response; status: number }
+type Result =
+	| { ok: true; data: unknown; response: Response }
+	| { ok: false; error: ClientErrorLike; response: Response }
 type ClientErrorLike = Error & { body: unknown; response: Response; status: number }
 type ErrorClass = new (init: { body: unknown; message: string; response: Response; status: number }) => ClientErrorLike
 type Runtime = Record<string, ErrorClass> & {
@@ -24,30 +26,43 @@ async function runtime(front: Front): Promise<Runtime> {
 	return (front === "sdk" ? await emittedSdk(DOC) : await emittedApp()) as unknown as Runtime
 }
 
-/** One `GET /items` through `front` (the SDK class or the app client), answered by `answer`. */
-async function get(front: Front, answer: () => Response, config: Record<string, unknown> = {}): Promise<unknown> {
+type List = { items: { list: () => Promise<unknown> } }
+type Get = { get: (path: string) => Promise<unknown> }
+
+/** One `GET /items` through `front` (the SDK class or the app client), its safe twin when `safe`, answered by `answer`. */
+async function get(front: Front, answer: () => Response, config: Record<string, unknown> = {}, safe = false) {
 	const settings = { baseURL: "https://api.test", fetch: recordingFetch(answer).fetch, ...config }
 	if (front === "sdk") {
-		const { TestSDK } = (await emittedSdk(DOC)) as unknown as {
-			TestSDK: new (config: object) => { items: { list: () => Promise<unknown> } }
-		}
-		return new TestSDK(settings).items.list()
+		const { TestSDK } = (await emittedSdk(DOC)) as unknown as { TestSDK: new (config: object) => List & { safe: List } }
+		const sdk = new TestSDK(settings)
+		return (safe ? sdk.safe : sdk).items.list()
 	}
 	const { createClient } = (await emittedApp()) as unknown as {
-		createClient: (config: object) => { get: (path: string) => Promise<unknown> }
+		createClient: (config: object) => Get & { safe: Get }
 	}
-	return createClient(settings).get("/items")
+	const client = createClient(settings)
+	return (safe ? client.safe : client).get("/items")
 }
 
-/** What a throw-mode `GET /items` answered by `answer` rejects with. */
+/** The Err a safe `GET /items` answered by `answer` resolves with; a failure for an Ok. */
+async function failed(front: Front, answer: () => Response) {
+	const result = (await get(front, answer, {}, true)) as Result
+	if (result.ok) throw new Error(`the safe call resolved Ok ${JSON.stringify(result.data)}; an Err was expected`)
+	return result
+}
+
+/** What a normal `GET /items` answered by `answer` rejects with. */
 async function rejection(front: Front, answer: () => Response, config: Record<string, unknown> = {}) {
-	return get(front, answer, { throwOnError: true, ...config }).then(
+	return get(front, answer, config).then(
 		() => {
 			throw new Error("the call resolved; a rejection was expected")
 		},
 		(error: unknown) => error as ClientErrorLike,
 	)
 }
+
+/** What a ClientError carries, to compare two of them. */
+const fields = (e: ClientErrorLike) => [e.name, e.status, e.body, e.message]
 
 /** A JSON answer with `status`. */
 const json = (body: unknown, status: number) => () => Response.json(body, { status })
@@ -148,15 +163,15 @@ describe("isClientError", () => {
 
 	// v0: 0fedaf926a
 	// v0: 79ddd8e169
-	it("api.$isClientError answers exactly as isClientError: a thrown error yes, a safe-mode error no", async () => {
+	it("api.$isClientError answers exactly as isClientError: a thrown error and a safe Err's error yes, its body no", async () => {
 		const { createClient, isClientError } = (await emittedApp()) as unknown as Runtime & {
 			createClient: (config: object) => { $isClientError: (value: unknown) => boolean }
 		}
 		const api = createClient({ baseURL: "https://api.test", fetch: recordingFetch().fetch })
 		const answer = json(envelope(404, "not_found"), 404)
-		const safe = ((await get("app", answer)) as Result).error
-		const values = [await rejection("app", answer), safe, new Error("x"), null, undefined, {}]
-		const expected = [true, false, false, false, false, false]
+		const { error } = await failed("app", answer)
+		const values = [await rejection("app", answer), error, error.body, new Error("x"), null, undefined, {}]
+		const expected = [true, true, false, false, false, false, false]
 		expect([values.map((v) => api.$isClientError(v)), values.map((v) => isClientError(v))]).toEqual([
 			expected,
 			expected,
@@ -180,7 +195,7 @@ const STATUS_CLASSES: ReadonlyArray<readonly [number, string]> = [
 	[418, "ClientError"],
 ]
 
-describe("throw mode: a non-2xx rejects with the status's ClientError", () => {
+describe("a normal call: a non-2xx rejects with the status's ClientError", () => {
 	// v0: 4b28b5125a
 	// v0: b23536e1a6
 	it.each(FRONTS)(
@@ -222,7 +237,7 @@ const THROWN: ReadonlyArray<readonly [() => Response, string, unknown]> = [
 	[json({ reason: "nope", ts: 2000 }, 400), "BadRequestError", { reason: "nope", ts: 2000 }],
 ]
 
-describe("throw mode: what the thrown ClientError carries", () => {
+describe("a normal call: what the thrown ClientError carries", () => {
 	// v0: e4b98863f9
 	it.each(FRONTS)(
 		"%s: an Error isClientError accepts, with the HTTP status and the parsed body, extra fields kept",
@@ -244,12 +259,12 @@ describe("throw mode: what the thrown ClientError carries", () => {
 	// v0: 3ad57ef8f3
 	// v0: 29a2c3a702
 	it.each(FRONTS)(
-		"%s: the same failure resolves in safe mode and rejects in throw mode, the body and status alike",
+		"%s: the same failure resolves a safe call's Err and rejects the normal call, the error alike",
 		async (front) => {
 			const answer = json(envelope(404, "not_found"), 404)
-			const safe = (await get(front, answer)) as Result
+			const safe = await failed(front, answer)
 			const thrown = await rejection(front, answer)
-			expect([safe.data, thrown.body, thrown.status]).toEqual([null, safe.error, safe.status])
+			expect([safe.ok, fields(safe.error), safe.response.status]).toEqual([false, fields(thrown), thrown.status])
 		},
 	)
 })
@@ -306,33 +321,27 @@ const OPAQUE: ReadonlyArray<readonly [() => Response, unknown]> = [
 	[json(null, 500), null],
 ]
 
-describe("safe mode: the error a failed call resolves with", () => {
+describe("a safe call's Err: the error a failed call resolves with", () => {
 	// v0: 6ae275b4c0
 	// v0: f10ead7d5a
-	it.each(FRONTS)("%s: a JSON object body is the error itself, a plain object and no ClientError", async (front) => {
+	it.each(FRONTS)("%s: a JSON object body is the error's body, the error the status's ClientError", async (front) => {
 		const { ClientError, isClientError } = await runtime(front)
-		const { error } = (await get(front, json(envelope(404, "not_found"), 404))) as Result
-		expect([error, error instanceof Error, error instanceof ClientError, isClientError(error)]).toEqual([
+		const { error } = await failed(front, json(envelope(404, "not_found"), 404))
+		expect([error.body, error.name, error instanceof ClientError, isClientError(error)]).toEqual([
 			envelope(404, "not_found"),
-			false,
-			false,
-			false,
+			"NotFoundError",
+			true,
+			true,
 		])
 	})
 
 	// v0: cc1f8a93e9
 	// v0: f4f728515b
-	it.each(FRONTS)(
-		"%s: any other body makes the error a ClientError with the result's status, so if (error) never misses",
-		async (front) => {
-			const { isClientError } = await runtime(front)
-			const results = (await Promise.all(OPAQUE.map(([answer]) => get(front, answer)))) as Array<{
-				error: ClientErrorLike
-				status: number
-			}>
-			expect(results.map(({ error, status }) => [isClientError(error), error.status === status, error.body])).toEqual(
-				OPAQUE.map(([, body]) => [true, true, body]),
-			)
-		},
-	)
+	it.each(FRONTS)("%s: any other body is a ClientError's body too, its status the response's", async (front) => {
+		const { isClientError } = await runtime(front)
+		const results = await Promise.all(OPAQUE.map(([answer]) => failed(front, answer)))
+		expect(
+			results.map(({ error, response }) => [isClientError(error), error.status === response.status, error.body]),
+		).toEqual(OPAQUE.map(([, body]) => [true, true, body]))
+	})
 })

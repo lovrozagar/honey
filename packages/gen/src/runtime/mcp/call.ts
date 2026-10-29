@@ -1,10 +1,10 @@
 /**
- * A tool's call through the API's TS SDK (bit 18): each tool as tools.gen.ts describes it, bound to the SDK client in
- * safe mode. Its arguments pass guard.ts first, else nothing is sent. They go back into the SDK's input groups (each
- * parameter under its own name: path, query or header; the body as JSON, a form, base64-decoded bytes at most 1 MiB, or
- * text, a raw body under its content type), the SDK member the operation sits at is called with the session's abort,
- * and its answer becomes the tool's result as result.ts shapes it, scrubbed of the API key; an event stream's, the
- * collect stream.ts runs. Bit 21 c: a multipart form's parts are arguments, sent as multipart whether or not a file is.
+ * A tool's call through the API's TS SDK (bit 18): each tool as tools.gen.ts describes it, bound to the SDK client's
+ * safe twin (bit 21 i1), a collect to the client's own stream. Its arguments pass guard.ts first, else nothing is
+ * sent. They go back into the SDK's input groups (each parameter under its own name: path, query or header; the body
+ * as JSON, a form, base64-decoded bytes at most 1 MiB, or text, a raw body under its content type), the SDK member the
+ * operation sits at is called with the session's abort, and its Result becomes the tool's result as result.ts shapes
+ * it, scrubbed of the API key; an event stream's, the collect stream.ts runs. Bit 21 c: a multipart form's parts are arguments, sent as multipart whether or not a file is.
  * Bit 21 g: data-less FileInputs are staged first (files.ts), an input request or a refusal the answer.
  */
 import { decoded, type Files, fileOf, staged } from "./files.ts"
@@ -49,7 +49,7 @@ export type Binding = {
 }
 
 /** The SDK client a tool drives: its members walked key by key to the operation's method. */
-export type SdkClient = object
+export type SdkClient = { readonly safe: object }
 
 /** The SDK input `args` make for `spec`: each parameter in its group, the body in its field; or why it cannot be sent. */
 function inputOf(spec: ToolSpec, args: Record<string, unknown>): Record<string, unknown> | string {
@@ -107,7 +107,7 @@ async function formed(
 }
 
 /** The method at `member` on `client`, with the object it is called on. */
-function methodAt(client: SdkClient, member: readonly string[]): [owner: unknown, method: unknown] {
+function methodAt(client: object, member: readonly string[]): [owner: unknown, method: unknown] {
 	let owner: unknown = client
 	let method: unknown = client
 	for (const key of member) {
@@ -117,7 +117,7 @@ function methodAt(client: SdkClient, member: readonly string[]): [owner: unknown
 	return [owner, method]
 }
 
-/** `specs` as tools calling `client` (in safe mode) as `binding` says, every result scrubbed of the secrets. */
+/** `specs` as tools calling `client.safe` as `binding` says, every result scrubbed of the secrets. */
 export function bindTools(specs: readonly ToolSpec[], client: SdkClient, binding: Binding): Tool[] {
 	const scrub = redactor(binding.secrets)
 	return specs.map((spec) => ({
@@ -133,7 +133,7 @@ export function bindTools(specs: readonly ToolSpec[], client: SdkClient, binding
 			if (typeof input === "string") return json(scrub({ message: input }), true)
 			if ("inputRequired" in input || "invalid" in input) return input as Outcome
 			let opened = false
-			const [owner, method] = methodAt(spec.collect ? binding.opening(() => (opened = true)) : client, spec.member)
+			const [owner, method] = methodAt(spec.collect ? binding.opening(() => (opened = true)) : client.safe, spec.member)
 			const send = (more: object) => (method as (input: unknown) => unknown).call(owner, { ...input, ...more })
 			try {
 				if (spec.collect)
@@ -145,15 +145,16 @@ export function bindTools(specs: readonly ToolSpec[], client: SdkClient, binding
 						timeout: binding.timeout,
 					})
 				const answer = (await send({ signal })) as Answer
-				const ok = answer.status >= 200 && answer.status < 300 && answer.error == null
-				return {
-					...(ok ? successOf(spec, answer, scrub) : failureOf(answer, scrub)),
-					_meta: { "honey/status": answer.status },
-				}
+				const { status } = answer.response
+				if (answer.ok) return { ...successOf(spec, answer, scrub), _meta: { "honey/status": status } }
+				/* an error status's JSON object body speaks for it, any other answer its error */
+				const { body } = answer.error as { body?: unknown }
+				const error = body && typeof body === "object" && !Array.isArray(body) ? body : answer.error
+				return { ...failureOf({ error, status }, scrub), _meta: { "honey/status": status } }
 			} catch (error) {
 				const status = (error as { status?: unknown } | null)?.status
 				return typeof status === "number"
-					? { ...failureOf({ data: null, error, status }, scrub), _meta: { "honey/status": status } }
+					? { ...failureOf({ error, status }, scrub), _meta: { "honey/status": status } }
 					: unanswered(error, scrub)
 			}
 		},

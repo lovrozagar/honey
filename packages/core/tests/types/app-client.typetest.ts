@@ -7,7 +7,8 @@
 import { describe, expectTypeOf, it } from "vitest"
 import * as z from "zod"
 import type { createClient } from "../../../gen/src/runtime/ts/app.ts"
-import type { ClientResult, ErrorsFor, OutputDefFor } from "../../../gen/src/runtime/ts/app-types.ts"
+import type { ErrorsFor, OutputDefFor } from "../../../gen/src/runtime/ts/app-types.ts"
+import type { Result } from "../../../gen/src/runtime/ts/response.ts"
 import type { SSEEvent } from "../../../gen/src/runtime/ts/sse.ts"
 import { defineErrors } from "../../src/errors/errors.ts"
 import { readableStream } from "../../src/input/input.ts"
@@ -152,21 +153,6 @@ const prefixed = honey<{}>()
 	.output({ "application/json": { ok: z.object({ id: z.string() }).array() } })
 	.handler((ctx) => ctx.res.json("ok", [{ id: "1" }]))
 
-/** A route declaring a custom-schema error from the app's factory. */
-const erring = honey<{}>()
-	.errorFactory(
-		defineErrors({
-			item_not_found: {
-				schema: z.object({ reason: z.string(), suggestions: z.array(z.string()) }),
-				status: "not_found",
-			},
-		}),
-	)
-	.get("/items/:id")
-	.output({ "application/json": { ok: z.object({ name: z.string() }) } })
-	.errors("item_not_found")
-	.handler((ctx) => ctx.res.json("ok", { name: "test" }))
-
 /** A declared no-content status (no body at 204), alone and beside a JSON body; an open media type. */
 const emptying = honey<{}>()
 	.get("/image")
@@ -180,17 +166,15 @@ const emptying = honey<{}>()
 	.handler((ctx) => ctx.res.json("ok", { id: ctx.params.id, name: "a" }))
 
 type Verb = "delete" | "get" | "patch" | "post" | "put"
-/** The result-mode (default) client for an app. */
+/** The client for an app: its calls throw an error status, `safe`'s answer a Result. */
 type Api<T = typeof app> = ReturnType<typeof createClient<T>>
 /** The paths `api[verb]` takes. */
 type PathsOf<V extends Verb, T = typeof app> = Parameters<Api<T>[V]>[0]
 
 declare const api: Api
 declare const deep: Api<typeof big>
-declare const thrower: ReturnType<typeof createClient<typeof app, true>>
-declare const prefixedApi: ReturnType<typeof createClient<typeof prefixed, true>>
-declare const erringApi: Api<typeof erring>
-declare const emptyingApi: ReturnType<typeof createClient<typeof emptying, true>>
+declare const prefixedApi: Api<typeof prefixed>
+declare const emptyingApi: Api<typeof emptying>
 
 /** The input `api.get(path, input)` takes for one path. */
 type GetIn<P extends PathsOf<"get">> = NonNullable<Parameters<typeof api.get<P>>[1]>
@@ -349,7 +333,7 @@ describe("the input of readableStream(), combined and deep routes", () => {
 			params: { id: string }
 			search: { dryRun?: boolean }
 		}>()
-		const call = thrower.put("/input/combined/:id", {
+		const call = api.put("/input/combined/:id", {
 			headers: { "x-idempotency-key": "k" },
 			json: { name: "a" },
 			params: { id: "1" },
@@ -376,13 +360,11 @@ describe("what a call resolves", () => {
 	// v0: b36a5c6f62
 	// v0: f5fb7a6348
 	it("throw mode resolves a single json status as its schema's type: an object, a created body, an array", () => {
-		expectTypeOf(thrower.get("/output/json")).toEqualTypeOf<Promise<{ email: string; id: string; name: string }>>()
-		expectTypeOf(thrower.get("/users/:id", { params: { id: "1" } })).toEqualTypeOf<
-			Promise<{ id: string; name: string }>
-		>()
-		expectTypeOf(thrower.post("/users", { json: { name: "a" } })).toEqualTypeOf<Promise<{ id: string }>>()
-		expectTypeOf(thrower.get("/users", { search: {} })).toEqualTypeOf<Promise<{ id: string; name: string }[]>>()
-		expectTypeOf(thrower.post("/input/json", { json: { email: "a@b.c", name: "a" } })).toEqualTypeOf<
+		expectTypeOf(api.get("/output/json")).toEqualTypeOf<Promise<{ email: string; id: string; name: string }>>()
+		expectTypeOf(api.get("/users/:id", { params: { id: "1" } })).toEqualTypeOf<Promise<{ id: string; name: string }>>()
+		expectTypeOf(api.post("/users", { json: { name: "a" } })).toEqualTypeOf<Promise<{ id: string }>>()
+		expectTypeOf(api.get("/users", { search: {} })).toEqualTypeOf<Promise<{ id: string; name: string }[]>>()
+		expectTypeOf(api.post("/input/json", { json: { email: "a@b.c", name: "a" } })).toEqualTypeOf<
 			Promise<{ email: string; id: string; name: string }>
 		>()
 	})
@@ -391,17 +373,17 @@ describe("what a call resolves", () => {
 	// v0: 32581f87d3
 	// v0: 89b1d821bf
 	it("resolves several json statuses as the union of their bodies", () => {
-		expectTypeOf(thrower.post("/output/json-multi")).toEqualTypeOf<
+		expectTypeOf(api.post("/output/json-multi")).toEqualTypeOf<
 			Promise<{ detail: string } | { id: string; name: string }>
 		>()
-		expectTypeOf(thrower.post("/jobs")).toEqualTypeOf<
+		expectTypeOf(api.post("/jobs")).toEqualTypeOf<
 			Promise<{ eta: number; jobId: string } | { reason: string } | { result: string }>
 		>()
 	})
 
 	// v0: 9ddb72e91e
 	it("takes search in and resolves a paginated object out on one route", () => {
-		expectTypeOf(thrower.get("/input/search", { search: { limit: 10, page: 1 } })).toEqualTypeOf<
+		expectTypeOf(api.get("/input/search", { search: { limit: 10, page: 1 } })).toEqualTypeOf<
 			Promise<{ items: { id: string }[]; nextCursor: string | null; total: number }>
 		>()
 	})
@@ -413,9 +395,9 @@ describe("what a call resolves", () => {
 	// v0: d03706997a
 	/* V0BUG: v0's app-client typed an undeclared-output route null though the handler's body is returned */
 	it("resolves unknown for a route without output, a noContent DELETE by params included", () => {
-		expectTypeOf(thrower.get("/output/untyped")).toEqualTypeOf<Promise<unknown>>()
-		expectTypeOf(thrower.get("/health")).toEqualTypeOf<Promise<unknown>>()
-		expectTypeOf(thrower.delete("/methods/resource/:id", { params: { id: "1" } })).toEqualTypeOf<Promise<unknown>>()
+		expectTypeOf(api.get("/output/untyped")).toEqualTypeOf<Promise<unknown>>()
+		expectTypeOf(api.get("/health")).toEqualTypeOf<Promise<unknown>>()
+		expectTypeOf(api.delete("/methods/resource/:id", { params: { id: "1" } })).toEqualTypeOf<Promise<unknown>>()
 		expectTypeOf<NonNullable<Parameters<typeof api.delete<"/methods/resource/:id">>[1]>>().toEqualTypeOf<{
 			params: { id: string }
 		}>()
@@ -432,15 +414,15 @@ describe("what a call resolves by media type", () => {
 	// v0: 361266fcfb
 	// v0: ea387c0bf3
 	it("resolves a text/plain, text/html, text/csv or application/xml output as a string", () => {
-		expectTypeOf(thrower.get("/output/text")).toEqualTypeOf<Promise<string>>()
-		expectTypeOf(thrower.get("/output/html")).toEqualTypeOf<Promise<string>>()
-		expectTypeOf(thrower.get("/output/csv")).toEqualTypeOf<Promise<string>>()
-		expectTypeOf(thrower.get("/output/xml")).toEqualTypeOf<Promise<string>>()
+		expectTypeOf(api.get("/output/text")).toEqualTypeOf<Promise<string>>()
+		expectTypeOf(api.get("/output/html")).toEqualTypeOf<Promise<string>>()
+		expectTypeOf(api.get("/output/csv")).toEqualTypeOf<Promise<string>>()
+		expectTypeOf(api.get("/output/xml")).toEqualTypeOf<Promise<string>>()
 	})
 
 	// v0: 11c3a6a4ae
 	it("resolves an application/octet-stream output as bytes (A1)", () => {
-		expectTypeOf(thrower.get("/output/binary")).toEqualTypeOf<Promise<Uint8Array<ArrayBuffer>>>()
+		expectTypeOf(api.get("/output/binary")).toEqualTypeOf<Promise<Uint8Array<ArrayBuffer>>>()
 	})
 
 	// v0: ee7aa99202
@@ -448,10 +430,10 @@ describe("what a call resolves by media type", () => {
 	// v0: b12a193174
 	// v0: 7129910f96
 	it("returns an AsyncIterable of SSE events for a text/event-stream route only", () => {
-		expectTypeOf(thrower.get("/output/sse")).toEqualTypeOf<AsyncIterable<SSEEvent>>()
 		expectTypeOf(api.get("/output/sse")).toEqualTypeOf<AsyncIterable<SSEEvent>>()
-		expectTypeOf(thrower.get("/output/json")).not.toExtend<AsyncIterable<SSEEvent>>()
-		expectTypeOf(thrower.get("/output/untyped")).not.toExtend<AsyncIterable<SSEEvent>>()
+		expectTypeOf(api.safe.get("/output/sse")).toEqualTypeOf<Promise<Result<AsyncIterable<SSEEvent>>>>()
+		expectTypeOf(api.get("/output/json")).not.toExtend<AsyncIterable<SSEEvent>>()
+		expectTypeOf(api.get("/output/untyped")).not.toExtend<AsyncIterable<SSEEvent>>()
 	})
 
 	/* V0BUG: v0 typed an open media type's answer null though its body is returned */
@@ -470,22 +452,7 @@ describe("what a call resolves by media type", () => {
 	})
 })
 
-describe("result mode and the declared errors", () => {
-	// v0: ce81093ba0
-	// v0: b797bb4a20
-	it("defaults to result mode: Promise<ClientResult<data, errorsByStatus>> with the declared statuses", () => {
-		expectTypeOf(api.get("/users/:id", { params: { id: "1" } })).toEqualTypeOf<
-			Promise<ClientResult<{ id: string; name: string }, { 404: null }>>
-		>()
-	})
-
-	// v0: 680e667162
-	it("narrows the error branch by status to that status's declared error body", () => {
-		type Result = Awaited<ReturnType<typeof erringApi.get<"/items/:id">>>
-		expectTypeOf<Extract<Result, { error: null }>["data"]>().toEqualTypeOf<{ name: string }>()
-		expectTypeOf<Extract<Result, { status: 404 }>["error"]>().toEqualTypeOf<{ reason: string; suggestions: string[] }>()
-	})
-
+describe("the declared errors", () => {
 	// v0: d5b5570bad
 	// v0: 681d5c6a54
 	// v0: c174579ea4

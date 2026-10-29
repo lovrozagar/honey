@@ -1,5 +1,6 @@
 export type ClientErrorInit<TBody = unknown> = {
 	body: TBody
+	cause?: unknown
 	message: string
 	response: Response
 	status: number
@@ -12,7 +13,7 @@ export class ClientError<TBody = unknown> extends Error {
 	readonly status: number
 
 	constructor(init: ClientErrorInit<TBody>) {
-		super(init.message)
+		super(init.message, init)
 		/* V8 only, and not in every lib: read it as optional so the runtime compiles anywhere */
 		;(Error as { captureStackTrace?: (target: object, ctor?: unknown) => void }).captureStackTrace?.(this, new.target)
 		this.name = "ClientError"
@@ -54,6 +55,12 @@ export class ServiceUnavailableError<TBody = unknown> extends ClientError<TBody>
 }
 export class GatewayTimeoutError<TBody = unknown> extends ClientError<TBody> {
 	override name = "GatewayTimeoutError"
+}
+
+/** A 2xx whose body is no value of its operation: the text (null past the size cap), the parse error its cause. */
+export class DecodeError extends ClientError<string | null> {
+	/* a literal, so a declared error with a string body never reads as one */
+	override readonly name = "DecodeError"
 }
 
 const STATUS_ERRORS: Readonly<Record<number, new (init: ClientErrorInit) => ClientError>> = {

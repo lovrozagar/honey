@@ -4,6 +4,7 @@
  * output type are spelled here as honey spells them.
  */
 import type { ClientError } from "./error.ts"
+import type { Result, StatusOf } from "./response.ts"
 import type { SSEEvent } from "./sse.ts"
 import type { TypedWebSocket } from "./ws.ts"
 
@@ -121,39 +122,20 @@ export type ErrorEnvelope<TStatus extends number = number, TKey extends string =
 /** `null` in a route's errorsByStatus means the default envelope, not a null body. */
 type ResolveErrorBody<S extends number, T> = T extends null ? ErrorEnvelope<S> : T
 
-/** Object keys of `{ 400: ... }` are `400` or `"400"` depending on the TS version. */
-type StatusCode<K> = K extends number ? K : K extends `${infer N extends number}` ? N : never
+/** Each declared status's error body, honey's envelope where the route names none. */
+type ErrorBodies<S> = { [K in keyof S]: ResolveErrorBody<StatusOf<K>, S[K]> }
 
-type HasStatusErrors<T> = [StatusCode<keyof T>] extends [never] ? false : true
+/** What a call resolves to, by transport. */
+export type ReturnFor<TRoutes, P extends string, M extends string> =
+	IsSSE<TRoutes, P, M> extends true ? AsyncIterable<SSEEvent> : Promise<OutputFor<TRoutes, P, M>>
 
-type ErrorVariants<TErrorsByStatus> = {
-	[K in keyof TErrorsByStatus]: StatusCode<K> extends never
-		? never
-		: {
-				data: null
-				error: ResolveErrorBody<StatusCode<K>, TErrorsByStatus[K]>
-				response: Response
-				status: StatusCode<K>
-			}
-}[keyof TErrorsByStatus]
-
-/**
- * A safe-mode result: `error` is the parsed body, not a ClientError. When the errors are known by
- * status, the typed branch covers every declared status, so `if (error)` / `if (!error)` narrow.
- */
-export type ClientResult<TData, TErrorsByStatus = never> =
-	| { data: TData; error: null; response: Response; status: number }
-	| (HasStatusErrors<TErrorsByStatus> extends false
-			? { data: null; error: unknown; response: Response; status: number }
-			: ErrorVariants<TErrorsByStatus>)
-
-/** What a call resolves to, by transport and throw mode. */
-export type ReturnFor<TRoutes, P extends string, M extends string, TThrow extends boolean = true> =
-	IsSSE<TRoutes, P, M> extends true
-		? AsyncIterable<SSEEvent>
-		: TThrow extends true
-			? Promise<OutputFor<TRoutes, P, M>>
-			: Promise<ClientResult<OutputFor<TRoutes, P, M>, ErrorsByStatusFor<TRoutes, P, M>>>
+/** What a safe call resolves to: its value, an event stream opened, or the answer's error; never a thrown answer. */
+export type SafeReturnFor<TRoutes, P extends string, M extends string> = Promise<
+	Result<
+		IsSSE<TRoutes, P, M> extends true ? AsyncIterable<SSEEvent> : OutputFor<TRoutes, P, M>,
+		ErrorBodies<ErrorsByStatusFor<TRoutes, P, M>>
+	>
+>
 
 /** A path's params, required whenever the pattern names one. */
 type ParamsInput<P extends string> = [ParamKeys<P>] extends [never] ? {} : { params: { [K in ParamKeys<P>]: string } }
@@ -179,26 +161,33 @@ type OptionalInput<T> = keyof T extends never
 		? [input?: T]
 		: [input: T]
 
-type Method<TRoutes, TThrow extends boolean, M extends string> = <P extends PathsForMethod<TRoutes, M>>(
+type Method<TRoutes, M extends string> = <P extends PathsForMethod<TRoutes, M>>(
 	path: P,
 	...input: OptionalInput<ClientInput<TRoutes, P, M>>
-) => ReturnFor<TRoutes, P, M, TThrow>
+) => ReturnFor<TRoutes, P, M>
+
+type SafeMethod<TRoutes, M extends string> = <P extends PathsForMethod<TRoutes, M>>(
+	path: P,
+	...input: OptionalInput<ClientInput<TRoutes, P, M>>
+) => SafeReturnFor<TRoutes, P, M>
 
 type PathHelper<TRoutes> = <P extends keyof TRoutes & string>(
 	path: P,
 	input?: { params?: Record<string, string>; search?: Record<string, unknown> },
 ) => string
 
-/** The typed client: `TThrow` decides whether calls resolve to values or results. */
-export type HoneyClient<TRoutes, TThrow extends boolean = false> = {
+/** The typed client: each call resolves to its value and throws an error status; `safe`'s answer a Result. */
+export type HoneyClient<TRoutes> = {
 	$isClientError: (e: unknown) => e is ClientError
 	$path: PathHelper<TRoutes>
 	$url: PathHelper<TRoutes>
-	delete: Method<TRoutes, TThrow, "delete">
-	get: Method<TRoutes, TThrow, "get">
-	patch: Method<TRoutes, TThrow, "patch">
-	post: Method<TRoutes, TThrow, "post">
-	put: Method<TRoutes, TThrow, "put">
+	delete: Method<TRoutes, "delete">
+	get: Method<TRoutes, "get">
+	patch: Method<TRoutes, "patch">
+	post: Method<TRoutes, "post">
+	put: Method<TRoutes, "put">
+	/** the same calls, each answering a Result instead of throwing an API answer (bit 21 i) */
+	safe: { [M in "delete" | "get" | "patch" | "post" | "put"]: SafeMethod<TRoutes, M> }
 	ws(
 		path: string,
 		input?: {

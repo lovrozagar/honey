@@ -6,13 +6,14 @@ generated from a small example API (`Kitchen`) by the docs' tests. Your client i
 
 ## TypeScript
 
-A client with `throwOnError: true` throws a typed error per status; without it, every call returns a result to
-inspect. Leaving a `for await` loop over a stream frees its connection.
+A call throws a typed error per status. `client.safe` holds the same calls, each answering a Result to narrow on
+`ok`: its data and response, or the error the call would have thrown and its response. Leaving a `for await` loop
+over a stream frees its connection.
 
 ```ts sdk
-import { Kitchen, NotFoundError } from "./kitchen"
+import { DecodeError, Kitchen, NotFoundError } from "./kitchen"
 
-export async function organization(client: Kitchen<true>, orgId: string): Promise<string | null> {
+export async function organization(client: Kitchen, orgId: string): Promise<string | null> {
 	try {
 		await client.getApiV1OrganizationsByOrgId({ params: { orgId } })
 		return orgId
@@ -20,6 +21,13 @@ export async function organization(client: Kitchen<true>, orgId: string): Promis
 		if (error instanceof NotFoundError) return null
 		throw error
 	}
+}
+
+export async function health(client: Kitchen): Promise<string> {
+	const result = await client.safe.getApiHealth()
+	if (result.ok) return "up"
+	if (result.error instanceof DecodeError) return `unreadable answer: ${result.error.message}`
+	return `answered ${result.error.status}`
 }
 ```
 

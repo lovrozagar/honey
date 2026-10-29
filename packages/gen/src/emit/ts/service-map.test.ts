@@ -70,13 +70,15 @@ describe("memberTree: names a client cannot expose", () => {
 				"/a": { get: { operationId: "users.toString", responses: { 200: json() } } },
 				"/b": { get: { operationId: "users.state", responses: { 200: json() } } },
 				"/c": { get: { operationId: "dispose", responses: { 200: json() } } },
+				"/d": { get: { operationId: "safe.list", responses: { 200: json() } } },
+				"/e": { get: { operationId: "users.safe", responses: { 200: json() } } },
 			}).tree,
 		)
 		const users = tree.entries.get("users")
 		const inner = users?.kind === "namespace" ? [...users.ns.entries.keys()] : []
 		expect([[...tree.entries.keys()], inner]).toEqual([
-			["dispose_", "users"],
-			["state", "toString_"],
+			["dispose_", "safe_", "users"],
+			["safe", "state", "toString_"],
 		])
 	})
 })

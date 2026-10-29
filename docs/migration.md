@@ -36,6 +36,47 @@ export const app = honey()
 app.get("/health").handler((ctx) => ctx.res.text("ok", "up"))
 ```
 
+## The TS SDK always throws; its safe mode is `client.safe`, answering a Result
+
+A TS client, the SDK class and the app's `createClient` alike, has no `throwOnError` and no `<true>`: delete both, as
+that client is the one every call now uses. It throws a typed error per status. An unconfigured client was safe
+before, so a call that read `{ data, error }` now throws; move it to `client.safe`, which holds the same calls, each
+answering a `Result` to narrow on `ok`:
+
+- `if (error)` / `if (r.error)` becomes `if (!r.ok)`, and `r.status` becomes `r.response.status`.
+- The Err arm's `error` is the error the call would have thrown, by status (`NotFoundError` and so on), never the
+  parsed body: the body is `error.body`, and a declared status narrows `error.status` and `error.body` once
+  `DecodeError` is ruled out.
+- An undecodable 2xx is a `DecodeError` (a `ClientError` holding the raw text and, as `cause`, the parse error): the
+  call throws it, and the safe call answers it as an Err.
+- A call that cannot be built (a path param that cannot form a path) was a status-0 result; it throws in both now,
+  like any call with no answer.
+- An event stream's safe call resolves once the stream opens: the Ok arm's data is the stream, and an error status at
+  its opening is the Err. A WebSocket or realtime operation is the same connection on `client.safe`.
+- `SDKResult`, `ClientResult` and `HTTPClient.requestSafe` are gone, as are `requestAuto`'s mode argument and the
+  `<TThrow>` of each config, class and `HoneyClient` type. A root resource named `safe` is reached as `safe_`.
+
+A response type of your own with both a `data` and an `error` field still destructures under the old pattern, so tsc
+cannot flag it: search for `.error` reads on your calls by hand if your API answers such a shape.
+
+```ts v0
+const client = new Kitchen({ baseURL: "https://api.example.com" })
+const { data, error, status } = await client.getApiHealth()
+if (error) console.error("answered", status)
+else console.log(data)
+```
+
+```ts sdk
+import { DecodeError, Kitchen } from "./kitchen"
+
+const client = new Kitchen({ baseURL: "https://api.example.com" })
+const result = await client.safe.getApiHealth()
+if (!result.ok) {
+	const why = result.error instanceof DecodeError ? "an unreadable body" : result.error.status
+	console.error("answered", result.response.status, why)
+} else console.log(result.data)
+```
+
 ## The TS SDK's realtime `token?` and `onAuthExpired?` are gone
 
 Neither was ever read. A connection's `headers` may be a function read on every dial, and the client's
@@ -203,8 +244,8 @@ await connection.sendText("plain words")
 
 ## A TS network failure is `APIConnectionError`
 
-A network failure is `APIConnectionError`, its `cause` the platform's error, not a raw `TypeError`, and safe mode
-throws it like every SDK, since no answer exists. An abort or a timeout keeps its own error.
+A network failure is `APIConnectionError`, its `cause` the platform's error, not a raw `TypeError`, and the safe
+twin (`client.safe`) throws it like every SDK, since no answer exists. An abort or a timeout keeps its own error.
 
 ```ts v0
 try {
@@ -270,7 +311,7 @@ if (String(error).startsWith("Not Found")) showMissing()
 ```ts sdk
 import { Kitchen, NotFoundError } from "./kitchen"
 
-const client = new Kitchen({ baseURL: "https://api.example.com", throwOnError: true })
+const client = new Kitchen({ baseURL: "https://api.example.com" })
 try {
 	await client.getApiV1OrganizationsByOrgId({ params: { orgId: "org-404" } })
 } catch (error) {

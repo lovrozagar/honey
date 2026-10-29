@@ -51,9 +51,9 @@ afterEach(() => {
 describe("app front: requests and headers", () => {
 	// v0: 0df7a8cb44
 	// v0: adca120b1b
-	it("sends a GET to the base URL plus the path, resolving the parsed JSON in throw mode", async () => {
+	it("sends a GET to the base URL plus the path, resolving the parsed JSON", async () => {
 		const body = { items: [{ id: "1", name: "Alice" }], total: 1 }
-		const { api, calls } = await app({ throwOnError: true }, () => Response.json(body))
+		const { api, calls } = await app({}, () => Response.json(body))
 		const data = await api.get("/users", { search: { limit: "10" } })
 		await api.get("/health")
 		expect([data, calls.map((call) => [call.method, call.url])]).toEqual([

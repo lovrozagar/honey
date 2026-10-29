@@ -135,7 +135,7 @@ describe("SDK SSE call: the request it sends", () => {
 	it("carries an auto UUIDv4 x-request-id on the SDK and the app front", async () => {
 		const sdk = recordingFetch(() => eventStream(["event: tick\ndata: {}\n\n"]))
 		const app = recordingFetch(() => eventStream(["data: hi\n\n"]))
-		const events = await collect((await sdkFor({ fetch: sdk.fetch, throwOnError: true })).events.stream())
+		const events = await collect((await sdkFor({ fetch: sdk.fetch })).events.stream())
 		const appEvents = await collect((await appFor({ fetch: app.fetch })).get("/events"))
 		const ids = [sdk.calls[0], app.calls[0]].map((r) => UUID_V4.test(r?.headers.get("x-request-id") ?? ""))
 		expect([events.length, appEvents.length, ids]).toEqual([1, 1, [true, true]])
@@ -226,13 +226,30 @@ describe("SDK SSE call: hooks and body", () => {
 
 describe("SDK SSE call: failure, abort and timers", () => {
 	// v0: e28af4e2c1
-	it("a non-ok response rejects the iteration with a ClientError, in safe and throw mode", async () => {
+	it("a non-ok response rejects the iteration with a ClientError; the safe call resolves it as an Err", async () => {
 		const { NotFoundError } = await emittedSdk(STREAMS)
 		const { fetch } = recordingFetch(() => Response.json({ message: "nope" }, { status: 404 }))
-		for (const throwOnError of [false, true]) {
-			const failure = collect((await sdkFor({ fetch, throwOnError })).events.stream())
-			await expect(failure).rejects.toSatisfy((e) => e instanceof (NotFoundError as any) && (e as any).status === 404)
-		}
+		const sdk = await sdkFor({ fetch })
+		const failure = collect(sdk.events.stream())
+		await expect(failure).rejects.toSatisfy((e) => e instanceof (NotFoundError as any) && (e as any).status === 404)
+		const opened = await sdk.safe.events.stream()
+		expect([
+			opened.ok,
+			opened.error instanceof (NotFoundError as any),
+			opened.error?.status,
+			opened.error?.body,
+			opened.response.status,
+		]).toEqual([false, true, 404, { message: "nope" }, 404])
+	})
+
+	it("the safe call resolves Ok once the stream opens, its data the events", async () => {
+		const { fetch } = recordingFetch(() => eventStream(["data: a\n\n", "data: b\n\n"]))
+		const opened = await (await sdkFor({ fetch })).safe.events.stream()
+		expect([opened.ok, opened.response.status, await collect(opened.data)]).toEqual([
+			true,
+			200,
+			[{ data: "a" }, { data: "b" }],
+		])
 	})
 
 	// v0: e0fe80d231

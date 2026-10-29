@@ -8,6 +8,7 @@ type Sdk = {
 	events: { watch(input?: Json): AsyncIterable<{ data: string }> }
 	items: { list: Call }
 	reports: { get: Call }
+	safe: { reports: { get: Call } }
 	slow: { get: Call }
 }
 
@@ -67,7 +68,6 @@ describe("per-call timeout and headers (C2)", () => {
 		const api = await createClient({
 			baseURL: "https://x",
 			fetch: hanging().fetch,
-			throwOnError: true,
 			timeout: 60_000,
 		})
 		await expect(api.get("/slow", { timeout: 30 })).rejects.toMatchObject({ name: "TimeoutError" })
@@ -80,7 +80,6 @@ describe("per-call timeout and headers (C2)", () => {
 			baseURL: "https://api.example.com",
 			fetch,
 			headers: async () => ({ authorization: "Bearer wrong" }),
-			throwOnError: true,
 		})
 		await api.get("/api/v1/organizations", { headers: { authorization: "Bearer test" } })
 		expect(calls[0]?.headers.get("authorization")).toBe("Bearer test")
@@ -127,7 +126,6 @@ describe("per-call base, signal and stream timeouts (C2)", () => {
 		const { client: patient } = await sdk({
 			baseURL: "https://x",
 			fetch: hanging().fetch,
-			throwOnError: true,
 			timeout: 60_000,
 		})
 		const pending = patient.slow.get({ signal: ctrl.signal })
@@ -136,7 +134,6 @@ describe("per-call base, signal and stream timeouts (C2)", () => {
 		const { client: hasty } = await sdk({
 			baseURL: "https://x",
 			fetch: hanging().fetch,
-			throwOnError: true,
 			timeout: 30,
 		})
 		await expect(hasty.slow.get({ signal: new AbortController().signal })).rejects.toMatchObject({
@@ -146,7 +143,7 @@ describe("per-call base, signal and stream timeouts (C2)", () => {
 
 	it("an event stream is exempt from the timeout", async () => {
 		const { fetch } = recordingFetch(() => slowEvents(80))
-		const { client } = await sdk({ baseURL: "https://x", fetch, throwOnError: true, timeout: 20 })
+		const { client } = await sdk({ baseURL: "https://x", fetch, timeout: 20 })
 		const data: string[] = []
 		for await (const event of client.events.watch()) data.push(event.data)
 		expect(data).toEqual(["a", "b"])
@@ -158,10 +155,11 @@ const reports = (status: number) =>
 	recordingFetch(() => Response.json({ total: 3 }, { headers: { "x-total": "3" }, status }))
 
 describe("raw-response accessor (C2): `raw: true` resolves the unread Response", () => {
-	it("reaches status, headers and the unread body in either mode", async () => {
-		for (const throwOnError of [false, true]) {
-			const { client } = await sdk({ baseURL: "https://x", fetch: reports(200).fetch, throwOnError })
-			const response = (await client.reports.get({ raw: true })) as Response
+	it("reaches status, headers and the unread body through the client and as its safe twin's Ok", async () => {
+		for (const safe of [false, true]) {
+			const { client } = await sdk({ baseURL: "https://x", fetch: reports(200).fetch })
+			const answer = await (safe ? client.safe : client).reports.get({ raw: true })
+			const response = (safe ? (answer as { data: unknown; ok: true }).data : answer) as Response
 			expect([
 				response instanceof Response,
 				response.status,
@@ -172,11 +170,12 @@ describe("raw-response accessor (C2): `raw: true` resolves the unread Response",
 		}
 	})
 
-	it("resolves an error status in safe mode and throws the typed error in throw mode", async () => {
-		const { client: safe } = await sdk({ baseURL: "https://x", fetch: reports(404).fetch })
-		const response = (await safe.reports.get({ raw: true })) as Response
-		expect([response.status, await response.json()]).toEqual([404, { total: 3 }])
-		const { client: thrower, mod } = await sdk({ baseURL: "https://x", fetch: reports(404).fetch, throwOnError: true })
-		await expect(thrower.reports.get({ raw: true })).rejects.toBeInstanceOf(mod.NotFoundError as typeof Error)
+	it("answers an error status as the safe twin's Err, its response readable, and throws the typed error", async () => {
+		const { client, mod } = await sdk({ baseURL: "https://x", fetch: reports(404).fetch })
+		const NotFound = mod.NotFoundError as typeof Error
+		const result = (await client.safe.reports.get({ raw: true })) as { error: unknown; ok: boolean; response: Response }
+		expect([result.ok, result.error instanceof NotFound, result.response.status]).toEqual([false, true, 404])
+		expect(await result.response.json()).toEqual({ total: 3 })
+		await expect(client.reports.get({ raw: true })).rejects.toBeInstanceOf(NotFound)
 	})
 })

@@ -3,8 +3,10 @@ import { emittedApp, recordingFetch } from "./__fixtures__/emitted.ts"
 
 type Verb = "delete" | "get" | "patch" | "post" | "put"
 
+type Call = (path: string, input?: object) => Promise<unknown>
+
 /** The emitted client as these tests drive it; its types are pinned in core's app-client.typetest.ts. */
-type Client = { readonly [V in Verb]: (path: string, input?: object) => Promise<unknown> } & { readonly ws: unknown }
+type Client = { readonly [V in Verb]: Call } & { readonly safe: { readonly [V in Verb]: Call }; readonly ws: unknown }
 
 type ErrorClass = abstract new (...args: never[]) => Error
 
@@ -42,7 +44,7 @@ describe("createClient: a Proxy over the HTTP methods", () => {
 	// v0: 21ca2ca75f
 	it("answers every verb and ws with a function", async () => {
 		const { createClient } = await front()
-		const api = createClient({ baseURL: "http://test", fetch: recordingFetch().fetch, throwOnError: true })
+		const api = createClient({ baseURL: "http://test", fetch: recordingFetch().fetch })
 		expect((["get", "post", "put", "patch", "delete", "ws"] as const).map((key) => typeof api[key])).toEqual([
 			"function",
 			"function",
@@ -57,7 +59,7 @@ describe("createClient: a Proxy over the HTTP methods", () => {
 	// v0: ac0f2f1c40
 	// v0: 74bd25361d
 	// v0: 9a2142697f
-	it("sends each verb as its method, json as the body, and resolves the answer as data beside a null error", async () => {
+	it("sends each verb as its method, json as the body, and resolves the answer as the data", async () => {
 		const { createClient } = await front()
 		const { calls, fetch } = recordingFetch((request) => Response.json({ method: request.method }))
 		const api = createClient({ baseURL: "http://test", fetch })
@@ -69,7 +71,7 @@ describe("createClient: a Proxy over the HTTP methods", () => {
 		]
 		const sent = await Promise.all(calls.map(async (call) => [call.method, call.url, await call.text()]))
 		expect({ results, sent }).toMatchObject({
-			results: ["POST", "PUT", "PATCH", "DELETE"].map((method) => ({ data: { method }, error: null, status: 200 })),
+			results: ["POST", "PUT", "PATCH", "DELETE"].map((method) => ({ method })),
 			sent: [
 				["POST", "http://test/api/echo", "{}"],
 				["PUT", "http://test/api/echo", "{}"],
@@ -82,10 +84,10 @@ describe("createClient: a Proxy over the HTTP methods", () => {
 
 describe("createClient: any fetch, params and a chain of calls", () => {
 	// v0: 0bb3cc4326
-	it("runs over any fetch-shaped handler, in process: throw mode resolves a text answer as the string", async () => {
+	it("runs over any fetch-shaped handler, in process: a text answer resolves as the string", async () => {
 		const { createClient } = await front()
 		const { calls, fetch } = recordingFetch(() => new Response("ok", { headers: { "content-type": "text/plain" } }))
-		const api = createClient({ baseURL: "http://test", fetch, throwOnError: true })
+		const api = createClient({ baseURL: "http://test", fetch })
 		expect([await api.get("/api/health"), calls.map((call) => call.url)]).toEqual(["ok", ["http://test/api/health"]])
 	})
 
@@ -95,15 +97,15 @@ describe("createClient: any fetch, params and a chain of calls", () => {
 		const { calls, fetch } = recordingFetch(organizations())
 		const api = createClient({ baseURL: "http://test", fetch, headers: { authorization: "Bearer test" } })
 		for (const slug of ["a", "b", "c"]) await api.post("/api/v1/organizations", { json: { name: slug, slug } })
-		const before = await api.get("/api/v1/organizations")
-		const removed = await api.delete("/api/v1/organizations/:orgId", { params: { orgId: "org-2" } })
-		const after = await api.get("/api/v1/organizations")
-		const gone = await api.get("/api/v1/organizations/:orgId", { params: { orgId: "org-2" } })
+		const before = await api.safe.get("/api/v1/organizations")
+		const removed = await api.safe.delete("/api/v1/organizations/:orgId", { params: { orgId: "org-2" } })
+		const after = await api.safe.get("/api/v1/organizations")
+		const gone = await api.safe.get("/api/v1/organizations/:orgId", { params: { orgId: "org-2" } })
 		expect([before, removed, after, gone]).toMatchObject([
-			{ data: { total: 4 }, error: null, status: 200 },
-			{ data: null, error: null, status: 204 },
-			{ data: { total: 3 }, error: null, status: 200 },
-			{ data: null, error: { error_key: "not_found" }, status: 404 },
+			{ data: { total: 4 }, ok: true, response: { status: 200 } },
+			{ data: null, ok: true, response: { status: 204 } },
+			{ data: { total: 3 }, ok: true, response: { status: 200 } },
+			{ error: { body: { error_key: "not_found" }, status: 404 }, ok: false, response: { status: 404 } },
 		])
 		expect(calls.map((call) => [call.method, call.url, call.headers.get("authorization")]).slice(4, 6)).toEqual([
 			["DELETE", "http://test/api/v1/organizations/org-2", "Bearer test"],
@@ -112,17 +114,19 @@ describe("createClient: any fetch, params and a chain of calls", () => {
 	})
 })
 
-describe("createClient: result mode and throw mode", () => {
+describe("createClient: the safe twin and the normal client", () => {
 	// v0: f91714b808
 	// v0: 850ca0e9f4
-	it("result mode resolves a 2xx json answer as data beside a null error and its status", async () => {
+	it("safe resolves a 2xx json answer as an Ok of the data and its response", async () => {
 		const { createClient } = await front()
 		const { calls, fetch } = recordingFetch(() => Response.json({ id: "1", name: "test" }))
 		const api = createClient({ baseURL: "http://test", fetch })
-		expect([await api.get("/items/:id", { params: { id: "1" } }), calls[0]?.url]).toMatchObject([
-			{ data: { id: "1", name: "test" }, error: null, status: 200 },
+		const result = await api.safe.get("/items/:id", { params: { id: "1" } })
+		expect([result, calls[0]?.url]).toMatchObject([
+			{ data: { id: "1", name: "test" }, ok: true, response: { status: 200 } },
 			"http://test/items/1",
 		])
+		expect(Object.keys(result as object).sort()).toEqual(["data", "ok", "response"])
 	})
 
 	// v0: 05bfebf817
@@ -130,8 +134,8 @@ describe("createClient: result mode and throw mode", () => {
 	// v0: 93cd837821
 	// v0: bbe9086162
 	// v0: cb37af43a2
-	it("result mode resolves a non-2xx json body verbatim as the error, beside its status and null data", async () => {
-		const { createClient } = await front()
+	it("safe resolves a non-2xx as an Err of its ClientError, the json body verbatim, beside its response", async () => {
+		const { ClientError, createClient } = await front()
 		const bodies: Readonly<Record<string, readonly [object, number]>> = {
 			"/fail": [{ reason: "deleted" }, 404],
 			"/register": [{ error_key: "email_taken", fields: {}, message: "Email taken", status: 409, success: false }, 409],
@@ -142,23 +146,49 @@ describe("createClient: result mode and throw mode", () => {
 			return Response.json(body, { status })
 		})
 		const api = createClient({ baseURL: "http://test", fetch })
-		expect([await api.get("/fail"), await api.post("/register"), await api.get("/std-err")]).toMatchObject(
-			Object.values(bodies).map(([error, status]) => ({ data: null, error, status })),
+		const results = [await api.safe.get("/fail"), await api.safe.post("/register"), await api.safe.get("/std-err")]
+		expect(results).toMatchObject(
+			Object.values(bodies).map(([body, status]) => ({ error: { body, status }, ok: false, response: { status } })),
 		)
+		expect(results.map((result) => (result as { error: unknown }).error instanceof ClientError)).toEqual([
+			true,
+			true,
+			true,
+		])
 	})
 
 	// v0: 9a87d3067d
-	it("throw mode rejects a non-2xx answer with the status's ClientError, its body the parsed payload", async () => {
+	it("the normal client rejects a non-2xx answer with the status's ClientError, its body the parsed payload", async () => {
 		const { ClientError, NotFoundError, createClient } = await front()
 		const payload = { reason: "Item deleted", suggestions: ["/items/456"] }
 		const { fetch } = recordingFetch(() => Response.json(payload, { status: 404 }))
-		const api = createClient({ baseURL: "http://test", fetch, throwOnError: true })
+		const api = createClient({ baseURL: "http://test", fetch })
 		const error = await api.get("/custom-404").catch((thrown: unknown) => thrown)
 		expect([error instanceof ClientError, error instanceof NotFoundError, error]).toMatchObject([
 			true,
 			true,
 			{ body: payload, status: 404 },
 		])
+	})
+})
+
+describe("createClient: the safe object", () => {
+	it("is one safe object on every read, its Ok and Err from the same calls the normal client throws", async () => {
+		const { NotFoundError, createClient } = await front()
+		const { fetch } = recordingFetch((request) =>
+			request.url.endsWith("/gone") ? Response.json({ reason: "x" }, { status: 404 }) : Response.json({ id: "1" }),
+		)
+		const api = createClient({ baseURL: "http://test", fetch })
+		const ok = await api.safe.get("/here")
+		const err = await api.safe.get("/gone")
+		const thrown = await api.get("/gone").catch((e: unknown) => e)
+		expect([api.safe === api.safe, ok, err, thrown instanceof NotFoundError]).toMatchObject([
+			true,
+			{ data: { id: "1" }, ok: true },
+			{ error: { body: { reason: "x" }, status: 404 }, ok: false, response: { status: 404 } },
+			true,
+		])
+		expect((err as { error: unknown }).error instanceof NotFoundError).toBe(true)
 	})
 })
 

@@ -93,8 +93,8 @@ describe("base URL: joining the operation path", () => {
 		const { createClient } = await app()
 		const { calls, fetch } = recordingFetch(() => new Response("ok", { headers: { "content-type": "text/plain" } }))
 		const api = createClient({ baseURL: "https://api.example.com/api", fetch })
-		const { data, error } = (await api.get("/health")) as { data: unknown; error: unknown }
-		expect([calls[0]?.url, data, error]).toEqual(["https://api.example.com/api/health", "ok", null])
+		const data = await api.get("/health")
+		expect([calls[0]?.url, data]).toEqual(["https://api.example.com/api/health", "ok"])
 	})
 })
 
@@ -124,7 +124,7 @@ describe("base URL: absolute values", () => {
 		const [{ Http }, TestSDK] = await Promise.all([app(), sdkClass()])
 		setLocation({ value: { origin: ORIGIN } })
 		const { calls, fetch } = recordingFetch()
-		await new TestSDK({ baseURL: "https://api.example.com", fetch, throwOnError: true }).users.list({})
+		await new TestSDK({ baseURL: "https://api.example.com", fetch }).users.list({})
 		const built = new Http({ baseURL: "https://api.example.com/v1" }).buildUrl("/x", {})
 		expect([built, ...calls.map((call) => call.url)]).toEqual([
 			"https://api.example.com/v1/x",
@@ -156,7 +156,7 @@ describe("base URL: path-only values resolve against location.origin", () => {
 		const { createClient } = await app()
 		setLocation({ value: { origin: ORIGIN } })
 		const { calls, fetch } = recordingFetch()
-		const api = createClient({ baseURL: "/api", fetch, throwOnError: true })
+		const api = createClient({ baseURL: "/api", fetch })
 		await api.get("/health")
 		expect([calls[0]?.url, api.$url("/v1/users"), api.$url("/v1/users/:id", { params: { id: "1" } })]).toEqual([
 			`${ORIGIN}/api/health`,
@@ -207,7 +207,7 @@ describe("base URL: refused values", () => {
 		const TestSDK = await sdkClass()
 		setLocation(location)
 		const { calls, fetch } = recordingFetch()
-		const sdk = new TestSDK({ baseURL: base, fetch, throwOnError: true })
+		const sdk = new TestSDK({ baseURL: base, fetch })
 		await expect(sdk.users.list({})).rejects.toThrow(invalid(base))
 		expect(calls).toEqual([])
 	})
@@ -234,7 +234,7 @@ describe("default fetch: configured and bound", () => {
 		const baseURL = "https://api.example.com"
 		await new Http({ baseURL, fetch }).request("GET", "/health", {})
 		await new TestSDK({ baseURL, fetch }).users.list({})
-		await createClient({ baseURL, fetch, throwOnError: true }).get("/api/health")
+		await createClient({ baseURL, fetch }).get("/api/health")
 		expect(calls.map((call) => call.url)).toEqual([`${baseURL}/health`, `${baseURL}/users`, `${baseURL}/api/health`])
 		expect(environment).not.toHaveBeenCalled()
 	})
@@ -249,8 +249,8 @@ describe("default fetch: configured and bound", () => {
 		const baseURL = "https://api.example.com"
 		const results = [
 			await new Http({ baseURL }).request("GET", "/health", {}),
-			await new TestSDK({ baseURL, throwOnError: true }).users.list({}),
-			await createClient({ baseURL, throwOnError: true }).get("/health"),
+			await new TestSDK({ baseURL }).users.list({}),
+			await createClient({ baseURL }).get("/health"),
 		]
 		expect(results).toEqual([{ ok: true }, { ok: true }, { ok: true }])
 		expect(urls).toEqual([`${baseURL}/health`, `${baseURL}/users`, `${baseURL}/health`])
@@ -264,7 +264,7 @@ describe("default fetch: path-only base and missing fetch", () => {
 		setLocation({ value: { origin: ORIGIN } })
 		const urls: string[] = []
 		vi.stubGlobal("fetch", methodFetch(urls))
-		expect(await new TestSDK({ baseURL: "/api", throwOnError: true }).users.list({})).toEqual({ ok: true })
+		expect(await new TestSDK({ baseURL: "/api" }).users.list({})).toEqual({ ok: true })
 		expect(urls).toEqual([`${ORIGIN}/api/users`])
 	})
 
@@ -277,7 +277,7 @@ describe("default fetch: path-only base and missing fetch", () => {
 		for (const environment of [undefined, 1]) {
 			vi.stubGlobal("fetch", environment)
 			const http = new Http({ baseURL })
-			const sdk = new TestSDK({ baseURL, throwOnError: true })
+			const sdk = new TestSDK({ baseURL })
 			await expect(http.request("GET", "/health", {})).rejects.toThrow(TypeError)
 			await expect(sdk.users.list({})).rejects.toThrow(TypeError)
 		}

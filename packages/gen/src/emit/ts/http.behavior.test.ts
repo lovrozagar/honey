@@ -2,10 +2,12 @@ import { describe, expect, it, vi } from "vitest"
 import { emittedApp, emittedSdk, recordingFetch } from "./__fixtures__/emitted.ts"
 
 type Json = Record<string, unknown>
-/** What a safe-mode call resolves to. */
-type Result = { data: unknown; error: unknown; response: Response; status: number }
-type Call = (path: string, input?: Json) => Promise<Result>
-type Api = Record<"delete" | "get" | "patch" | "post" | "put", Call>
+/** What a safe call resolves to. */
+type Result = { data?: unknown; error?: unknown; ok: boolean; response: Response }
+type Verb = "delete" | "get" | "patch" | "post" | "put"
+type Api = Record<Verb, (path: string, input?: Json) => Promise<unknown>> & {
+	safe: Record<Verb, (path: string, input?: Json) => Promise<Result>>
+}
 type Answer = (request: Request) => Response | Promise<Response>
 /** The app client module's runtime exports these cases use. */
 type AppModule = {
@@ -15,7 +17,7 @@ type AppModule = {
 	UnauthorizedError: new () => Error
 }
 /** A generated SDK with one `a` operation (`GET /a`). */
-type OneOpSdk = { a: () => Promise<Result>; state: Json }
+type OneOpSdk = { a: () => Promise<unknown>; safe: { a: () => Promise<Result> }; state: Json }
 
 /** The emitted app client module. */
 async function app(): Promise<AppModule> {
@@ -62,20 +64,17 @@ const json401 = () => Response.json({ message: "no" }, { status: 401 })
 
 describe("results: what a call resolves to", () => {
 	// v0: 6ecb113767
-	it("resolves the parsed body directly in throw mode", async () => {
-		const { api } = await appClient(
-			{ throwOnError: true },
-			() => new Response("ok", { headers: { "content-type": "text/plain" } }),
-		)
+	it("resolves the parsed body directly", async () => {
+		const { api } = await appClient({}, () => new Response("ok", { headers: { "content-type": "text/plain" } }))
 		expect(await api.get("/api/health")).toBe("ok")
 	})
 
 	// v0: 5d71e8c6d5
 	it("resolves one result object however often the call is awaited", async () => {
-		const { api, calls } = await appClient({}, () => new Response("ok", { headers: { "content-type": "text/plain" } }))
+		const { api, calls } = await appClient({}, () => Response.json({ ok: true }))
 		const call = api.get("/api/health")
 		const [first, second] = [await call, await call]
-		expect([first === second, first.data, calls.length]).toEqual([true, "ok", 1])
+		expect([first === second, first, calls.length]).toEqual([true, { ok: true }, 1])
 	})
 
 	// v0: 8102eea6a6
@@ -93,30 +92,33 @@ describe("results: what a call resolves to", () => {
 			headers: { authorization: "Bearer test" },
 		})
 		const results = [
-			await publicApi.get("/api/health"),
-			await authedApi.get("/api/v1/organizations"),
-			await publicApi.get("/api/v1/organizations"),
+			await publicApi.safe.get("/api/health"),
+			await authedApi.safe.get("/api/v1/organizations"),
+			await publicApi.safe.get("/api/v1/organizations"),
 		]
-		expect([results.map((result) => result.status), calls.map((call) => call.headers.get("authorization"))]).toEqual([
+		expect([
+			results.map((result) => result.response.status),
+			calls.map((call) => call.headers.get("authorization")),
+		]).toEqual([
 			[200, 200, 403],
 			[null, "Bearer test", null],
 		])
 	})
 })
 
-describe("timeouts and abort: a network-level failure rejects in both modes", () => {
+describe("timeouts and abort: a network-level failure rejects from both clients", () => {
 	// v0: c2aaf13e25
-	it("rejects with a TimeoutError, not a ClientError, in throw mode", async () => {
+	it("rejects with a TimeoutError, not a ClientError", async () => {
 		const { isClientError } = await app()
-		const { api } = await appClient({ throwOnError: true, timeout: 1 }, hanging)
+		const { api } = await appClient({ timeout: 1 }, hanging)
 		const error = (await api.get("/api/events-live").catch((e: unknown) => e)) as Error
 		expect([isClientError(error), error.name]).toEqual([false, "TimeoutError"])
 	})
 
 	// v0: 39f681f314
-	it("rejects on a timeout in safe mode too", async () => {
+	it("rejects on a timeout from the safe twin too", async () => {
 		const { api } = await appClient({ timeout: 1 }, hanging)
-		await expect(api.get("/api/events-live")).rejects.toThrow()
+		await expect(api.safe.get("/api/events-live")).rejects.toMatchObject({ name: "TimeoutError" })
 	})
 
 	// v0: 78ea52cb6f
@@ -129,11 +131,11 @@ describe("timeouts and abort: a network-level failure rejects in both modes", ()
 	})
 
 	// v0: 52165058ee
-	it("covers reading the body: a stalled body ends as { error } in safe mode", async () => {
+	it("covers reading the body: a stalled body ends the safe twin's call with its TimeoutError, no answer (f2)", async () => {
 		const { api } = await appClient({ timeout: 50 }, stalledBody)
 		const started = Date.now()
-		const result = await api.get("/slow")
-		expect([Boolean(result.error), Date.now() - started < 1000]).toEqual([true, true])
+		const error = (await api.safe.get("/slow").catch((e: unknown) => e)) as Error
+		expect([error.name, Date.now() - started < 1000]).toEqual(["TimeoutError", true])
 	})
 })
 
@@ -142,7 +144,7 @@ describe("timeouts and abort: body reads and user aborts", () => {
 	it("covers reading the body in a generated SDK", async () => {
 		const TestSDK = await oneOpSdk()
 		const { fetch } = recordingFetch(stalledBody)
-		const sdk = new TestSDK({ baseURL: "https://api.test.com", fetch, throwOnError: true, timeout: 50 })
+		const sdk = new TestSDK({ baseURL: "https://api.test.com", fetch, timeout: 50 })
 		const started = Date.now()
 		await expect(sdk.a()).rejects.toBeTruthy()
 		expect(Date.now() - started).toBeLessThan(2000)
@@ -150,7 +152,7 @@ describe("timeouts and abort: body reads and user aborts", () => {
 
 	// v0: 8ce64c4bf9
 	it("lets a user abort after the headers cancel the body read while a timeout is set", async () => {
-		const { api } = await appClient({ throwOnError: true, timeout: 10_000 }, stalledBody)
+		const { api } = await appClient({ timeout: 10_000 }, stalledBody)
 		const controller = new AbortController()
 		const call = api.get("/slow", { signal: controller.signal })
 		setTimeout(() => controller.abort(new Error("user")), 30)
@@ -162,15 +164,17 @@ describe("timeouts and abort: body reads and user aborts", () => {
 	// v0: 5c32d62538
 	it("rejects an already aborted call with an AbortError, not a ClientError, sending nothing", async () => {
 		const { isClientError } = await app()
-		const { api, calls } = await appClient({ throwOnError: true })
+		const { api, calls } = await appClient({})
 		const error = (await api.get("/api/health", { signal: AbortSignal.abort() }).catch((e: unknown) => e)) as Error
 		expect([isClientError(error), error.name, calls.length]).toEqual([false, "AbortError", 0])
 	})
 
 	// v0: 1b05f701da
-	it("rejects an aborted call in safe mode too", async () => {
+	it("rejects an aborted call from the safe twin too", async () => {
 		const { api } = await appClient({})
-		await expect(api.get("/api/health", { signal: AbortSignal.abort() })).rejects.toThrow()
+		await expect(api.safe.get("/api/health", { signal: AbortSignal.abort() })).rejects.toMatchObject({
+			name: "AbortError",
+		})
 	})
 })
 
@@ -181,7 +185,7 @@ describe("auth refresh: onAuthExpired turns a 401 into one retry with a fresh to
 		const { api, calls } = await appClient({ headers: { authorization: "Bearer stale" }, onAuthExpired }, (request) =>
 			request.headers.get("authorization") === "Bearer fresh" ? Response.json({ ok: true }) : json401(),
 		)
-		const data = [(await api.get("/a")).data, (await api.get("/b")).data]
+		const data = [await api.get("/a"), await api.get("/b")]
 		expect([data, onAuthExpired.mock.calls, calls.map((call) => call.headers.get("authorization"))]).toEqual([
 			[{ ok: true }, { ok: true }],
 			[[{ rejectedToken: "stale" }]],
@@ -196,10 +200,13 @@ describe("auth refresh: onAuthExpired turns a 401 into one retry with a fresh to
 		const { api } = await appClient({ headers: { authorization: "Bearer stale" }, onAuthExpired }, (request) =>
 			request.headers.get("authorization") === "Bearer fresh" ? Response.json({}) : json401(),
 		)
-		const all = Promise.all([api.get("/1"), api.get("/2"), api.get("/3")])
+		const all = Promise.all([api.safe.get("/1"), api.safe.get("/2"), api.safe.get("/3")])
 		await vi.waitFor(() => expect(onAuthExpired).toHaveBeenCalled())
 		resolveToken?.("fresh")
-		expect([(await all).map((result) => result.status), onAuthExpired.mock.calls.length]).toEqual([[200, 200, 200], 1])
+		expect([(await all).map((result) => result.response.status), onAuthExpired.mock.calls.length]).toEqual([
+			[200, 200, 200],
+			1,
+		])
 	})
 
 	// v0: 931fa820f2
@@ -222,7 +229,9 @@ describe("auth refresh: onAuthExpired turns a 401 into one retry with a fresh to
 			headers: { authorization: "Bearer stale" },
 			onAuthExpired,
 		})
-		const statuses = (await Promise.all([sdk.a(), sdk.a(), sdk.a()])).map((result) => result.status)
+		const statuses = (await Promise.all([sdk.safe.a(), sdk.safe.a(), sdk.safe.a()])).map(
+			(result) => result.response.status,
+		)
 		const before = calls.length
 		await sdk.a()
 		const after = calls.slice(before).map((call) => call.headers.get("authorization"))
@@ -234,7 +243,7 @@ describe("auth refresh: when it does not retry", () => {
 	// v0: 56f8ab6406
 	it("gives up on a null or empty token without an unauthenticated retry", async () => {
 		const { UnauthorizedError } = await app()
-		const { api, calls } = await appClient({ onAuthExpired: async () => "", throwOnError: true }, json401)
+		const { api, calls } = await appClient({ onAuthExpired: async () => "" }, json401)
 		const error = await api.get("/a").catch((e: unknown) => e)
 		expect([error instanceof UnauthorizedError, calls.length]).toEqual([true, 1])
 	})
@@ -249,7 +258,10 @@ describe("auth refresh: when it does not retry", () => {
 			},
 			json401,
 		)
-		const statuses = [(await replayable.api.post("/up", {})).status, (await streamed.api.post("/up", {})).status]
+		const statuses = [
+			(await replayable.api.safe.post("/up", {})).response.status,
+			(await streamed.api.safe.post("/up", {})).response.status,
+		]
 		expect([statuses, replayable.calls.length, streamed.calls.length]).toEqual([[401, 401], 2, 1])
 	})
 })

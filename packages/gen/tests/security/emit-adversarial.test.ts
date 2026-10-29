@@ -240,7 +240,8 @@ void new AdvSDK({ baseURL: "https://x" })`
 	})
 })
 
-type Api = { get(path: string, input?: object): Promise<{ error?: { message?: string } | null }> }
+type Get = (path: string, input?: object) => Promise<unknown>
+type Api = { get: Get; safe: { get(path: string, input?: object): Promise<{ error: Error }> } }
 
 /** The emitted app front's `createClient`. */
 const appFront = async () => ((await emittedApp()) as unknown as { createClient: (config: object) => Api }).createClient
@@ -293,8 +294,9 @@ describe("gen adversarial: the emitted TS runtime", () => {
 		})
 		const search = { search: { api_key: "k3y" } }
 		await api.get("/ok", search)
-		const denied = await api.get("/denied", search)
-		const seen = JSON.stringify([entries, denied.error])
+		const denied = await api.safe.get("/denied", search)
+		const thrown = await api.get("/denied", search).catch((e: unknown) => e)
+		const seen = JSON.stringify([entries, denied.error, denied.error.message, (thrown as Error).message])
 		expect([seen.includes("s3cret"), seen.includes("k3y"), seen.includes("api_key")]).toEqual([false, false, false])
 	})
 })

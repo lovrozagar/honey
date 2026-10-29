@@ -3,6 +3,7 @@
  * token grammar, is a TypeError before anything goes out, naming the header and never quoting its value. The
  * platforms differ underneath: Node's Headers quotes a CR/LF/NUL value in its own error, and Bun sends `\u0001` and
  * DEL raw (probe: ~/.cache/honey-tmp/b19/probes/undici-header.txt), so the SDK checks before Headers sees either.
+ * Nothing was answered, so the safe call (bit 21 i1) throws it too, never an Err.
  */
 import { describe, expect, it } from "vitest"
 import { emittedApp, emittedSdk, recordingFetch } from "./__fixtures__/emitted.ts"
@@ -18,21 +19,32 @@ const DOC = {
 	paths: { "/items": { get: { operationId: "items.list", responses: { "200": { description: "ok" } } } } },
 }
 
-/** What one `GET /items` through `front` with `headers`, in throw mode, rejects with, and the requests it made. */
-async function refused(front: Front, headers: Record<string, string>, config: Record<string, unknown> = {}) {
+type List = { items: { list: (input: object) => Promise<unknown> } }
+type Get = { get: (path: string, opts: object) => Promise<unknown> }
+
+/**
+ * What one `GET /items` through `front` with `headers` rejects with, and the requests it made: the normal call, or its
+ * safe twin when `safe`.
+ */
+async function refused(
+	front: Front,
+	headers: Record<string, string>,
+	config: Record<string, unknown> = {},
+	safe = false,
+) {
 	const recorded = recordingFetch()
-	const settings = { baseURL: "https://api.test", fetch: recorded.fetch, throwOnError: true, ...config }
+	const settings = { baseURL: "https://api.test", fetch: recorded.fetch, ...config }
 	let call: Promise<unknown>
 	if (front === "sdk") {
-		const { TestSDK } = (await emittedSdk(DOC)) as unknown as {
-			TestSDK: new (config: object) => { items: { list: (input: object) => Promise<unknown> } }
-		}
-		call = new TestSDK(settings).items.list({ headers })
+		const { TestSDK } = (await emittedSdk(DOC)) as unknown as { TestSDK: new (config: object) => List & { safe: List } }
+		const sdk = new TestSDK(settings)
+		call = (safe ? sdk.safe : sdk).items.list({ headers })
 	} else {
 		const { createClient } = (await emittedApp()) as unknown as {
-			createClient: (config: object) => { get: (path: string, opts: object) => Promise<unknown> }
+			createClient: (config: object) => Get & { safe: Get }
 		}
-		call = createClient(settings).get("/items", { headers })
+		const client = createClient(settings)
+		call = (safe ? client.safe : client).get("/items", { headers })
 	}
 	const error = await call.then(
 		() => null,
@@ -67,6 +79,13 @@ describe.each(FRONTS)("a header the TS SDK cannot send, through the %s (bit 19 b
 	it("refuses a configured header's control character too, before the call's are added", async () => {
 		expect(await refused(front, {}, { headers: { "X-Config": `${SECRET}\u0001` } })).toEqual({
 			error: "TypeError: the X-Config header's value cannot be sent",
+			sent: 0,
+		})
+	})
+
+	it("throws the refusal from the safe call too, nothing sent", async () => {
+		expect(await refused(front, { "X-Bad": `${SECRET}\u0001x` }, {}, true)).toEqual({
+			error: "TypeError: the X-Bad header's value cannot be sent",
 			sent: 0,
 		})
 	})

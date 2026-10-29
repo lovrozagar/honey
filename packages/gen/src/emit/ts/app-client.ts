@@ -15,6 +15,7 @@ const VALUES = [
 	"createKeepaliveLoop",
 	"createResumableConnection",
 	"createTypedWebSocket",
+	"DecodeError",
 	"ForbiddenError",
 	"GatewayTimeoutError",
 	"HTTPClient",
@@ -38,7 +39,6 @@ const VALUES = [
 const TYPES = [
 	"AuthExpiredContext",
 	"ClientConfig",
-	"ClientResult",
 	"ConnectionState",
 	"ErrorEnvelope",
 	"FieldError",
@@ -50,6 +50,7 @@ const TYPES = [
 	"RealtimeOptions",
 	"RedirectPolicy",
 	"RequestOptions",
+	"Result",
 	"ResumableConnection",
 	"ResumableConnectionOpts",
 	"ServerFrame",

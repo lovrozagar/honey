@@ -3,11 +3,12 @@ import { emittedApp, emittedSdk, recordingFetch } from "./__fixtures__/emitted.t
 
 type Json = Record<string, unknown>
 type Answer = (request: Request) => Response | Promise<Response>
-type Result = { data: unknown; error: unknown }
+type Get = (path: string, input?: Json) => Promise<unknown>
 type App = {
 	$path: (path: string, input?: Json) => string
 	$url: (path: string, input?: Json) => string
-	get: (path: string, input?: Json) => Promise<Result>
+	get: Get
+	safe: { get: (path: string, input?: Json) => Promise<{ ok: boolean }> }
 }
 type Op = (input?: Json) => Promise<unknown>
 
@@ -53,12 +54,12 @@ describe("app front: query serialization", () => {
 	it("sends the query, repeating an array's key and writing numbers and booleans as text", async () => {
 		const { api, calls } = await app()
 		const results = [
-			await api.get("/items", { search: { limit: "10", q: "test" } }),
-			await api.get("/echo", { search: { ids: [1, 2, 3] } }),
-			await api.get("/echo", { search: { active: true, count: 42, tag: "test" } }),
+			await api.safe.get("/items", { search: { limit: "10", q: "test" } }),
+			await api.safe.get("/echo", { search: { ids: [1, 2, 3] } }),
+			await api.safe.get("/echo", { search: { active: true, count: 42, tag: "test" } }),
 		]
-		expect([results.map((result) => result.error), calls.map((call) => call.url)]).toEqual([
-			[null, null, null],
+		expect([results.map((result) => result.ok), calls.map((call) => call.url)]).toEqual([
+			[true, true, true],
 			[
 				`${ORIGIN}/items?limit=10&q=test`,
 				`${ORIGIN}/echo?ids=1&ids=2&ids=3`,
@@ -73,7 +74,7 @@ describe("app front: query serialization", () => {
 		const { api, calls } = await app({}, echoQuery)
 		const skipped = await api.get("/api", { search: { gone: null, id: "present", missing: undefined } })
 		const empty = await api.get("/api/echo", { search: {} })
-		expect([skipped.data, empty.data, calls.map((call) => call.url)]).toEqual([
+		expect([skipped, empty, calls.map((call) => call.url)]).toEqual([
 			{ id: "present" },
 			{},
 			[`${ORIGIN}/api?id=present`, `${ORIGIN}/api/echo`],
@@ -105,7 +106,7 @@ describe("app front: sorting and custom serializers", () => {
 			api.$path("/test", { search: { z: "3", a: "1" } }),
 		]).toEqual([
 			`${ORIGIN}/test?a=first&m=middle&z=last`,
-			expect.objectContaining({ data: { a: "first", m: "middle", z: "last" }, error: null }),
+			{ a: "first", m: "middle", z: "last" },
 			`${ORIGIN}/api/echo?alpha=a&middle=m&zebra=z`,
 			"/test?a=1&z=3",
 		])
@@ -116,9 +117,9 @@ describe("app front: sorting and custom serializers", () => {
 	// v0: 1f01336c24
 	it("shapes the query of requests and $url with a custom buildSearchParams", async () => {
 		const { api, calls } = await app({ buildSearchParams: brackets })
-		const sent = await api.get("/test", { search: { ids: [1, 2, 3], name: "x" } })
-		expect([sent.error, calls[0]?.url, api.$url("/api/echo", { search: { ids: [1, 2], x: "y" } })]).toEqual([
-			null,
+		const sent = await api.safe.get("/test", { search: { ids: [1, 2, 3], name: "x" } })
+		expect([sent.ok, calls[0]?.url, api.$url("/api/echo", { search: { ids: [1, 2], x: "y" } })]).toEqual([
+			true,
 			`${ORIGIN}/test?ids%5B%5D=1&ids%5B%5D=2&ids%5B%5D=3&name=x`,
 			`${ORIGIN}/api/echo?ids%5B%5D=1&ids%5B%5D=2&x=y`,
 		])
@@ -126,7 +127,7 @@ describe("app front: sorting and custom serializers", () => {
 
 	// v0: 80f8238c5b
 	it("sorts what the custom serializer returns, keeping each key's values in order", async () => {
-		const { api, calls } = await app({ buildSearchParams: brackets, sortSearchParams: true, throwOnError: true })
+		const { api, calls } = await app({ buildSearchParams: brackets, sortSearchParams: true })
 		await api.get("/test", { search: { z: "last", ids: [2, 1] } })
 		expect(calls[0]?.url).toBe(`${ORIGIN}/test?ids%5B%5D=2&ids%5B%5D=1&z=last`)
 	})

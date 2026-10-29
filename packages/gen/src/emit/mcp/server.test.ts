@@ -129,7 +129,6 @@ const config = {
 	headers: key === "" ? headers : { ...headers, "Authorization": "Bearer " + key },
 	maxResponseBytes: BYTES_MAX,
 	redirect: redirect as "follow" | "same-origin",
-	throwOnError: false,
 	timeout: Number(timeout),
 }
 const client = new Api(config)

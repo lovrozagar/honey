@@ -34,6 +34,7 @@ const RUNTIME_EXPORTS = [
 	"createFallbackChain",
 	"createKeepaliveLoop",
 	"createResumableConnection",
+	"DecodeError",
 	"ForbiddenError",
 	"GatewayTimeoutError",
 	"HTTPClient",
@@ -60,6 +61,7 @@ const RUNTIME_TYPES = [
 	"LogEntry",
 	"RealtimeOptions",
 	"RequestOptions",
+	"Result",
 	"ResumableConnection",
 	"ResumableConnectionOpts",
 	"ServerFrame",
@@ -101,16 +103,18 @@ function clientText(name: string, stem: string, server: string | undefined, auth
 	const config = `schemeAuth(${based}, ${tsString(auth.headerName)}, ${tsString(auth.prefix)})`
 	return `import { SDKClient, schemeAuth } from "./${stem}.runtime.gen"
 import { serviceMap } from "./${stem}.map.gen"
-import type { ${name}Config, ${name}Operations } from "./${stem}.types.gen"
+import type { ${name}Config, ${name}Operations, ${name}Safe } from "./${stem}.types.gen"
 
-export class ${name}<TThrow extends boolean = false> extends SDKClient {
-	constructor(config: ${name}Config<TThrow>) {
+export class ${name} extends SDKClient {
+	constructor(config: ${name}Config) {
 		super(serviceMap, ${config})
 	}
 }
 
-/* declaration merge: the Proxy-backed class carries the typed operations */
-export interface ${name}<TThrow extends boolean = false> extends ${name}Operations<TThrow> {}
+/* declaration merge: the Proxy-backed class carries the typed operations, and their safe twins */
+export interface ${name} extends ${name}Operations {
+	readonly safe: ${name}Safe
+}
 `
 }
 

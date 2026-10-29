@@ -1,4 +1,4 @@
-import { type ClientError, clientErrorFor } from "./error.ts"
+import { ClientError, clientErrorFor, DecodeError } from "./error.ts"
 import { isJsonMediaType, isTextMediaType, parseMediaType } from "./media-type.ts"
 
 /** A sent request: its answer, and how to release what it holds once the body is read. */
@@ -10,26 +10,41 @@ export type Sent = {
 	response: Response
 }
 
-/** A safe-mode result: `error` is truthy for every non-2xx and always carries `status`. */
-export type SafeResult = { data: unknown; error: unknown; response: Response; status: number }
+/** A REST call's answer: its value (the response itself when raw) and the response. */
+export type Answer = { data: unknown; response: Response }
+
+/** Object keys of `{ 400: ... }` are `400` or `"400"` depending on the TS version. */
+export type StatusOf<K> = K extends number ? K : K extends `${infer N extends number}` ? N : never
+
+/** The error each declared status answers with, its body typed; a ClientError when none is declared. */
+type StatusErrors<E> = [E] extends [never]
+	? ClientError
+	: [keyof E] extends [never]
+		? ClientError
+		: { [K in keyof E]: ClientError<E[K]> & { readonly status: StatusOf<K> } }[keyof E]
+
+/** A safe call's outcome: its data (and declared headers), or the answer's error; the response on both. */
+export type Result<T, TErrors = never, THeaders = never> =
+	| ([THeaders] extends [never]
+			? { ok: true; data: T; response: Response }
+			: { ok: true; data: T; headers: THeaders; response: Response })
+	| { ok: false; error: StatusErrors<TErrors> | DecodeError; response: Response }
 
 export function isEventStream(response: Response): boolean {
 	return parseMediaType(response.headers.get("content-type"))?.essence === "text/event-stream"
 }
 
-/** How a REST answer is read: thrown or as a result, parsed or raw, and which response headers to keep (A2). */
+/** How a REST answer is read: parsed or raw, by its declared media type, within the client's limits. */
 export type Reading = {
 	/**
 	 * the non-JSON media type the operation declares: its body is read as that type, empty or not.
 	 * `null` when it declares no success body: whatever arrives is discarded and reads as null.
 	 */
 	declared?: string | null
-	headers?: readonly string[]
 	/** the client's limits: an error message's characters, and the bytes a body may hold decoded */
 	limits?: Limits
 	method: string
 	raw?: boolean
-	shouldThrow: boolean
 }
 
 /** A server's message as an Error may carry it: ASCII control characters stripped, `max` characters at most. */
@@ -64,7 +79,7 @@ async function bodyBytes(response: Response, max = MAX_RESPONSE_BYTES): Promise<
 			const sent = response.headers.get("content-length")
 			const what = [response.headers.get("content-type") ?? "no content type", sent && `${sent} bytes`]
 			const message = `Response body is over the ${max}-byte cap (${what.filter(Boolean).join(", ")})`
-			throw clientErrorFor({ body: null, message, response, status: response.status })
+			throw new DecodeError({ body: null, message, response, status: response.status })
 		}
 		chunks.push(next.value)
 	}
@@ -119,12 +134,6 @@ export async function errorFromResponse(response: Response, limits: Limits = {})
 	return clientErrorFor({ body, message: text, response: preserved, status: response.status })
 }
 
-/** The safe-mode error: the server's error object when the body is a JSON object, else the ClientError. */
-function safeErrorValue(error: ClientError): unknown {
-	const body = error.body
-	return typeof body === "object" && body !== null && !Array.isArray(body) ? body : error
-}
-
 /** A body with no content to read: 204/205/304 and every answer to HEAD. */
 function hasNoBody(response: Response, method: string): boolean {
 	return response.status === 204 || response.status === 205 || response.status === 304 || method === "HEAD"
@@ -158,13 +167,9 @@ export async function parseBody(
 		if (text.length === 0) return null
 		try {
 			return JSON.parse(text)
-		} catch {
-			throw clientErrorFor({
-				body: text,
-				message: "Response body is not valid JSON",
-				response,
-				status: response.status,
-			})
+		} catch (cause) {
+			const message = "Response body is not valid JSON"
+			throw new DecodeError({ body: text, cause, message, response, status: response.status })
 		}
 	}
 	if (isTextMediaType(type)) return bodyText(response, max)
@@ -182,33 +187,32 @@ function declaredHeaders(response: Response, names: readonly string[]): Record<s
 	return out
 }
 
-/** A safe-mode success, with the declared headers when the operation declares any. */
-function success(data: unknown, response: Response, names: readonly string[] | undefined): SafeResult {
-	const result: SafeResult = { data, error: null, response, status: response.status }
-	if (names) Object.assign(result, { headers: declaredHeaders(response, names) })
-	return result
-}
-
-/** Read the answer of a REST call into its value (throw mode), a result (safe mode), or the raw response. */
-export async function finishRequest(sent: Sent, reading: Reading): Promise<unknown> {
+/**
+ * A REST answer read into its value, or the response itself when raw. A non-2xx throws its ClientError, an
+ * undecodable 2xx DecodeError, and a body read that fails no answer (f2).
+ */
+export async function finishRequest(sent: Sent, reading: Reading): Promise<Answer> {
 	const { response } = sent
-	const { method, shouldThrow } = reading
 	try {
-		if (!response.ok) {
-			if (reading.raw && !shouldThrow) return response
-			const error = await errorFromResponse(response, reading.limits)
-			if (shouldThrow) throw error
-			return { data: null, error: safeErrorValue(error), response: error.response, status: response.status }
-		}
-		if (reading.raw) return response
+		if (!response.ok) throw await errorFromResponse(response, reading.limits)
+		if (reading.raw) return { data: response, response }
 		const max = reading.limits?.maxResponseBytes
-		if (shouldThrow) return await parseBody(response, method, reading.declared, max)
-		try {
-			return success(await parseBody(response, method, reading.declared, max), response, reading.headers)
-		} catch (e) {
-			return { data: null, error: e, response, status: response.status }
-		}
+		return { data: await parseBody(response, reading.method, reading.declared, max), response }
+	} catch (e) {
+		throw e instanceof ClientError ? e : sent.failed(e)
 	} finally {
 		sent.done()
+	}
+}
+
+/** `answer` as a safe call's Result (bit 21 i): an answer's error its Err; no answer, or none sent, thrown (f2). */
+export async function resultOf(answer: Promise<Answer>, names?: readonly string[]): Promise<Result<unknown>> {
+	try {
+		const { data, response } = await answer
+		const ok: Result<unknown> = { data, ok: true, response }
+		return names ? Object.assign(ok, { headers: declaredHeaders(response, names) }) : ok
+	} catch (e) {
+		if (e instanceof ClientError && e.status !== 0) return { error: e, ok: false, response: e.response }
+		throw e
 	}
 }

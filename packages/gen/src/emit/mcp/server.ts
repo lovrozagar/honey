@@ -182,7 +182,6 @@ const config = {
 	headers: key === "" ? headers : { ...headers, ${tsString(ir.auth.headerName)}: ${tsString(ir.auth.prefix)} + key },
 	maxResponseBytes: BYTES_MAX,
 	redirect: redirect as "follow" | "same-origin",
-	throwOnError: false,
 	timeout: Number(timeout),
 }
 ${app.files ? filesSource(app.envPrefix) : ""}const client = new Api(config)

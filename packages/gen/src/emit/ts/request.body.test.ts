@@ -5,8 +5,10 @@ type Json = Record<string, unknown>
 type Answer = (request: Request) => Response | Promise<Response>
 type Send = (path: string, input?: Json) => Promise<unknown>
 type App = { get: Send; patch: Send; post: Send; put: Send }
-type Op = (input?: Json) => Promise<{ data: unknown; error: { message: string } | null; status: number }>
-type Sdk = Record<"createUser" | "listUsers" | "submitForm" | "updateUser" | "upload" | "uploadFiles", Op>
+type Op = (input?: Json) => Promise<unknown>
+type Sdk = Record<"createUser" | "listUsers" | "submitForm" | "updateUser" | "upload" | "uploadFiles", Op> & {
+	safe: Record<"createUser", Op>
+}
 
 const ORIGIN = "https://api.example.com"
 const OK = { 200: { content: { "application/json": { schema: {} } }, description: "ok" } }
@@ -89,8 +91,8 @@ describe("app front: JSON bodies", () => {
 	// v0: b726e4d0b6
 	// v0: ebc8f5482f
 	// v0: 3c9897d033
-	it("sends JSON as application/json on POST, PUT and PATCH, resolving the parsed answer in throw mode", async () => {
-		const { api, calls } = await app({ throwOnError: true }, () => Response.json({ id: "new-1" }, { status: 201 }))
+	it("sends JSON as application/json on POST, PUT and PATCH, resolving the parsed answer", async () => {
+		const { api, calls } = await app({}, () => Response.json({ id: "new-1" }, { status: 201 }))
 		const created = await api.post("/users", { json: { email: "a@b.com", name: "Alice" } })
 		await api.put("/users/:userId", { json: { name: "Updated" }, params: { userId: "42" } })
 		await api.patch("/users/:userId/settings", { json: { theme: "dark" }, params: { userId: "42" } })
@@ -113,10 +115,7 @@ describe("app front: JSON bodies", () => {
 		await api.post("/api/echo", { json: null })
 		const echoed = await api.post("/api/v1/organizations", { json: deep })
 		const texts = await Promise.all(calls.map((call) => call.text()))
-		expect([texts, echoed]).toEqual([
-			["[1,2,3]", "null", JSON.stringify(deep)],
-			expect.objectContaining({ data: deep, error: null }),
-		])
+		expect([texts, echoed]).toEqual([["[1,2,3]", "null", JSON.stringify(deep)], deep])
 	})
 })
 
@@ -163,7 +162,7 @@ describe("app front: multipart bodies", () => {
 	// v0: 7314ffaf02
 	it("switches to multipart for a File, a Blob or a FileList, leaving the boundary to fetch", async () => {
 		vi.stubGlobal("FileList", FakeFileList)
-		const { api, calls } = await app({ throwOnError: true })
+		const { api, calls } = await app()
 		await api.post("/upload", {
 			form: { avatar: new File(["hello"], "test.txt", { type: "text/plain" }), name: "Alice" },
 		})
@@ -207,15 +206,21 @@ describe("SDK front: empty and JSON bodies", () => {
 	})
 
 	// v0: 4f7d2e0f61
-	it("resolves an unserializable JSON body as a status-0 ClientError naming the failure, sending nothing", async () => {
+	it("throws an unserializable JSON body as a status-0 ClientError naming the failure, from the safe twin too, sending nothing", async () => {
 		const { calls, mod, sdk } = await sdkOf()
-		const result = await sdk.createUser({ json: { n: 1n } })
-		expect([
-			calls.length,
-			result.status,
-			result.error instanceof (mod.ClientError as abstract new (...args: never[]) => unknown),
-			result.error?.message,
-		]).toEqual([0, 0, true, expect.stringMatching(/^JSON serialization failed: /)])
+		const Client = mod.ClientError as abstract new (...args: never[]) => unknown
+		/* never sent, so no answer: thrown by both styles (bit 21 i1) */
+		const thrown = [
+			await sdk.createUser({ json: { n: 1n } }).catch((e: unknown) => e),
+			await sdk.safe.createUser({ json: { n: 1n } }).catch((e: unknown) => e),
+		] as { message: string; status: number }[]
+		expect([calls.length, thrown.map((e) => [e.status, e instanceof Client, e.message])]).toEqual([
+			0,
+			[
+				[0, true, expect.stringMatching(/^JSON serialization failed: /)],
+				[0, true, expect.stringMatching(/^JSON serialization failed: /)],
+			],
+		])
 	})
 })
 
@@ -254,7 +259,6 @@ describe("SDK front: form and stream bodies", () => {
 		let hooked: unknown
 		const { calls, sdk } = await sdkOf({
 			onResponse: [(ctx: { request: Request }) => void (hooked = ctx.request)],
-			throwOnError: true,
 		})
 		const stream = new ReadableStream<Uint8Array>({
 			start(controller) {

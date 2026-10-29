@@ -4,9 +4,8 @@ import { emittedApp, emittedSdk, recordingFetch } from "./__fixtures__/emitted.t
 type Json = Record<string, unknown>
 type Build = (path: string, input?: Json) => string
 type Send = (path: string, input?: Json) => Promise<unknown>
-type App = { $path: Build; $url: Build; delete: Send; get: Send }
-type Result = { data: unknown; error: { message: string } | null; status: number }
-type Op = (input?: Json) => Promise<Result>
+type App = { $path: Build; $url: Build; delete: Send; get: Send; safe: { get: Send } }
+type Op = (input?: Json) => Promise<unknown>
 type Ctor = abstract new (...args: never[]) => unknown
 
 const ORIGIN = "https://api.example.com"
@@ -251,7 +250,7 @@ describe("app front: sending to a path", () => {
 
 	// v0: fe01068985
 	// v0: e3619f2f85
-	it("refuses empty and dot-segment params with a PathParamError before sending, even in safe mode", async () => {
+	it("refuses empty and dot-segment params with a PathParamError before sending, from the safe twin too", async () => {
 		const { api, calls, PathParamError } = await app(ORIGIN, { headers: { authorization: "Bearer t" } })
 		await expect(api.get("/api/v1/organizations/:orgId", { params: { orgId: "" } })).rejects.toThrow(
 			/Invalid path param "orgId"/,
@@ -260,6 +259,9 @@ describe("app front: sending to a path", () => {
 			api.delete("/orgs/:org/projects/:pid/files/:fid", { params: { fid: "..", org: "acme", pid: "p1" } }),
 		).rejects.toThrow(PathParamError)
 		await expect(api.get("/:org/:repo", { params: { org: "", repo: "evil.example" } })).rejects.toThrow(PathParamError)
+		await expect(api.safe.get("/:org/:repo", { params: { org: "", repo: "evil.example" } })).rejects.toThrow(
+			PathParamError,
+		)
 		expect(calls).toEqual([])
 	})
 })
@@ -272,9 +274,12 @@ describe("SDK front: URL vectors", () => {
 			{ [template]: { get: { operationId: "op", parameters, responses: OK } } },
 			{ baseURL: `${ORIGIN}${v.base ?? ""}`, requestId: false },
 		)
-		const result = await sdk.op({ params: v.params, search: v.search })
+		const refusal = await sdk.op({ params: v.params, search: v.search }).then(
+			() => null,
+			(error: Error) => error.message,
+		)
 		expect({
-			refused: result.error?.message.includes(v.error ?? "") ?? false,
+			refused: refusal?.includes(v.error ?? "") ?? false,
 			url: calls[0]?.url ?? null,
 		}).toEqual(want(v))
 	})
@@ -333,28 +338,29 @@ describe("SDK front: path interpolation", () => {
 describe("SDK front: path param errors", () => {
 	// v0: 7b5d88a7a5
 	// v0: 90ace364d2
-	it("throws on a missing required path param in throw mode, sending nothing", async () => {
-		const { calls, sdk } = await sdkOf<{ getUser: Op }>(
-			{ "/users/{id}": getOp("getUser", ["id"]) },
-			{ throwOnError: true },
-		)
+	it("throws on a missing required path param, sending nothing", async () => {
+		const { calls, sdk } = await sdkOf<{ getUser: Op }>({ "/users/{id}": getOp("getUser", ["id"]) })
 		await expect(sdk.getUser({ params: {} })).rejects.toThrow("Missing path param: id")
 		expect(calls).toEqual([])
 	})
 
 	// v0: 8ebd298507
-	it("interpolates before sending, and resolves a path param error as a status-0 ClientError in safe mode", async () => {
-		const { calls, mod, sdk } = await sdkOf<{ getUser: Op }>({ "/users/{id}": getOp("getUser", ["id"]) })
-		const result = await sdk.getUser({ params: { id: ".." } })
+	it("interpolates before sending, and throws a path param error as a status-0 ClientError from the safe twin too", async () => {
+		const { calls, mod, sdk } = await sdkOf<{ getUser: Op; safe: { getUser: Op } }>({
+			"/users/{id}": getOp("getUser", ["id"]),
+		})
+		/* no request was sent, so there is no answer for an Err to carry: thrown in both styles (bit 21 i1) */
+		const error = (await sdk.safe.getUser({ params: { id: ".." } }).catch((e: unknown) => e)) as {
+			message: string
+			status: number
+		}
 		expect({
 			calls: calls.length,
-			data: result.data,
-			isClientError: result.error instanceof (mod.ClientError as Ctor),
-			message: result.error?.message,
-			status: result.status,
+			isClientError: error instanceof (mod.ClientError as Ctor),
+			message: error.message,
+			status: error.status,
 		}).toEqual({
 			calls: 0,
-			data: null,
 			isClientError: true,
 			message: expect.stringContaining('Invalid path param "id"'),
 			status: 0,

@@ -21,8 +21,12 @@ function routes(request: Request): Response {
 	return Response.json({ error_key: "not_found" }, { status: 404 })
 }
 
-/** A safe-mode result as [status, data, the error's error_key or null]. */
-const summary = (result: Json) => [result.status, result.data, result.error === null ? null : result.error.error_key]
+/** A safe call's Result as [status, data or null, the Err's error_key or null]. */
+const summary = (result: Json) => [
+	result.response.status,
+	result.ok ? result.data : null,
+	result.ok ? null : result.error.body.error_key,
+]
 
 describe("hook contexts for a parameterized route", () => {
 	// v0: 5a16ac11d2
@@ -64,7 +68,7 @@ describe("one client over many calls", () => {
 	// v0: 1146095908
 	it("handles a success, then an error, then a success with nothing carried over", async () => {
 		const api = await appFor({ fetch: recordingFetch(routes).fetch })
-		const results = [await api.get("/health"), await api.get("/missing"), await api.get("/echo")]
+		const results = [await api.safe.get("/health"), await api.safe.get("/missing"), await api.safe.get("/echo")]
 		expect(results.map(summary)).toEqual([
 			[200, "ok", null],
 			[404, null, "not_found"],
@@ -75,7 +79,9 @@ describe("one client over many calls", () => {
 	// v0: a98111c2ed
 	it("concurrent successes and errors each get their own result", async () => {
 		const api = await appFor({ fetch: recordingFetch(routes).fetch })
-		const results = await Promise.all(["/health", "/missing", "/echo", "/boom", "/health"].map((path) => api.get(path)))
+		const results = await Promise.all(
+			["/health", "/missing", "/echo", "/boom", "/health"].map((path) => api.safe.get(path)),
+		)
 		expect(results.map(summary)).toEqual([
 			[200, "ok", null],
 			[404, null, "not_found"],
@@ -86,10 +92,12 @@ describe("one client over many calls", () => {
 	})
 
 	// v0: 23bdd81bee
-	it("a network failure rejects even in result mode", async () => {
+	it("a network failure rejects from the safe twin too", async () => {
 		const api = await appFor({ fetch: recordingFetch(() => Promise.reject(new TypeError("fetch failed"))).fetch })
 		/* the platform's TypeError is the typed connection error's cause (bit 19 f2) */
-		await expect(api.get("/down")).rejects.toMatchObject({ cause: expect.any(TypeError), name: "APIConnectionError" })
+		const failure = { cause: expect.any(TypeError), name: "APIConnectionError" }
+		await expect(api.safe.get("/down")).rejects.toMatchObject(failure)
+		await expect(api.get("/down")).rejects.toMatchObject(failure)
 	})
 })
 
@@ -121,7 +129,7 @@ describe("config headers and fetch options", () => {
 		}
 		const { calls, fetch } = recordingFetch(routes)
 		const api = await appFor({ fetch, headers })
-		const results = await Promise.all([api.get("/health"), api.get("/health"), api.get("/health")])
+		const results = await Promise.all([api.safe.get("/health"), api.safe.get("/health"), api.safe.get("/health")])
 		expect([count, results.map(summary), calls.map((call) => call.headers.get("x-call")).sort()]).toEqual([
 			3,
 			[
@@ -140,16 +148,16 @@ describe("config headers and fetch options", () => {
 		["mode", "same-origin"],
 	] as const)("config %s %s reaches fetch", async (option, value) => {
 		const { calls, fetch } = recordingFetch()
-		await (await appFor({ fetch, [option]: value, throwOnError: true })).get("/health")
+		await (await appFor({ fetch, [option]: value })).get("/health")
 		expect(calls[0]?.[option]).toBe(value)
 	})
 })
 
-describe("onResponse with throwOnError and retry", () => {
+describe("onResponse with the throwing client and retry", () => {
 	// v0: 120e782527
 	it("a hook replacing a 404 with a 200 prevents the throw, and its body becomes the data", async () => {
 		const onResponse = [(ctx: Ctx) => (ctx.response.status === 404 ? Response.json({ fallback: true }) : undefined)]
-		const api = await appFor({ fetch: recordingFetch(routes).fetch, onResponse, throwOnError: true })
+		const api = await appFor({ fetch: recordingFetch(routes).fetch, onResponse })
 		expect(await api.get("/missing")).toEqual({ fallback: true })
 	})
 
@@ -170,7 +178,6 @@ describe("onResponse with throwOnError and retry", () => {
 					return ctx.response.status === 401 && !ctx.isRetry ? ctx.retry() : undefined
 				},
 			],
-			throwOnError: true,
 		})
 		expect(await api.get("/orgs")).toBe("ok")
 		expect([log, calls.map((call) => call.headers.get("authorization"))]).toEqual([
@@ -183,7 +190,7 @@ describe("onResponse with throwOnError and retry", () => {
 	it("a hook that retries every 401 stops after one retry and throws the 401", async () => {
 		const { calls, fetch } = recordingFetch(() => Response.json({ message: "nope" }, { status: 401 }))
 		const onResponse = [(ctx: Ctx) => (ctx.response.status === 401 ? ctx.retry() : undefined)]
-		const api = await appFor({ fetch, onResponse, throwOnError: true })
+		const api = await appFor({ fetch, onResponse })
 		const error = await api.get("/x").then(
 			() => null,
 			(thrown: Json) => thrown,

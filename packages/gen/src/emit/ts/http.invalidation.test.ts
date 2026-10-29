@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest"
 import { emittedSdk, recordingFetch } from "./__fixtures__/emitted.ts"
 
 type Json = Record<string, unknown>
-/** What a safe-mode call resolves to. */
-type Result = { data: unknown; error: unknown; response: Response; status: number }
-type Op = (input?: Json) => Promise<Result>
-type Sdk = Record<string, Record<string, Op>>
+/** What a safe call resolves to. */
+type Result = { data?: unknown; error?: { name: string; status: number }; ok: boolean; response: Response }
+type Op = (input?: Json) => Promise<unknown>
+type Sdk = Record<string, Record<string, Op>> & {
+	safe: Record<string, Record<string, (input?: Json) => Promise<Result>>>
+}
 /** One request's invalidation view, as a hook sees it. */
 type View = { invalidatedBy?: string[]; isStale?: boolean; selector?: string }
 
@@ -227,9 +229,9 @@ describe("invalidation: when a mark is set and cleared", () => {
 	// v0: 57194d84d8
 	it("does not mark anything when the mutation fails", async () => {
 		const { sdk, views } = await staleSdk(users({ create: ["GET /users"] }), failingAt(0))
-		await sdk.users.create({ json: { name: "Alice" } })
+		const failed = await sdk.safe.users.create({ json: { name: "Alice" } })
 		await sdk.users.list()
-		expect(views[1]?.isStale).toBe(false)
+		expect([failed.ok, views[1]?.isStale]).toEqual([false, false])
 	})
 
 	// v0: eb7dbb0cc1
@@ -251,9 +253,9 @@ describe("invalidation: when a mark is set and cleared", () => {
 				? new Response("{not json", { headers: { "content-type": "application/json" } })
 				: Response.json([]),
 		)
-		const created = await sdk.users.create({ json: { name: "Alice" } })
+		const created = await sdk.safe.users.create({ json: { name: "Alice" } })
 		await sdk.users.list()
-		expect([created.status, created.error === null, views[1]?.isStale]).toEqual([200, false, true])
+		expect([created.response.status, created.error?.name, views[1]?.isStale]).toEqual([200, "DecodeError", true])
 	})
 })
 
@@ -271,7 +273,7 @@ describe("invalidation: when a mark clears", () => {
 	it("keeps a mark after a failed read", async () => {
 		const { sdk, views } = await staleSdk(users({ create: ["GET /users"] }), failingAt(1))
 		await sdk.users.create({ json: { name: "Alice" } })
-		await sdk.users.list()
+		await sdk.safe.users.list()
 		await sdk.users.list()
 		expect(views.slice(1).map((view) => view.isStale)).toEqual([true, true])
 	})

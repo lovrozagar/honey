@@ -75,7 +75,7 @@ const echoSocket = (search?: Json): Socket => client().ws.echo(search && { searc
 describe("round trip", () => {
 	// v0: de55a6308c
 	it("creates a user, then reads the same user back by its id", async () => {
-		const sdk = client({ headers: VALID, throwOnError: true })
+		const sdk = client({ headers: VALID })
 		const created = await sdk.users.create({ json: { email: "a@b.com", name: "Alice" } })
 		const fetched = await sdk.users.get({ params: { id: created.id } })
 		expect([created, fetched]).toEqual([
@@ -93,7 +93,7 @@ describe("onAuthExpired", () => {
 			calls++
 			return "valid-token"
 		}
-		const sdk = client({ headers: EXPIRED, onAuthExpired, throwOnError: true })
+		const sdk = client({ headers: EXPIRED, onAuthExpired })
 		const { hops, outcome } = await observe(async () => {
 			const user = await sdk.users.create({ json: { email: "b@c.com", name: "Bob" } })
 			return sdk.users.get({ params: { id: user.id } })
@@ -107,7 +107,7 @@ describe("onAuthExpired", () => {
 
 	// v0: 695e2bf63b
 	it("gives up when the hook returns null: no retry, the 401 is thrown", async () => {
-		const sdk = client({ headers: EXPIRED, onAuthExpired: () => null, throwOnError: true })
+		const sdk = client({ headers: EXPIRED, onAuthExpired: () => null })
 		const { hops, outcome } = await observe(() => sdk.users.create({ json: { email: "n@n.com", name: "Nope" } }))
 		expect([outcome instanceof cls("UnauthorizedError"), (outcome as Failure).status, hops.length]).toEqual([
 			true,
@@ -118,7 +118,7 @@ describe("onAuthExpired", () => {
 
 	// v0: 1527910afa
 	it("passes a 401 through with no retry when no hook is configured", async () => {
-		const sdk = client({ headers: EXPIRED, throwOnError: true })
+		const sdk = client({ headers: EXPIRED })
 		const { hops, outcome } = await observe(() => sdk.users.create({ json: { email: "n@n.com", name: "Nope" } }))
 		expect([(outcome as Failure).status, hops.length]).toEqual([401, 1])
 	})
@@ -131,7 +131,7 @@ describe("onAuthExpired", () => {
 			return "valid-token"
 		}
 		const explicit = { authHeaderName: "Authorization", authHeaderPrefix: "Bearer ", headers: EXPIRED, onAuthExpired }
-		const user = await client({ ...explicit, throwOnError: true }).users.create({
+		const user = await client({ ...explicit }).users.create({
 			json: { email: "c@c.com", name: "Custom" },
 		})
 		const custom = client({ authHeaderName: "X-Token", authHeaderPrefix: "Token ", headers: EXPIRED, onAuthExpired })
@@ -152,7 +152,7 @@ describe("onAuthExpired: request bodies", () => {
 			rejected.push(ctx.rejectedToken)
 			return "valid-token"
 		}
-		const sdk = client({ headers: EXPIRED, onAuthExpired, throwOnError: true })
+		const sdk = client({ headers: EXPIRED, onAuthExpired })
 		const out = await sdk.uploads.form({ form: { file: new Blob(["hello multipart"], { type: "text/plain" }) } })
 		expect([rejected, (out.size as number) > 0]).toEqual([["expired-token"], true])
 	})
@@ -164,7 +164,7 @@ describe("onAuthExpired: request bodies", () => {
 			calls++
 			return "valid-token"
 		}
-		const sdk = client({ headers: EXPIRED, onAuthExpired, throwOnError: true })
+		const sdk = client({ headers: EXPIRED, onAuthExpired })
 		const body = new ReadableStream({
 			start(controller) {
 				controller.enqueue(new TextEncoder().encode("x"))
@@ -179,7 +179,7 @@ describe("onAuthExpired: request bodies", () => {
 describe("typed errors", () => {
 	// v0: 4749aee6b7
 	it("throws the ClientError subclass of each known status, name and status kept", async () => {
-		const sdk = client({ throwOnError: true })
+		const sdk = client()
 		const names = {
 			400: "BadRequestError",
 			401: "UnauthorizedError",
@@ -197,13 +197,13 @@ describe("typed errors", () => {
 
 	// v0: fb04dab92d
 	it("throws exactly the base ClientError for a status with no subclass (418)", async () => {
-		const error = await rejection(client({ throwOnError: true }).errors.status({ params: { status: "418" } }))
+		const error = await rejection(client().errors.status({ params: { status: "418" } }))
 		expect([error?.constructor === cls("ClientError"), error?.name, error?.status]).toEqual([true, "ClientError", 418])
 	})
 
 	// v0: 7e435f6692
 	it("answers isClientError for a typed subclass (422), status kept", async () => {
-		const error = await rejection(client({ throwOnError: true }).errors.status({ params: { status: "422" } }))
+		const error = await rejection(client().errors.status({ params: { status: "422" } }))
 		const isClientError = emitted.isClientError as (e: unknown) => boolean
 		expect([isClientError(error), error instanceof cls("UnprocessableEntityError"), error?.status]).toEqual([
 			true,
@@ -214,7 +214,7 @@ describe("typed errors", () => {
 
 	// v0: 56e5309a8c
 	it("carries a declared 400's envelope on body, with no data alias", async () => {
-		const error = await rejection(client({ throwOnError: true }).errors.declared({ params: { status: "400" } }))
+		const error = await rejection(client().errors.declared({ params: { status: "400" } }))
 		expect([error instanceof cls("BadRequestError"), error?.status, Object.hasOwn(error ?? {}, "data")]).toEqual([
 			true,
 			400,
@@ -232,7 +232,7 @@ describe("typed errors", () => {
 describe("timeouts", () => {
 	// v0: cc221b68ac
 	it("lets a per-call timeout beat the config timeout and abort a slow call", async () => {
-		const sdk = client({ throwOnError: true, timeout: 10_000 })
+		const sdk = client({ timeout: 10_000 })
 		const started = Date.now()
 		const error = await rejection(sdk.timing.slow({ search: { ms: 2000 }, timeout: 50 }))
 		expect([error instanceof Error, Date.now() - started < 1000]).toEqual([true, true])
@@ -240,7 +240,7 @@ describe("timeouts", () => {
 
 	// v0: c6c5a1dd2f
 	it("applies the config timeout when the call sets none, and a slow call within it succeeds", async () => {
-		const result = await client({ throwOnError: true, timeout: 10_000 }).timing.slow({ search: { ms: 50 } })
+		const result = await client({ timeout: 10_000 }).timing.slow({ search: { ms: 50 } })
 		expect(result).toEqual({ ok: true })
 	})
 })
@@ -249,7 +249,7 @@ describe("hooks", () => {
 	// v0: cdb56a936e
 	it("logs request_start, then response_received with the status and a duration", async () => {
 		const entries: Json[] = []
-		const sdk = client({ headers: VALID, onLog: (entry: Json) => entries.push(entry), throwOnError: true })
+		const sdk = client({ headers: VALID, onLog: (entry: Json) => entries.push(entry) })
 		await sdk.users.create({ json: { email: "l@l.com", name: "Log" } })
 		const operation = "POST /v1/secure/users"
 		expect(entries).toEqual([
@@ -275,13 +275,13 @@ describe("bodies", () => {
 				controller.enqueue(chunk)
 			},
 		})
-		const result = await client({ headers: VALID, throwOnError: true }).uploads.blob({ body })
+		const result = await client({ headers: VALID }).uploads.blob({ body })
 		expect(result).toEqual({ sha256: hasher.digest("hex"), size: total })
 	})
 
 	// v0: 9898b4fc7c
 	it("sends an idempotent op an auto UUID key, the explicit key, or the caller's header over both", async () => {
-		const sdk = client({ throwOnError: true })
+		const sdk = client()
 		const auto = await sdk.idempotent.create()
 		const explicit = await sdk.idempotent.create({ idempotencyKey: "user-supplied-key-123" })
 		const header = await sdk.idempotent.create({

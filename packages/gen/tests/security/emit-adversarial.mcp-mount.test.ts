@@ -33,23 +33,24 @@ async function dispatch(request: Request): Promise<Response> {
 	return Response.json({ credential })
 }
 
-/** An SDK client of the shape the TS SDK's is: each member fetches through the config, `away` off the origin. */
+/**
+ * An SDK client of the shape the TS SDK's is, its safe twin the tools call: each member fetches through the config,
+ * `away` off the origin, and answers a Result, an error status its Err holding the error with its body.
+ */
 const client = (config: MountConfig) => {
 	const call = async (url: string, signal?: AbortSignal) => {
 		const response = await config.fetch(url, { signal })
 		const data = (await response.text()) || null
 		const parsed = data === null ? null : (JSON.parse(data) as unknown)
-		return response.ok
-			? { data: parsed, error: undefined, response, status: response.status }
-			: { data: null, error: parsed, response, status: response.status }
+		const error = Object.assign(new Error(`HTTP ${response.status}`), { body: parsed, status: response.status })
+		return response.ok ? { data: parsed, ok: true, response } : { error, ok: false, response }
 	}
-	return {
-		api: {
-			away: ({ signal }: { signal?: AbortSignal }) => call("https://elsewhere.example/api/v1/who", signal),
-			get: ({ params, signal }: { params: { what: string }; signal?: AbortSignal }) =>
-				call(`${config.baseURL}/v1/${params.what}`, signal),
-		},
+	const api = {
+		away: ({ signal }: { signal?: AbortSignal }) => call("https://elsewhere.example/api/v1/who", signal),
+		get: ({ params, signal }: { params: { what: string }; signal?: AbortSignal }) =>
+			call(`${config.baseURL}/v1/${params.what}`, signal),
 	}
+	return { api, safe: { api } }
 }
 
 const tool = (name: string, member: string, args: [string, "params", string][] = []) => ({

@@ -114,7 +114,6 @@ export type ClientConfig = {
 	/** The most UTF-8 bytes one event's data may hold, its joining newlines counted. Default 8 MiB. */
 	sseMaxEventBytes?: number
 	state?: Record<string, unknown>
-	throwOnError?: boolean
 	/** Milliseconds for a whole request, including reading the body; a stream's only up to its headers. */
 	timeout?: number
 }

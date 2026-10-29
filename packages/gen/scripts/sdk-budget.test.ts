@@ -32,13 +32,13 @@ const appSpec = (app: string) =>
 const runtimeDir = (language: string) => join(REPO, `packages/gen/src/runtime/${language}`)
 
 describe("the v1 SDK within the budget (bit 11)", () => {
-	it("reads each operation's signature lines, its raw overload with its call, a repeated name numbered", () => {
-		const raw = "get(input: A & { raw: true }): Promise<Response>"
-		const types = `interface Ops {\n\titems: {\n\t\t${raw}\n\t\tget(input?: A): R\n\t}\n\tusers: {\n\t\tget(input?: B): S\n\t}\n\t"x-y"(input?: C): T\n}`
+	it("reads each operation's member line, a call, a stream or a connection, a repeated name numbered", () => {
+		const types = `interface Ops {\n\titems: {\n\t\tget: HoneyCall<A, R>\n\t\tfeed: HoneyStream<{}, SSEEvent>\n\t}\n\tusers: {\n\t\tget: HoneyCall<B, S, { 404: E }>\n\t}\n\t"x-y"(input?: C): TypedWebSocket\n\tsafe: {\n\t}\n}`
 		expect(Object.fromEntries(v1SdkSurfaces(types))).toEqual({
-			'"x-y"': '"x-y"(input?: C): T',
-			get: `${raw}\nget(input?: A): R`,
-			"get#2": "get(input?: B): S",
+			'"x-y"': '"x-y"(input?: C): TypedWebSocket',
+			feed: "feed: HoneyStream<{}, SSEEvent>",
+			get: "get: HoneyCall<A, R>",
+			"get#2": "get: HoneyCall<B, S, { 404: E }>",
 		})
 	})
 
@@ -594,8 +594,19 @@ describe("the C# runtime within its byte budget (bit 15, G14)", () => {
  * call's own f2 path, no second wrapper: error.ts +247 (noAnswer, connectionErrors' catch made a function both call),
  * http.ts +85 (each Sent's failed, bound to its request), sse.ts +428 (readerOf: a failed read throws failed's error,
  * split out of parseSSEStream at its complexity cap), response.ts +83 (Sent.failed). Nothing cut: the catch moved.
+ * Bit 21 i1, +369 B to 122,006: the normal client always throws and `client.safe` answers a Result (R-i2..R-i4), the
+ * old safe mode cut first. Cut: SafeResult, safeErrorValue, success and finishRequest's two modes (response.ts),
+ * requestSafe, requestOperation's status-0 result and every shouldThrow (http.ts), ClientResult, ErrorVariants,
+ * HasStatusErrors and TThrow (app-types.ts), createClient's three TThrow overloads (app.ts), throwOnError (config.ts),
+ * the poll's shouldThrow (realtime-transports.ts -21). Added: DecodeError, its cause through ClientErrorInit
+ * (error.ts +320); Answer, Result with its per-status errors, resultOf, and finishRequest's failed body read as no
+ * answer (response.ts +433); the twin's flag through namespace, memberOf and callable, `safe` itself, open() for a
+ * stream's opening, a 2xx DecodeError still marking its targets, and memberOf's At and callable's `open`, which hold
+ * sdk.ts at its 300-line cap (sdk.ts +530). Net of both: http.ts -351 (the
+ * stream's open split out as openStream, `later` its lazy form), app-types.ts -334 (SafeReturnFor and SafeMethod in),
+ * app.ts -184 (safeMethods in), config.ts -24.
  */
-const TS_RUNTIME_BYTES = 121_637
+const TS_RUNTIME_BYTES = 122_006
 
 describe("the TS runtime within its byte budget (bit 11, G14)", () => {
 	it(

@@ -1,6 +1,6 @@
 import type { ClientConfig, HeadersContext, RequestMeta } from "./config.ts"
 import { bindDefaultFetch, parseClientBaseURL } from "./defaults.ts"
-import { ClientError, connectionErrors, noAnswer } from "./error.ts"
+import { connectionErrors, noAnswer } from "./error.ts"
 import { exchangeLog, runRequestHooks, runResponseHooks } from "./hooks.ts"
 import { interpolatePath } from "./path.ts"
 import { fetchFollowing } from "./redirects.ts"
@@ -14,14 +14,7 @@ import {
 	requestInit,
 	requestSignal,
 } from "./request.ts"
-import {
-	errorFromResponse,
-	finishRequest,
-	isEventStream,
-	type Reading,
-	type SafeResult,
-	type Sent,
-} from "./response.ts"
+import { type Answer, errorFromResponse, finishRequest, isEventStream, type Reading, type Sent } from "./response.ts"
 import { parseSSEStream, type SSEEvent } from "./sse.ts"
 
 /** One request, ready to send: where, with what, and the hooks' view of it. */
@@ -37,10 +30,18 @@ export const REFRESH_AUTH = /* @__PURE__ */ Symbol("honey.refreshAuth")
 export type Operation = Call & {
 	/** the non-JSON media type the operation declares, read as that type; null when it declares no body */
 	declared?: string | null
-	headers?: readonly string[]
 	meta?: RequestMeta
-	shouldThrow: boolean
 }
+
+/** An event stream's call: its stale view, and what runs once its answer is ok. */
+type StreamCall = Call & { meta?: RequestMeta; onOpen?: (response: Response) => void }
+
+/** An event stream sent when its iteration starts: `open`'s events. */
+export const later = (open: () => Promise<Answer>): AsyncIterable<SSEEvent> => ({
+	async *[Symbol.asyncIterator]() {
+		yield* (await open()).data as AsyncIterable<SSEEvent>
+	},
+})
 
 /** Ignore a failed cancel: the body is being discarded either way. */
 const discard = (response: Response) =>
@@ -210,45 +211,32 @@ export class HTTPClient {
 		}
 	}
 
-	#reading(method: string, opts: RequestOptions, shouldThrow: boolean): Reading {
-		return { limits: this.#config, method, raw: opts.raw, shouldThrow }
+	#reading(method: string, opts: RequestOptions): Reading {
+		return { limits: this.#config, method, raw: opts.raw }
 	}
 
-	/** Throw mode: the parsed body, or a ClientError (a per-status subclass) on non-2xx. */
+	/** The parsed body; a non-2xx throws its ClientError (a per-status subclass). */
 	async request(method: string, path: string, opts: RequestOptions, meta?: RequestMeta): Promise<unknown> {
-		return this.requestOperation({ meta, method, opts, path, shouldThrow: true })
+		return (await this.requestOperation({ meta, method, opts, path })).data
 	}
 
-	/** Safe mode: `{ data, error, response, status }`; `error` is truthy for every non-2xx. */
-	async requestSafe(method: string, path: string, opts: RequestOptions, meta?: RequestMeta): Promise<SafeResult> {
-		return this.requestOperation({ meta, method, opts, path, shouldThrow: false }) as Promise<SafeResult>
-	}
-
-	/** One REST operation, read as `op` says: thrown or safe, raw, with its declared response headers (A2). */
-	async requestOperation(op: Operation): Promise<unknown> {
-		const { declared, headers, meta, method, opts, shouldThrow } = op
-		let sent: Sent
-		try {
-			sent = await this.#send(op, "rest", meta)
-		} catch (e) {
-			/* a request that could not be built (status 0) is a safe-mode result like any other failure */
-			if (shouldThrow || !(e instanceof ClientError)) throw e
-			return { data: null, error: e, response: e.response, status: e.status }
-		}
-		return finishRequest(sent, { ...this.#reading(method, opts, shouldThrow), declared, headers })
+	/** One REST operation's answer, read as `op` says: parsed, or raw. */
+	async requestOperation(op: Operation): Promise<Answer> {
+		const sent = await this.#send(op, "rest", op.meta)
+		return finishRequest(sent, { ...this.#reading(op.method, op.opts), declared: op.declared })
 	}
 
 	/**
 	 * One request whose shape is decided by the answer: an event stream becomes an
 	 * `AsyncIterable<SSEEvent>` (never buffered, exempt from the timeout once headers arrive);
-	 * anything else is read as in `request` / `requestSafe`.
+	 * anything else is read as in `request`.
 	 */
-	async requestAuto(method: string, path: string, opts: RequestOptions, shouldThrow: boolean): Promise<unknown> {
+	async requestAuto(method: string, path: string, opts: RequestOptions): Promise<Answer> {
 		const sent = await this.#send({ method, opts, path }, "auto")
 		if (!sent.response.ok || !isEventStream(sent.response) || opts.raw)
-			return finishRequest(sent, this.#reading(method, opts, shouldThrow))
+			return finishRequest(sent, this.#reading(method, opts))
 		sent.exemptFromTimeout()
-		return this.#iterate(sent)
+		return { data: this.#iterate(sent), response: sent.response }
 	}
 
 	requestStream(method: string, path: string, opts: RequestOptions, meta?: RequestMeta): AsyncIterable<SSEEvent> {
@@ -256,26 +244,24 @@ export class HTTPClient {
 	}
 
 	/** An event stream, sent when iteration starts; `onOpen` runs once the answer is ok. */
-	streamOperation(op: Call & { meta?: RequestMeta; onOpen?: (response: Response) => void }): AsyncIterable<SSEEvent> {
-		const send = () => this.#send(op, "stream", op.meta)
-		const limits = this.#config
-		const iterate = (sent: Sent) => this.#iterate(sent)
-		return {
-			async *[Symbol.asyncIterator]() {
-				const sent = await send()
-				/* the timeout bounded the open; the stream itself is never cut by it */
-				sent.exemptFromTimeout()
-				if (!sent.response.ok) {
-					try {
-						throw await errorFromResponse(sent.response, limits)
-					} finally {
-						sent.done()
-					}
-				}
-				op.onOpen?.(sent.response)
-				yield* iterate(sent)
-			},
+	streamOperation(op: StreamCall): AsyncIterable<SSEEvent> {
+		return later(() => this.openStream(op))
+	}
+
+	/** An event stream opened: its non-2xx thrown as its ClientError, `onOpen` run, its events read as they arrive. */
+	async openStream(op: StreamCall): Promise<{ data: AsyncIterable<SSEEvent>; response: Response }> {
+		const sent = await this.#send(op, "stream", op.meta)
+		/* the timeout bounded the open; the stream itself is never cut by it */
+		sent.exemptFromTimeout()
+		if (!sent.response.ok) {
+			try {
+				throw await errorFromResponse(sent.response, this.#config)
+			} finally {
+				sent.done()
+			}
 		}
+		op.onOpen?.(sent.response)
+		return { data: this.#iterate(sent), response: sent.response }
 	}
 
 	buildUrl(path: string, opts: RequestOptions): string {

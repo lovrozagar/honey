@@ -85,9 +85,12 @@ const SLOW = { timeout: 120_000 }
  * to 42,567 (file arguments over stdio); c's fold-in -350 to 42,217; d +12,278 to 54,495 (Streamable HTTP, the
  * standalone --http); e +4,103 to 58,598, split into portable 48,620 and node 9,978 (the mount); g +9,800 portable and
  * +38 node to 58,420 and 10,016 (uploads and URL files); h -18 portable to 58,402 (the mount's unused timeout option
- * cut). Bit 21 in all: +37,253 B over its start, 31,165 -> 68,418.
+ * cut); i1 +190 portable to 58,592, the tools on the SDK's safe twin (`client.safe`): call.ts +292 (each REST tool
+ * read off its Result, an error status's JSON object body still its failure, +232 with the catch's dropped `data`;
+ * SdkClient's `safe` and the twin walked, +11; the header naming the twin, +49), result.ts -47 (Answer the Result's
+ * shape, failureOf's own two fields), mount.ts -55 (the dead `throwOnError: false`, field and value, cut). Bit 21 in all: +37,443 B over its start, 31,165 -> 68,608.
  */
-const MCP_PORTABLE_BYTES = 58402
+const MCP_PORTABLE_BYTES = 58592
 const MCP_NODE_BYTES = 10016
 
 const RUNTIME_DIR = resolve(import.meta.dirname, "../src/runtime/mcp")

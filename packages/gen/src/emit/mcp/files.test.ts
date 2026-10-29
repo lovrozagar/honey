@@ -284,7 +284,8 @@ function formTool() {
 			["files", "files", "files"],
 		],
 	}
-	const client = { send: async (input: unknown) => (sent.push(input), { data: {}, error: null, status: 200 }) }
+	const send = async (input: unknown) => (sent.push(input), { data: {}, ok: true, response: new Response() })
+	const client = { safe: { send } }
 	const [tool] = bindTools([spec], client, { inline: 4, opening: () => client, secrets: [], timeout: 1000 })
 	return { sent, tool: tool as NonNullable<typeof tool> }
 }

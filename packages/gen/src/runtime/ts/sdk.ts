@@ -1,10 +1,11 @@
 import type { ClientConfig, RequestMeta } from "./config.ts"
-import { ClientError } from "./error.ts"
-import { HTTPClient } from "./http.ts"
+import { ClientError, DecodeError } from "./error.ts"
+import { HTTPClient, later } from "./http.ts"
 import type { ResumableConnection } from "./realtime.ts"
 import { type RealtimeOptions, realtimeConnection } from "./realtime-transports.ts"
 import { interpolatePath, PathParamError } from "./path.ts"
 import { newClientRequestId, type RequestOptions } from "./request.ts"
+import { type Answer, resultOf } from "./response.ts"
 import type { SSEEvent } from "./sse.ts"
 import { resolveInvalidationTargets, StaleIndex } from "./stale.ts"
 import { createTypedWebSocket, type TypedWebSocket } from "./ws.ts"
@@ -146,34 +147,36 @@ class SdkCore {
 		for (const target of resolveInvalidationTargets(entry.invalidate, params)) this.#stale.mark(target, selector, at)
 	}
 
-	async request(entry: ServiceEntry, input: CallInput): Promise<unknown> {
-		const shouldThrow = this.#config.throwOnError === true
+	/** A REST op's answer, its `x-invalidate` targets marked and its stale mark cleared once it is a 2xx. */
+	async request(entry: ServiceEntry, input: CallInput): Promise<Answer> {
 		const template = templateOf(entry)
 		let path: string
 		try {
 			path = interpolatePath(template, input.params)
 		} catch (e) {
-			if (!(e instanceof PathParamError)) throw e
-			const error = pathError(e, entry)
-			if (shouldThrow) throw error
-			return { data: null, error, response: error.response, status: 0 }
+			throw e instanceof PathParamError ? pathError(e, entry) : e
 		}
 		const selector = `${entry.method} ${path}`
 		const meta = this.#meta(selector, path, entry.method)
 		const opts = optionsFor(entry, input)
 		const declared = entry.empty ? null : entry.accept
-		const op = { declared, headers: entry.headers, meta, method: entry.method, opts, path: template, shouldThrow }
-		const result = await this.http.requestOperation(op)
-		const status = result instanceof Response ? result.status : (result as { status?: number } | null)?.status
-		if (shouldThrow || (status !== undefined && status >= 200 && status < 300)) {
+		const settle = () => {
 			this.#mark(entry, input.params, selector)
 			if (meta?.isStale) this.#stale?.clear(selector, path, entry.method, meta.seqSnapshot)
 		}
-		return result
+		try {
+			const answer = await this.http.requestOperation({ declared, meta, method: entry.method, opts, path: template })
+			settle()
+			return answer
+		} catch (e) {
+			/* a 2xx whose body does not decode still changed what it invalidates */
+			if (e instanceof DecodeError) settle()
+			throw e
+		}
 	}
 
-	/** An SSE op: its stale view for the hooks, and its `x-invalidate` targets marked once the answer is ok. */
-	stream(entry: ServiceEntry, input: CallInput): AsyncIterable<unknown> {
+	/** An SSE op opened: its stale view for the hooks, and its `x-invalidate` targets marked once the answer is ok. */
+	async open(entry: ServiceEntry, input: CallInput): Promise<Answer> {
 		const opts = optionsFor(entry, input)
 		const template = templateOf(entry)
 		let selector: string | undefined
@@ -188,8 +191,8 @@ class SdkCore {
 		const onOpen = () => {
 			if (selector !== undefined) this.#mark(entry, input.params, selector)
 		}
-		const events = this.http.streamOperation({ meta, method: entry.method, onOpen, opts, path: template })
-		return entry.sse === "json" ? jsonEvents(events) : events
+		const { data, response } = await this.http.openStream({ meta, method: entry.method, onOpen, opts, path: template })
+		return { data: entry.sse === "json" ? jsonEvents(data) : data, response }
 	}
 
 	/** An x-realtime op: one resumable connection, dialed through the client. */
@@ -209,37 +212,41 @@ class SdkCore {
 	}
 }
 
-/** The function an entry is called through, named by its dotted member path for stack traces. */
-function callable(core: SdkCore, entry: ServiceEntry, name: string): OperationFn {
+/** The function an entry is called through, named by its member path; a safe one's REST or SSE answer a Result. */
+function callable(core: SdkCore, entry: ServiceEntry, name: string, safe: boolean): OperationFn {
 	let fn: OperationFn
+	const open = (input?: CallInput) => core.open(entry, input ?? {})
 	/* a realtime op is one resumable connection; any other dispatches by its transport */
 	if (entry.realtime) fn = (input) => core.realtime(entry, input ?? {})
 	else if (entry.ws) fn = (input) => core.connect(entry, input ?? {})
-	else if (entry.sse) fn = (input) => core.stream(entry, input ?? {})
-	else fn = (input) => core.request(entry, input ?? {})
+	else if (entry.sse) fn = safe ? (input) => resultOf(open(input)) : (input) => later(() => open(input))
+	else if (safe) fn = (input) => resultOf(core.request(entry, input ?? {}), entry.headers)
+	else fn = async (input) => (await core.request(entry, input ?? {})).data
 	Object.defineProperty(fn, "name", { value: name })
 	return fn
 }
 
 /** A namespace of the map: each read of a key returns the same function or namespace object. */
-function namespace(core: SdkCore, node: ServiceMapNode, path: readonly string[]): object {
+function namespace(core: SdkCore, node: ServiceMapNode, path: readonly string[], safe: boolean): object {
 	const members = new Map<string, unknown>()
 	return new Proxy({} as Record<string, unknown>, {
 		get(target, key: string | symbol) {
 			if (typeof key === "symbol") return Reflect.get(target, key)
 			const child = childOf(node, key)
 			if (child === undefined) return Reflect.get(target, key)
-			return memberOf(core, members, { child, path: [...path, key] })
+			return memberOf(core, members, { child, path: [...path, key], safe })
 		},
 	})
 }
 
-/** A member, once: a callable for an entry, a namespace object otherwise. */
-function memberOf(core: SdkCore, members: Map<string, unknown>, at: { child: ServiceMapNode; path: string[] }) {
+type At = { child: ServiceMapNode; path: string[]; safe: boolean }
+
+/** A member at its node and path, the twin's or not, once: a callable for an entry, a namespace object otherwise. */
+function memberOf(core: SdkCore, members: Map<string, unknown>, at: At) {
 	const key = at.path.join(".")
 	let member = members.get(key)
 	if (member === undefined) {
-		member = isEntry(at.child) ? callable(core, at.child, key) : namespace(core, at.child, at.path)
+		member = isEntry(at.child) ? callable(core, at.child, key, at.safe) : namespace(core, at.child, at.path, at.safe)
 		members.set(key, member)
 	}
 	return member
@@ -253,10 +260,12 @@ export function schemeAuth<T extends ClientConfig>(config: T, headerName: string
 
 /**
  * A generated SDK's base class. The instance is a Proxy over the service map: `sdk.users.create(input)`
- * dispatches the entry at `users.create`; the client's own members (`state`, `dispose`, `toString`)
+ * dispatches the entry at `users.create`; the client's own members (`safe`, `state`, `dispose`, `toString`)
  * always win, and a key the map does not hold reads as `undefined`.
  */
 export class SDKClient {
+	/** the same operations, each answering a Result, never throwing an API answer (bit 21 i) */
+	readonly safe: object
 	state: Record<string, unknown>
 	readonly #core: SdkCore
 
@@ -264,6 +273,7 @@ export class SDKClient {
 		this.state = config.state ?? {}
 		this.#core = new SdkCore({ ...config, state: this.state })
 		const core = this.#core
+		this.safe = namespace(core, serviceMap, [], true)
 		const members = new Map<string, unknown>()
 		return new Proxy(this, {
 			get(target, key: string | symbol) {
@@ -272,7 +282,7 @@ export class SDKClient {
 					return typeof value === "function" ? value.bind(target) : value
 				}
 				const child = childOf(serviceMap, key)
-				return child === undefined ? undefined : memberOf(core, members, { child, path: [key] })
+				return child === undefined ? undefined : memberOf(core, members, { child, path: [key], safe: false })
 			},
 		})
 	}

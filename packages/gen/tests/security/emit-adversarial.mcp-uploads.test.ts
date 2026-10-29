@@ -76,11 +76,14 @@ const stored = new Map<string, Uint8Array>()
 /** Each fetch the URL stub saw: its URL and signal. */
 const fetched: [string, AbortSignal][] = []
 
+/** The SDK client's safe twin the tools call: records each upload, answers an Ok. */
 const client = () => ({
-	docs: {
-		upload: async (input: { body: Uint8Array; headers: Record<string, string> }) => {
-			sent.push(input)
-			return { data: { ok: true }, error: undefined, response: new Response("{}"), status: 200 }
+	safe: {
+		docs: {
+			upload: async (input: { body: Uint8Array; headers: Record<string, string> }) => {
+				sent.push(input)
+				return { data: { ok: true }, ok: true, response: new Response("{}") }
+			},
 		},
 	},
 })
