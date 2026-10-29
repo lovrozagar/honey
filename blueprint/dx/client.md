@@ -13,6 +13,7 @@ Every generated SDK (TS/Go/Rust/Python/C#/Java) exposes the same consumer contra
 | binary response | — | — | **[A1]** bytes/stream (`Uint8Array`/`[]byte`/`bytes`/`Stream`); sets `Accept` to the declared type | — | `emit/*/binary.test.ts` |
 | SSE / WS client | — | — | typed event stream + WebSocket with `Last-Event-ID` reconnect [H8] | reconnect parity is uniform across SDKs | `integration/realtime.test.ts` |
 | hooks (request/response) | — | — | observe/modify a call | they run on every HTTP call, SSE and long-poll opens included; no SDK's WebSocket dial runs one or refreshes on a 401 (auth goes in the client's credential or the call's headers) | per-lang harness, `emit/shared/runtime-docs.test.ts` |
+| `client.safe` (the safe mirror) | — | always emitted | **[bit 21 i]** every op twice: the normal client throws on any failure; `client.safe.<group>.<op>` answers a Result whose Ok carries the data and the response and whose Err carries the error instance (a declared error, an undeclared status, or a `DecodeError` for an undecodable or over-cap 2xx) and the response; a call with no answer (never sent, the connection, a timeout, a cancel, a stream dropped after it opened) throws in both styles (f2) | the old safe mode and `throwOnError` are gone, and code written for them fails to compile; a root resource named `safe` is emitted as `safe_`; TS first (i1), each other SDK in its own phase | `integration/conformance/*` safe variant, `emit/ts/error.safe.test.ts`, `emit/ts/types.safe.test.ts` |
 
 ## Per-target behavior (bit 19 k1)
 
@@ -43,4 +44,3 @@ a user acts on is pinned in the runtime the SDK ships (`emit/shared/runtime-docs
 | 29, Java realtime open | an open is bounded at 30 s (`ApiTimeoutException`, "no transport opened within"); a close is `CancellationException` | the realtime loop runs on its own thread, with no call deadline to borrow |
 | Rust `default_headers` (Q9) | a caller-built `reqwest::Client`'s `default_headers` go on every hop, a cross-origin redirect included; credentials belong in `bearer_token`, `api_key` and `headers` | accepting a prebuilt client is kept; the lack is documented, never a credential leak by default |
 | Java message cap | a message over 16 MiB closes 1008 ("Message too big") where the others close 1009 | the JDK lets a client send only 1000, 1001, 1008, 1011 and 3000–4999 |
-
