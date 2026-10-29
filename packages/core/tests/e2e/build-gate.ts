@@ -37,6 +37,15 @@ export const HANG_GUARD_MS: Record<RuntimeId, number> = { bun: 8_000, node: 13_0
  */
 export const REFERENCE_SAMPLES = 5
 
+/**
+ * App builds per cell, judged on their median: one build is one sample against the reference's median of 5, so one
+ * slow build read as a regression. CI run 40877110861's build (bun) job built defaults×cloudflare once in 2,949 ms
+ * (ratio 21.21, over its 20.98 ceiling) where compose×cloudflare and gateway×cloudflare, which track it within a few %,
+ * took 2,472 and 2,501, and its own ×bun and ×node cells read 17.55 and 16.39. Three builds pass one such spike and
+ * fail two; the cost is two more builds a cell, about +95 s a build job on CI.
+ */
+export const BUILD_SAMPLES = 3
+
 /** The key a cell's ceiling is kept under: Bun by minor (CI pins BUN_VERSION), Node by major (CI pins only "22"). */
 export function runtimeKey(runtime: RuntimeId, version: string): string {
 	const parts = version.replace(/^v/, "").split(".")
@@ -50,6 +59,11 @@ export type BuildBaseline = { builds: Record<string, Record<string, BuildCeiling
 
 /** Where the ceilings live; absent until the record runs are derived (derive-build-ceilings.ts). */
 export const BASELINE_FILE = new URL("../../../../blueprint/baselines/build.json", import.meta.url)
+
+/** How many cells `baseline` holds a ceiling for: 0 while it is pending or emptied for a re-record (report-only). */
+export function recordedCells(baseline: BuildBaseline | undefined): number {
+	return Object.values(baseline?.builds ?? {}).reduce((sum, cells) => sum + Object.keys(cells).length, 0)
+}
 
 /** The recorded baseline, or undefined while it is pending (no file yet). */
 export function readBaseline(file: URL = BASELINE_FILE): BuildBaseline | undefined {
@@ -78,23 +92,23 @@ export type Verdict = {
 }
 
 /**
- * One cell's verdict from its build time and its reference's median, both in ms: two independent checks. The hang
- * guard judges in every mode; the ratio judges only against a recorded ceiling outside record mode. A regression on a
- * slow runner can cross both, and then both are reported.
+ * One cell's verdict from its builds' times (BUILD_SAMPLES of them) and its reference's median, all in ms: two
+ * independent checks. The ratio is the builds' median over the reference's, judged only against a recorded ceiling
+ * outside record mode; the hang guard holds every build, in every mode, so one runaway build fails whatever the
+ * median. A regression on a slow runner can cross both, and then both are reported.
  */
 export function judgeBuild(input: {
+	builds: readonly number[]
 	ceiling: BuildCeiling | undefined
 	mode: "judge" | "record"
-	ms: number
 	referenceMs: number
 	runtime: RuntimeId
 }): Verdict {
-	const ratio = Number((input.ms / input.referenceMs).toFixed(2))
+	const ratio = Number((median(input.builds) / input.referenceMs).toFixed(2))
 	const guard = HANG_GUARD_MS[input.runtime]
-	const hung = input.ms > guard
-	const failures = hung
-		? [`built in ${Math.round(input.ms)}ms, over the ${guard}ms hang guard on ${input.runtime}`]
-		: []
+	const slowest = Math.max(...input.builds)
+	const hung = slowest > guard
+	const failures = hung ? [`built in ${Math.round(slowest)}ms, over the ${guard}ms hang guard on ${input.runtime}`] : []
 	const status =
 		input.mode === "record"
 			? "recorded"
@@ -111,9 +125,20 @@ export function judgeBuild(input: {
 	return { failures, hung, ratio, status }
 }
 
-/** One cell's ratio as one parseable line: `RATIO build <runtime>@<version> <cell> <ratio> ms=<ms> ref=<ms>`. */
-export function ratioLine(key: string, cell: string, ratio: number, ms: number, referenceMs: number): string {
-	return `RATIO build ${key.replace(" ", "@")} ${cell} ${ratio} ms=${Math.round(ms)} ref=${Math.round(referenceMs)}`
+/**
+ * One cell's ratio as one parseable line, its builds' median as ms and each build after builds= (for diagnosis):
+ * `RATIO build <runtime>@<version> <cell> <ratio> ms=<median> ref=<ms> builds=<ms>,<ms>,<ms>`.
+ */
+export function ratioLine(
+	key: string,
+	cell: string,
+	ratio: number,
+	builds: readonly number[],
+	referenceMs: number,
+): string {
+	const each = builds.map((ms) => Math.round(ms)).join(",")
+	const ms = median(builds)
+	return `RATIO build ${key.replace(" ", "@")} ${cell} ${ratio} ms=${Math.round(ms)} ref=${Math.round(referenceMs)} builds=${each}`
 }
 
 /** A reference's samples as one parseable line: `REFERENCE build <runtime>@<version> <target> <median> <samples>`. */
@@ -122,9 +147,17 @@ export function referenceLine(key: string, target: string, samples: readonly num
 }
 
 /** One RATIO line parsed back: what the derive reads from a CI job's log. */
-export type RatioRecord = { cell: string; key: string; ms: number; ratio: number; referenceMs: number }
+/** One RATIO line parsed back; `builds` only on a line from a median-of-BUILD_SAMPLES run (none before). */
+export type RatioRecord = {
+	builds?: number[]
+	cell: string
+	key: string
+	ms: number
+	ratio: number
+	referenceMs: number
+}
 
-const RATIO_RE = /^RATIO build (\S+)@(\S+) (\S+) ([\d.]+) ms=(\d+) ref=(\d+)$/
+const RATIO_RE = /^RATIO build (\S+)@(\S+) (\S+) ([\d.]+) ms=(\d+) ref=(\d+)(?: builds=([\d,]+))?$/
 
 /** Every RATIO line in a log (any prefix before `RATIO`, as a CI log's job and timestamp columns). */
 export function parseRatios(log: string): RatioRecord[] {
@@ -134,7 +167,15 @@ export function parseRatios(log: string): RatioRecord[] {
 		const match = at === -1 ? null : RATIO_RE.exec(line.slice(at).trim())
 		if (match === null) continue
 		const [, runtime, version, cell, ratio, ms, ref] = match as unknown as string[]
-		out.push({ cell, key: `${runtime} ${version}`, ms: Number(ms), ratio: Number(ratio), referenceMs: Number(ref) })
+		const builds: string | undefined = match[7]
+		const record = {
+			cell,
+			key: `${runtime} ${version}`,
+			ms: Number(ms),
+			ratio: Number(ratio),
+			referenceMs: Number(ref),
+		}
+		out.push(builds === undefined ? record : { builds: builds.split(",").map(Number), ...record })
 	}
 	return out
 }

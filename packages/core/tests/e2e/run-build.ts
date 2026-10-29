@@ -2,9 +2,10 @@
 /**
  * Build tier. Every e2e app is built for every deploy target it declares, on the
  * runtime you pick. A target passes when the build exits 0, emits the artifacts its
- * spec names, stays under its size budget and its runtime's hang guard, and its time over
- * the honey-free reference build's is within its recorded ceiling (build-gate.ts says how,
- * and why a ratio). Every built cell prints a `RATIO build` line; BUILD_MODE=record prints
+ * spec names, stays under its size budget and its runtime's hang guard, and the median of
+ * its BUILD_SAMPLES builds over the honey-free reference build's is within its recorded
+ * ceiling (build-gate.ts says how, and why a ratio and a median). Every built cell prints a
+ * `RATIO build` line, each build's ms after builds=; BUILD_MODE=record prints
  * them without judging, for CI to record the ceilings from.
  *
  *   bun run packages/core/tests/e2e/run-build.ts
@@ -35,11 +36,13 @@ import {
 	viteBuildCommand,
 } from "./builds.ts"
 import {
+	BUILD_SAMPLES,
 	judgeBuild,
 	median,
 	modeOf,
 	ratioLine,
 	readBaseline,
+	recordedCells,
 	REFERENCE_SAMPLES,
 	referenceLine,
 	runtimeKey,
@@ -197,19 +200,24 @@ async function referenceMs(runtime: RuntimeId, target: TargetId): Promise<number
 async function runBuild(spec: BuildSpec, runtime: RuntimeId): Promise<Result> {
 	const name = `${spec.id} on ${runtime}`
 	const cwd = buildCwd(spec)
-	for (const dir of spec.outDirs) {
-		rmSync(join(cwd, dir), { force: true, recursive: true })
-	}
 	const reference = await referenceMs(runtime, spec.target)
 
 	const dirtyBefore = checkGenerated ? await dirtyTrackedFiles(cwd) : []
 
-	const { code, ms, output } = await timedBuild(buildCommand(spec, runtime), cwd, spec.target)
-
-	if (code !== 0) {
-		process.stdout.write(output)
-		return { detail: `build exited ${code}`, ms, name, status: "fail" }
+	/* BUILD_SAMPLES builds from a clean output each, judged on their median; the artifacts checked are the last's */
+	const builds: number[] = []
+	for (let sample = 0; sample < BUILD_SAMPLES; sample++) {
+		for (const dir of spec.outDirs) {
+			rmSync(join(cwd, dir), { force: true, recursive: true })
+		}
+		const built = await timedBuild(buildCommand(spec, runtime), cwd, spec.target)
+		if (built.code !== 0) {
+			process.stdout.write(built.output)
+			return { detail: `build exited ${built.code}`, ms: built.ms, name, status: "fail" }
+		}
+		builds.push(built.ms)
 	}
+	const ms = median(builds)
 
 	const missing = spec.expect.filter((rel) => !existsSync(join(cwd, rel)))
 	if (missing.length > 0) {
@@ -218,8 +226,14 @@ async function runBuild(spec: BuildSpec, runtime: RuntimeId): Promise<Result> {
 
 	const kb = gzipKb(join(cwd, entryArtifact(spec)))
 	const key = await keyOf(runtime)
-	const verdict = judgeBuild({ ceiling: baseline?.builds[key]?.[spec.id], mode, ms, referenceMs: reference, runtime })
-	console.log(ratioLine(key, spec.id, verdict.ratio, ms, reference))
+	const verdict = judgeBuild({
+		builds,
+		ceiling: baseline?.builds[key]?.[spec.id],
+		mode,
+		referenceMs: reference,
+		runtime,
+	})
+	console.log(ratioLine(key, spec.id, verdict.ratio, builds, reference))
 	if (verdict.failures.length > 0) {
 		return { detail: verdict.failures.join("; "), gzipKb: kb, ms, name, status: "fail" }
 	}
@@ -248,9 +262,9 @@ console.log(`build runtimes=${runtimes.join(",")} targets=${specs.map((s) => s.i
 console.log(
 	mode === "record"
 		? "build gate: record mode, ratios printed and not judged (the hang guard still judges)\n"
-		: baseline === undefined
-			? "build gate: no recorded ceilings yet (blueprint/baselines/build.json), ratios report-only\n"
-			: "build gate: ratios judged against blueprint/baselines/build.json\n",
+		: recordedCells(baseline) === 0
+			? `build gate: no recorded ceilings in blueprint/baselines/build.json, ratios report-only${baseline === undefined ? "" : `: ${baseline.note}`}\n`
+			: `build gate: ratios of the median of ${BUILD_SAMPLES} builds judged against blueprint/baselines/build.json\n`,
 )
 
 for (const runtime of runtimes) {
