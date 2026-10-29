@@ -38,7 +38,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      version: ${{ steps.resolve.outputs.version }}
+      node: ${{ steps.resolve.outputs.version }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
@@ -97,7 +97,7 @@ jobs:
       # which the runner image's default Node may not have
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: ${{ needs.node-current.outputs.version }}
+          node-version: ${{ needs.node-current.outputs.node }}
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ env.BUN_VERSION }}
@@ -196,7 +196,7 @@ jobs:
       # vitest runs on node
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: ${{ needs.node-current.outputs.version }}
+          node-version: ${{ needs.node-current.outputs.node }}
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ env.BUN_VERSION }}
@@ -356,7 +356,7 @@ jobs:
       # vitest runs on node
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: ${{ needs.node-current.outputs.version }}
+          node-version: ${{ needs.node-current.outputs.node }}
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ env.BUN_VERSION }}
@@ -427,7 +427,7 @@ jobs:
       # vitest runs on node
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: ${{ needs.node-current.outputs.version }}
+          node-version: ${{ needs.node-current.outputs.node }}
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ env.BUN_VERSION }}
@@ -488,7 +488,7 @@ jobs:
       # vitest runs on node
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: ${{ needs.node-current.outputs.version }}
+          node-version: ${{ needs.node-current.outputs.node }}
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ env.BUN_VERSION }}
@@ -546,7 +546,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: ${{ needs.node-current.outputs.version }}
+          node-version: ${{ needs.node-current.outputs.node }}
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ env.BUN_VERSION }}
@@ -573,7 +573,7 @@ jobs:
       - run: echo "HONEY_TEST_NODE_LEGACY=$(which node)" >> "$GITHUB_ENV"
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: ${{ needs.node-current.outputs.version }}
+          node-version: ${{ needs.node-current.outputs.node }}
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ env.BUN_VERSION }}
@@ -666,7 +666,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: ${{ (matrix.node || 'current') == 'current' && needs.node-current.outputs.version || matrix.node }}
+          node-version: ${{ (matrix.node || 'current') == 'current' && needs.node-current.outputs.node || matrix.node }}
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ env.BUN_VERSION }}
@@ -717,7 +717,7 @@ jobs:
       # cf-workers still runs node for wrangler, playwright and the type-stripped fixtures
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: ${{ (matrix.node || 'current') == 'current' && needs.node-current.outputs.version || matrix.node }}
+          node-version: ${{ (matrix.node || 'current') == 'current' && needs.node-current.outputs.node || matrix.node }}
       - run: bun install --frozen-lockfile
       # the MCP app's cells drive the mounted endpoint with the pinned official clients (bit 21 e): as in the test job
       - name: MCP clients (client-lock.json's @modelcontextprotocol/sdk and @modelcontextprotocol/client)
@@ -739,7 +739,7 @@ jobs:
       # vitest and the emitted SDK's WebSocket run on node: the global WebSocket needs Node >= 22
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: ${{ needs.node-current.outputs.version }}
+          node-version: ${{ needs.node-current.outputs.node }}
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ env.BUN_VERSION }}

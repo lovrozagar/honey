@@ -8,9 +8,9 @@ import { type Step, workflow } from "./fixture/workflows.ts"
 import { INDEX, newestRelease, resolveNodeCurrent } from "./node-current.ts"
 
 const ci = workflow("ci.yml")
-const FED = "${{ needs.node-current.outputs.version }}"
+const FED = "${{ needs.node-current.outputs.node }}"
 /* a matrix job's node: its "current" (or none, a runtime that only needs some Node) is node-current's */
-const MAPPED = "${{ (matrix.node || 'current') == 'current' && needs.node-current.outputs.version || matrix.node }}"
+const MAPPED = "${{ (matrix.node || 'current') == 'current' && needs.node-current.outputs.node || matrix.node }}"
 
 /* nodejs.org's index top on 2026-10-29, as the run that went red read it */
 const TODAY = [
@@ -97,7 +97,7 @@ describe("ci.yml's current Node", () => {
 
 	it("resolves it once, through node-current.ts, writing the version to the job's output", () => {
 		const job = ci.jobs["node-current"] as { outputs?: Record<string, string>; steps?: readonly Step[] } | undefined
-		expect(job?.outputs?.version).toBe("${{ steps.resolve.outputs.version }}")
+		expect(job?.outputs?.node).toBe("${{ steps.resolve.outputs.version }}")
 		const resolve = job?.steps?.find((step) => (step as { id?: string }).id === "resolve")
 		expect(resolve?.run).toContain("packages/core/tests/build/node-current.ts")
 	})

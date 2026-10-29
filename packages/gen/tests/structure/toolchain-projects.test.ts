@@ -316,7 +316,8 @@ describe("CI's gen shards", () => {
 		const needs = /^ {4}needs: \[(.*)\]$/m.exec(jobs(WORKFLOW)["gen-coverage"] ?? "")?.[1]?.split(", ") ?? []
 		const whole = Object.entries(jobs(WORKFLOW)).filter(([, job]) => /^ +- run: bun run test(?::gen)?$/m.test(job))
 		expect(Object.values(shards).flat().sort()).toEqual((resolved.projects ?? []).map(({ test }) => test.name).sort())
-		expect(needs.sort()).toEqual(Object.keys(shards).sort())
+		/* node-current is no shard: gen-coverage needs it for its setup-node's version, as every fed job does */
+		expect(needs.filter((job) => job !== "node-current").sort()).toEqual(Object.keys(shards).sort())
 		expect(whole.map(([name]) => name)).toEqual([])
 	})
 })
