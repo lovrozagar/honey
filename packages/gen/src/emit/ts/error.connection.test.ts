@@ -3,7 +3,8 @@
  * ApiConnectionException and Transport error: a request that got no answer (a refused or reset connection, DNS, TLS)
  * throws `APIConnectionError` on both fronts and in either mode, the platform's error its `cause`; its message names
  * the method and the URL's origin and path, never a query or a header value. An abort and a timeout keep their names,
- * and a realtime dial's connection failure stays transient: the chain backs off and redials.
+ * and a realtime dial's connection failure stays transient: the chain backs off and redials. Bit 21 i0: a stream whose
+ * connection drops after its events throws it too, through the same path, never the platform's raw TypeError.
  */
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { REFUSED_URL } from "../shared/__fixtures__/recording-server.ts"
@@ -20,6 +21,12 @@ const DOC = {
 				responses: { 200: { content: { "application/json": { schema: { type: "object" } } }, description: "" } },
 			},
 		},
+		"/ticks": {
+			get: {
+				operationId: "ticks.stream",
+				responses: { 200: { content: { "text/event-stream": { schema: { type: "object" } } }, description: "" } },
+			},
+		},
 		"/feed": {
 			get: {
 				operationId: "rt.feed",
@@ -32,7 +39,12 @@ const DOC = {
 
 type Get = (input: object) => Promise<unknown>
 type Feed = AsyncIterable<unknown> & { close(): void }
-type Sdk = { dispose(): void; items: { get: Get }; rt: { feed(input: object): Feed } }
+type Sdk = {
+	dispose(): void
+	items: { get: Get }
+	rt: { feed(input: object): Feed }
+	ticks: { stream(input: object): AsyncIterable<{ data: unknown }> }
+}
 
 /** What a call threw: its class, whether it is the exported connection error, its cause's class and its message. */
 function caught(err: unknown, Connection: unknown) {
@@ -51,6 +63,18 @@ const REFUSED = {
 	message: `GET ${REFUSED_URL}/items/i1: the connection failed`,
 	name: "APIConnectionError",
 	typed: true,
+}
+
+/** A stream answer whose connection drops: the event on the first read, the platform's TypeError on the next. */
+const dropped: typeof fetch = async () => {
+	let pulls = 0
+	const body = new ReadableStream<Uint8Array>({
+		pull(controller) {
+			if (pulls++ === 0) controller.enqueue(new TextEncoder().encode('data: {"n":1}\n\n'))
+			else controller.error(new TypeError("terminated"))
+		},
+	})
+	return new Response(body, { headers: { "content-type": "text/event-stream" } })
 }
 
 afterEach(() => vi.unstubAllGlobals())
@@ -113,5 +137,27 @@ describe("a network failure is the TS SDK's APIConnectionError (bit 19 f2)", () 
 		})().catch((e: Error) => e.name)
 		client.dispose()
 		expect({ attempts, ended }).toEqual({ attempts: [1, 2], ended: "ended" })
+	})
+})
+
+describe("a stream's mid-answer drop is the same APIConnectionError (bit 21 i0)", () => {
+	it("throws it when a stream's connection drops after its events: the read's error its cause, the event delivered", async () => {
+		const sdk = await emittedSdk(DOC)
+		const TestSDK = sdk.TestSDK as new (config: object) => Sdk
+		const client = new TestSDK({ baseURL: "https://api.test", fetch: dropped })
+		const events: unknown[] = []
+		const thrown = await (async () => {
+			for await (const event of client.ticks.stream({})) events.push(event.data)
+		})().then(String, (e) => caught(e, sdk.APIConnectionError))
+		client.dispose()
+		expect({ events, thrown }).toEqual({
+			events: [{ n: 1 }],
+			thrown: {
+				cause: "TypeError",
+				message: "GET https://api.test/ticks: the connection failed",
+				name: "APIConnectionError",
+				typed: true,
+			},
+		})
 	})
 })

@@ -5,6 +5,8 @@ import { isJsonMediaType, isTextMediaType, parseMediaType } from "./media-type.t
 export type Sent = {
 	done: () => void
 	exemptFromTimeout: () => void
+	/** a failed body read's error (noAnswer) */
+	failed: (cause: unknown) => unknown
 	response: Response
 }
 

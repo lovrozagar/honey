@@ -189,6 +189,13 @@ export class APIConnectionError extends Error {
 	override name = "APIConnectionError"
 }
 
+/** A send or body read with no answer as APIConnectionError, its cause the platform's; an abort's as it is (f2). */
+export function noAnswer(cause: unknown, url: unknown, init?: RequestInit): unknown {
+	if (init?.signal?.aborted) return cause
+	const { origin, pathname } = new URL(String(url))
+	return new APIConnectionError(`${init?.method} ${origin}${pathname}: the connection failed`, { cause })
+}
+
 /** A fetch failure as APIConnectionError; an abort's as it is. */
 export function connectionErrors(fetch: typeof globalThis.fetch): typeof globalThis.fetch {
 	if (typeof fetch !== "function") return fetch
@@ -197,9 +204,7 @@ export function connectionErrors(fetch: typeof globalThis.fetch): typeof globalT
 		try {
 			return await fetch(input, init)
 		} catch (cause) {
-			if (init?.signal?.aborted) throw cause
-			const url = new URL(String(input))
-			throw new APIConnectionError(`${init?.method} ${url.origin}${url.pathname}: the connection failed`, { cause })
+			throw noAnswer(cause, input, init)
 		}
 	}) as typeof globalThis.fetch
 }
@@ -596,6 +601,8 @@ export function requestInit(
 export type Sent = {
 	done: () => void
 	exemptFromTimeout: () => void
+	/** a failed body read's error (noAnswer) */
+	failed: (cause: unknown) => unknown
 	response: Response
 }
 
@@ -1170,27 +1177,38 @@ function completeLines(pending: string, from: number): { lines: string[]; rest: 
 	return { lines, rest: pending.slice(start), scanned: Math.max(end - start, 0) }
 }
 
+/** `stream`'s reader, and a read whose failure throws `failed`'s error for it. */
+function readerOf(stream: ReadableStream<Uint8Array>, failed = (cause: unknown) => cause) {
+	const reader = stream.getReader()
+	const read = () =>
+		/* no answer (f2) */
+		reader.read().catch((cause) => {
+			throw failed(cause)
+		})
+	return { read, reader }
+}
+
 /**
  * Parse a `text/event-stream` body per the WHATWG "event stream interpretation" rules: lines end
  * at CRLF, LF or CR; a leading BOM is skipped; `id` persists until changed and an `id` holding NUL
  * is ignored; `retry` counts only when all ASCII digits; an event still open when the stream ends
  * is discarded. A line over `maxLineBytes` (1 MiB) or an event's data over `maxEventBytes` (8 MiB), in UTF-8 bytes,
- * throws after every event completed before it. Leaving a `for await` early (a break, return or throw) cancels the
- * body's reader, which frees the connection.
+ * throws after every event completed before it, as does a failed read, by `failed`. Leaving a `for await` early (a
+ * break, return or throw) cancels the body's reader, which frees the connection.
  */
 export async function* parseSSEStream(
 	stream: ReadableStream<Uint8Array>,
-	opts?: { maxLineBytes?: number; maxEventBytes?: number },
+	opts?: { failed?: (cause: unknown) => unknown; maxLineBytes?: number; maxEventBytes?: number },
 ): AsyncGenerator<SSEEvent, void, undefined> {
 	const decoder = new TextDecoder()
-	const reader = stream.getReader()
-	const { maxEventBytes = MAX_EVENT, maxLineBytes: maxLine = MAX_LINE } = opts ?? {}
+	const { failed, maxEventBytes = MAX_EVENT, maxLineBytes: maxLine = MAX_LINE } = opts ?? {}
+	const { read, reader } = readerOf(stream, failed)
 	const fields = new EventFields(maxEventBytes)
 	let pending = ""
 	let scanned = 0
 	let first = true
 	try {
-		for (let chunk = await reader.read(); !chunk.done; chunk = await reader.read()) {
+		for (let chunk = await read(); !chunk.done; chunk = await read()) {
 			pending += decoder.decode(chunk.value, { stream: true })
 			if (first && pending.length > 0) {
 				if (pending.charCodeAt(0) === 0xfeff) pending = pending.slice(1)
@@ -2103,7 +2121,7 @@ export class HTTPClient {
 				const at = { init, isRetry, meta, method, path, response, retry, state, url }
 				response = await runResponseHooks(this.#config.onResponse, at)
 			}
-			return { done: finish, exemptFromTimeout, response }
+			return { done: finish, exemptFromTimeout, failed: (cause) => noAnswer(cause, url, init), response }
 		} catch (e) {
 			finish()
 			log.failed(e)
@@ -2116,7 +2134,7 @@ export class HTTPClient {
 		return {
 			async *[Symbol.asyncIterator]() {
 				try {
-					if (sent.response.body) yield* parseSSEStream(sent.response.body, caps)
+					if (sent.response.body) yield* parseSSEStream(sent.response.body, { ...caps, failed: sent.failed })
 				} finally {
 					sent.done()
 				}

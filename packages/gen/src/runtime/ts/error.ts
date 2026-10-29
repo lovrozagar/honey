@@ -85,6 +85,13 @@ export class APIConnectionError extends Error {
 	override name = "APIConnectionError"
 }
 
+/** A send or body read with no answer as APIConnectionError, its cause the platform's; an abort's as it is (f2). */
+export function noAnswer(cause: unknown, url: unknown, init?: RequestInit): unknown {
+	if (init?.signal?.aborted) return cause
+	const { origin, pathname } = new URL(String(url))
+	return new APIConnectionError(`${init?.method} ${origin}${pathname}: the connection failed`, { cause })
+}
+
 /** A fetch failure as APIConnectionError; an abort's as it is. */
 export function connectionErrors(fetch: typeof globalThis.fetch): typeof globalThis.fetch {
 	if (typeof fetch !== "function") return fetch
@@ -93,9 +100,7 @@ export function connectionErrors(fetch: typeof globalThis.fetch): typeof globalT
 		try {
 			return await fetch(input, init)
 		} catch (cause) {
-			if (init?.signal?.aborted) throw cause
-			const url = new URL(String(input))
-			throw new APIConnectionError(`${init?.method} ${url.origin}${url.pathname}: the connection failed`, { cause })
+			throw noAnswer(cause, input, init)
 		}
 	}) as typeof globalThis.fetch
 }

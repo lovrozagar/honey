@@ -590,8 +590,12 @@ describe("the C# runtime within its byte budget (bit 15, G14)", () => {
  * Bit 21 e, +90 B to 120,794 B: connectionErrors' fetch wrapper asserted as the platform's fetch (+29) with its one-line
  * reason (+61), so a generated SDK type-checks under Bun's types, whose fetch also names `preconnect`: the MCP app's
  * mounted handler embeds the SDK, and its Bun host's type check is the first to read it there.
+ * Bit 21 i0 (F1), +843 B to 121,637 B: a stream whose connection drops mid-answer is APIConnectionError, through the
+ * call's own f2 path, no second wrapper: error.ts +247 (noAnswer, connectionErrors' catch made a function both call),
+ * http.ts +85 (each Sent's failed, bound to its request), sse.ts +428 (readerOf: a failed read throws failed's error,
+ * split out of parseSSEStream at its complexity cap), response.ts +83 (Sent.failed). Nothing cut: the catch moved.
  */
-const TS_RUNTIME_BYTES = 120_794
+const TS_RUNTIME_BYTES = 121_637
 
 describe("the TS runtime within its byte budget (bit 11, G14)", () => {
 	it(

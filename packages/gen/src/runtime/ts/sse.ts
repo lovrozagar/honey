@@ -94,27 +94,38 @@ function completeLines(pending: string, from: number): { lines: string[]; rest: 
 	return { lines, rest: pending.slice(start), scanned: Math.max(end - start, 0) }
 }
 
+/** `stream`'s reader, and a read whose failure throws `failed`'s error for it. */
+function readerOf(stream: ReadableStream<Uint8Array>, failed = (cause: unknown) => cause) {
+	const reader = stream.getReader()
+	const read = () =>
+		/* no answer (f2) */
+		reader.read().catch((cause) => {
+			throw failed(cause)
+		})
+	return { read, reader }
+}
+
 /**
  * Parse a `text/event-stream` body per the WHATWG "event stream interpretation" rules: lines end
  * at CRLF, LF or CR; a leading BOM is skipped; `id` persists until changed and an `id` holding NUL
  * is ignored; `retry` counts only when all ASCII digits; an event still open when the stream ends
  * is discarded. A line over `maxLineBytes` (1 MiB) or an event's data over `maxEventBytes` (8 MiB), in UTF-8 bytes,
- * throws after every event completed before it. Leaving a `for await` early (a break, return or throw) cancels the
- * body's reader, which frees the connection.
+ * throws after every event completed before it, as does a failed read, by `failed`. Leaving a `for await` early (a
+ * break, return or throw) cancels the body's reader, which frees the connection.
  */
 export async function* parseSSEStream(
 	stream: ReadableStream<Uint8Array>,
-	opts?: { maxLineBytes?: number; maxEventBytes?: number },
+	opts?: { failed?: (cause: unknown) => unknown; maxLineBytes?: number; maxEventBytes?: number },
 ): AsyncGenerator<SSEEvent, void, undefined> {
 	const decoder = new TextDecoder()
-	const reader = stream.getReader()
-	const { maxEventBytes = MAX_EVENT, maxLineBytes: maxLine = MAX_LINE } = opts ?? {}
+	const { failed, maxEventBytes = MAX_EVENT, maxLineBytes: maxLine = MAX_LINE } = opts ?? {}
+	const { read, reader } = readerOf(stream, failed)
 	const fields = new EventFields(maxEventBytes)
 	let pending = ""
 	let scanned = 0
 	let first = true
 	try {
-		for (let chunk = await reader.read(); !chunk.done; chunk = await reader.read()) {
+		for (let chunk = await read(); !chunk.done; chunk = await read()) {
 			pending += decoder.decode(chunk.value, { stream: true })
 			if (first && pending.length > 0) {
 				if (pending.charCodeAt(0) === 0xfeff) pending = pending.slice(1)

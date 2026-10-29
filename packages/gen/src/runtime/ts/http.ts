@@ -1,6 +1,6 @@
 import type { ClientConfig, HeadersContext, RequestMeta } from "./config.ts"
 import { bindDefaultFetch, parseClientBaseURL } from "./defaults.ts"
-import { ClientError, connectionErrors } from "./error.ts"
+import { ClientError, connectionErrors, noAnswer } from "./error.ts"
 import { exchangeLog, runRequestHooks, runResponseHooks } from "./hooks.ts"
 import { interpolatePath } from "./path.ts"
 import { fetchFollowing } from "./redirects.ts"
@@ -189,7 +189,7 @@ export class HTTPClient {
 				const at = { init, isRetry, meta, method, path, response, retry, state, url }
 				response = await runResponseHooks(this.#config.onResponse, at)
 			}
-			return { done: finish, exemptFromTimeout, response }
+			return { done: finish, exemptFromTimeout, failed: (cause) => noAnswer(cause, url, init), response }
 		} catch (e) {
 			finish()
 			log.failed(e)
@@ -202,7 +202,7 @@ export class HTTPClient {
 		return {
 			async *[Symbol.asyncIterator]() {
 				try {
-					if (sent.response.body) yield* parseSSEStream(sent.response.body, caps)
+					if (sent.response.body) yield* parseSSEStream(sent.response.body, { ...caps, failed: sent.failed })
 				} finally {
 					sent.done()
 				}
