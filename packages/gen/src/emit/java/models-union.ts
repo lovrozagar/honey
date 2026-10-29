@@ -8,6 +8,7 @@
 import type { IRDiscriminator, IRSchema } from "../../ir/model.ts"
 import { compareCodeUnits, javaTypeName } from "../shared/lang.ts"
 import { type Dispatch, deserializerLines } from "./json.ts"
+import { classOf, typeHeader } from "./layout.ts"
 import { enumValues, stringEnumDecl } from "./models-enum.ts"
 import { fieldsOf } from "./models-record.ts"
 import { JSON_NODE } from "./models-names.ts"
@@ -56,16 +57,17 @@ function selectedBy(union: Discriminated, at: JavaTypeContext): Selected[] {
 		.sort((a, b) => compareCodeUnits(firstValue(a), firstValue(b)))
 }
 
-/* google-java-format's line width */
-const WIDTH = 100
-
 /** A wrapper record holding its payload as `@JsonValue`, implementing its union. */
-function wrapperText(wrapper: string, union: string, payload: string): string {
-	const header = `public record ${wrapper}(@JsonValue ${payload} value)`
-	const one = `${header} implements ${union} {}`
-	/* past 100 columns google-java-format breaks before `implements`, indented four */
-	return `@JsonDeserialize\n${one.length <= WIDTH ? one : `${header}\n    implements ${union} {}`}`
-}
+const wrapperText = (wrapper: string, union: string, payload: string): string =>
+	typeHeader(0, {
+		annotations: [{ name: "JsonDeserialize" }],
+		components: [{ annotations: [{ name: "JsonValue" }], name: "value", type: payload }],
+		end: "{}",
+		implements: [union],
+		kind: "record",
+		modifiers: ["public"],
+		name: wrapper,
+	}).join("\n")
 
 /** Each selectable variant's payload, wrapper and selecting values; the wrappers are declared here. */
 function dispatchOf(name: string, union: Discriminated, scope: UnionScope): Dispatch[] {
@@ -81,22 +83,6 @@ function dispatchOf(name: string, union: Discriminated, scope: UnionScope): Disp
 	})
 }
 
-/**
- * The sealed interface's header lines as google-java-format writes them: one line when it fits; else `permits`
- * on its own line, indented four; else each permit on its own line, the first after `permits`, the rest indented eight.
- */
-function headerLines(name: string, permits: readonly string[]): string[] {
-	const one = `public sealed interface ${name} permits ${permits.join(", ")} {`
-	if (one.length <= WIDTH) return [one]
-	const broken = `    permits ${permits.join(", ")} {`
-	if (broken.length <= WIDTH) return [`public sealed interface ${name}`, broken]
-	const last = permits.length - 1
-	return [
-		`public sealed interface ${name}`,
-		...permits.map((permit, i) => `${i === 0 ? "    permits " : "        "}${permit}${i === last ? " {" : ","}`),
-	]
-}
-
 /** The sealed interface of `union`'s wrappers, its nested Deserializer, then the `<Union>Unknown` wrapper. */
 function discriminatedDecl(name: string, union: Discriminated, scope: UnionScope): string {
 	const dispatch = dispatchOf(name, union, scope)
@@ -104,8 +90,14 @@ function discriminatedDecl(name: string, union: Discriminated, scope: UnionScope
 	scope.at.decls.set(unknown, wrapperText(unknown, name, JSON_NODE))
 	const permits = [...dispatch.map((arm) => arm.wrapper), unknown]
 	return [
-		`@JsonDeserialize(using = ${name}.Deserializer.class)`,
-		...headerLines(name, permits),
+		...typeHeader(0, {
+			annotations: [{ args: [["using", classOf(`${name}.Deserializer`)]], name: "JsonDeserialize" }],
+			end: "{",
+			kind: "interface",
+			modifiers: ["public", "sealed"],
+			name,
+			permits,
+		}),
 		...deserializerLines(name, union.discriminator.propertyName, dispatch, unknown),
 		"}",
 	].join("\n")

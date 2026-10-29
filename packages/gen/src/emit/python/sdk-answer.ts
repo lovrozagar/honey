@@ -43,9 +43,12 @@ export type PyStream = {
 	readonly doc: readonly string[]
 }
 
-/** A streamed event's type: the operation's declared event schema, else `fallback`. */
-export const eventType = (op: SdkOp, env: MethodEnv, fallback: string) =>
-	op.events === undefined ? fallback : typeAt(op, "Event", op.events, env)
+/**
+ * A streamed event's type: the operation's declared event schema, else `fallback`'s, spelled only then, so an
+ * undeclared event's `Any` is imported only where it is written (bit 21 i7a: a typed realtime op imported it unused).
+ */
+export const eventType = (op: SdkOp, env: MethodEnv, fallback: () => string) =>
+	op.events === undefined ? fallback() : typeAt(op, "Event", op.events, env)
 
 /** The answer of a plain operation `op`: its decoded success (`client.safe`'s twin wraps it in a `Result`). */
 export function answerOf(op: SdkOp, env: MethodEnv): Answer {

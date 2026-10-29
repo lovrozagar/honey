@@ -11,12 +11,27 @@ import type { SdkOp } from "../../ir/sdk-model.ts"
 import { javaString } from "../shared/escape.ts"
 import { snakeWords } from "../shared/lang.ts"
 import { type JavaTypeContext, javaTypeOf } from "./models.ts"
-import { assigned, docParagraphs, layout } from "./sdk-decl.ts"
+import {
+	array,
+	call,
+	type Declaration,
+	exprStmt,
+	type Expr,
+	field,
+	lit,
+	local,
+	methodHeader,
+	param,
+	newOf,
+	returnStmt,
+	statement,
+} from "./layout.ts"
+import { docParagraphs } from "./sdk-decl.ts"
 import { type JavaHeaders, javaResponseHeaders } from "./sdk-headers.ts"
 import { MAX_RECONNECT_ATTEMPTS, RECONNECT_DELAY, realtimeMethodLines } from "./realtime.ts"
 import { CURSOR, sseMethodLines } from "./sse.ts"
 import { PROTOCOLS, TOKEN, wsMethodLines } from "./ws.ts"
-import { multipartRecordLines, paramsRecord } from "./sdk-record.ts"
+import { multipartHelper, multipartRecordLines, paramsRecord } from "./sdk-record.ts"
 import type { JavaCallPlan } from "./sdk-plan.ts"
 import { type Field, fieldsOf, multipartRecord, paramsName } from "./sdk-params.ts"
 
@@ -52,17 +67,17 @@ export const paragraphsOf = (op: SdkOp): string[] => [op.id, op.summary, op.desc
 /** The constant's name for a method: its words upper-cased, `_OPERATION` after them. */
 export const constantOf = (method: string) => `${snakeWords(method).toUpperCase()}_OPERATION`
 
-/** The answer's Java type and its reader, for each response kind. */
-export function answerOf(op: SdkOp, env: OpEnv) {
+/** The answer's Java type and its reader on `answer`, for each response kind. */
+export function answerOf(op: SdkOp, env: OpEnv): { readonly reader: Expr; readonly type: string } {
 	const kind = op.success.kind
 	if (kind === "json") {
 		const schema = op.success.schema ?? UNKNOWN
 		const type = javaTypeOf(schema, { ...env.ctx, fieldName: "Response", parentName: op.id })
-		return { reader: `json(new TypeReference<${type}>() {})`, type }
+		return { reader: call("answer", "json", [newOf(`TypeReference<${type}>`, [], true)]), type }
 	}
-	if (kind === "text") return { reader: "text()", type: "String" }
-	if (kind === "binary") return { reader: "bytes()", type: "byte[]" }
-	return { reader: "none()", type: "void" }
+	if (kind === "text") return { reader: call("answer", "text"), type: "String" }
+	if (kind === "binary") return { reader: call("answer", "bytes"), type: "byte[]" }
+	return { reader: call("answer", "none"), type: "void" }
 }
 
 /** The `Accept` an operation asks for: a text or binary answer's media type. */
@@ -73,62 +88,39 @@ function acceptOf(op: SdkOp): string | undefined {
 }
 
 /** One body's expression over the params record's `body` component. */
-function bodyExpr(op: SdkOp): string {
+function bodyExpr(op: SdkOp): Expr {
 	const body = op.body
-	if (body === undefined) return "null"
-	if (body.kind === "json") return `Body.json(params.body(), ${javaString(body.contentType)})`
-	if (body.kind === "form") return "Body.form(params.body())"
-	if (body.kind === "text") return `Body.text(params.body(), ${javaString(body.contentType)})`
-	if (body.kind === "binary") return `Body.binary(params.body(), ${javaString(body.contentType)})`
-	return `multipart(params.body())`
+	if (body === undefined) return lit("null")
+	const value = call("params", "body")
+	if (body.kind === "form") return call("Body", "form", [value])
+	if (body.kind === "multipart") return call(null, "multipart", [value])
+	return call("Body", body.kind, [value, javaString(body.contentType)])
 }
 
-/** The `multipart` helper of a multipart body: null without a body, else the parts, one per component, in order. */
-function multipartHelper(op: SdkOp, env: OpEnv): string[] {
-	const body = op.body
-	if (body === undefined || body.kind !== "multipart") return []
-	const { components, name } = multipartRecord(op, body.parts, env.ctx, env.isArray)
-	const parts = components.map(({ field, name: part, type }) => {
-		const value = `body.${field}()`
-		if (type === "FilePart") return `Body.Part.file(${javaString(part)}, ${value})`
-		if (type === "List<FilePart>") return `Body.Part.files(${javaString(part)}, ${value})`
-		return `Body.Part.text(${javaString(part)}, ${value})`
-	})
-	return [
-		`  private static Body multipart(${name} body) {`,
-		"    if (body == null) {",
-		"      return null;",
-		"    }",
-		...assigned("    ", "List<Body.Part> parts", { items: parts, prefix: "List.of(", suffix: ");" }),
-		"    return Body.multipart(parts);",
-		"  }",
-		"",
-	]
-}
+/** `Type name = init;`, a local at the method body's indent. */
+const declared = (type: string, name: string, init: Expr): string[] => statement(4, local({ init, name, type }))
 
 /** One query or header param's `Call.Arg`; the cursor's sends nothing when it is unset or empty. */
 const arg = (f: Field) =>
-	`Call.Arg.${f.where === "cursor" || f.where === "token" ? "cursor" : "of"}(${javaString(f.name)}, params.${f.field}())`
+	call("Call.Arg", f.where === "cursor" || f.where === "token" ? "cursor" : "of", [
+		javaString(f.name),
+		call("params", f.field),
+	])
 
 /** One `List<Call.Arg>` local of `items`, as its own statement. */
-const list = (name: string, items: readonly string[]) =>
-	assigned("    ", `List<Call.Arg> ${name}`, { items, prefix: "List.of(", suffix: ");" })
+const list = (name: string, items: readonly Expr[]) => declared("List<Call.Arg>", name, call("List", "of", items))
 
 /** The lines that build the `Call`: its path array, its query and header lists, its body, each as its own statement. */
 function callLines(fields: readonly Field[], op: SdkOp): string[] {
-	const path = fields.filter((f) => f.where === "path").map((f) => `params.${f.field}()`)
+	const path = fields.filter((f) => f.where === "path").map((f) => call("params", f.field))
 	const query = fields.filter((f) => f.where === "query" || f.where === "token").map(arg)
 	const headers = fields.filter((f) => f.where === "header" || f.where === "key" || f.where === "cursor").map(arg)
 	return [
-		`    String[] path = {${path.join(", ")}};`,
+		...declared("String[]", "path", array(null, path)),
 		...list("query", query),
 		...list("headers", headers),
-		...assigned("    ", "Body body", { items: [], prefix: bodyExpr(op), suffix: ";" }),
-		...assigned("    ", "Call call", {
-			items: ["path", "query", "headers", "body"],
-			prefix: "new Call(",
-			suffix: ");",
-		}),
+		...declared("Body", "body", bodyExpr(op)),
+		...declared("Call", "call", newOf("Call", ["path", "query", "headers", "body"])),
 	]
 }
 
@@ -145,10 +137,10 @@ function streamMethodLines(op: SdkOp, site: MethodSite, env: OpEnv): string[] | 
 	const { fields, headers, name } = site
 	const constant = constantOf(name)
 	const params = paramsName(op, env.ctx)
-	const call = callLines(fields, op)
-	if (op.stream === "sse") return sseMethodLines(op, { call, constant, headers, name, params }, env.ctx)
-	if (op.stream === "ws") return wsMethodLines(op, { call, constant, name, params })
-	return realtimeMethodLines(op, { call, constant, name, params }, env.ctx)
+	const lines = callLines(fields, op)
+	if (op.stream === "sse") return sseMethodLines(op, { call: lines, constant, headers, name, params }, env.ctx)
+	if (op.stream === "ws") return wsMethodLines(op, { call: lines, constant, name, params })
+	return realtimeMethodLines(op, { call: lines, constant, name, params }, env.ctx)
 }
 
 /**
@@ -164,9 +156,9 @@ function methodLines(op: SdkOp, site: MethodSite, env: OpEnv): string[] {
 	const answer = answerOf(op, env)
 	const returns = answer.type
 	const params = paramsName(op, env.ctx)
-	const reader = answer.reader
-	const ret = returns === "void" ? "" : "return "
-	const via = headers === null ? "" : ", null"
+	/* `return value;`, or the statement alone for no answer */
+	const ret = (value: Expr) => statement(4, returns === "void" ? exprStmt(value) : returnStmt(value))
+	const delegate = (args: readonly string[]) => ret(call(null, name, args))
 	const fill =
 		headers === null
 			? []
@@ -177,25 +169,21 @@ function methodLines(op: SdkOp, site: MethodSite, env: OpEnv): string[] {
 				]
 	const body = [
 		...callLines(fields, op),
-		...assigned("    ", "Answer answer", {
-			items: [constant, "call", "options"],
-			prefix: "exchange.run(",
-			suffix: ");",
-		}),
+		...declared("Answer", "answer", call("exchange", "run", [constant, "call", "options"])),
 		...fill,
-		`    ${ret}answer.${reader};`,
+		...ret(answer.reader),
 	]
-	const shorter = headers === null ? body : [`    ${ret}${name}(params, null, options);`]
-	/* an overload's signature, broken as google-java-format breaks one past 100 columns */
-	const signature = (args: readonly string[]) => layout(`public ${returns} ${name}(`, args, ") {", "  ")
+	const shorter = headers === null ? body : delegate(["params", "null", "options"])
+	const signature = (args: readonly Declaration[]) =>
+		methodHeader(2, { end: "{", modifiers: ["public"], name, params: args, returns })
 	return [
 		docParagraphs(paragraphsOf(op)),
-		...signature([`${params} params`]),
-		`    ${ret}${name}(params, null${via});`,
+		...signature([param(params, "params")]),
+		...delegate(headers === null ? ["params", "null"] : ["params", "null", "null"]),
 		"  }",
 		"",
 		docParagraphs(paragraphsOf(op)),
-		...signature([`${params} params`, "RequestOptions options"]),
+		...signature([param(params, "params"), param("RequestOptions", "options")]),
 		...shorter,
 		"  }",
 		"",
@@ -203,7 +191,11 @@ function methodLines(op: SdkOp, site: MethodSite, env: OpEnv): string[] {
 			? []
 			: [
 					docParagraphs(paragraphsOf(op)),
-					...signature([`${params} params`, `${headers.type} headersInto`, "RequestOptions options"]),
+					...signature([
+						param(params, "params"),
+						param(headers.type, "headersInto"),
+						param("RequestOptions", "options"),
+					]),
 					...body,
 					"  }",
 					"",
@@ -218,14 +210,27 @@ function constantLines(op: SdkOp, constant: string): string[] {
 	const items = [
 		javaString(op.method),
 		javaString(op.path),
-		`new String[] {${names.map((n) => javaString(n)).join(", ")}}`,
+		array(
+			"String[]",
+			names.map((n) => javaString(n)),
+		),
 		accept === undefined ? "null" : javaString(accept),
 		op.idempotent ? "true" : "false",
 		...(op.invalidates.length === 0
 			? []
-			: [`new String[] {${op.invalidates.map((target) => javaString(target)).join(", ")}}`]),
+			: [
+					array(
+						"String[]",
+						op.invalidates.map((target) => javaString(target)),
+					),
+				]),
 	]
-	return assigned("  ", `private static final Operation ${constant}`, { items, prefix: "new Operation(", suffix: ");" })
+	return field(2, {
+		init: newOf("Operation", items),
+		modifiers: ["private", "static", "final"],
+		name: constant,
+		type: "Operation",
+	})
 }
 
 /**
@@ -233,14 +238,14 @@ function constantLines(op: SdkOp, constant: string): string[] {
  * null where absent.
  */
 const streamPlan = (fields: readonly Field[]) => {
-	const field = (where: Field["where"]) => fields.find((f) => f.where === where)?.field ?? null
+	const named = (where: Field["where"]) => fields.find((f) => f.where === where)?.field ?? null
 	const own = (name: string) => fields.find((f) => f.where === "realtime" && f.name === name)?.field ?? null
 	return {
-		lastEventId: field("cursor") ?? own(CURSOR),
+		lastEventId: named("cursor") ?? own(CURSOR),
 		maxReconnectAttempts: own(MAX_RECONNECT_ATTEMPTS),
-		protocols: field("protocols") ?? own(PROTOCOLS),
+		protocols: named("protocols") ?? own(PROTOCOLS),
 		reconnectDelay: own(RECONNECT_DELAY),
-		reconnectToken: field("token") ?? own(TOKEN),
+		reconnectToken: named("token") ?? own(TOKEN),
 	}
 }
 

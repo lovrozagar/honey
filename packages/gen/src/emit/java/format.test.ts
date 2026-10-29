@@ -12,6 +12,7 @@ import { compiledJavaSdk } from "./__fixtures__/compiled.ts"
 import { FIXTURES, type FixtureKey, type JavaFixture } from "./__fixtures__/documents.ts"
 import { runGjf, withJava } from "./__fixtures__/java-env.ts"
 import { errors } from "../shared/__fixtures__/documents-http.ts"
+import { LONG_LENGTHS, longNames } from "../shared/__fixtures__/documents-long.ts"
 import { generateJavaSdk } from "./sdk.ts"
 
 type Json = Record<string, unknown>
@@ -156,10 +157,6 @@ describe("generateJavaSdk: a twin's body in each of google-java-format's lambda 
 		})
 	})
 
-	/*
-	 * the bodies alone: names this long already pass google-java-format's width in the normal layouts (a constant, a
-	 * signature, a record's header), before bit 21; the twin's body is the formatter's own text in both forms
-	 */
 	it.skipIf(!JAVA)("lays each body as google-java-format's own output of the file does, and compiles", SLOW, () => {
 		const built = compiledJavaSdk(generateJavaSdk(LONG_NAMES).files)
 		const formatted = runGjf([join(built.dir, "src/main/java/ai/anyrow/SafeAnyrowClient.java")]).stdout
@@ -168,5 +165,29 @@ describe("generateJavaSdk: a twin's body in each of google-java-format's lambda 
 			bodies: [LONG.a, LONG.b, LONG.c].map((name) => formatted.includes(twinBody(ours, name).join("\n"))),
 			diagnostics: built.javac.diagnostics,
 		}).toEqual({ bodies: [true, true, true], diagnostics: [] })
+	})
+})
+
+/*
+ * bit 21 i7a: past ~60 characters a name pushed the normal client's layouts (a constant, a signature, a record's
+ * header, a delegation) off google-java-format's; layout.ts is its layout, ported. The long-name document crosses
+ * every width at each length, so every file it gives, the normal client, the safe mirror and the types, is held to
+ * GJF's own text
+ */
+describe.skipIf(!JAVA)("google-java-format --dry-run on the long-name SDK (bit 21 i7a)", SLOW, () => {
+	it("lists no file of the client, its safe mirror or its types, and the SDK compiles clean", () => {
+		const files = generateJavaSdk(longNames()).files
+		const built = compiledJavaSdk(files)
+		const sources = Object.keys(files).filter((name) => name.endsWith(".java"))
+		const longest = Math.max(...Object.values(files).flatMap((text) => text.split("\n").map((line) => line.length)))
+		expect({
+			diagnostics: built.javac.diagnostics,
+			format: built.format(),
+			/* not vacuous: a name alone passes the width, and every kind of file is among those held */
+			past: longest > 100 && Math.max(...LONG_LENGTHS) > 100,
+			reached: ["AnyrowClient.java", "SafeAnyrowClient.java", "Resource.java", "Params.java", "Headers.java"].map(
+				(end) => sources.some((name) => name.endsWith(end)),
+			),
+		}).toEqual({ diagnostics: [], format: [], past: true, reached: [true, true, true, true, true] })
 	})
 })

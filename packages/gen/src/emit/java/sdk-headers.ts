@@ -11,7 +11,20 @@ import type { SdkOp } from "../../ir/sdk-model.ts"
 import { javaString } from "../shared/escape.ts"
 import { camelWords, compareCodeUnits, javaIdentifier, NameScope } from "../shared/lang.ts"
 import type { JavaTypeContext } from "./models.ts"
-import { assigned, docOf } from "./sdk-decl.ts"
+import {
+	accessor as accessorLines,
+	assign,
+	call,
+	classHeader,
+	type Expr,
+	exprStmt,
+	field,
+	id,
+	lambda,
+	ref,
+	statement,
+} from "./layout.ts"
+import { docOf } from "./sdk-decl.ts"
 import { opTypeName } from "./sdk-params.ts"
 
 /** The holder's type, its file's declaration lines, and each declared header (as written) to its accessor. */
@@ -53,15 +66,15 @@ function declaredHeaders(op: SdkOp): Header[] {
 function scalarOf(
 	schema: IRSchema,
 	ctx: JavaTypeContext,
-): { readonly java: string; readonly parse: string; readonly word: string } {
+): { readonly java: string; readonly parse: Expr; readonly word: string } {
 	const resolved = ctx.names.resolve(schema)
 	if (resolved.kind === "scalar" && resolved.type === "integer")
-		return { java: "Long", parse: "Long::parseLong", word: "integer" }
+		return { java: "Long", parse: ref("Long", "parseLong"), word: "integer" }
 	if (resolved.kind === "scalar" && resolved.type === "number")
-		return { java: "Double", parse: "Double::parseDouble", word: "number" }
+		return { java: "Double", parse: ref("Double", "parseDouble"), word: "number" }
 	if (resolved.kind === "scalar" && resolved.type === "boolean")
-		return { java: "Boolean", parse: "Answer::flag", word: "boolean" }
-	return { java: "String", parse: "value -> value", word: "text" }
+		return { java: "Boolean", parse: ref("Answer", "flag"), word: "boolean" }
+	return { java: "String", parse: lambda(["value"], id("value")), word: "text" }
 }
 
 /** `<Op>Headers` for `op`, or null when its 2xx responses declare no header. */
@@ -76,22 +89,27 @@ export function javaResponseHeaders(op: SdkOp, env: { readonly ctx: JavaTypeCont
 	})
 	const lines = [
 		docOf(`The response headers of ${op.id}, set when the call answers 2xx.`, ""),
-		`public final class ${type} {`,
-		...fields.map(({ accessor, java }) => `  private ${java} ${accessor};`),
+		...classHeader(type),
+		...fields.flatMap(({ accessor, java }) => field(2, { modifiers: ["private"], name: accessor, type: java })),
 		"",
-		...fields.flatMap(({ accessor, java }) => [
-			`  public ${java} ${accessor}() {`,
-			`    return ${accessor};`,
-			"  }",
-			"",
-		]),
+		...fields.flatMap(({ accessor, java }) => [...accessorLines(java, accessor), ""]),
 		"  void read(Map<String, String> headers) {",
 		...fields.flatMap(({ accessor, header, parse, word }) =>
-			assigned("    ", accessor, {
-				items: ["headers", javaString(header.name), String(header.required === true), javaString(word), parse],
-				prefix: "Answer.header(",
-				suffix: ");",
-			}),
+			statement(
+				4,
+				exprStmt(
+					assign(
+						accessor,
+						call("Answer", "header", [
+							"headers",
+							javaString(header.name),
+							String(header.required === true),
+							javaString(word),
+							parse,
+						]),
+					),
+				),
+			),
 		),
 		"  }",
 		"}",

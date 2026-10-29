@@ -8,6 +8,7 @@ import type { IRSchema } from "../../ir/model.ts"
 import { javaString } from "../shared/escape.ts"
 import { NameScope, words } from "../shared/lang.ts"
 import { intEnumJsonLines } from "./json.ts"
+import { annotationLine, enumConstant, typeHeader } from "./layout.ts"
 
 type Scalar = Extract<IRSchema, { kind: "scalar" }>
 
@@ -39,13 +40,16 @@ export function stringEnumDecl(name: string, values: readonly string[]): string 
 	const scope = new NameScope()
 	const members = values.map((value) => [javaString(value), scope.claim(constantOf(value))] as const)
 	const constants = members.flatMap(([wire, constant], i) => [
-		`  @JsonProperty(${wire})`,
+		...annotationLine(2, { args: [wire], name: "JsonProperty" }),
 		`  ${constant}${i < members.length - 1 ? "," : ""}`,
 	])
-	return [`public enum ${name} {`, ...constants, "}"].join("\n")
+	return [...enumHeader(name), ...constants, "}"].join("\n")
 }
 
 /** An integer value's constant: `L<n>`, or `Neg<n>` below zero. */
+/** `public enum Name {`. */
+const enumHeader = (name: string) => typeHeader(0, { end: "{", kind: "enum", modifiers: ["public"], name })
+
 const label = (value: number) => `${value < 0 ? "Neg" : "L"}${String(Math.abs(value))}`
 
 /** An integer value as a Java `long` literal: a `L` suffix past the int range. */
@@ -53,8 +57,10 @@ const literal = (value: number) => (value >= INT_MIN && value <= INT_MAX ? Strin
 
 /** `public enum <name>` of an integer enum: one constant per value, then the `long` value and its JSON creator. */
 function intEnumDecl(name: string, values: readonly number[]): string {
-	const constants = values.map((value, i) => `  ${label(value)}(${literal(value)})${i < values.length - 1 ? "," : ";"}`)
-	return [`public enum ${name} {`, ...constants, ...intEnumJsonLines(name), "}"].join("\n")
+	const constants = values.flatMap((value, i) =>
+		enumConstant(2, label(value), [literal(value)], i < values.length - 1 ? "," : ";"),
+	)
+	return [...enumHeader(name), ...constants, ...intEnumJsonLines(name), "}"].join("\n")
 }
 
 /** The enum `name` of the string or integer enum `ir`. */

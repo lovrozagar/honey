@@ -15,7 +15,7 @@ export const isLastEventIdHeader = (name: string, where: string) =>
 /** The SSE operation's answer, its one field and its docstring's lines. */
 export const sseStream: PyStream = {
 	answer: (op, env) => {
-		const events = eventType(op, env, "str")
+		const events = eventType(op, env, () => "str")
 		return { returns: `EventStream[${events}]`, run: "sse", type: events }
 	},
 	carries: isLastEventIdHeader,

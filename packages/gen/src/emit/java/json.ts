@@ -4,6 +4,24 @@
  * mapper config is the runtime's (Json.java); this file holds no mapper.
  */
 import { javaString } from "../shared/escape.ts"
+import {
+	bin,
+	call,
+	classOf,
+	type Expr,
+	forOpen,
+	ifOpen,
+	lit,
+	local,
+	methodHeader,
+	newOf,
+	param,
+	returnStmt,
+	rule,
+	statement,
+	throwStmt,
+	typeHeader,
+} from "./layout.ts"
 
 /** One dispatch: the values that select a wrapper, the wrapper, and the payload type it reads. */
 export type Dispatch = { readonly values: readonly string[]; readonly wrapper: string; readonly payload: string }
@@ -11,17 +29,15 @@ export type Dispatch = { readonly values: readonly string[]; readonly wrapper: s
 /* a payload's erasure: `Class` takes no type arguments */
 const erased = (type: string) => type.replace(/<.*$/, "")
 
-/** One switch arm, `label -> value;`: one line when it fits 100 columns, else broken after `->` as google-java-format breaks it. */
-function arm(label: string, value: string): string[] {
-	const one = `        ${label} -> ${value};`
-	return one.length <= 100 ? [one] : [`        ${label} ->`, `            ${value};`]
-}
+/** One switch arm, `case label -> value;` (`default` for no label), in the switch's body. */
+const arm = (label: string | null, value: Expr): string[] =>
+	statement(8, rule(label === null ? null : lit(label), value))
 
 /** One `case` arm per selecting value, in dispatch order. */
 const cases = (dispatch: readonly Dispatch[]): string[] =>
 	dispatch.flatMap(({ values, wrapper, payload }) =>
 		values.flatMap((value) =>
-			arm(`case ${javaString(value)}`, `new ${wrapper}(ctxt.readTreeAsValue(node, ${erased(payload)}.class))`),
+			arm(javaString(value), newOf(wrapper, [call("ctxt", "readTreeAsValue", ["node", classOf(erased(payload))])])),
 		),
 	)
 
@@ -33,22 +49,34 @@ export function deserializerLines(
 	unknown: string,
 ): string[] {
 	return [
-		`  final class Deserializer extends StdDeserializer<${name}> {`,
+		...typeHeader(2, {
+			end: "{",
+			extends: `StdDeserializer<${name}>`,
+			kind: "class",
+			modifiers: ["final"],
+			name: "Deserializer",
+		}),
 		"    public Deserializer() {",
-		`      super(${name}.class);`,
+		...statement(6, { expr: call(null, "super", [classOf(name)]), k: "expr" }),
 		"    }",
 		"",
 		"    @Override",
-		`    public ${name} deserialize(JsonParser p, DeserializationContext ctxt) {`,
+		...methodHeader(4, {
+			end: "{",
+			modifiers: ["public"],
+			name: "deserialize",
+			params: [param("JsonParser", "p"), param("DeserializationContext", "ctxt")],
+			returns: name,
+		}),
 		"      JsonNode node = ctxt.readTree(p);",
-		`      JsonNode kind = node.get(${javaString(property)});`,
+		...statement(6, local({ init: call("node", "get", [javaString(property)]), name: "kind", type: "JsonNode" })),
 		"      String value = kind != null && kind.isString() ? kind.asString() : null;",
 		"      if (value == null) {",
-		`        return new ${unknown}(node);`,
+		...statement(8, returnStmt(newOf(unknown, ["node"]))),
 		"      }",
 		"      return switch (value) {",
 		...cases(dispatch),
-		...arm("default", `new ${unknown}(node)`),
+		...arm(null, newOf(unknown, ["node"])),
 		"      };",
 		"    }",
 		"  }",
@@ -64,7 +92,7 @@ export function intEnumJsonLines(name: string): string[] {
 		"",
 		"  private final long value;",
 		"",
-		`  ${name}(long value) {`,
+		...methodHeader(2, { end: "{", name, params: [param("long", "value")] }),
 		"    this.value = value;",
 		"  }",
 		"",
@@ -74,15 +102,21 @@ export function intEnumJsonLines(name: string): string[] {
 		"  }",
 		"",
 		"  @JsonCreator",
-		`  public static ${name} fromValue(JsonNode node) {`,
-		"    if (node.isIntegralNumber()) {",
-		`      for (${name} level : values()) {`,
+		...methodHeader(2, {
+			end: "{",
+			modifiers: ["public", "static"],
+			name: "fromValue",
+			params: [param("JsonNode", "node")],
+			returns: name,
+		}),
+		...statement(4, ifOpen(call("node", "isIntegralNumber"))),
+		...statement(6, forOpen(name, "level", call(null, "values"))),
 		"        if (level.value == node.longValue()) {",
 		"          return level;",
 		"        }",
 		"      }",
 		"    }",
-		`    throw new IllegalArgumentException(node + ${javaString(` is no ${name}`)});`,
+		...statement(4, throwStmt(newOf("IllegalArgumentException", [bin("+", "node", javaString(` is no ${name}`))]))),
 		"  }",
 	]
 }

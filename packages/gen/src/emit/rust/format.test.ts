@@ -9,7 +9,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
 import { devNull } from "node:os"
 import { dirname, join } from "node:path"
 import { describe, expect, it } from "vitest"
-import { formatFiles } from "../shared/format.ts"
+import { type Formatter, formatFiles } from "../shared/format.ts"
 import { rustfmtFormatter } from "../shared/rustfmt.ts"
 import { compiledRust } from "./__fixtures__/compiled.ts"
 import { FIXTURES } from "./__fixtures__/documents.ts"
@@ -64,6 +64,43 @@ describe("the emitted Rust SDK through the rustfmt pass", () => {
 		expect(Object.keys(runtime).length).toBeGreaterThan(0)
 		expect(await formatFiles(runtime, { rs: rustfmtFormatter(rustfmtPath()) })).toEqual(runtime)
 	})
+})
+
+describe("the long-name crate through the rustfmt pass (bit 21 i7a)", () => {
+	// bit 21 i7a: red-first clean
+	it.skipIf(!RUST)(
+		"leaves rustfmt --check nothing to change over every file, both styles' client and the types, and builds as emitted",
+		async () => {
+			const files = generateRustSdk(FIXTURES.long.document()).files
+			const reached: string[] = []
+			const rustfmt = rustfmtFormatter(rustfmtPath())
+			const counting: Formatter = (name, source, options) => {
+				reached.push(name)
+				return rustfmt(name, source, options)
+			}
+			const rs = rustOf(await formatFiles(files, { rs: counting }))
+			/* not vacuous: the pass reaches every .rs file, and the client (one impl per resource, both styles) and the types run past 100 */
+			const long = (name: string) => (files[name] ?? "").split("\n").filter((line) => line.length > 100).length
+			const styled = [...(files["src/client.rs"] ?? "").matchAll(/^impl<S: Style> \w+Resource<'_, S> \{$/gm)].length
+			expect({
+				client: long("src/client.rs") > 0,
+				reached: reached.sort(),
+				styled,
+				types: long("src/types.rs") > 0,
+			}).toEqual({
+				client: true,
+				reached: Object.keys(rustOf(files)).sort(),
+				styled: 11,
+				types: true,
+			})
+			expect(await formatFiles(rs, { rs: rustfmtFormatter(rustfmtPath()) })).toEqual(rs)
+			const check = runRustfmt(["--edition", "2024", "--config-path", devNull, "--check", ...written(rs)])
+			expect({ status: check.status, stdout: check.stdout }, check.stderr).toEqual({ status: 0, stdout: "" })
+			const sdk = compiledRust("long")
+			expect(sdk.built, sdk.stderr).toBe(true)
+		},
+		600_000,
+	)
 })
 
 describe("the emitted Rust SDK under the pinned toolchain", () => {

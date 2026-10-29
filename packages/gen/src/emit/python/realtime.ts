@@ -13,7 +13,7 @@ import { isReconnectToken, PROTOCOLS, RECONNECT_TOKEN } from "./ws.ts"
 /** The realtime operation's answer, its five fields and its docstring's lines. */
 export const realtimeStream: PyStream = {
 	answer: (op, env) => {
-		const events = eventType(op, env, pyTypeOf({ kind: "unknown" }, env.at))
+		const events = eventType(op, env, () => pyTypeOf({ kind: "unknown" }, env.at))
 		return { returns: `ResumableConnection[${events}]`, run: "realtime", type: events }
 	},
 	/* the WebSocket and long-poll dials send the cursor as query params, the SSE dial its id as Last-Event-ID */

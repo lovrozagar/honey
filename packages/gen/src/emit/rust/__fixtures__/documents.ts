@@ -15,6 +15,7 @@ import realtimeLongpoll from "../../../ir/__fixtures__/specs/rust/realtime-longp
 import realtimeSse from "../../../ir/__fixtures__/specs/rust/realtime-sse.json" with { type: "json" }
 import realtime from "../../../ir/__fixtures__/specs/rust/realtime.json" with { type: "json" }
 import { adversarialCorpus } from "../../shared/__fixtures__/adversarial-corpus.ts"
+import { longNames } from "../../shared/__fixtures__/documents-long.ts"
 import { merged } from "../../shared/__fixtures__/merge.ts"
 import type { RustSdkOptions } from "../sdk.ts"
 import { errors, http, httpExtraPaths } from "../../shared/__fixtures__/documents-http.ts"
@@ -92,6 +93,8 @@ export const FIXTURES = {
 	http: { document: http },
 	/** a decode failure on answers a fallback would fit, never Ok (bit 21 i4) */
 	lenient: { document: lenient },
+	/** every name spelled at lengths 20..110, across rustfmt's width of 100 (bit 21 i7a) */
+	long: { document: longNames },
 	/** the header-rule paths Python, C# and Java add to `http` (bit 19 d1): a declared key, a map header and query */
 	keyed: { document: () => ({ info: { title: "Keyed", version: "1" }, openapi: "3.1.0", paths: httpExtraPaths() }) },
 	/** the realtime connections (contract 20 §4.3): a typed feed, and one declaring every stream field's name */

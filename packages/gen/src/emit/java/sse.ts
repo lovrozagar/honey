@@ -7,7 +7,19 @@
  */
 import type { SdkOp } from "../../ir/sdk-model.ts"
 import { type JavaTypeContext, javaTypeOf } from "./models.ts"
-import { docOf, layout } from "./sdk-decl.ts"
+import {
+	bin,
+	call as callOf,
+	cond,
+	type Declaration,
+	methodHeader,
+	param,
+	newOf,
+	ref,
+	returnStmt,
+	statement,
+} from "./layout.ts"
+import { docOf } from "./sdk-decl.ts"
 import type { JavaHeaders } from "./sdk-headers.ts"
 
 /** The header an SSE open resumes an event stream with. */
@@ -48,26 +60,28 @@ export function sseMethodLines(op: SdkOp, site: SseSite, ctx: JavaTypeContext): 
 	const doc = docOf(
 		`${op.id}: the open stream. An error status throws before any event, and no timeout bounds it after that. ${RELEASE}`,
 	)
-	const signature = (args: readonly string[]) => layout(`public EventStream<${type}> ${name}(`, args, ") {", "  ")
-	const holder = headers === null ? "null" : "headersInto == null ? null : headersInto::read"
+	const signature = (args: readonly Declaration[]) =>
+		methodHeader(2, { end: "{", modifiers: ["public"], name, params: args, returns: `EventStream<${type}>` })
+	const holder = headers === null ? "null" : cond(bin("==", "headersInto", "null"), "null", ref("headersInto", "read"))
 	const open = [
 		...call,
-		...layout(
-			"return exchange.events(",
-			[constant, "call", "options", holder, `new TypeReference<${type}>() {}`],
-			");",
-			"    ",
+		...statement(
+			4,
+			returnStmt(
+				callOf("exchange", "events", [constant, "call", "options", holder, newOf(`TypeReference<${type}>`, [], true)]),
+			),
 		),
 	]
-	const longest = headers === null ? open : [`    return ${name}(params, null, options);`]
+	const delegate = (args: readonly string[]) => statement(4, returnStmt(callOf(null, name, args)))
+	const longest = headers === null ? open : delegate(["params", "null", "options"])
 	return [
 		doc,
-		...signature([`${params} params`]),
-		`    return ${name}(params, null${headers === null ? "" : ", null"});`,
+		...signature([param(params, "params")]),
+		...delegate(headers === null ? ["params", "null"] : ["params", "null", "null"]),
 		"  }",
 		"",
 		doc,
-		...signature([`${params} params`, "RequestOptions options"]),
+		...signature([param(params, "params"), param("RequestOptions", "options")]),
 		...longest,
 		"  }",
 		"",
@@ -75,7 +89,11 @@ export function sseMethodLines(op: SdkOp, site: SseSite, ctx: JavaTypeContext): 
 			? []
 			: [
 					doc,
-					...signature([`${params} params`, `${headers.type} headersInto`, "RequestOptions options"]),
+					...signature([
+						param(params, "params"),
+						param(headers.type, "headersInto"),
+						param("RequestOptions", "options"),
+					]),
 					...open,
 					"  }",
 					"",

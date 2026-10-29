@@ -18,6 +18,7 @@ import realtimeSse from "../../../ir/__fixtures__/specs/rust/realtime-sse.json" 
 import realtime from "../../../ir/__fixtures__/specs/rust/realtime.json" with { type: "json" }
 import { adversarialCorpus } from "../../shared/__fixtures__/adversarial-corpus.ts"
 import { docsDocument } from "../../shared/__fixtures__/docs-blocks.ts"
+import { longNames } from "../../shared/__fixtures__/documents-long.ts"
 import { errors } from "../../shared/__fixtures__/documents-http.ts"
 import * as streams from "../../shared/__fixtures__/documents-streams.ts"
 import { merged } from "../../shared/__fixtures__/merge.ts"
@@ -107,6 +108,8 @@ export const FIXTURES = {
 	fixtures: { document: fixtures },
 	/** the HTTP runtime's document (contract 29 §4.3): bit 13's `http` and three Python-only paths, both modes */
 	http: { document: pythonHttp },
+	/** every name spelled at lengths 20..110, across ruff's width of 88 (bit 21 i7a) */
+	long: { document: longNames },
 	/** the resumable connections (contract 34 Fd6): bit 13's `realtime` document, shared */
 	realtime: { document: streams.realtime },
 	/** a relative first server: `SDK()` needs an absolute `base_url` (R7) */

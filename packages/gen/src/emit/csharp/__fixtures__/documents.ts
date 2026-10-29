@@ -13,6 +13,7 @@ import reservedWords from "../../../ir/__fixtures__/specs/python/reserved-words.
 import integerEnumStatus from "../../../ir/__fixtures__/specs/go/integer-enum-status.json" with { type: "json" }
 import nullablePrimitive from "../../../ir/__fixtures__/specs/go/nullable-primitive.json" with { type: "json" }
 import { docsDocument } from "../../shared/__fixtures__/docs-blocks.ts"
+import { longNames } from "../../shared/__fixtures__/documents-long.ts"
 import { errors } from "../../shared/__fixtures__/documents-http.ts"
 import * as streams from "../../shared/__fixtures__/documents-streams.ts"
 import { merged } from "../../shared/__fixtures__/merge.ts"
@@ -123,6 +124,8 @@ export const FIXTURES = {
 	http: { document: csharpHttp },
 	/** a decode failure on answers a fallback would fit, never Ok (bit 21 i5) */
 	lenient: { document: lenient },
+	/** every name spelled at lengths 20..110, no formatter after the emitter (bit 21 i7a) */
+	long: { document: longNames },
 	/** the resumable connections (contract 50 §4.1): bit 13's `realtime` document, shared, and the C#-only `clash.feed` */
 	realtime: { document: csharpRealtime },
 	/** a relative first server: a client needs an absolute `BaseUrl` (R7) */

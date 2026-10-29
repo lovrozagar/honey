@@ -8,7 +8,22 @@
 import type { IR } from "../../ir/model.ts"
 import type { SdkOp } from "../../ir/sdk-model.ts"
 import { messageTypeOf } from "./realtime.ts"
-import { docOf, docParagraphs, layout } from "./sdk-decl.ts"
+import {
+	accessor,
+	assign,
+	call,
+	classHeader,
+	type Declaration,
+	exprStmt,
+	finalField,
+	lambda,
+	methodHeader,
+	newOf,
+	param,
+	returnStmt,
+	statement,
+} from "./layout.ts"
+import { docOf, docParagraphs } from "./sdk-decl.ts"
 import type { JavaHeaders } from "./sdk-headers.ts"
 import { putFile } from "./sdk-models.ts"
 import { answerOf, type OpEnv, paragraphsOf } from "./sdk-op.ts"
@@ -35,20 +50,10 @@ function returnsOf(op: SdkOp, env: OpEnv): string {
 
 /**
  * The widest twin's body: `Answer.<helper>(options, o -> _n.<name>(<args>, o))` returned, the normal method run on
- * the options with a raw box, as google-java-format lays a call with a trailing lambda: on one line, its two arguments
- * on one continuation, each on its own, or the lambda's body below its arrow.
+ * the options with a raw box.
  */
-function safeCall(helper: string, name: string, args: readonly string[]): string[] {
-	const call = `_n.${name}(${[...args, "o"].join(", ")})`
-	const open = `    return Answer.${helper}(`
-	const one = `${open}options, o -> ${call});`
-	if (one.length <= 100) return [one]
-	const shared = `        options, o -> ${call});`
-	if (shared.length <= 100) return [open, shared]
-	const own = `        o -> ${call});`
-	if (own.length <= 100) return [open, "        options,", own]
-	return [open, "        options,", "        o ->", ...layout(`_n.${name}(`, [...args, "o"], "));", "            ")]
-}
+const safeCall = (helper: string, name: string, args: readonly string[]): string[] =>
+	statement(4, returnStmt(call("Answer", helper, ["options", lambda(["o"], call("_n", name, [...args, "o"]))])))
 
 /**
  * The twin's lines on the safe mirror (bit 21 i6): each overload of the normal method restated. A connection's twin
@@ -62,27 +67,31 @@ function twinLines(op: SdkOp, name: string, headers: JavaHeaders | null, env: Op
 	const doc = docParagraphs(paragraphsOf(op))
 	const connection = op.stream === "ws" || op.stream === "realtime"
 	const type = connection ? returns : `Result<${returns === "void" ? "Void" : returns}>`
-	const signature = (args: readonly string[]) => layout(`public ${type} ${name}(`, args, ") {", "  ")
-	const method = (args: readonly string[], body: readonly string[]) => [doc, ...signature(args), ...body, "  }", ""]
+	const signature = (args: readonly Declaration[]) =>
+		methodHeader(2, { end: "{", modifiers: ["public"], name, params: args, returns: type })
+	const method = (args: readonly Declaration[], body: readonly string[]) => [
+		doc,
+		...signature(args),
+		...body,
+		"  }",
+		"",
+	]
+	const delegate = (of: string | null, args: readonly string[]) => statement(4, returnStmt(call(of, name, args)))
+	const one = [param(params, "params")]
+	const two = [...one, param("RequestOptions", "options")]
 	if (connection)
-		return [
-			...method([`${params} params`], [`    return _n.${name}(params);`]),
-			...method([`${params} params`, "RequestOptions options"], [`    return _n.${name}(params, options);`]),
-		]
+		return [...method(one, delegate("_n", ["params"])), ...method(two, delegate("_n", ["params", "options"]))]
 	const run = safeCall(
 		returns === "void" ? "safeNone" : "safe",
 		name,
 		headers === null ? ["params"] : ["params", "headersInto"],
 	)
 	return [
-		...method([`${params} params`], [`    return ${name}(params, null${headers === null ? "" : ", null"});`]),
-		...method(
-			[`${params} params`, "RequestOptions options"],
-			headers === null ? run : [`    return ${name}(params, null, options);`],
-		),
+		...method(one, delegate(null, headers === null ? ["params", "null"] : ["params", "null", "null"])),
+		...method(two, headers === null ? run : delegate(null, ["params", "null", "options"])),
 		...(headers === null
 			? []
-			: method([`${params} params`, `${headers.type} headersInto`, "RequestOptions options"], run)),
+			: method([...one, param(headers.type, "headersInto"), param("RequestOptions", "options")], run)),
 	]
 }
 
@@ -104,23 +113,21 @@ function mirrorLines(node: Node, own: string, normal: string, env: SurfaceEnv): 
 				`{@link ${normal}}'s safe mirror: each method answers a {@link Result}, an error status or an answer that does not decode its Err; no answer still throws.`,
 				"",
 			),
-			`public final class ${own} {`,
+			...classHeader(own),
 		],
 		[
-			...(held ? [`  private final ${normal} _n;`] : []),
-			...children.map(({ child, name }) => `  private final ${mirrorName(child.path, env)} ${name};`),
+			...(held ? finalField(normal, "_n") : []),
+			...children.flatMap(({ child, name }) => finalField(mirrorName(child.path, env), name)),
 		],
 		[
-			`  ${own}(${normal} _n) {`,
+			...methodHeader(2, { end: "{", name: own, params: [param(normal, "_n")] }),
 			...(held ? ["    this._n = _n;"] : []),
-			...children.map(({ child, name }) => `    this.${name} = new ${mirrorName(child.path, env)}(_n.${name}());`),
+			...children.flatMap(({ child, name }) =>
+				statement(4, exprStmt(assign(`this.${name}`, newOf(mirrorName(child.path, env), [call("_n", name)])))),
+			),
 			"  }",
 		],
-		...children.map(({ child, name }) => [
-			`  public ${mirrorName(child.path, env)} ${name}() {`,
-			`    return ${name};`,
-			"  }",
-		]),
+		...children.map(({ child, name }) => accessor(mirrorName(child.path, env), name)),
 		...ops.map(({ name, op }) => twinLines(env.ops.get(op.plan.operation) as SdkOp, name, op.headers, env)),
 	]).concat("}")
 }

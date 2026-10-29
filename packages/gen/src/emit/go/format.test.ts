@@ -6,6 +6,8 @@ import { gofmtFormatter } from "../shared/gofmt.ts"
 import { type Compiled, compileGo } from "./__fixtures__/compiled.ts"
 import { GO_FLOOR, gofmtPath, withGo } from "./__fixtures__/go-env.ts"
 import { generateGoSdk } from "./sdk.ts"
+import { longNames } from "../shared/__fixtures__/documents-long.ts"
+import { SPAWN_TIMEOUT } from "../../gen/__fixtures__/spawn-timeout.ts"
 
 /** Whether Go is here: a missing one fails where it is required and skips the Go tests elsewhere (go-env). */
 const GO = withGo()
@@ -127,6 +129,51 @@ describe("the emitted Go SDK through gofmt, build and vet", () => {
 		async () => {
 			const sdk = await formattedSdk()
 			expect({ built: sdk.built, vet: sdk.vet }, sdk.stderr).toEqual({ built: true, vet: [] })
+		},
+		600_000,
+	)
+})
+
+describe("the long-name SDK through the gofmt pass (bit 21 i7a)", () => {
+	// bit 21 i7a: red-first clean
+	it.skipIf(!GO)(
+		"leaves gofmt -l nothing to list over every file, the client's safe mirror and the types too, and builds and vets",
+		async () => {
+			const files = generateGoSdk(longNames()).files
+			const reached: string[] = []
+			const gofmt = gofmtFormatter(gofmtPath())
+			const sdk = compileGo(
+				await formatFiles(files, {
+					go: (name, source, options) => {
+						reached.push(name)
+						return gofmt(name, source, options)
+					},
+				}),
+			)
+			const listed = spawnSync(gofmtPath(), ["-l", sdk.dir], { encoding: "utf8", timeout: SPAWN_TIMEOUT })
+			/* not vacuous: the pass reached every .go file, and the client (safe mirror and all) and the types run past 100 */
+			const long = (name: string) => (files[name] ?? "").split("\n").filter((line) => line.length > 100).length
+			expect({
+				pastWidth: { client: long("client.go") > 0, types: long("types.go") > 0 },
+				reached: reached.sort(),
+				safe: /^type Safe\w+Resource struct \{$/m.test(files["client.go"] ?? ""),
+			}).toEqual({
+				pastWidth: { client: true, types: true },
+				reached: Object.keys(files)
+					.filter((name) => name.endsWith(".go"))
+					.sort(),
+				safe: true,
+			})
+			expect(
+				{
+					built: sdk.built,
+					listed: listed.stdout,
+					rawBuilds: compileGo(files).built,
+					status: listed.status,
+					vet: sdk.vet,
+				},
+				sdk.stderr + listed.stderr,
+			).toEqual({ built: true, listed: "", rawBuilds: true, status: 0, vet: [] })
 		},
 		600_000,
 	)

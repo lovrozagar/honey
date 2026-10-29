@@ -28,10 +28,9 @@ const FLOOR = withPython(PY_FLOOR)
 
 /** The merged fixtures: one client holds both styles, the normal methods and their `safe` mirror (bit 21 i2). */
 const MODES = ["fixtures"] as const
-type Mode = (typeof MODES)[number]
 
 /** `key`'s package, as emitted. */
-function emitted(key: Mode): Readonly<Record<string, string>> {
+function emitted(key: keyof typeof FIXTURES): Readonly<Record<string, string>> {
 	const fixture: PythonFixture = FIXTURES[key]
 	if (!("document" in fixture)) throw new Error(`${key} is not a document fixture`)
 	return generatePythonSdk(fixture.document(), fixture.options).files
@@ -95,6 +94,27 @@ describe("the emitted Python package through the ruff pass", () => {
 			expect(Object.keys(files).length).toBeGreaterThan(0)
 			expect(ruffGates(written("driver", files))).toEqual(CLEAN)
 		},
+	)
+})
+
+describe("the long-name package through the ruff pass (bit 21 i7a)", () => {
+	// bit 21 i7a: red-first clean
+	it.skipIf(!PY)(
+		"leaves ruff format --check and the Fb9 rule list nothing to report in any file, the safe mirror and the types too, and imports",
+		async () => {
+			const files = emitted("long")
+			/* not vacuous: the pass reaches every .py file, and the client (both styles' classes in it) and the types run past 88 */
+			const long = (name: string) => (files[name] ?? "").split("\n").filter((line) => line.length > 88).length
+			const safe = [...(files["src/honey_sdk/client.py"] ?? "").matchAll(/^class (?:Async)?Safe\w+Resource:$/gm)].length
+			expect({
+				pastWidth: ["src/honey_sdk/client.py", "src/honey_sdk/types.py"].filter((name) => long(name) > 0),
+				safe,
+			}).toEqual({ pastWidth: ["src/honey_sdk/client.py", "src/honey_sdk/types.py"], safe: 22 })
+			expect(await ruffGate(files)).toEqual({ ...CLEAN, reached: pythonNames(files), suppressed: [] })
+			const sdk = compiledPython("long")
+			expect(sdk.imported, sdk.stderr).toBe(true)
+		},
+		300_000,
 	)
 })
 

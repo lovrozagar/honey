@@ -9,7 +9,8 @@
  */
 import type { SdkOp } from "../../ir/sdk-model.ts"
 import { type JavaTypeContext, javaTypeOf } from "./models.ts"
-import { assigned, docOf, layout } from "./sdk-decl.ts"
+import { call as callOf, type Declaration, local, methodHeader, param, newOf, returnStmt, statement } from "./layout.ts"
+import { docOf } from "./sdk-decl.ts"
 import { CURSOR, isLastEventIdHeader } from "./sse.ts"
 import { isReconnectTokenQuery, PROTOCOLS, TOKEN } from "./ws.ts"
 
@@ -69,28 +70,32 @@ export function realtimeMethodLines(op: SdkOp, site: RealtimeSite, ctx: JavaType
 	const doc = docOf(
 		`${op.id}: the connection over WebSocket, else SSE, else long-poll. It reconnects after a drop and resumes after the last message it delivered; close() ends it.`,
 	)
-	const signature = (args: readonly string[]) =>
-		layout(`public ResumableConnection<${type}> ${name}(`, args, ") {", "  ")
+	const signature = (args: readonly Declaration[]) =>
+		methodHeader(2, { end: "{", modifiers: ["public"], name, params: args, returns: `ResumableConnection<${type}>` })
+	const transport = callOf(
+		"TransportOptions",
+		"of",
+		REALTIME_FIELDS.map((f) => callOf("params", f.field)),
+	)
+	const open = callOf("Realtime", "open", [
+		"exchange",
+		constant,
+		"call",
+		"options",
+		"transport",
+		newOf(`TypeReference<${type}>`, [], true),
+	])
 	return [
 		doc,
-		...signature([`${params} params`]),
-		`    return ${name}(params, null);`,
+		...signature([param(params, "params")]),
+		...statement(4, returnStmt(callOf(null, name, ["params", "null"]))),
 		"  }",
 		"",
 		doc,
-		...signature([`${params} params`, "RequestOptions options"]),
+		...signature([param(params, "params"), param("RequestOptions", "options")]),
 		...call,
-		...assigned("    ", "TransportOptions transport", {
-			items: REALTIME_FIELDS.map((f) => `params.${f.field}()`),
-			prefix: "TransportOptions.of(",
-			suffix: ");",
-		}),
-		...layout(
-			"return Realtime.open(",
-			["exchange", constant, "call", "options", "transport", `new TypeReference<${type}>() {}`],
-			");",
-			"    ",
-		),
+		...statement(4, local({ init: transport, name: "transport", type: "TransportOptions" })),
+		...statement(4, returnStmt(open)),
 		"  }",
 		"",
 	]

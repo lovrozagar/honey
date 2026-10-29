@@ -12,6 +12,18 @@ import { javaString } from "../shared/escape.ts"
 import { javaIdentifier, javaTypeName, NameScope } from "../shared/lang.ts"
 import { MIRROR, mirrorNotice } from "../shared/mirror.ts"
 import type { JavaTypeContext } from "./models.ts"
+import {
+	accessor,
+	assign,
+	call,
+	classHeader,
+	exprStmt,
+	finalField,
+	methodHeader,
+	newOf,
+	returnStmt,
+	statement,
+} from "./layout.ts"
 import { docOf } from "./sdk-decl.ts"
 import { putFile, sourceOf } from "./sdk-models.ts"
 import { type JavaOp, javaOp, type OpEnv } from "./sdk-op.ts"
@@ -107,33 +119,38 @@ const opBlocks = (ops: readonly { readonly op: JavaOp }[]): string[][] =>
 /** A child node's resource class name, by its path: the name its own file declares. */
 const own = (child: Node, env: SurfaceEnv) => resourceName(child.path, env.ctx)
 
+/** `this.name = new Type(args);` in a constructor. */
+const constructed = (name: string, type: string, args: readonly string[]) =>
+	statement(4, exprStmt(assign(`this.${name}`, newOf(type, args))))
+
 /** A resource class's text: its constants, its exchange and child fields, its constructor, accessors and methods. */
 function resourceLines(node: Node, env: SurfaceEnv): string[] {
 	const { children, ops } = membersOf(node, env)
 	const constants = ops.map(({ op }) => op.constantLines)
 	return blocks([
-		[docOf(`The ${node.path.join(".")} operations.`, ""), `public final class ${resourceName(node.path, env.ctx)} {`],
+		[docOf(`The ${node.path.join(".")} operations.`, ""), ...classHeader(resourceName(node.path, env.ctx))],
 		constants.flat(),
+		["  private final Exchange exchange;", ...children.flatMap(({ child, name }) => finalField(own(child, env), name))],
 		[
-			"  private final Exchange exchange;",
-			...children.map(({ child, name }) => `  private final ${own(child, env)} ${name};`),
-		],
-		[
-			`  ${resourceName(node.path, env.ctx)}(Exchange exchange) {`,
+			...methodHeader(2, {
+				end: "{",
+				name: resourceName(node.path, env.ctx),
+				params: [{ name: "exchange", type: "Exchange" }],
+			}),
 			"    this.exchange = exchange;",
-			...children.map(({ child, name }) => `    this.${name} = new ${own(child, env)}(exchange);`),
+			...children.flatMap(({ child, name }) => constructed(name, own(child, env), ["exchange"])),
 			"  }",
 		],
-		...children.map(({ child, name }) => [`  public ${own(child, env)} ${name}() {`, `    return ${name};`, "  }"]),
+		...children.map(({ child, name }) => accessor(own(child, env), name)),
 		...opBlocks(ops),
 	]).concat("}")
 }
 
 /** One builder setter: its doc, its signature, and the config call it makes. */
-const setter = (name: string, type: string, call: string) => [
+const setter = (name: string, type: string, method: string) => [
 	`    /** Sets the ${name}. */`,
 	`    public Builder ${name}(${type} ${name}) {`,
-	`      config.${call}(${name});`,
+	`      config.${method}(${name});`,
 	"      return this;",
 	"    }",
 ]
@@ -166,18 +183,23 @@ export function clientLines(ir: IR, root: Node, env: SurfaceEnv, mirror: string)
 		javaString(ir.auth.prefix),
 	]
 	return blocks([
-		[docOf("The client for the API. Build one with {@link #builder()}.", ""), `public final class ${env.client} {`],
+		[docOf("The client for the API. Build one with {@link #builder()}.", ""), ...classHeader(env.client)],
 		[
 			"  private final Exchange exchange;",
-			...children.map(({ child, name }) => `  private final ${own(child, env)} ${name};`),
-			`  private final ${mirror} safe;`,
+			...children.flatMap(({ child, name }) => finalField(own(child, env), name)),
+			...finalField(mirror, "safe"),
 		],
 		ops.flatMap(({ op }) => op.constantLines),
 		[
-			`  private ${env.client}(ClientConfig config) {`,
+			...methodHeader(2, {
+				end: "{",
+				modifiers: ["private"],
+				name: env.client,
+				params: [{ name: "config", type: "ClientConfig" }],
+			}),
 			"    this.exchange = new Exchange(config);",
-			...children.map(({ child, name }) => `    this.${name} = new ${own(child, env)}(exchange);`),
-			`    this.safe = new ${mirror}(this);`,
+			...children.flatMap(({ child, name }) => constructed(name, own(child, env), ["exchange"])),
+			...constructed("safe", mirror, ["this"]),
 			"  }",
 		],
 		[
@@ -186,12 +208,10 @@ export function clientLines(ir: IR, root: Node, env: SurfaceEnv, mirror: string)
 			"    return new Builder();",
 			"  }",
 		],
-		...children.map(({ child, name }) => [`  public ${own(child, env)} ${name}() {`, `    return ${name};`, "  }"]),
+		...children.map(({ child, name }) => accessor(own(child, env), name)),
 		[
 			"  /** The safe mirror: the same calls, each answering a {@link Result}; no answer still throws. */",
-			`  public ${mirror} safe() {`,
-			"    return safe;",
-			"  }",
+			...accessor(mirror, "safe"),
 		],
 		...opBlocks(ops),
 		[
@@ -200,13 +220,13 @@ export function clientLines(ir: IR, root: Node, env: SurfaceEnv, mirror: string)
 			"    private final ClientConfig.Builder config;",
 			"",
 			"    private Builder() {",
-			`      this.config = ClientConfig.builder(${defaults.join(", ")});`,
+			...statement(6, exprStmt(assign("this.config", call("ClientConfig", "builder", defaults)))),
 			"    }",
 			"",
 			...SETTERS.flatMap(([name, type]) => [...setter(name, type, name), ""]),
 			`    /** Builds the client. */`,
-			`    public ${env.client} build() {`,
-			`      return new ${env.client}(config.build());`,
+			...methodHeader(4, { end: "{", modifiers: ["public"], name: "build", params: [], returns: env.client }),
+			...statement(6, returnStmt(newOf(env.client, [call("config", "build")]))),
 			"    }",
 			"  }",
 		],

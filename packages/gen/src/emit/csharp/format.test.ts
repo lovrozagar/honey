@@ -7,7 +7,7 @@
  * marker. No emitted text suppresses a diagnostic or marks itself generated, and every file's `using` lines are
  * sorted, each one used: an unused one builds clean, so only the text holds it.
  */
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { describe, expect, it } from "vitest"
 import { compiledCSharp } from "./__fixtures__/compiled.ts"
@@ -26,6 +26,7 @@ const GATED = [
 	"fixtures",
 	"http",
 	"lenient",
+	"long",
 	"realtime",
 	"relative",
 	"sse",
@@ -35,9 +36,10 @@ const GATED = [
 ] as const
 type Gated = (typeof GATED)[number]
 
-/* what each gated SDK's ops need of the runtime beyond plain HTTP (contract 50 §2): only these two have a WebSocket
+/* what each gated SDK's ops need of the runtime beyond plain HTTP (contract 50 §2): only these three have a WebSocket
  * or realtime op; SSE is core */
 const MIXES: Partial<Record<Gated, CSharpRuntimeFeatures>> = {
+	long: { realtime: true, ws: true },
 	realtime: { realtime: true, ws: false },
 	ws: { realtime: false, ws: true },
 }
@@ -99,6 +101,34 @@ describe.skipIf(!DOTNET)("the format gate: dotnet format whitespace leaves nothi
 		})
 		expect(run.status, `${run.stdout}${run.stderr}`).toBe(0)
 	}, 120_000)
+})
+
+describe.skipIf(!DOTNET)("the long-name SDK (bit 21 i7a)", () => {
+	// bit 21 i7a: red-first clean
+	it("builds clean and leaves the format gate nothing to change in any file: the client, its safe mirror, the types, the context", () => {
+		const files = emitted("long")
+		const sdk = compiledCSharp("long")
+		/* not vacuous: the gate writes every file, and the client (its client.Safe mirror in it), the types and the context run past 120 */
+		const long = (name: string) => (files[name] ?? "").split("\n").filter((line) => line.length > 120).length
+		const safe = [...(files["Client.cs"] ?? "").matchAll(/^public sealed class Safe\w+Resource$/gm)].length
+		expect({
+			built: sdk.built,
+			diagnostics: sdk.diagnostics,
+			format: sdk.format(),
+			pastWidth: ["Client.cs", "JsonContext.cs", "Types.cs"].filter((name) => long(name) > 0),
+			safe,
+			written: readdirSync(sdk.src, { encoding: "utf8", recursive: true })
+				.filter((name) => !statSync(join(sdk.src, name)).isDirectory())
+				.sort(),
+		}).toEqual({
+			built: true,
+			diagnostics: [],
+			format: [],
+			pastWidth: ["Client.cs", "JsonContext.cs", "Types.cs"],
+			safe: 11,
+			written: Object.keys(files).sort(),
+		})
+	}, 600_000)
 })
 
 describe("what the gates reach", () => {
