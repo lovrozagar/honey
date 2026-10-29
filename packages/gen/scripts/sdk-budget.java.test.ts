@@ -112,8 +112,21 @@ import { SPAWN_TIMEOUT } from "../src/gen/__fixtures__/spawn-timeout.ts"
  * A change raises it only by the bytes of a named feature, dead code cut first.
  * Bit 19 k1, +313 B of doc only, to 153,464 B: TypedWebSocket.java +125 (the dial runs no onRequest or onResponse
  * hook and no onAuthExpired refresh), RequestOptions.java +188 (the JDK's restricted headers throw ConfigException).
+ * Bit 21 i6, +1,230 B to 154,694 B: the client.safe() mirror, Result as Java's answer, and a 2xx past the cap read as
+ * an answer. Cut first: safe mode's readers (jsonResult, textResult, bytesResult, noneResult and result, 448 B), the
+ * cap's refusal helpers (Decode's within and refused) and `Result.status()`; the new docs tightened.
+ * - SdkException.java +352: the answers' base, between HoneyException and ApiException (-2 B: its extends clause)
+ *   and DecodeException, so the Err holds both by construction;
+ * - Result.java +281: `isOk`, `fold(onOk, onErr)` (no pattern switch at --release 17) and `orElseThrow`, the Err's
+ *   error typed SdkException;
+ * - Answer.java +236: `safe` and `safeNone`, every twin's one path (the normal method on the options with a raw
+ *   box, an SdkException its Err), after the readers' 448 B cut;
+ * - Flight.java +368: the `dial` flag (the old `refreshes`, inverted) keeping a realtime dial's over-cap answer
+ *   ApiConnectionException, `over`, and the 2xx past the cap as its DecodeException after the stale settle;
+ * - RequestOptions.java +132: `boxed(RawResponse)`, the caller's overrides with the twin's raw box;
+ * - Decode.java -131: the body null past the cap, `exceeds` its one text; Exchange.java -6: `dial = true`.
  */
-const JAVA_RUNTIME_BYTES = 153464
+const JAVA_RUNTIME_BYTES = 154694
 
 describe("the Java runtime within its byte budget (bit 16, the G14 analog)", () => {
 	it(
@@ -141,16 +154,21 @@ const appSpec = (app: string) =>
 	) as Record<string, unknown>
 
 /*
- * G13 (bit 16, phase f): Java's own per-operation ceiling, as C#'s bit 15 set its 68 (129 since bit 21 i5). Measured over the five e2e apps'
- * 72 operations in both throwOnError modes (144 surfaces, `v1JavaSdkSurfaces` over the emitted files; the ids the
- * IR derives, item 0): max 60 (surface, putInAllByResourceId, safe mode: C#'s max too), median 30, min 21. A Java
+ * G13 (bit 16, phase f): Java's own per-operation ceiling, as C#'s bit 15 set its 68 (129 since bit 21 i5). A Java
  * surface is the widest overload's signature and its <Op>Params record's header, both joined from google-java-format's
- * wrap, since Java's arguments live in that record. 60 + 20% headroom = 72. An operation over it is fixed in the
- * schema, never by raising the ceiling.
+ * wrap, since Java's arguments live in that record. Phase f measured the five e2e apps in both throwOnError modes: max
+ * 60 (surface, putInAllByResourceId, safe mode), so 60 + 20% = 72.
+ * Bit 21 i6 (R-i5): each surface is both styles, the widest normal overload, its client.safe() twin's, then the header
+ * (`v1JavaSdkSurfaces`). Measured over the five apps' 71 operations: max 94 (surface/getInParamsMembersByOrgIdAndMemberId),
+ * median 49, sum 3,603; at 5b71611 the 142 one-mode surfaces summed 4,455 (max 60, median 31), so the sum falls 19%.
+ * The twin-form comparison: Java has no higher-kinded type, so one style-generic resource (`UsersResource<R>`
+ * answering `R<T>`) is javac's "unexpected type"; a twin on the widest overload alone measures the same 94 but drops
+ * the normal call's shorter overloads; the twin on every overload (built) keeps each. 94 + 20% = 113. An operation
+ * over it is fixed in the schema, never by raising the ceiling.
  */
-const JAVA_SDK_CEILING = ceilingOf([60], 0.2)
+const JAVA_SDK_CEILING = ceilingOf([94], 0.2)
 
-/** One operation's emitted files: a resource whose signature GJF wrapped, and its Params record. */
+/** One operation's emitted files: a resource whose signature GJF wrapped, its safe mirror's twin, and its Params record. */
 const WRAPPED = {
 	"src/main/java/a/ItemsResource.java": `public final class ItemsResource {
   public Map<String, JsonNode> getVeryLongName(
@@ -163,6 +181,21 @@ const WRAPPED = {
   }
 }
 `,
+	"src/main/java/a/SafeItemsResource.java": `/**
+ * {@link ItemsResource}'s safe mirror: each method answers a {@link Result}, an error status or an
+ * answer that does not decode its Err; no answer still throws.
+ */
+public final class SafeItemsResource {
+  public Result<Map<String, JsonNode>> getVeryLongName(
+      ItemsGetVeryLongNameParams params, RequestOptions options) {
+    return Answer.safe(options, o -> _n.getVeryLongName(params, o));
+  }
+
+  public Result<Map<String, JsonNode>> getVeryLongName(ItemsGetVeryLongNameParams params) {
+    return getVeryLongName(params, null);
+  }
+}
+`,
 	"src/main/java/a/ItemsGetVeryLongNameParams.java": `public record ItemsGetVeryLongNameParams(
     @JsonProperty("id") String id, @JsonInclude(JsonInclude.Include.NON_NULL) Long limit) {
 }
@@ -171,38 +204,47 @@ const WRAPPED = {
 const PLAN = { "items.getVeryLongName": { method: "getVeryLongName", params: "ItemsGetVeryLongNameParams" } }
 
 describe("the v1 Java SDK within the budget (bit 16, G13)", () => {
-	/* new: phase f item 1 */
-	it("reads an operation's widest overload joined from GJF's wrap, and its Params header without annotations", () => {
+	/* new: phase f item 1; bit 21 i6: both styles, the normal overload then its twin's on client.safe() */
+	it("reads an operation's widest overload and its twin's, joined from GJF's wrap, and its Params header without annotations", () => {
 		expect(Object.fromEntries(v1JavaSdkSurfaces(WRAPPED, PLAN))).toEqual({
 			"items.getVeryLongName":
-				"public Map<String, JsonNode> getVeryLongName(ItemsGetVeryLongNameParams params, RequestOptions options) { public record ItemsGetVeryLongNameParams(String id, Long limit) {",
+				"public Map<String, JsonNode> getVeryLongName(ItemsGetVeryLongNameParams params, RequestOptions options) {\npublic Result<Map<String, JsonNode>> getVeryLongName(ItemsGetVeryLongNameParams params, RequestOptions options) { public record ItemsGetVeryLongNameParams(String id, Long limit) {",
 		})
+	})
+
+	/* bit 21 i6 (C#'s i5 leg): a mirror that drops a twin never measures short */
+	it("refuses an operation its client.safe() mirror drops", () => {
+		const { "src/main/java/a/SafeItemsResource.java": _, ...dropped } = WRAPPED
+		expect(() => v1JavaSdkSurfaces(dropped, PLAN)).toThrow("items.getVeryLongName: no client.safe() twin to measure")
 	})
 
 	/* new: phase f item 1 (C#'s completeness: a surface the reader misses can never pass by going unmeasured) */
 	it("refuses an operation whose Params record it cannot find", () => {
-		const missing = { "src/main/java/a/ItemsResource.java": WRAPPED["src/main/java/a/ItemsResource.java"] }
+		const missing = {
+			"src/main/java/a/ItemsResource.java": WRAPPED["src/main/java/a/ItemsResource.java"],
+			"src/main/java/a/SafeItemsResource.java": WRAPPED["src/main/java/a/SafeItemsResource.java"],
+		}
 		expect(() => v1JavaSdkSurfaces(missing, PLAN)).toThrow(
 			"items.getVeryLongName: no getVeryLongName or ItemsGetVeryLongNameParams to measure",
 		)
 	})
 
-	/* new: phase f item 1 */
-	it(`keeps every e2e app's Java operations within ${JAVA_SDK_CEILING} tokens, in both throwOnError modes`, () => {
+	/* new: phase f item 1; bit 21 i6: each surface its two styles' */
+	it(`keeps every e2e app's Java operations within ${JAVA_SDK_CEILING} tokens, each its two styles' signatures`, () => {
 		const over: string[] = []
+		let surfaces = 0
 		for (const app of APPS) {
 			const spec = appSpec(app)
-			for (const throwOnError of [true, false]) {
-				const plans = javaCallPlans(spec, { throwOnError })
-				const surfaces = v1JavaSdkSurfaces(generateJavaSdk(spec, { throwOnError }).files, plans)
-				if (surfaces.size !== Object.keys(plans).length)
-					over.push(`${app}: ${surfaces.size} of ${Object.keys(plans).length} measured`)
-				for (const [key, text] of surfaces) {
-					const tokens = countTokens(text)
-					if (tokens > JAVA_SDK_CEILING) over.push(`${app}/${key}${throwOnError ? "" : " (safe)"}: ${tokens}`)
-				}
+			const plans = javaCallPlans(spec)
+			const measured = v1JavaSdkSurfaces(generateJavaSdk(spec).files, plans)
+			if (measured.size !== Object.keys(plans).length)
+				over.push(`${app}: ${measured.size} of ${Object.keys(plans).length} measured`)
+			surfaces += measured.size
+			for (const [key, text] of measured) {
+				const tokens = countTokens(text)
+				if (tokens > JAVA_SDK_CEILING) over.push(`${app}/${key}: ${tokens}`)
 			}
 		}
-		expect(over).toEqual([])
+		expect({ ceiling: JAVA_SDK_CEILING, over, surfaces }).toEqual({ ceiling: JAVA_SDK_CEILING, over: [], surfaces: 71 })
 	})
 })

@@ -9,7 +9,7 @@ import java.util.Map;
  * Java serialization keeps status, message, detail, body and key; headers() and envelope() return
  * null. The SDK never serializes exceptions; -Xlint:serial only forces the declaration.
  */
-public abstract class ApiException extends HoneyException {
+public abstract class ApiException extends SdkException {
   private static final long serialVersionUID = 1L;
 
   private final int status;

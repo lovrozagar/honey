@@ -8,6 +8,7 @@ import { readdirSync, readFileSync } from "node:fs"
 import type { IR, IRSchema } from "../../ir/model.ts"
 import { irResolver } from "../../ir/schema.ts"
 import { compareCodeUnits, javaTypeName, NameScope } from "../shared/lang.ts"
+import type { Rename } from "../shared/mirror.ts"
 
 /** The type a value without a schema is, and the one a nullable open value is. */
 export const JSON_NODE = "JsonNode"
@@ -21,6 +22,8 @@ export type JavaTypeNames = {
 	/** the schema of the component `name` when Java declares nothing for it, so a ref to it is its use type */
 	alias(name: string): IRSchema | undefined
 	resolve(schema: IRSchema): IRSchema
+	/** each component emitted under another name than its own (`<Name>Model`), for the generation's notices */
+	readonly renamed: readonly Rename[]
 }
 
 /* the type names the emitted models and the client spell, which no runtime file holds: each is reserved */
@@ -89,11 +92,20 @@ export function javaNames(
 ): JavaTypeNames {
 	const scope = new NameScope([...runtimeSpelled(), ...SPELLED, ...taken])
 	const components = new Map<string, string>()
+	const renamed: Rename[] = []
 	for (const name of Object.keys(schemas)
 		.sort(compareCodeUnits)
 		.filter((n) => declares(schemas[n] as IRSchema))) {
 		const base = javaTypeName(name)
-		components.set(name, scope.claim(scope.has(base) ? `${base}Model` : base))
+		const taken = scope.has(base)
+		components.set(name, scope.claim(taken ? `${base}Model` : base))
+		if (taken)
+			renamed.push({
+				because: `"${base}" is a name the SDK's runtime, the JDK or another declaration holds`,
+				name,
+				renamed: components.get(name) as string,
+				what: "component",
+			})
 	}
 	const hoisted = new Map<string, string>()
 	return {
@@ -108,6 +120,7 @@ export function javaNames(
 		},
 		/* a ref reaches here only for a declared component: `alias` answers for every other one */
 		ref: (name) => components.get(name) as string,
+		renamed,
 		resolve: irResolver(schemas),
 	}
 }

@@ -144,7 +144,7 @@ const plain = (entry: Partial<JavaError>) => ({
 	via: "return",
 	...entry,
 })
-const statusChain = (type: string) => [type, "ApiException", "HoneyException"]
+const statusChain = (type: string) => [type, "ApiException", "SdkException", "HoneyException"]
 /** An error status with no key whose detail is `message`, as the trace records it. */
 const unkeyed = (status: number, type: string, message = "m") =>
 	plain({
@@ -270,7 +270,7 @@ describe.skipIf(!JAVA)(
 				path: 'path param id: ".." is not a path segment',
 				shapes: [
 					[statusChain("NotFoundException"), 404, null],
-					[["DecodeException", "HoneyException"], undefined, "UnexpectedEndOfInputException"],
+					[["DecodeException", "SdkException", "HoneyException"], undefined, "UnexpectedEndOfInputException"],
 					[["PathParamException", "HoneyException"], undefined, null],
 					[["ApiConnectionException", "HoneyException"], undefined, "ConnectException"],
 				],

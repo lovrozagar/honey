@@ -15,8 +15,8 @@ import java.util.zip.InflaterInputStream;
 /**
  * An answer's body as the SDK reads it: gzip or deflate decoded, and bounded by {@code
  * maxResponseBytes} on the decoded size. The decoded size is counted in 64 KiB reads before any
- * byte is held, so an answer over the cap is refused at the cap, never at the heap; the bytes are
- * then decoded into an array of exactly that size.
+ * byte is held, so an answer over the cap is left unread at the cap, never at the heap; the bytes
+ * are then decoded into an array of exactly that size.
  */
 final class Decode {
   private static final int CHUNK = 64 * 1024;
@@ -26,19 +26,21 @@ final class Decode {
 
   private Decode() {}
 
-  /**
-   * The response's decoded body, refused as an ApiConnectionException once its decoded size passes
-   * {@code cap}; 0 is none.
-   */
+  /** The response's decoded body, or null once its decoded size passes {@code cap}; 0 is none. */
   static byte[] body(HttpResponse<byte[]> response, long cap, Deadline deadline) {
     byte[] raw = response.body();
     String encoding = encoding(response);
     long limit = cap > 0 ? cap : MAX_ARRAY;
     if (!encoding.equals("gzip") && !encoding.equals("deflate")) {
-      return within(raw, limit);
+      return raw.length > limit ? null : raw;
     }
     long size = count(raw, encoding, limit, deadline);
-    return decoded(raw, encoding, size, deadline);
+    return size > limit ? null : decoded(raw, encoding, size, deadline);
+  }
+
+  /** What an answer past {@code cap} is: its text, the cap in bytes. */
+  static String exceeds(long cap) {
+    return "the answer exceeds " + (cap > 0 ? cap : MAX_ARRAY) + " bytes";
   }
 
   /** The response's content encoding, lower case; empty for none. */
@@ -92,16 +94,7 @@ final class Decode {
     return inflater(in, zlibWrapped(head));
   }
 
-  private static byte[] within(byte[] raw, long limit) {
-    if (raw.length > limit) {
-      throw refused(limit);
-    }
-    return raw;
-  }
-
-  /**
-   * The decoded size, counted in 64 KiB reads, which is refused the moment it passes {@code limit}.
-   */
+  /** The decoded size, counted in 64 KiB reads, which stops the moment it passes {@code limit}. */
   private static long count(byte[] raw, String encoding, long limit, Deadline deadline) {
     byte[] buffer = new byte[CHUNK];
     long total = 0;
@@ -110,7 +103,7 @@ final class Decode {
         lapse(deadline);
         total += n;
         if (total > limit) {
-          throw refused(limit);
+          return total;
         }
       }
     } catch (IOException e) {
@@ -180,10 +173,6 @@ final class Decode {
     if (deadline != null) {
       deadline.check();
     }
-  }
-
-  private static ApiConnectionException refused(long limit) {
-    return new ApiConnectionException("the answer exceeds " + limit + " bytes", null);
   }
 
   private static ApiConnectionException malformed(String encoding, IOException e) {

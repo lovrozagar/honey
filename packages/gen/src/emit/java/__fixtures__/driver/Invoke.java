@@ -9,9 +9,10 @@ import java.util.TimerTask;
 import tools.jackson.databind.JsonNode;
 
 /**
- * One call sent by its plan: the accessors walked from the client, the params built, the options
- * given, the method run, and its cancel armed. A cancel is the thread's interrupt, as the SDK reads
- * it (Flight): before the call, or after the script's delay, on the thread that makes the call.
+ * One call sent by its plan: the accessors walked from the client (from its {@code safe()} mirror in
+ * the safe style, bit 21 i6), the params built, the options given, the method run, and its cancel
+ * armed. A cancel is the thread's interrupt, as the SDK reads it (Flight): before the call, or after
+ * the script's delay, on the thread that makes the call.
  */
 final class Invoke {
   private Invoke() {}
@@ -26,7 +27,8 @@ final class Invoke {
   static Observe.Outcome call(Run run, JsonNode call, JsonNode entry) {
     String op = Wire.text(call, "operation");
     JsonNode plan = Wire.member(Wire.member(run.envelope(), "plans"), op);
-    Object target = run.client();
+    boolean safe = Wire.flag(run.envelope(), "safe");
+    Object target = safe ? Reflect.call(run.client(), "safe") : run.client();
     for (JsonNode accessor : Wire.items(Wire.member(plan, "accessors"))) {
       target = Reflect.call(target, accessor.asString());
     }
@@ -40,7 +42,13 @@ final class Invoke {
     Object[] args = holder == null ? new Object[] {params, options} : new Object[] {params, holder, options};
     JsonNode cancel = Wire.member(entry, "cancel");
     Observe.Ask ask =
-        new Observe.Ask(Wire.flag(call, "raw"), run.scripted(), Wire.flag(entry, "envelope"), holder);
+        new Observe.Ask(
+            Wire.flag(call, "raw"),
+            run.scripted(),
+            Wire.flag(entry, "envelope"),
+            holder,
+            /* a safe call answers a Result, a connection's twin excepted: it is the very method */
+            safe && !Set.of("ws", "realtime").contains(Wire.text(plan, "stream") + ""));
     if (Wire.member(plan, "stream") != null) {
       return Streams.observe(new Streams.At(run, plan, call, entry, ask, raw), method, target, args, cancel);
     }

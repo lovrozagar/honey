@@ -49,6 +49,24 @@ export function findGofmt(env: NodeJS.ProcessEnv = process.env): string | undefi
 	return onPath("gofmt", env) ?? (beside !== undefined && existsSync(beside) ? beside : undefined)
 }
 
+/** One SDK target's generation: its files and what it reports (a name it renamed). */
+function sdkOf(target: Exclude<Target, "cli" | "mcp">, document: Record<string, unknown>, options: Options) {
+	switch (target) {
+		case "ts":
+			return generateSdk(document, { name: "SDK", ...options } as Parameters<typeof generateSdk>[1])
+		case "go":
+			return generateGoSdk(document, options)
+		case "rust":
+			return generateRustSdk(document, options)
+		case "python":
+			return generatePythonSdk(document, options)
+		case "csharp":
+			return generateCSharpSdk(document, options)
+		case "java":
+			return generateJavaSdk(document, options)
+	}
+}
+
 /** One target's files for `document`, by their path under the target's directory; what it leaves out to `report`. */
 function filesOf(
 	target: Target,
@@ -56,42 +74,15 @@ function filesOf(
 	options: Options,
 	report: (line: string) => void,
 ): Readonly<Record<string, string>> {
-	switch (target) {
-		case "ts": {
-			const sdk = generateSdk(document, { name: "SDK", ...options } as Parameters<typeof generateSdk>[1])
-			for (const notice of sdk.notices) report(`honey-codegen: ${notice}\n`)
-			return sdk.files
-		}
-		case "go": {
-			const sdk = generateGoSdk(document, options)
-			for (const notice of sdk.notices) report(`honey-codegen: ${notice}\n`)
-			return sdk.files
-		}
-		case "rust": {
-			const sdk = generateRustSdk(document, options)
-			for (const notice of sdk.notices) report(`honey-codegen: ${notice}\n`)
-			return sdk.files
-		}
-		case "python": {
-			const sdk = generatePythonSdk(document, options)
-			for (const notice of sdk.notices) report(`honey-codegen: ${notice}\n`)
-			return sdk.files
-		}
-		case "csharp": {
-			const sdk = generateCSharpSdk(document, options)
-			for (const notice of sdk.notices) report(`honey-codegen: ${notice}\n`)
-			return sdk.files
-		}
-		case "java":
-			return generateJavaSdk(document, options).files
-		case "cli":
-			return generateGoCli(document, options).files
-		case "mcp": {
-			const server = generateMcpServer(document, options)
-			for (const op of server.skipped) report(`honey-codegen: mcp: no tool serves ${op} yet: skipped\n`)
-			return server.files
-		}
+	if (target === "cli") return generateGoCli(document, options).files
+	if (target === "mcp") {
+		const server = generateMcpServer(document, options)
+		for (const op of server.skipped) report(`honey-codegen: mcp: no tool serves ${op} yet: skipped\n`)
+		return server.files
 	}
+	const sdk = sdkOf(target, document, options)
+	for (const notice of sdk.notices) report(`honey-codegen: ${notice}\n`)
+	return sdk.files
 }
 
 /** oxfmt's `format`, the optional peer, when installed; else undefined (TS then goes out as emitted). */

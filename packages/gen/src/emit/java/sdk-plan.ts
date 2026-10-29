@@ -38,8 +38,6 @@ export type JavaCallPlan = {
 	readonly response: SdkResponseKind
 	/** the `<Op>Headers` holder the method takes as `headersInto`, each declared header to its accessor; null without one */
 	readonly responseHeaders: { readonly type: string; readonly fields: Readonly<Record<string, string>> } | null
-	/** false: the method answers `Result<T>` (`throwOnError: false`) */
-	readonly throws: boolean
 	/** the method has a `RequestOptions` overload; every method does */
 	readonly options: true
 	readonly stream: SdkStream

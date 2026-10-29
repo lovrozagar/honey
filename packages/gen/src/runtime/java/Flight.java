@@ -59,8 +59,11 @@ final class Flight {
   /** Whether this call opens a stream: its final 2xx body is left live. */
   private boolean stream;
 
-  /** Whether a 401 refreshes the token and retries. */
-  boolean refreshes = true;
+  /** A realtime dial: a 401 does not refresh, an answer past the cap is no answer. */
+  boolean dial;
+
+  /** Whether the last hop's body passed the cap. */
+  private boolean over;
 
   Flight(Exchange exchange, Operation op, Call call, RequestOptions options) {
     this.exchange = exchange;
@@ -125,7 +128,7 @@ final class Flight {
     String token = credential.token();
     Hop hop = attempt(url, token, false);
     boolean replayable = call.body() == null || call.body().replayable();
-    if (hop.status() == 401 && refreshes && config.onAuthExpired() != null && replayable) {
+    if (hop.status() == 401 && !dial && config.onAuthExpired() != null && replayable) {
       String fresh = credential.refresh(token, config.onAuthExpired());
       if (fresh != null) {
         hop = attempt(url, fresh, true);
@@ -156,7 +159,11 @@ final class Flight {
     }
     Sent<byte[]> sent = follow(leg(context), url, hops::send, response -> {});
     byte[] body = Decode.body(sent.response(), config.maxResponseBytes(), deadline);
-    return answered(sent, body, retry, null);
+    over = body == null;
+    if (over && dial) {
+      throw new ApiConnectionException(Decode.exceeds(config.maxResponseBytes()), null);
+    }
+    return answered(sent, over ? new byte[0] : body, retry, null);
   }
 
   /**
@@ -279,6 +286,9 @@ final class Flight {
     }
     if (hop.status() >= 200 && hop.status() < 300) {
       exchange.stale().settle(meta, op.invalidates(), pathValues());
+      if (over) {
+        throw new DecodeException(Decode.exceeds(config.maxResponseBytes()), null);
+      }
     }
     return new Answer(route, raw, error, hop.body());
   }

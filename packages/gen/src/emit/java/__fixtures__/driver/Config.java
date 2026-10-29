@@ -47,6 +47,10 @@ final class Config {
     if (timeout != null) {
       Reflect.call(builder, "timeout", Duration.ofMillis(timeout.asLong()));
     }
+    JsonNode cap = Wire.member(setup, "maxResponseBytes");
+    if (cap != null) {
+      Reflect.call(builder, "maxResponseBytes", cap.asLong());
+    }
     JsonNode redirect = Wire.member(setup, "redirect");
     if (redirect != null) {
       Reflect.call(builder, "redirect", redirectPolicy(sdk, Wire.text(setup, "redirect")));

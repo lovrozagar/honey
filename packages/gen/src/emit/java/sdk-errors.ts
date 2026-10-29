@@ -51,9 +51,9 @@ const OTHER: readonly { name: string; base: string; cause: boolean; doc: string 
 		name: "ConfigException",
 	},
 	{
-		base: "HoneyException",
+		base: "SdkException",
 		cause: true,
-		doc: "An answer that does not decode as the declared type.",
+		doc: "An answer that does not decode as the declared type, or a 2xx past maxResponseBytes.",
 		name: "DecodeException",
 	},
 	{

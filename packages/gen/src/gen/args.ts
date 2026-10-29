@@ -5,35 +5,23 @@
  * untouched (each generator validates its own). Strict: an unknown flag, a missing value, a stray argument, an unknown
  * target or an option for a target not asked for is a usage error.
  */
-/** A target's option: a string, or a boolean given as `--x`, `--x=true` or `--x=false`. */
-type OptionKind = "string" | "boolean"
-
-/** Each target, its generate function's options by name and kind. */
+/**
+ * Each target, its generate function's options by name, each a string value. Since bit 21 i6 no target has a boolean
+ * option: the SDKs' `throwOnError`, the last ones, are gone (a client always throws; its safe mirror answers a Result).
+ */
 const TARGETS = {
-	cli: { binaryName: "string", envPrefix: "string", modulePath: "string", repo: "string" },
-	csharp: {
-		clientName: "string",
-		packageId: "string",
-		rootNamespace: "string",
-		version: "string",
-	},
-	go: { modulePath: "string" },
-	java: {
-		artifactId: "string",
-		clientName: "string",
-		groupId: "string",
-		packageName: "string",
-		throwOnError: "boolean",
-		version: "string",
-	},
-	mcp: { envPrefix: "string", name: "string" },
-	python: { packageName: "string", version: "string" },
-	rust: { crateName: "string", version: "string" },
-	ts: { name: "string", stem: "string" },
-} as const satisfies Record<string, Record<string, OptionKind>>
+	cli: ["binaryName", "envPrefix", "modulePath", "repo"],
+	csharp: ["clientName", "packageId", "rootNamespace", "version"],
+	go: ["modulePath"],
+	java: ["artifactId", "clientName", "groupId", "packageName", "version"],
+	mcp: ["envPrefix", "name"],
+	python: ["packageName", "version"],
+	rust: ["crateName", "version"],
+	ts: ["name", "stem"],
+} as const satisfies Record<string, readonly string[]>
 
 export type Target = keyof typeof TARGETS
-export type Options = Record<string, string | boolean>
+export type Options = Record<string, string>
 
 /** What one `generate` run asks for: a spec file or an app module (one, never both). */
 export type Generate = {
@@ -59,14 +47,9 @@ export function usage(): string {
   --watch           generate again on each change of the spec or the app module
   -h, --help        this text
 
-A target's options are its generator's, as --<target>-<option> (a boolean as --x, --x=true or --x=false):
+A target's options are its generator's, as --<target>-<option> <value>:
 ${Object.entries(TARGETS)
-	.map(
-		([target, options]) =>
-			`  ${target}: ${Object.keys(options)
-				.map((key) => `--${target}-${kebab(key)}`)
-				.join(" ")}`,
-	)
+	.map(([target, options]) => `  ${target}: ${options.map((key) => `--${target}-${kebab(key)}`).join(" ")}`)
 	.join("\n")}
 
 Each <out>/<target> keeps .honey-generated.json, every file it wrote with its sha256. A regeneration deletes a
@@ -82,11 +65,10 @@ function kebab(key: string): string {
 	return key.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)
 }
 
-/** The `--<target>-<option>` flag `flag` names: its target, its option's name and kind; none for another flag. */
-function optionFlag(flag: string): { key: string; kind: OptionKind; target: Target } | undefined {
+/** The `--<target>-<option>` flag `flag` names: its target and its option's name; none for another flag. */
+function optionFlag(flag: string): { key: string; target: Target } | undefined {
 	for (const [target, options] of Object.entries(TARGETS))
-		for (const [key, kind] of Object.entries(options))
-			if (flag === `${target}-${kebab(key)}`) return { key, kind: kind as OptionKind, target: target as Target }
+		for (const key of options) if (flag === `${target}-${kebab(key)}`) return { key, target: target as Target }
 	return undefined
 }
 
@@ -124,8 +106,7 @@ function takeFlag(
 	} else {
 		const option = optionFlag(flag)
 		if (option === undefined) throw new UsageError(`unknown option --${flag}`)
-		into.options[option.target][option.key] =
-			option.kind === "boolean" ? booleanOf(flag, inline) : valueOf(flag, inline, rest)
+		into.options[option.target][option.key] = valueOf(flag, inline, rest)
 	}
 }
 

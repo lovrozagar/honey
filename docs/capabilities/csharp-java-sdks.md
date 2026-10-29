@@ -3,7 +3,8 @@
 `honey-codegen generate --target csharp` writes a .NET
 SDK (a project with its own `HttpClient` pipeline, `IAsyncDisposable` streams and a `client.Safe` mirror answering a
 `Result<T>`), and
-`--target java` writes a Java 17+ library (Jackson 3, builders, `try`-with-resources streams, a Gradle publication).
+`--target java` writes a Java 17+ library (Jackson 3, builders, `try`-with-resources streams, a `client.safe()`
+mirror answering a sealed `Result<T>`, a Gradle publication).
 Both pass the same conformance grid as the TypeScript, Go, Rust and Python SDKs. The SDK recipes page shows each in
 a compiled example.
 

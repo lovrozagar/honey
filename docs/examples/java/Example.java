@@ -1,10 +1,14 @@
-// A Java program against an SDK generated from the Kitchen example API: a client, a call and its typed error, and
-// an event stream released by try-with-resources. Compiled against the generated SDK in the docs' tests.
+// A Java program against an SDK generated from the Kitchen example API: a client, a call and its typed error, the
+// client.safe() twin's Result, and an event stream released by try-with-resources. Compiled against the generated SDK
+// in the docs' tests.
 import com.example.kitchen.ApiException;
 import com.example.kitchen.EventStream;
 import com.example.kitchen.GetApiEventsParams;
 import com.example.kitchen.GetApiHealthParams;
+import com.example.kitchen.GetApiParams;
 import com.example.kitchen.KitchenClient;
+import com.example.kitchen.ListApiResponse200;
+import com.example.kitchen.Result;
 import com.example.kitchen.SseEvent;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -30,6 +34,18 @@ public final class Example {
     }
   }
 
+  static String listing(KitchenClient client) {
+    // no answer (never sent, refused, timed out, canceled) still throws
+    Result<ListApiResponse200> result = client.safe().getApi(GetApiParams.builder().build());
+    int status = result.response().status();
+    return result.fold(
+        found -> "answered " + status + ": " + found,
+        error ->
+            error instanceof ApiException failed
+                ? "answered " + status + ": " + failed.key()
+                : "answered " + status + ", unreadable: " + error.getMessage());
+  }
+
   static List<String> firstEvents(KitchenClient client, int limit) {
     List<String> seen = new ArrayList<>();
     // try-with-resources frees the connection, a break out of the loop included
@@ -50,6 +66,7 @@ public final class Example {
     }
     KitchenClient client = newClient();
     System.out.println(checkHealth(client));
+    System.out.println(listing(client));
     System.out.println(firstEvents(client, 2));
   }
 }

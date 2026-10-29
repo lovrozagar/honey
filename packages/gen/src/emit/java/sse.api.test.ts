@@ -2,7 +2,7 @@
  * An SSE operation through the Java SDK's public API (bit 16 phase d1; C#'s `sse.test.ts` consumer legs): consumer programs
  * on the `sse` client open, read and close `EventStream<T>` (J1), javac holds its types, a refused open's error body is
  * read at most 64 KiB (J4), `raw` fills at the open (J6), a stream is read once, and its cursor is the last delivered id.
- * The emitted text: a stream method ignores throwOnError, and its javadoc and EventStream's say that a for-each `break`
+ * The emitted text: a stream method's safe twin answers a `Result` of its stream (bit 21 i6), and its javadoc and EventStream's say that a for-each `break`
  * needs try-with-resources (F1, condition a). The driven legs: `sse.test.ts`.
  */
 import { describe, expect, it } from "vitest"
@@ -145,31 +145,36 @@ describe.skipIf(!JAVA)("a refused SSE open's error body", SLOW, () => {
 	})
 })
 
-/** The `sse` SDK's files in throw mode or safe mode. */
-const files = (throwOnError: boolean) => generateJavaSdk(FIXTURES.sse.document(), { throwOnError }).files
+/** The `sse` SDK's files. */
+const files = () => generateJavaSdk(FIXTURES.sse.document()).files
 const TICKS_RESOURCE = "src/main/java/ai/anyrow/TicksResource.java"
-/** Each stream method's lines in the files: every line from its signature to its closing brace. */
-const streamMethods = (all: Readonly<Record<string, string>>) =>
+/** Each method's lines answering `type` in the files: every line from its signature to its closing brace. */
+const methodsOf = (all: Readonly<Record<string, string>>, type: string) =>
 	Object.values(all).flatMap((source) =>
-		[...source.matchAll(/^ {2}public EventStream<[\s\S]*?^ {2}\}$/gm)].map((match) => match[0]),
+		[...source.matchAll(new RegExp(`^ {2}public ${type}<[\\s\\S]*?^ {2}\\}$`, "gm"))].map((match) => match[0]),
 	)
 /** F1's doc obligation: the sentence every stream method's javadoc and EventStream's carry. */
 const RELEASE = "Open it in try-with-resources: a for-each break without one keeps the connection."
 
-describe("generateJavaSdk: an SSE method in safe mode, and its javadoc", () => {
-	/* new: C# sse.test.ts:278 */
-	it("emits each stream method as throw mode does: a stream ignores throwOnError and answers no Result", () => {
-		const [thrown, safe] = [streamMethods(files(true)), streamMethods(files(false))]
+describe("generateJavaSdk: an SSE method's safe twin, and its javadoc", () => {
+	/* bit 21 i6: each stream method has its twin on client.safe(), a Result of the very stream it opens */
+	it("emits each stream method once, and its twin answering a Result of its EventStream through the very method", () => {
+		const all = files()
+		const streams = methodsOf(all, "EventStream")
+		const twins = methodsOf(all, "Result<EventStream")
+		/* the signature joined from GJF's wrap, which a longer twin's may take differently */
+		const head = (method: string) =>
+			(method.slice(0, method.indexOf("{")) as string).replace(/\s+/g, " ").replace(/\( /g, "(").trim()
 		expect({
-			count: safe.length,
-			result: safe.filter((method) => method.includes("Result<")),
-			safe,
-		}).toEqual({ count: 9, result: [], safe: thrown })
+			count: [streams.length, twins.length],
+			through: twins.filter((twin) => /return Answer\.safe\(\s*options,|return \w+\(params, null/.test(twin)).length,
+			twins: twins.map(head).map((line) => line.replace(/^public Result<(EventStream<.*?>)> /, "public $1 ")),
+		}).toEqual({ count: [9, 9], through: 9, twins: streams.map(head) })
 	})
 
 	/* pin: reviewer condition (a) on F1: the emitted method and EventStream say how a stream lets go */
 	it("says in each stream method's javadoc and in EventStream's that a for-each break needs try-with-resources", () => {
-		const all = files(true)
+		const all = files()
 		const docs = (all[TICKS_RESOURCE] ?? "").split("\n").filter((line) => line.includes("try-with-resources"))
 		expect({
 			eventStream: (all["src/main/java/ai/anyrow/EventStream.java"] ?? "").replace(/\s*\n\s*\*\s*/g, " "),

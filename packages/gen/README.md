@@ -46,8 +46,7 @@ honey-codegen generate --spec openapi.json --target ts --target cli --out genera
 - `--target <name>`: `ts`, `go`, `rust`, `python`, `csharp`, `java`, `cli` or `mcp`; repeat it for more than one. Each
   target's files go under `<out>/<target>`.
 - `--<target>-<option>`: a target's options are its generator's, passed through as given (`--go-module-path`,
-  `--rust-crate-name`, `--cli-binary-name`, a boolean as `--go-throw-on-error=false`). `honey-codegen --help` lists
-  them all.
+  `--rust-crate-name`, `--cli-binary-name`). Each takes a value. `honey-codegen --help` lists them all.
 - `--watch`: generate again on each change of the spec (or the `--app` module), each run in a fresh process.
 
 The `go` and `cli` targets format every Go file they write with gofmt, so they need Go installed. gofmt is found by

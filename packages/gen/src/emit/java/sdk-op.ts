@@ -1,7 +1,8 @@
 /**
  * One operation's Java text (bit 16 phase c1, C1, C3): its `Operation` constant, its two method overloads
- * `op(Params)` and `op(Params, RequestOptions)`, its call through the runtime's `Exchange`, and its plan. A throwing SDK
- * answers the type; a safe one (`throwOnError: false`) answers `Result<T>`. A body is sent by its declared media type:
+ * `op(Params)` and `op(Params, RequestOptions)`, its call through the runtime's `Exchange`, and its plan. The method
+ * answers the type and throws an error status; its twin on the client's `safe()` mirror is sdk-mirror.ts's (bit 21 i6).
+ * A body is sent by its declared media type:
  * JSON as the mapper writes it, a form urlencoded, text as its raw bytes, binary as sized bytes or a one-shot stream,
  * multipart as hand-built parts under a `honey-<uuid>` boundary.
  */
@@ -19,11 +20,10 @@ import { multipartRecordLines, paramsRecord } from "./sdk-record.ts"
 import type { JavaCallPlan } from "./sdk-plan.ts"
 import { type Field, fieldsOf, multipartRecord, paramsName } from "./sdk-params.ts"
 
-/** What an operation's text needs: the type context its types hoist into, the array test, and the error mode. */
+/** What an operation's text needs: the type context its types hoist into, and the array test. */
 export type OpEnv = {
 	readonly ctx: JavaTypeContext
 	readonly isArray: (schema: IRSchema) => boolean
-	readonly throwOnError: boolean
 }
 
 /** One operation's text and plan, before its accessors are known. */
@@ -47,26 +47,22 @@ export type JavaOp = {
 const UNKNOWN: IRSchema = { kind: "unknown" }
 
 /** A method's javadoc paragraphs: the operation's id, then its summary and description, as the other SDKs carry them. */
-const paragraphsOf = (op: SdkOp): string[] => [op.id, op.summary, op.description].filter((text) => text !== "")
+export const paragraphsOf = (op: SdkOp): string[] => [op.id, op.summary, op.description].filter((text) => text !== "")
 
 /** The constant's name for a method: its words upper-cased, `_OPERATION` after them. */
 export const constantOf = (method: string) => `${snakeWords(method).toUpperCase()}_OPERATION`
 
-/** The answer's Java type, its reader and its safe reader, for each response kind. */
-function answerOf(op: SdkOp, env: OpEnv) {
+/** The answer's Java type and its reader, for each response kind. */
+export function answerOf(op: SdkOp, env: OpEnv) {
 	const kind = op.success.kind
 	if (kind === "json") {
 		const schema = op.success.schema ?? UNKNOWN
 		const type = javaTypeOf(schema, { ...env.ctx, fieldName: "Response", parentName: op.id })
-		return {
-			reader: `json(new TypeReference<${type}>() {})`,
-			safe: `jsonResult(new TypeReference<${type}>() {})`,
-			type,
-		}
+		return { reader: `json(new TypeReference<${type}>() {})`, type }
 	}
-	if (kind === "text") return { reader: "text()", safe: "textResult()", type: "String" }
-	if (kind === "binary") return { reader: "bytes()", safe: "bytesResult()", type: "byte[]" }
-	return { reader: "none()", safe: "noneResult()", type: "void" }
+	if (kind === "text") return { reader: "text()", type: "String" }
+	if (kind === "binary") return { reader: "bytes()", type: "byte[]" }
+	return { reader: "none()", type: "void" }
 }
 
 /** The `Accept` an operation asks for: a text or binary answer's media type. */
@@ -137,7 +133,11 @@ function callLines(fields: readonly Field[], op: SdkOp): string[] {
 }
 
 /** One method's name, its fields, and the holder of its response headers when it declares any. */
-type MethodSite = { readonly name: string; readonly fields: readonly Field[]; readonly headers: JavaHeaders | null }
+export type MethodSite = {
+	readonly name: string
+	readonly fields: readonly Field[]
+	readonly headers: JavaHeaders | null
+}
 
 /** A stream operation's method lines (SSE, WebSocket or realtime), each kind's own emitter; null for a plain call. */
 function streamMethodLines(op: SdkOp, site: MethodSite, env: OpEnv): string[] | null {
@@ -162,12 +162,10 @@ function methodLines(op: SdkOp, site: MethodSite, env: OpEnv): string[] {
 	const { fields, headers, name } = site
 	const constant = constantOf(name)
 	const answer = answerOf(op, env)
-	const safe = !env.throwOnError
-	const isVoid = answer.type === "void" && !safe
-	const returns = safe ? `Result<${answer.type === "void" ? "Void" : answer.type}>` : answer.type
+	const returns = answer.type
 	const params = paramsName(op, env.ctx)
-	const reader = safe ? answer.safe : answer.reader
-	const ret = isVoid ? "" : "return "
+	const reader = answer.reader
+	const ret = returns === "void" ? "" : "return "
 	const via = headers === null ? "" : ", null"
 	const fill =
 		headers === null
@@ -267,7 +265,6 @@ export function javaOp(op: SdkOp, name: string, env: OpEnv): JavaOp {
 		response: op.success.kind,
 		responseHeaders: headers === null ? null : { fields: headers.fields, type: headers.type },
 		stream: op.stream ?? null,
-		throws: env.throwOnError,
 	}
 	return {
 		body:

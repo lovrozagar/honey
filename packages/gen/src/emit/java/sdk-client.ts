@@ -2,29 +2,35 @@
  * The Java SDK's call surface (bit 16 phase c1, C3): the client with its builder, one `<Resource>` class per namespace of
  * `IR.tree` (`row.list` is `client.row().list(…)`), and an operation with no resource on the client itself. Every method
  * is an overload pair over its `<Op>Params` record and goes through the runtime's `Exchange`. Each operation's plan is
- * written here, with the names the classes use, so the driver walks these and nothing else.
+ * written here, with the names the classes use, so the driver walks these and nothing else. The client's `safe()`
+ * mirror (bit 21 i6) is sdk-mirror.ts's; at the root a member spelled `safe` is `safe_`, noticed.
  */
 import type { IR, IRNamespace, IROperation } from "../../ir/model.ts"
 import { methodsOf, namespacesOf } from "../../ir/resource-tree.ts"
 import type { SdkOp } from "../../ir/sdk-model.ts"
 import { javaString } from "../shared/escape.ts"
 import { javaIdentifier, javaTypeName, NameScope } from "../shared/lang.ts"
+import { MIRROR, mirrorNotice } from "../shared/mirror.ts"
 import type { JavaTypeContext } from "./models.ts"
 import { docOf } from "./sdk-decl.ts"
 import { putFile, sourceOf } from "./sdk-models.ts"
 import { type JavaOp, javaOp, type OpEnv } from "./sdk-op.ts"
 import type { JavaCallPlan } from "./sdk-plan.ts"
 
-/** What the surface is built from: the operations by id, the client's class, the marker and the package. */
+/**
+ * What the surface is built from: the operations by id, the client's class, the marker and the package, and the
+ * notices the generation reports (a root member renamed for the mirror).
+ */
 export type SurfaceEnv = OpEnv & {
 	readonly ops: ReadonlyMap<string, SdkOp>
 	readonly client: string
 	readonly marker: string
 	readonly packageName: string
+	readonly notices: string[]
 }
 
 /** A namespace of the tree: its path, its children by segment, its operations by segment. */
-type Node = {
+export type Node = {
 	readonly path: readonly string[]
 	readonly children: readonly { readonly segment: string; readonly node: Node }[]
 	readonly methods: readonly { readonly segment: string; readonly op: IROperation }[]
@@ -51,7 +57,7 @@ const RESERVED = [
 export const resourceName = (path: readonly string[], ctx: JavaTypeContext) =>
 	ctx.names.hoist(`resource:${JSON.stringify(path)}`, `${javaTypeName(path.join("."))}Resource`)
 
-function nodeOf(ns: IRNamespace, path: readonly string[]): Node {
+export function nodeOf(ns: IRNamespace, path: readonly string[]): Node {
 	return {
 		children: namespacesOf(ns).map(([segment, child]) => ({ node: nodeOf(child, [...path, segment]), segment })),
 		methods: methodsOf(ns).map(([segment, op]) => ({ op, segment })),
@@ -59,22 +65,30 @@ function nodeOf(ns: IRNamespace, path: readonly string[]): Node {
 	}
 }
 
-/** A node's members, claimed in one scope: each child's accessor name, each operation's method name. */
-function membersOf(node: Node, env: SurfaceEnv) {
-	const scope = new NameScope(RESERVED)
-	const children = node.children.map(({ node: child, segment }) => ({
-		child,
-		name: scope.claim(javaIdentifier(segment)),
-	}))
+/**
+ * A node's members, claimed in one scope: each child's accessor name, each operation's method name. At the root the
+ * mirror's `safe` is held, so a member spelled `safe` is `safe_` instead, and noticed (shared/mirror.ts's one rule).
+ */
+export function membersOf(node: Node, env: SurfaceEnv) {
+	const root = node.path.length === 0
+	const scope = new NameScope(root ? [...RESERVED, MIRROR] : RESERVED)
+	const claim = (segment: string) => {
+		const name = javaIdentifier(segment)
+		if (!root || name !== MIRROR) return scope.claim(name)
+		const renamed = scope.claim(`${MIRROR}_`)
+		env.notices.push(mirrorNotice("java", MIRROR, name, renamed) as string)
+		return renamed
+	}
+	const children = node.children.map(({ node: child, segment }) => ({ child, name: claim(segment) }))
 	const ops = node.methods.map(({ op, segment }) => {
-		const name = scope.claim(javaIdentifier(segment))
+		const name = claim(segment)
 		return { name, op: javaOp(env.ops.get(op.id) as SdkOp, name, env) }
 	})
 	return { children, ops }
 }
 
 /** A list of blocks, each set apart by one blank line; a block's own trailing blank lines are dropped. */
-const blocks = (parts: readonly (readonly string[])[]): string[] =>
+export const blocks = (parts: readonly (readonly string[])[]): string[] =>
 	parts
 		.map(trimmed)
 		.filter((part) => part.length > 0)
@@ -142,8 +156,8 @@ const SETTERS: readonly (readonly [string, string])[] = [
 	["invalidation", "InvalidationConfig"],
 ]
 
-/** The client: its constructor, its root resources, its ungrouped operations, and its builder. */
-function clientLines(ir: IR, root: Node, env: SurfaceEnv): string[] {
+/** The client: its constructor, its root resources, its safe mirror, its ungrouped operations, and its builder. */
+export function clientLines(ir: IR, root: Node, env: SurfaceEnv, mirror: string): string[] {
 	const { children, ops } = membersOf(root, env)
 	const server = ir.servers[0]
 	const defaults = [
@@ -156,12 +170,14 @@ function clientLines(ir: IR, root: Node, env: SurfaceEnv): string[] {
 		[
 			"  private final Exchange exchange;",
 			...children.map(({ child, name }) => `  private final ${own(child, env)} ${name};`),
+			`  private final ${mirror} safe;`,
 		],
 		ops.flatMap(({ op }) => op.constantLines),
 		[
 			`  private ${env.client}(ClientConfig config) {`,
 			"    this.exchange = new Exchange(config);",
 			...children.map(({ child, name }) => `    this.${name} = new ${own(child, env)}(exchange);`),
+			`    this.safe = new ${mirror}(this);`,
 			"  }",
 		],
 		[
@@ -171,6 +187,12 @@ function clientLines(ir: IR, root: Node, env: SurfaceEnv): string[] {
 			"  }",
 		],
 		...children.map(({ child, name }) => [`  public ${own(child, env)} ${name}() {`, `    return ${name};`, "  }"]),
+		[
+			"  /** The safe mirror: the same calls, each answering a {@link Result}; no answer still throws. */",
+			`  public ${mirror} safe() {`,
+			"    return safe;",
+			"  }",
+		],
 		...opBlocks(ops),
 		[
 			`  /** Builds an {@link ${env.client}}. */`,
@@ -209,11 +231,11 @@ function visit(
 }
 
 /** A file's text: the marker, the package, the imports its code spells, then its lines. */
-function recordSource(lines: readonly string[], env: SurfaceEnv): string {
+export function recordSource(lines: readonly string[], env: SurfaceEnv): string {
 	return sourceOf(env.marker, env.packageName, trimmed(lines).join("\n"))
 }
 
-/** Every file of the call surface, and every operation's call plan, for `ir`. */
+/** Every resource and record file of the call surface, and every operation's call plan, for `ir`. */
 export function surfaceOf(ir: IR, env: SurfaceEnv): { files: Record<string, string>; plans: JavaCallPlan[] } {
 	const root = nodeOf(ir.tree, [])
 	const out: { files: Record<string, string>; plans: JavaCallPlan[] } = { files: {}, plans: [] }
@@ -224,6 +246,5 @@ export function surfaceOf(ir: IR, env: SurfaceEnv): { files: Record<string, stri
 		for (const child of node.children) walk(child.node)
 	}
 	walk(root)
-	putFile(out.files, `${env.client}.java`, recordSource(clientLines(ir, root, env), env))
 	return out
 }

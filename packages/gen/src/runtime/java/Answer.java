@@ -3,15 +3,12 @@ package honey.runtime;
 
 import java.util.Locale;
 import java.util.Map;
+import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.function.Supplier;
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.type.TypeReference;
 
-/**
- * A call's answer. Each reader throws the error, or answers as the call's type; the safe readers
- * answer a {@link Result} instead.
- */
+/** A call's answer. Each reader throws the error, or answers as the call's type. */
 record Answer(String route, RawResponse raw, ApiException error, byte[] body) {
 
   <T> T json(TypeReference<T> type) {
@@ -33,20 +30,25 @@ record Answer(String route, RawResponse raw, ApiException error, byte[] body) {
     check();
   }
 
-  <T> Result<T> jsonResult(TypeReference<T> type) {
-    return result(() -> decode(type));
+  /** A safe twin's Result: {@code call} given a raw box; an answer it throws is the Err. */
+  static <T> Result<T> safe(RequestOptions options, Function<RequestOptions, T> call) {
+    RequestOptions given = options == null ? RequestOptions.NONE : options;
+    RawResponse raw = given.raw() != null ? given.raw() : new RawResponse();
+    try {
+      return new Result.Ok<>(call.apply(given.boxed(raw)), raw);
+    } catch (SdkException e) {
+      return new Result.Err<>(e, raw);
+    }
   }
 
-  Result<String> textResult() {
-    return result(this::text);
-  }
-
-  Result<byte[]> bytesResult() {
-    return result(this::bytes);
-  }
-
-  Result<Void> noneResult() {
-    return result(() -> null);
+  /** {@link #safe} for a call with no body. */
+  static Result<Void> safeNone(RequestOptions options, Consumer<RequestOptions> call) {
+    return safe(
+        options,
+        o -> {
+          call.accept(o);
+          return null;
+        });
   }
 
   /**
@@ -88,10 +90,6 @@ record Answer(String route, RawResponse raw, ApiException error, byte[] body) {
     if (error != null) {
       throw error;
     }
-  }
-
-  private <T> Result<T> result(Supplier<T> data) {
-    return error != null ? new Result.Err<>(error, raw) : new Result.Ok<>(data.get(), raw);
   }
 
   private <T> T decode(TypeReference<T> type) {

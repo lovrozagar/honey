@@ -40,7 +40,7 @@ final class Exchange {
 
   Flight dial(Operation op, Call call, RequestOptions options) {
     Flight flight = new Flight(this, op, call, options);
-    flight.refreshes = false;
+    flight.dial = true;
     return flight;
   }
 

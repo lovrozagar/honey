@@ -13,7 +13,7 @@ honey-codegen generate --spec openapi.json --target ts --out sdk
 
 ## Errors and the safe mirror
 
-TypeScript, Python, Go, Rust and C# today; the other SDKs as their phases land.
+TypeScript, Python, Go, Rust, C# and Java: all six SDKs.
 
 - **The normal call** answers its value and throws on any failure: an error status as its typed error
   (`NotFoundError` and so on, each a `ClientError`), and an undecodable or over-cap 2xx as a `DecodeError`.
@@ -135,6 +135,33 @@ is the `EventStream<T>`), its error status at the opening the Err; a WebSocket o
                 _ => error.Message,
             });
     }
+```
+
+In Java, `client.safe()` mirrors the client (`client.safe().<group>().<op>(…)`): each method takes the very
+parameters, every overload of it, and answers `Result<T>` where the normal one answers `T` (`Result<Void>` for one that
+answers no body), calling the normal method. `Result` is a sealed interface of two records with only their own
+fields: `Result.Ok(data, response)` and `Result.Err(error, response)`. The `error` is what the normal method throws for
+that answer, an `SdkException`: the status's `ApiException` subclass (`UnexpectedStatusException` for one without a
+class of its own), or a `DecodeException` for a 2xx, or a declared header, that does not read, a 2xx past
+`maxResponseBytes` included. The SDK targets Java 17, so narrow with `instanceof` patterns or `fold(onOk, onErr)`;
+`isOk()` reports the arm and `orElseThrow()` returns the data or throws the Err's own error. `response()` is the
+answer's `RawResponse` on both (the one `RequestOptions.raw` holds, when given). No answer still throws: a
+`CancellationException` for the caller's interrupt, an `ApiTimeoutException`, an `ApiConnectionException`. An event
+stream's twin answers once it opens (the Ok's data is the `EventStream<T>`), its error status at the opening the Err; a
+WebSocket or realtime method is the very method.
+
+```java
+  static String listing(KitchenClient client) {
+    // no answer (never sent, refused, timed out, canceled) still throws
+    Result<ListApiResponse200> result = client.safe().getApi(GetApiParams.builder().build());
+    int status = result.response().status();
+    return result.fold(
+        found -> "answered " + status + ": " + found,
+        error ->
+            error instanceof ApiException failed
+                ? "answered " + status + ": " + failed.key()
+                : "answered " + status + ", unreadable: " + error.getMessage());
+  }
 ```
 
 ## Reference

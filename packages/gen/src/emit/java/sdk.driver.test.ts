@@ -149,10 +149,10 @@ describe.skipIf(!JAVA)("the Java test driver traces scripted calls and safe mode
 		expect(run.trace?.calls[0]?.error).toBeUndefined()
 	}, 120_000)
 
-	it("traces a safe-mode failure as the method's result: Result.Err, not a throw", async () => {
-		const sdk = drivenJavaSdk("fixtures-safe")
+	it("traces a safe call's failure as the method's result: Result.Err, not a throw", async () => {
+		const sdk = drivenJavaSdk("fixtures")
 		const run = await served([{ json: { message: "no" }, status: 404 }], (server) =>
-			sdk.runCalls({ calls: [USER] }, { url: server.url }, { script: {} }),
+			sdk.runCalls({ calls: [USER] }, { url: server.url }, { safe: true, script: {} }),
 		)
 		expect({ status: run.status, stderr: run.stderr }, run.stderr).toEqual({ status: 0, stderr: "" })
 		expect(run.trace?.calls).toMatchObject([{ result: { ok: false, status: 404 } }])

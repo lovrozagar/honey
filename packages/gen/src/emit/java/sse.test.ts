@@ -128,7 +128,7 @@ describe.skipIf(!JAVA)("an SSE stream's failures and typed headers: thrown once,
 		]
 		const { run } = await drive(replies, [ticks(), ticks()], { script: {} })
 		const decoded = {
-			chain: ["DecodeException", "HoneyException"],
+			chain: ["DecodeException", "SdkException", "HoneyException"],
 			status: undefined,
 			text: expect.stringMatching(/^an event's data does not decode: /),
 			type: "DecodeException",
@@ -155,7 +155,7 @@ describe.skipIf(!JAVA)("an SSE stream's failures and typed headers: thrown once,
 	})
 })
 
-const STATUS = ["ApiException", "HoneyException"]
+const STATUS = ["ApiException", "SdkException", "HoneyException"]
 /** An error status at the open as the trace records it: its class, the status class, the text, via return. */
 const statusError = (type: string, status: number, message: string) => ({
 	error: { chain: [type, ...STATUS], status, text: `HTTP ${status}: ${message}`, type, via: "return" },

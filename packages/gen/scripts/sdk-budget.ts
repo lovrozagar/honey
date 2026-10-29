@@ -164,8 +164,10 @@ const joined = (text: string) => text.replace(/\s+/g, " ").replace(/\( /g, "(").
 /**
  * The v1 Java SDK's per-operation surfaces (bit 16, G13), keyed by operation: Java's arguments live in its
  * `<Op>Params` record, so a surface is the widest public overload of the operation's method (its signature, joined
- * from GJF's wrap) and the record's header (its components, annotations dropped, joined). An operation whose method
- * or record is not found is refused, so none passes by going unmeasured.
+ * from GJF's wrap) and the record's header (its components, annotations dropped, joined). Since bit 21 i6 each
+ * surface is both styles (R-i5): the widest normal overload, a newline, then its `client.safe()` twin's, read from the
+ * mirror classes (each one's javadoc opens `{@link X}'s safe mirror`), then the header. An operation whose method,
+ * twin or record is not found is refused, so none passes by going unmeasured.
  */
 export function v1JavaSdkSurfaces(
 	files: Readonly<Record<string, string>>,
@@ -173,15 +175,23 @@ export function v1JavaSdkSurfaces(
 ): Map<string, string> {
 	const out = new Map<string, string>()
 	const sources = Object.entries(files).filter(([path]) => path.endsWith(".java"))
+	const mirrors = (text: string) => /^ \* \{@link \w+\}'s safe mirror/m.test(text)
+	const normal = sources.filter(([, text]) => !mirrors(text))
+	const twins = sources.filter(([, text]) => mirrors(text))
 	for (const [operation, { method, params }] of Object.entries(plans)) {
 		const overload = new RegExp(`public [^;{]*? ${method}\\(\\s*${params} params[^)]*\\) \\{`, "g")
-		const signatures = sources.flatMap(([, text]) => [...text.matchAll(overload)].map((match) => joined(match[0])))
-		const widest = signatures.sort((a, b) => b.length - a.length)[0]
+		const widestOf = (of: readonly (readonly [string, string])[]) =>
+			of
+				.flatMap(([, text]) => [...text.matchAll(overload)].map((match) => joined(match[0])))
+				.sort((a, b) => b.length - a.length)[0]
+		const widest = widestOf(normal)
 		const record = sources.find(([path]) => path.endsWith(`/${params}.java`))?.[1]
 		const header = record === undefined ? undefined : /public record [^{]*\{/.exec(record)?.[0]
 		if (widest === undefined || header === undefined)
 			throw new Error(`${operation}: no ${method} or ${params} to measure`)
-		out.set(operation, `${widest} ${joined(header.replace(/@\w+(?:\.\w+)*(?:\([^)]*\))?\s*/g, ""))}`)
+		const twin = widestOf(twins)
+		if (twin === undefined) throw new Error(`${operation}: no client.safe() twin to measure`)
+		out.set(operation, `${widest}\n${twin} ${joined(header.replace(/@\w+(?:\.\w+)*(?:\([^)]*\))?\s*/g, ""))}`)
 	}
 	return out
 }

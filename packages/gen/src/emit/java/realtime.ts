@@ -51,7 +51,7 @@ export const REALTIME_FILES = [
 ]
 
 /** The type a realtime op's messages decode to: the declared event schema's, else `JsonNode`. */
-const messageTypeOf = (op: SdkOp, ctx: JavaTypeContext) =>
+export const messageTypeOf = (op: SdkOp, ctx: JavaTypeContext) =>
 	op.events === undefined ? "JsonNode" : javaTypeOf(op.events, { ...ctx, fieldName: "Event", parentName: op.id })
 
 /** What a realtime method's lines need: its name and constant, its Params, and its Call's lines. */

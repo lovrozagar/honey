@@ -4,7 +4,7 @@ package honey.runtime;
 import java.time.Duration;
 import java.util.Map;
 
-/** One call's overrides. Unset fields keep the client's. The same in both error modes. */
+/** One call's overrides. Unset fields keep the client's. The same in both styles. */
 public final class RequestOptions {
   private final Duration timeout;
   private final Map<String, String> headers;
@@ -83,5 +83,9 @@ public final class RequestOptions {
 
   RawResponse raw() {
     return raw;
+  }
+
+  RequestOptions boxed(RawResponse box) {
+    return builder().timeout(timeout).headers(headers).baseUrl(baseUrl).raw(box).build();
   }
 }

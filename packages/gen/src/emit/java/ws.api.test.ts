@@ -210,20 +210,33 @@ pool.shutdown();`
 	})
 })
 
-/** The `ws` SDK's socket methods in throw mode or safe mode: each from its signature to its closing brace. */
-const socketMethods = (throwOnError: boolean) =>
-	Object.values(generateJavaSdk(FIXTURES.ws.document(), { throwOnError }).files).flatMap((source) =>
-		[...source.matchAll(/^ {2}public TypedWebSocket[\s\S]*?^ {2}\}$/gm)].map((match) => match[0]),
+/** The `ws` SDK's socket methods in `files`, in order: each from its signature to its closing brace. */
+const socketMethods = (...files: readonly string[]) =>
+	files.flatMap((file) =>
+		[
+			...(generateJavaSdk(FIXTURES.ws.document()).files[`src/main/java/ai/anyrow/${file}.java`] ?? "").matchAll(
+				/^ {2}public TypedWebSocket[\s\S]*?^ {2}\}$/gm,
+			),
+		].map((match) => match[0]),
 	)
 
-describe("generateJavaSdk: a socket method in safe mode", () => {
-	/* new: C# ws.test.ts's safe mode (K2): a socket ignores throwOnError and answers no Result */
-	it("emits each socket method as throw mode does", () => {
-		const [thrown, safe] = [socketMethods(true), socketMethods(false)]
-		expect({ count: safe.length, result: safe.filter((m) => m.includes("Result<")), safe }).toEqual({
-			count: 4,
-			result: [],
-			safe: thrown,
+/** A method's signature line. */
+const head = (method: string) => method.split("\n")[0]
+
+describe("generateJavaSdk: a socket method's safe twin", () => {
+	/* bit 21 i6 (C#'s, Go's, Python's and Rust's): a socket's twin on client.safe() is the very method, no Result */
+	it("emits each socket method's twin as the very method: its signature, and the normal method's call", () => {
+		const normal = socketMethods("PlainResource", "RoomsResource")
+		const twins = socketMethods("SafePlainResource", "SafeRoomsResource")
+		expect({ bodies: twins.map((twin) => twin.split("\n").at(-2)), heads: twins.map(head) }).toEqual({
+			bodies: [
+				"    return _n.socket(params);",
+				"    return _n.socket(params, options);",
+				"    return _n.socket(params);",
+				"    return _n.socket(params, options);",
+			],
+			heads: normal.map(head),
 		})
+		expect(normal.length).toBe(4)
 	})
 })

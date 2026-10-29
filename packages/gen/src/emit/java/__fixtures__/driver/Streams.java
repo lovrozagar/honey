@@ -13,7 +13,8 @@ import tools.jackson.databind.node.ObjectNode;
  * every read run on one worker thread under a watchdog, so a stream that has not ended after ten
  * seconds fails the run instead of hanging it. The grid's cancel is the worker's interrupt, the
  * thread that opens and reads (the SDK's cancel). An error at the open is observed as any call's
- * (Observe.thrown, via "return"). Once open, the call observes the events the stream delivered: an
+ * (Observe.thrown, via "return"); a safe SSE call's Result is settled first (Observe.settle), its
+ * Err observed as any call's and its Ok's stream read. Once open, the call observes the events the stream delivered: an
  * error a read threw is traced via "stream" and ends the reads; a cancel is the stream's quiet end,
  * traced with canceled true; a failure with no answer (a connection lost, a timeout) is observed as
  * the events delivered and how it {@code failed}. Unscripted, any other stream error fails the run. After {@code take}
@@ -78,6 +79,14 @@ final class Streams {
       return Observe.thrown(at.run().sdk(), e.getCause(), at.raw(), at.ask());
     } catch (IllegalAccessException e) {
       throw new DriverException(Wire.text(at.plan(), "method") + " is not accessible");
+    }
+    /* a safe SSE call answers a Result of its stream: its Ok's stream is read, its Err observed */
+    if (at.ask().result()) {
+      Observe.Settled settled = Observe.settle(at.run().sdk(), stream, at.raw(), at.ask());
+      if (settled.err() != null) {
+        return settled.err();
+      }
+      stream = settled.data();
     }
     return switch (Wire.text(at.plan(), "stream")) {
       case "ws" -> Sockets.frames(at, stream, Wire.member(at.entry(), "ws"));

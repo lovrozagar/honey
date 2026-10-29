@@ -255,6 +255,49 @@ if (!r.IsSuccess) Console.WriteLine($"answered {r.Status} {r.Error?.Message}");
     }
 ```
 
+## The Java SDK's `throwOnError` is gone; its safe mode is `client.safe()`, answering a `Result`
+
+The Java generator has no `throwOnError` option (`--java-throw-on-error` is an unknown option now, and with it the
+generator's last boolean option): delete it. Every method answers `T` and throws an error status, as the default did;
+the safe mode is `client.safe()`, the same resources and methods (each overload) answering `Result<T>`
+(`Result<Void>` for no body):
+
+- A normal method no longer answers a `Result`: `Result<User> r = client.users().get(params)` fails `javac`
+  (`incompatible types`). Call `client.safe().users().get(params)`.
+- `Result.status()` is gone: read `response().status()`. `Result.Err`'s `error` is an `SdkException`, no longer an
+  `ApiException`: assigning it to an `ApiException` fails `javac`; narrow it with `instanceof`. `Result` gains
+  `isOk()`, `fold(onOk, onErr)` and `orElseThrow()`; `Ok` and `Err` keep only their own fields.
+- An undecodable 2xx threw `DecodeException` in safe mode; on `client.safe()` it is the `Result.Err`, its `error` the
+  `DecodeException`. `ApiException` and `DecodeException` now extend `SdkException` (itself a `HoneyException`), so a
+  `catch (HoneyException e)` still catches them.
+- A 2xx past `maxResponseBytes` threw `ApiConnectionException` ("the answer exceeds N bytes"); it is a
+  `DecodeException` with that text on the client, and the Err on `client.safe()`. An error status past the cap is its
+  `ApiException`, its body empty. A realtime transport's answer past the cap stays `ApiConnectionException`.
+- An event stream ignored the mode; on `client.safe()` it answers once it opens (the Ok's data is the
+  `EventStream<T>`), an error status at the opening its Err. A WebSocket or realtime method is the very method.
+- A root resource or operation named `safe` is emitted as `safe_` (`safe()` is the mirror), and the generation names
+  it on stderr. A component named like a new runtime type (`Result`, `SdkException`) is emitted as `<Name>Model`, as
+  every runtime- or JDK-named one is, and the generation names each such rename on stderr.
+
+```text v0
+Result<User> r = client.users().get(params); // generated with throwOnError false
+if (r instanceof Result.Err<User> err) System.out.println("answered " + r.status() + " " + err.error().getMessage());
+```
+
+```java
+  static String listing(KitchenClient client) {
+    // no answer (never sent, refused, timed out, canceled) still throws
+    Result<ListApiResponse200> result = client.safe().getApi(GetApiParams.builder().build());
+    int status = result.response().status();
+    return result.fold(
+        found -> "answered " + status + ": " + found,
+        error ->
+            error instanceof ApiException failed
+                ? "answered " + status + ": " + failed.key()
+                : "answered " + status + ", unreadable: " + error.getMessage());
+  }
+```
+
 ## The TS SDK's realtime `token?` and `onAuthExpired?` are gone
 
 Neither was ever read. A connection's `headers` may be a function read on every dial, and the client's

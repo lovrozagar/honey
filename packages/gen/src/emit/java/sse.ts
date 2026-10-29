@@ -26,7 +26,7 @@ export const RELEASE = "Open it in try-with-resources: a for-each break without 
 export const SSE_FILES = ["EventStream", "Pump", "Sse", "SseEvent"]
 
 /** The type an SSE op's events decode to: the declared event schema's, else `String`. */
-const eventTypeOf = (op: SdkOp, ctx: JavaTypeContext) =>
+export const eventTypeOf = (op: SdkOp, ctx: JavaTypeContext) =>
 	op.events === undefined ? "String" : javaTypeOf(op.events, { ...ctx, fieldName: "Event", parentName: op.id })
 
 /** What an SSE method's lines need: its name and constant, its Params, its headers holder, and its Call's lines. */

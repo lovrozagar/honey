@@ -61,7 +61,7 @@ const plain = (entry: Partial<JavaError>) => ({
 /** The method's DecodeException for a 2xx whose body does not decode (§5.6 pins its class, not its text). */
 const UNDECODED = expect.objectContaining({
 	canceled: false,
-	chain: ["DecodeException", "HoneyException"],
+	chain: ["DecodeException", "SdkException", "HoneyException"],
 	type: "DecodeException",
 	via: "return",
 })
@@ -131,7 +131,7 @@ describe.skipIf(!JAVA)(
 					{ error: UNDECODED },
 					{
 						error: plain({
-							chain: ["NotFoundException", "ApiException", "HoneyException"],
+							chain: ["NotFoundException", "ApiException", "SdkException", "HoneyException"],
 							envelope: { extraKeys: [] },
 							key: null,
 							keyMember: null,

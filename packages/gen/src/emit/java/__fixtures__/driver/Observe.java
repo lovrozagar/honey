@@ -12,7 +12,10 @@ import tools.jackson.databind.node.ObjectNode;
  * error and a safe-mode result's summary. An answer is its data, its bytes' digest or its raw
  * response; an ApiException is an error with its key and its body; a timeout is {@code {kind:
  * timeout}}, an ApiConnectionException {@code {kind: transport}} and a DecodeException {@code {kind:
- * decode}} with the raw box's status; any other failure has no outcome.
+ * decode}} with the raw box's status; any other failure has no outcome. A safe call's Result (bit
+ * 21 i6) is read strictly: an answer it throws, a Result whose response is not the call's raw box,
+ * an Ok on no 2xx and an Err whose response is not its error's each fail the run; its Ok observes
+ * its data as a normal call's answer, its Err its error. A normal call answering a Result fails too.
  */
 final class Observe {
   private Observe() {}
@@ -25,12 +28,12 @@ final class Observe {
   }
 
   /**
-   * What the script and the call ask for: the raw response, a traced run, and the envelope in each
-   * trace.
+   * What the script and the call ask for: the raw response, a traced run, the envelope in each
+   * trace, the response headers' holder, and whether the call answers a Result (a safe call).
    */
-  record Ask(boolean raw, boolean scripted, boolean envelope, Object holder) {}
+  record Ask(boolean raw, boolean scripted, boolean envelope, Object holder, boolean result) {}
 
-  /** A call that returned: a typed answer, or a safe-mode Result holding data or an error. */
+  /** A call that returned: a normal call's typed answer, or a safe call's Result. */
   static Outcome returned(Sdk sdk, JsonNode plan, Object answer, Object raw, Ask ask) {
     Outcome out = answeredOutcome(sdk, plan, answer, raw, ask);
     if (ask.holder() == null || out.observed() == null || !"data".equals(out.observed().path("kind").asString())) {
@@ -54,26 +57,79 @@ final class Observe {
   }
 
   private static Outcome answeredOutcome(Sdk sdk, JsonNode plan, Object answer, Object raw, Ask ask) {
-    if (Wire.flag(plan, "throws")) {
+    if (!ask.result()) {
+      if (instanceOf(sdk, "Result", answer)) {
+        throw new DriverException("the normal call answered a Result: " + answer);
+      }
       return new Outcome(answered(sdk, plan, answer, raw, ask), null, null);
     }
-    int status = statusOf(Reflect.call(answer, "status"));
-    boolean response = status == statusOf(Reflect.call(Reflect.call(answer, "response"), "status"));
-    if ("Err".equals(answer.getClass().getSimpleName())) {
-      Throwable error = (Throwable) Reflect.call(answer, "error");
-      JsonNode trace = ask.scripted() ? Traces.error(sdk, error, "result", ask.envelope()) : null;
-      return new Outcome(errorOf(error, raw, ask), trace, resultOf(false, false, response, status));
+    Settled settled = settle(sdk, answer, raw, ask);
+    if (settled.err() != null) {
+      return settled.err();
     }
-    Object data = Reflect.call(answer, "data");
-    return new Outcome(
-        answered(sdk, plan, data, raw, ask), null, resultOf(data != null, true, response, status));
+    return new Outcome(answered(sdk, plan, settled.data(), raw, ask), null, settled.summary());
+  }
+
+  /** A safe call's Result read: its Ok's data, or the Outcome its Err observes; and its summary. */
+  record Settled(Object data, Outcome err, JsonNode summary) {}
+
+  /**
+   * A safe call's {@code result}, its response held to {@code raw} (the box the call passed): its
+   * Ok's data, or the Outcome its Err observes. Anything but a Result fails the run, as does an Ok
+   * on no 2xx and an Err whose response is not its error's (an ApiException's status, or a 2xx for
+   * a DecodeException).
+   */
+  static Settled settle(Sdk sdk, Object result, Object raw, Ask ask) {
+    if (!instanceOf(sdk, "Result", result)) {
+      throw new DriverException(
+          "the safe call answered no Result: "
+              + (result == null ? "null" : result.getClass().getSimpleName()));
+    }
+    Object response = Reflect.call(result, "response");
+    int status = response == null ? -1 : statusOf(Reflect.call(response, "status"));
+    if (response != raw) {
+      throw new DriverException("a Result whose response (" + status + ") is not the call's answer");
+    }
+    boolean success = status >= 200 && status < 300;
+    if ((Boolean) Reflect.call(result, "isOk")) {
+      if (!success) {
+        throw new DriverException("a Result Ok whose response (" + status + ") is no 2xx");
+      }
+      Object data = Reflect.call(result, "data");
+      return new Settled(data, null, resultOf(data != null, true, true, status));
+    }
+    Throwable error = (Throwable) Reflect.call(result, "error");
+    boolean held =
+        instanceOf(sdk, "ApiException", error)
+            ? statusOf(Reflect.call(error, "status")) == status
+            : instanceOf(sdk, "DecodeException", error) && success;
+    if (!held) {
+      throw new DriverException(
+          "a Result Err whose response ("
+              + status
+              + ") is not its error's: "
+              + error.getClass().getSimpleName()
+              + ": "
+              + error.getMessage());
+    }
+    JsonNode trace = ask.scripted() ? Traces.error(sdk, error, "result", ask.envelope()) : null;
+    JsonNode summary = resultOf(false, false, true, status);
+    return new Settled(null, new Outcome(graded(sdk, error, raw, ask), trace, summary), summary);
   }
 
   /**
    * A call that threw: a status error or a timeout is observed; any failure is traced under a
-   * script.
+   * script. A safe call that throws an answer (an ApiException or a DecodeException) fails the run:
+   * it returns one as its Result.
    */
   static Outcome thrown(Sdk sdk, Throwable error, Object raw, Ask ask) {
+    if (ask.result() && (instanceOf(sdk, "ApiException", error) || instanceOf(sdk, "DecodeException", error))) {
+      throw new DriverException(
+          "the safe call threw an API answer, not a Result: "
+              + error.getClass().getSimpleName()
+              + ": "
+              + error.getMessage());
+    }
     JsonNode seen = graded(sdk, error, raw, ask);
     JsonNode trace = ask.scripted() ? Traces.error(sdk, error, "return", ask.envelope()) : null;
     if (seen == null && trace == null) {
@@ -109,7 +165,7 @@ final class Observe {
     return instanceOf(sdk, "ApiConnectionException", error) ? "transport" : null;
   }
 
-  private static boolean instanceOf(Sdk sdk, String simple, Object value) {
+  static boolean instanceOf(Sdk sdk, String simple, Object value) {
     Class<?> type = sdk.findType(simple);
     return type != null && type.isInstance(value);
   }

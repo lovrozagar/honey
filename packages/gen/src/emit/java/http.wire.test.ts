@@ -1,8 +1,9 @@
 /**
  * The Java SDK's wire legs (bit 16 phase c2, W7; the C# decode and protocol legs of `http.test.ts` and
  * `http.response.test.ts`). R8: a gzip or deflate answer decodes, the request offers `gzip, deflate` and never brotli,
- * and a decoded size over `maxResponseBytes` is an ApiConnectionException (0 is none, 100 MiB when unset). A 512 MiB
- * bomb, streamed by the recording server, is refused at its cap under a 64 MiB heap. R1: the exchange is HTTP/1.1 only,
+ * and a 2xx whose decoded size is over `maxResponseBytes` is its DecodeException, an answer whose body was not read
+ * (bit 21 i6; an ApiConnectionException before), an error status past it its status exception with an empty body (0 is
+ * none, 100 MiB when unset). A 512 MiB bomb, streamed by the recording server, is refused at its cap under a 64 MiB heap. R1: the exchange is HTTP/1.1 only,
  * shown by the absence of an h2c upgrade. Qc6: a restricted header set by config, per call or by a hook raises
  * ConfigException naming it, and the process-global `jdk.httpclient.allowRestrictedHeaders` is never set.
  * A leg is labelled `new` (red first) or `pin` (green on write, behavior c1 already ships). A `new` leg that is green
@@ -53,13 +54,15 @@ const plain = (entry: Partial<JavaError>) => ({
 	...entry,
 })
 
-/** The SDK's refusal of a decoded answer over `limit` bytes: an ApiConnectionException stating the limit. */
+/** The SDK's refusal of a decoded 2xx over `limit` bytes: its DecodeException stating the limit (bit 21 i6). */
 const capped = (limit: number) =>
 	plain({
-		chain: ["ApiConnectionException", "HoneyException"],
-		text: expect.stringContaining(String(limit)),
-		type: "ApiConnectionException",
+		chain: ["DecodeException", "SdkException", "HoneyException"],
+		text: `the answer exceeds ${limit} bytes`,
+		type: "DecodeException",
 	})
+/** A 2xx past the cap as the grid observes it: an answer that does not decode. */
+const OVER = [{ kind: "decode", status: 200 }]
 
 /** The SDK's refusal of the restricted header `name`: a ConfigException naming it, never the JDK's. */
 const refused = (name: string) =>
@@ -121,15 +124,27 @@ describe.skipIf(!JAVA)(
 	},
 )
 
-describe.skipIf(!JAVA)("R8: a decoded size over maxResponseBytes is ApiConnectionException; 0 is none", SLOW, () => {
-	/* new: no decoded-byte cap exists in c1, and the driver refuses the maxResponseBytes script key */
-	it("512 on a 2,011-byte decoded answer sent as a few dozen bytes is ApiConnectionException, observed as transport", async () => {
+describe.skipIf(!JAVA)("R8: a decoded 2xx over maxResponseBytes is its DecodeException; 0 is none", SLOW, () => {
+	/* new: no decoded-byte cap exists in c1, and the driver refuses the maxResponseBytes script key; bit 21 i6: an answer */
+	it("512 on a 2,011-byte decoded answer sent as a few dozen bytes is DecodeException, observed as decode", async () => {
 		const run = await served([answer(padded(2000), { gzip: true })], (server) =>
 			runOn(server.url, [ECHO], { script: { config: { maxResponseBytes: 512 } } }),
 		)
 		expect({ error: run.trace?.calls[0]?.error, observed: run.observed }, run.stderr).toEqual({
 			error: capped(512),
-			observed: [{ kind: "transport" }],
+			observed: OVER,
+		})
+	})
+
+	/* bit 21 i6: an error status past the cap is still that status, its body unread */
+	it("512 on a 404 whose body decodes to 2,011 bytes is its NotFoundException, with an empty body", async () => {
+		const run = await served([{ ...answer(padded(2000), { gzip: true }), status: 404 }], (server) =>
+			runOn(server.url, [ECHO], { script: { config: { maxResponseBytes: 512 } } }),
+		)
+		const error = run.trace?.calls[0]?.error
+		expect({ error: [error?.type, error?.status, error?.text], observed: run.observed }, run.stderr).toEqual({
+			error: ["NotFoundException", 404, "HTTP 404"],
+			observed: [{ errorKey: null, kind: "error", status: 404 }],
 		})
 	})
 
@@ -142,7 +157,7 @@ describe.skipIf(!JAVA)("R8: a decoded size over maxResponseBytes is ApiConnectio
 	})
 
 	/* new: an unset cap is 100 MiB, and a 101 MiB decoded answer is refused at it */
-	it("unset, the cap is 100 MiB: a 101 MiB decoded answer is ApiConnectionException at 104857600 bytes", async () => {
+	it("unset, the cap is 100 MiB: a 101 MiB decoded answer is DecodeException at 104857600 bytes", async () => {
 		const reply: Reply = {
 			bytes: DEFAULT_CAP + MIB,
 			gzip: true,
@@ -152,7 +167,7 @@ describe.skipIf(!JAVA)("R8: a decoded size over maxResponseBytes is ApiConnectio
 		const run = await served([reply], (server) => runOn(server.url, [ECHO]))
 		expect({ error: run.trace?.calls[0]?.error, observed: run.observed }, run.stderr).toEqual({
 			error: capped(DEFAULT_CAP),
-			observed: [{ kind: "transport" }],
+			observed: OVER,
 		})
 	})
 
@@ -162,14 +177,14 @@ describe.skipIf(!JAVA)("R8: a decoded size over maxResponseBytes is ApiConnectio
 		const run = await served([reply], (server) => runOn(server.url, [ECHO], { jvmArgs: HEAP_64M }))
 		expect({ error: run.trace?.calls[0]?.error, observed: run.observed }, run.stderr).toEqual({
 			error: capped(DEFAULT_CAP),
-			observed: [{ kind: "transport" }],
+			observed: OVER,
 		})
 	})
 })
 
 describe.skipIf(!JAVA)("bit 19 b1: a bomb for every encoding the SDK offers", SLOW, () => {
 	/* gzip's bombs are R8's legs; deflate, the other encoding offered, gets its own */
-	it("a deflate bomb (64 MiB streamed) past a 1 MiB cap is ApiConnectionException at the cap, observed as transport", async () => {
+	it("a deflate bomb (64 MiB streamed) past a 1 MiB cap is DecodeException at the cap, observed as decode", async () => {
 		const reply: Reply = {
 			bytes: 64 * MIB,
 			deflate: true,
@@ -181,7 +196,7 @@ describe.skipIf(!JAVA)("bit 19 b1: a bomb for every encoding the SDK offers", SL
 		)
 		expect({ error: run.trace?.calls[0]?.error, observed: run.observed }, run.stderr).toEqual({
 			error: capped(MIB),
-			observed: [{ kind: "transport" }],
+			observed: OVER,
 		})
 	})
 })

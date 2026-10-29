@@ -100,7 +100,7 @@ const UNAUTHORIZED: Observed = {
 /** An `ApiException` subclass the method threw, as the Java trace records it (`ApiException`'s `HTTP <status>: …`). */
 const statusError = (type: string, status: number, key: string, message: string): JavaError => ({
 	canceled: false,
-	chain: [type, "ApiException", "HoneyException"],
+	chain: [type, "ApiException", "SdkException", "HoneyException"],
 	display: expect.stringMatching(new RegExp(`${type}: HTTP ${status}: ${message}$`)) as unknown as string,
 	inner: null,
 	key,

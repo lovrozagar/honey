@@ -1,7 +1,8 @@
 /**
  * The Java fixture registry (bit 16 phase c1): every SDK the Java gates build is one entry here, an OpenAPI document
  * with the emitter's options, shared with C#'s registry (`csharp/__fixtures__/documents.ts`) so both languages build
- * the same documents. The `…-safe` entries are the same documents with `throwOnError: false`.
+ * the same documents. Each SDK has both styles, the normal client and its `safe()` mirror (bit 21 i6), so no entry
+ * is an error mode's.
  */
 import crud from "../../../ir/__fixtures__/specs/python/crud.json" with { type: "json" }
 import discriminated from "../../../ir/__fixtures__/specs/python/discriminated.json" with { type: "json" }
@@ -109,22 +110,40 @@ export function derivedIds(): Json {
 	}
 }
 
+/** A 200 whose JSON body is `schema`. */
+const okJson = (schema: unknown) => ({ 200: { content: { "application/json": { schema } }, description: "ok" } })
+
+/**
+ * Answers a fallback would fit (bit 21 i6, C# i5's and Rust i4's lesson): any JSON value (`JsonNode`), a nullable
+ * integer (`Long`) and a nullable object (a record), so an undecodable 2xx that became Ok (a NullNode, a null) would
+ * show, which a non-null answer's own null check would hide.
+ */
+function lenient(): Json {
+	const maybe = { properties: { id: { type: "string" } }, required: ["id"], type: ["object", "null"] }
+	return {
+		info: { title: "Lenient", version: "1" },
+		openapi: "3.1.0",
+		paths: {
+			"/any": { get: { operationId: "any.get", responses: okJson({}) } },
+			"/count": { get: { operationId: "count.get", responses: okJson({ type: ["integer", "null"] }) } },
+			"/maybe": { get: { operationId: "maybe.get", responses: okJson(maybe) } },
+		},
+	}
+}
+
 /** Every Java SDK the gates build, by key. */
 export const FIXTURES = {
 	errors: { document: errors },
 	fixtures: { document: fixtures },
-	"fixtures-safe": { document: fixtures, options: { throwOnError: false } },
 	http: { document: httpDocument },
-	"http-safe": { document: httpDocument, options: { throwOnError: false } },
+	/** a decode failure on answers a fallback would fit, never Ok (bit 21 i6) */
+	lenient: { document: lenient },
 	/** the event streams (phase d1): the shared `sse` document, as C#'s registry builds it */
 	sse: { document: streams.sse },
-	"sse-safe": { document: streams.sse, options: { throwOnError: false } },
 	/** the WebSockets (phase d2a): the shared `ws` document */
 	ws: { document: streams.ws },
-	"ws-safe": { document: streams.ws, options: { throwOnError: false } },
 	/** the resumable connections (phase d2b): the shared `realtime` document and `clash.feed` (its WebSocket files too) */
 	realtime: { document: realtime },
-	"realtime-safe": { document: realtime, options: { throwOnError: false } },
 	/** operations without an id, named by the IR's derivation and its collision suffixes (phase f) */
 	derived: { document: derivedIds },
 	/** every stream kind in one SDK: the core, the WebSocket and the realtime files together (the gating combinations) */

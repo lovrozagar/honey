@@ -6,11 +6,11 @@
  * Java's presence, as the C# files gate on .NET (`java-env.ts`). The default run compiles on 21; the CI matrix
  * compiles on 17, 21 and 25.
  */
-import { basename } from "node:path"
+import { basename, join } from "node:path"
 import { describe, expect, it } from "vitest"
 import { compiledJavaSdk } from "./__fixtures__/compiled.ts"
 import { FIXTURES, type FixtureKey, type JavaFixture } from "./__fixtures__/documents.ts"
-import { withJava } from "./__fixtures__/java-env.ts"
+import { runGjf, withJava } from "./__fixtures__/java-env.ts"
 import { errors } from "../shared/__fixtures__/documents-http.ts"
 import { generateJavaSdk } from "./sdk.ts"
 
@@ -104,5 +104,69 @@ describe.skipIf(!JAVA)(
 describe.skipIf(!JAVA)("one offline Gradle build of the emitted SDK", SLOW, () => {
 	it("succeeds, and leaves no Gradle daemon alive, checked by command line", () => {
 		expect(sdk().gradle()).toEqual({ daemons: [], status: 0 })
+	})
+})
+
+/*
+ * bit 21 i6: a twin's body as google-java-format lays a trailing lambda, its two longer forms reached only by long
+ * method names: both arguments on one continuation (55 letters), the lambda on its own line (65), its body below the arrow (80)
+ */
+const LONG = { a: "a".repeat(65), b: "b".repeat(80), c: "c".repeat(55) }
+const LONG_NAMES: Json = {
+	...ZERO,
+	paths: Object.fromEntries(
+		Object.values(LONG).map((name) => [
+			`/${name}`,
+			{
+				get: {
+					operationId: name,
+					responses: { 200: { content: { "text/plain": { schema: { type: "string" } } }, description: "ok" } },
+				},
+			},
+		]),
+	),
+}
+/** The mirror client's body line of `name`'s widest twin and the lines after it, to its closing brace. */
+const twinBody = (files: Files, name: string) => {
+	const lines = (files["src/main/java/ai/anyrow/SafeAnyrowClient.java"] ?? "").split("\n")
+	const at = lines.findIndex(
+		(line, i) =>
+			line.startsWith("    return Answer.safe(") &&
+			lines
+				.slice(i, i + 5)
+				.join("")
+				.includes(name),
+	)
+	return lines.slice(at, lines.indexOf("  }", at))
+}
+
+describe("generateJavaSdk: a twin's body in each of google-java-format's lambda layouts (bit 21 i6)", () => {
+	it("lays the lambda on its own line past one shared line, and its body below the arrow past that", () => {
+		const files = generateJavaSdk(LONG_NAMES).files
+		expect({ a: twinBody(files, LONG.a), b: twinBody(files, LONG.b), c: twinBody(files, LONG.c) }).toEqual({
+			a: ["    return Answer.safe(", "        options,", `        o -> _n.${LONG.a}(params, o));`],
+			b: [
+				"    return Answer.safe(",
+				"        options,",
+				"        o ->",
+				`            _n.${LONG.b}(`,
+				"                params, o));",
+			],
+			c: ["    return Answer.safe(", `        options, o -> _n.${LONG.c}(params, o));`],
+		})
+	})
+
+	/*
+	 * the bodies alone: names this long already pass google-java-format's width in the normal layouts (a constant, a
+	 * signature, a record's header), before bit 21; the twin's body is the formatter's own text in both forms
+	 */
+	it.skipIf(!JAVA)("lays each body as google-java-format's own output of the file does, and compiles", SLOW, () => {
+		const built = compiledJavaSdk(generateJavaSdk(LONG_NAMES).files)
+		const formatted = runGjf([join(built.dir, "src/main/java/ai/anyrow/SafeAnyrowClient.java")]).stdout
+		const ours = generateJavaSdk(LONG_NAMES).files
+		expect({
+			bodies: [LONG.a, LONG.b, LONG.c].map((name) => formatted.includes(twinBody(ours, name).join("\n"))),
+			diagnostics: built.javac.diagnostics,
+		}).toEqual({ bodies: [true, true, true], diagnostics: [] })
 	})
 })

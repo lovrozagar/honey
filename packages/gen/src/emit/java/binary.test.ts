@@ -21,12 +21,13 @@ const JAVA = withJava()
 /** Every executed describe's bound: a cold gate compiles the SDK and the driver first. */
 const SLOW = { timeout: 600_000 }
 
-type Key = "http" | "http-safe"
+/** The style a leg drives the `http` SDK in: its client, or its `safe()` mirror (bit 21 i6). */
+type Key = "client" | "client.safe()"
 
-/* both error modes: a binary or text answer has the same shape in the driver's observed as returned */
+/* both styles: a binary or text answer has the same shape in the driver's observed as returned */
 const MODES = [
-	["throw", "http"],
-	["safe", "http-safe"],
+	["throw", "client"],
+	["safe", "client.safe()"],
 ] as const
 
 const route = (method: string, path: string) => ({ method, path })
@@ -44,27 +45,28 @@ const OK: Reply = { json: { ok: true }, status: 200 }
 const pattern = (size: number) => Buffer.from(Array.from({ length: size }, (_, i) => i & 0xff))
 const sha256 = (bytes: Buffer | string) => createHash("sha256").update(bytes).digest("hex")
 
-/** The registry SDK `key`, driven; it must build (javac's diagnostics say why when not). */
-function on(key: Key): DrivenJavaSdk {
-	const sdk = drivenJavaSdk(key)
+/** The `http` SDK, driven; it must build (javac's diagnostics say why when not). */
+function on(): DrivenJavaSdk {
+	const sdk = drivenJavaSdk("http")
 	expect(sdk.built, sdk.diagnostics.join("\n")).toBe(true)
 	return sdk
 }
 
 type Options = { readonly script?: Script; readonly setup?: Setup }
 
-/** `calls` run by `key`'s driver under `o` against a server answering `replies`: the run and what the server got. */
+/** `calls` run in `key`'s style under `o` against a server answering `replies`: the run and what the server got. */
 async function drive(key: Key, replies: readonly Reply[], calls: readonly Call[], o: Options = {}) {
-	const sdk = on(key)
+	const sdk = on()
 	return served(replies, async (server) => {
-		const run = await sdk.runCalls({ calls, setup: o.setup ?? {} }, { url: server.url }, { script: o.script })
+		const opts = { safe: key === "client.safe()", ...(o.script === undefined ? {} : { script: o.script }) }
+		const run = await sdk.runCalls({ calls, setup: o.setup ?? {} }, { url: server.url }, opts)
 		return { bodies: [...server.bodies], hops: [...server.hops], run }
 	})
 }
 
 /** The consumer program `source(url)` (class `probe.Probe`) compiled against the `http` SDK, run against `replies`. */
 async function consume(replies: readonly Reply[], source: (url: string) => string) {
-	const sdk = on("http")
+	const sdk = on()
 	return served(replies, async (server) => {
 		const run = await sdk.exec("probe.Probe", source(server.url))
 		return { bodies: [...server.bodies], hops: [...server.hops], run }
@@ -123,7 +125,7 @@ describe.skipIf(!JAVA)("binary answers: byte[], never decoded, Accept the declar
 	/* pin: RequestOptions headers land after the operation's Accept (Flight.layer), so a per-call one overrides it */
 	it("lets a per-call Accept (RequestOptions.headers) win over the declared media type", async () => {
 		const call = { ...FILES_GET, headers: { accept: "*/*" } }
-		const { hops, run } = await drive("http", [octets(3, "application/octet-stream")], [call])
+		const { hops, run } = await drive("client", [octets(3, "application/octet-stream")], [call])
 		expect({ accept: hops.map((h) => h.headers.accept), observed: run.observed }, run.stderr).toEqual({
 			accept: ["*/*"],
 			observed: [bytesOf(3)],
@@ -133,7 +135,7 @@ describe.skipIf(!JAVA)("binary answers: byte[], never decoded, Accept the declar
 	/* pin: the operation's Accept is layered after the config headers, so a config Accept never wins */
 	it("keeps the declared media type over a ClientConfig.headers Accept", async () => {
 		const setup: Setup = { headers: { Accept: "application/json" } }
-		const { hops, run } = await drive("http", [octets(3, "application/octet-stream")], [FILES_GET], { setup })
+		const { hops, run } = await drive("client", [octets(3, "application/octet-stream")], [FILES_GET], { setup })
 		expect({ accept: hops.map((h) => h.headers.accept), observed: run.observed }, run.stderr).toEqual({
 			accept: ["application/octet-stream"],
 			observed: [bytesOf(3)],
@@ -242,7 +244,7 @@ const ITEMS_GET: Call = { operation: "items.get", params: { id: "i1" }, route: r
 /** A DecodeException as the trace records it: the SDK's own, thrown by the method. */
 const decodeError = (message: string) => ({
 	canceled: false,
-	chain: ["DecodeException", "HoneyException"],
+	chain: ["DecodeException", "SdkException", "HoneyException"],
 	display: expect.any(String),
 	inner: null,
 	text: message,
@@ -253,7 +255,10 @@ const decodeError = (message: string) => ({
 /** A 2xx that did not decode as the grid observes it (bit 21 i0): its status, read from the raw box. */
 const UNDECODABLE = { kind: "decode", status: 200 }
 
-/* new: the <Op>Headers holder is filled from a 2xx; a missing or unparsable required header is a DecodeException (as C#) */
+/*
+ * new: the <Op>Headers holder is filled from a 2xx; a missing or unparsable required header is a DecodeException (as
+ * C#): thrown by the client, the Result's Err on client.safe() (bit 21 i6, R-i1)
+ */
 describe.skipIf(!JAVA)("typed response headers: <Op>Headers fills the declared headers (Fc7)", SLOW, () => {
 	it.each(MODES)(
 		"fills the declared headers only, an absent optional one unset; a missing or unparsable required one is a DecodeException (%s)",
@@ -270,8 +275,11 @@ describe.skipIf(!JAVA)("typed response headers: <Op>Headers fills the declared h
 				errors: [
 					undefined,
 					undefined,
-					decodeError("the X-Item-Version header is missing"),
-					decodeError("the X-Item-Version header is not a valid integer"),
+					{ ...decodeError("the X-Item-Version header is missing"), via: key === "client" ? "return" : "result" },
+					{
+						...decodeError("the X-Item-Version header is not a valid integer"),
+						via: key === "client" ? "return" : "result",
+					},
 				],
 				observed: [
 					{ data, headers: { "X-Etag": "e1", "X-Item-Version": "3" }, kind: "data", status: 200 },

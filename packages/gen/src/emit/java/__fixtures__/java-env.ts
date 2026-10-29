@@ -7,7 +7,7 @@
  * (google-java-format needs it); 17 and 25 are CI's matrix. Downloads are manual: a missing pin fails where Java is
  * required, naming its install, and is never fetched by a run. A structure test forbids a Java spawn elsewhere.
  */
-import { type SpawnSyncReturns, spawn, spawnSync } from "node:child_process"
+import { type ChildProcessWithoutNullStreams, type SpawnSyncReturns, spawn, spawnSync } from "node:child_process"
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { join, resolve } from "node:path"
@@ -122,7 +122,7 @@ export function execJava(
 	options: RunOptions & { readonly killAfterMs?: number } = {},
 ): Promise<AsyncRun> {
 	return new Promise((done, reject) => {
-		const child = spawn(join(javaHome(major), "bin/java"), [...JVM_LOG, ...args], { cwd: options.cwd, env: javaEnv() })
+		const child = spawnJava(major, args, options)
 		let stdout = ""
 		let stderr = ""
 		const bound =
@@ -143,6 +143,18 @@ export function execJava(
 		child.on("close", (status) => done({ status, stderr, stdout }))
 		child.stdin.end(options.input ?? "")
 	})
+}
+
+/**
+ * The pinned `major`'s java on `args`, its stdin left open (bit 21 i6): a JVM a caller keeps for many runs (the
+ * driver's serve mode), writing to it and ending it. execJava's spawn too.
+ */
+export function spawnJava(
+	major: number,
+	args: readonly string[],
+	options: RunOptions = {},
+): ChildProcessWithoutNullStreams {
+	return spawn(join(javaHome(major), "bin/java"), [...JVM_LOG, ...args], { cwd: options.cwd, env: javaEnv() })
 }
 
 /** google-java-format on `args`, on the 21 JDK. */

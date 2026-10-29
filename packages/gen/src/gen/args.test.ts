@@ -26,7 +26,7 @@ describe("generate's arguments (phase h)", () => {
 			refused([...base, "--target", "ts", "stray"]),
 			refused([...base, "--target", "kotlin"]),
 			refused([...base, "--target", "ts", "--rust-crate-name", "x"]),
-			refused([...base, "--target", "java", "--java-throw-on-error=maybe"]),
+			refused([...base, "--target", "java", "--watch=maybe"]),
 			refused(["--out", "o", "--target", "ts"]),
 			refused(["--spec", "s.json", "--target", "ts"]),
 			refused(["--spec", "s.json", "--out", "o"]),
@@ -38,7 +38,7 @@ describe("generate's arguments (phase h)", () => {
 			'unexpected argument "stray"',
 			'--target "kotlin": want one of cli, csharp, go, java, mcp, python, rust, ts',
 			"options for rust, which no --target names",
-			'--java-throw-on-error takes true or false, not "maybe"',
+			'--watch takes true or false, not "maybe"',
 			"--spec or --app is required",
 			"--out is required",
 			"--target is required",
@@ -58,7 +58,8 @@ describe("generate's arguments (phase h)", () => {
 			"go",
 			"--target",
 			"java",
-			"--java-throw-on-error=false",
+			"--java-client-name",
+			"ShopClient",
 			"--cli-binary-name",
 			"shop",
 			"--watch",
@@ -67,19 +68,31 @@ describe("generate's arguments (phase h)", () => {
 			"s.json",
 			"o",
 			["go", "cli", "java"],
-			{ throwOnError: false },
+			{ clientName: "ShopClient" },
 			{ binaryName: "shop" },
 			true,
 		])
 	})
 })
 
+describe("generate's --watch, the one boolean flag", () => {
+	/* bit 21 i6: no target option is a boolean now, so --watch alone holds the bare, true and false forms */
+	it("takes --watch bare or =true as true, and =false as false", () => {
+		const base = ["--spec", "s.json", "--out", "o", "--target", "go"]
+		expect(["--watch", "--watch=true", "--watch=false"].map((flag) => parseGenerate([...base, flag]).watch)).toEqual([
+			true,
+			true,
+			false,
+		])
+	})
+})
+
 /*
- * bit 21 i2 (python), i3 (go), i4 (rust) and i5 (csharp): a client always throws and its safe mirror answers a Result, so the
- * error-mode option is gone
+ * bit 21 i2 (python), i3 (go), i4 (rust), i5 (csharp) and i6 (java): a client always throws and its safe mirror answers
+ * a Result, so the error-mode option is gone, in every target
  */
 describe("generate's removed options", () => {
-	it.each(["python", "go", "rust", "csharp"])(
+	it.each(["python", "go", "rust", "csharp", "java"])(
 		"refuses --%s-throw-on-error as the unknown option it now is",
 		(target) => {
 			const base = ["--spec", "s.json", "--out", "o", "--target", target]

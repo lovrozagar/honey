@@ -2,7 +2,7 @@
  * Per-call overrides through the one `RequestOptions` argument (bit 16 phase c1, W4; the C# `overrides.test.ts` port,
  * contract 47 §5.10): `headers` over the config's for that call alone, `timeout` in place of the client's (zero:
  * none), `baseUrl` to another origin, and the `raw` box, filled with the answer as it arrived on success and on error.
- * Driven in both error modes, `http` (throwing) and `http-safe` (`throwOnError: false`), on the same client shape,
+ * Driven in both styles of the `http` SDK, its client and its `safe()` mirror (bit 21 i6), on the same client shape,
  * so a per-call override applies whatever the method returns. The raw box's URL after a redirect is a consumer
  * program's leg and is not written here.
  */
@@ -22,26 +22,31 @@ const ITEM: Call = { operation: "items.get", params: { id: "i1" }, route: { meth
 const OK: Reply = { json: { ok: true }, status: 200 }
 const OK_DATA = { data: { ok: true }, kind: "data", status: 200 }
 
-type Key = "http" | "http-safe"
+/** The style a leg drives the `http` SDK in: its client, or its `safe()` mirror. */
+type Key = "client" | "client.safe()"
 
 /* both error modes: a per-call override applies whatever the method returns */
 const MODES = [
-	["throw", "http"],
-	["safe", "http-safe"],
+	["throw", "client"],
+	["safe", "client.safe()"],
 ] as const
 
-/** The registry SDK `key` with the driver aimed at it, which must build. */
-function driven(key: Key): DrivenJavaSdk {
-	const sdk = drivenJavaSdk(key)
+/** The `http` SDK with the driver aimed at it, which must compile. */
+function driven(): DrivenJavaSdk {
+	const sdk = drivenJavaSdk("http")
 	expect(sdk.built, sdk.diagnostics.join("\n")).toBe(true)
 	return sdk
 }
 
-/** `calls` run by `key`'s driver under `setup` against a server answering `replies`, with the hops. */
+/** `calls` run in `key`'s style under `setup` against a server answering `replies`, with the hops. */
 async function drive(key: Key, replies: readonly Reply[], calls: readonly Call[], setup: Setup = {}) {
-	const sdk = driven(key)
+	const sdk = driven()
 	return served(replies, async (server) => {
-		const run = await sdk.runCalls({ calls, setup }, { alt: server.alt, url: server.url })
+		const run = await sdk.runCalls(
+			{ calls, setup },
+			{ alt: server.alt, url: server.url },
+			{ safe: key === "client.safe()" },
+		)
 		return { hops: [...server.hops], run }
 	})
 }
