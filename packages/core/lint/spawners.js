@@ -46,7 +46,7 @@ export const SPAWNING_HELPERS = new Map([
 	["packages/gen/src/emit/go/__fixtures__/go-env.ts", ["gofmtPath", "hasGo", "runGo", "withGo"]],
 	["packages/gen/src/emit/java/__fixtures__/compiled.ts", ["compiledJavaSdk"]],
 	["packages/gen/src/emit/java/__fixtures__/driven.ts", ["drivenJavaSdk", "servedJavaSdk"]],
-	["packages/gen/src/emit/java/__fixtures__/java-env.ts", ["runGradle", "runJava", "runJavac"]],
+	["packages/gen/src/emit/java/__fixtures__/java-env.ts", ["runGjf", "runGradle", "runJava", "runJavac"]],
 	["packages/gen/src/emit/java/__fixtures__/realtime-program.ts", ["runner"]],
 	["packages/gen/src/emit/java/__fixtures__/realtime.ts", ["consumed", "drivenRealtime"]],
 	["packages/gen/src/emit/mcp/__fixtures__/clients.ts", ["clientCheck", "clientSession", "hasNpm", "httpSession"]],
