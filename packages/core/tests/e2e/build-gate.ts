@@ -70,9 +70,25 @@ export function readBaseline(file: URL = BASELINE_FILE): BuildBaseline | undefin
 	return existsSync(file) ? (JSON.parse(readFileSync(file, "utf8")) as BuildBaseline) : undefined
 }
 
-/** `record` when BUILD_MODE=record (a calibration run in CI): every ratio printed, none judged. */
-export function modeOf(env: Readonly<Record<string, string | undefined>>): "judge" | "record" {
-	return env.BUILD_MODE === "record" ? "record" : "judge"
+/** How a run treats its ratios: judged, recorded for a re-derive, or reported only (off the runners that recorded them). */
+export type BuildMode = "judge" | "local" | "record"
+
+/**
+ * Why a run off GitHub Actions only reports its ratios: the ceilings are CI's, recorded on Actions runners, and a
+ * machine's ratio is not CI's (this one's honey-free reference builds in ~80 ms against CI's 160-230 ms, and its Node
+ * cells read 27-31 against CI's ~23.7).
+ */
+export const LOCAL_REASON =
+	"ratio report-only off GitHub Actions: ceilings recorded on CI runners; a local reference builds in ~80 ms against CI's 160-230 ms"
+
+/**
+ * The run's mode, from explicit signals only: `record` when BUILD_MODE=record (a calibration dispatch), `judge` on a
+ * GitHub Actions runner (GITHUB_ACTIONS=true, which Actions alone sets; a bare CI=true is exported by local tools
+ * too), `local` anywhere else, where the ratio is printed and never judged. The hang guard judges in all three.
+ */
+export function modeOf(env: Readonly<Record<string, string | undefined>>): BuildMode {
+	if (env.BUILD_MODE === "record") return "record"
+	return env.GITHUB_ACTIONS === "true" ? "judge" : "local"
 }
 
 export function median(values: readonly number[]): number {
@@ -87,8 +103,11 @@ export type Verdict = {
 	/** Whether the build ran past its runtime's hang guard. */
 	hung: boolean
 	ratio: number
-	/** The ratio's own verdict, judged whether or not the build hung: REGRESSED fails, recorded and unbaselined never do. */
-	status: "ok" | "recorded" | "REGRESSED" | "unbaselined"
+	/**
+	 * The ratio's own verdict, judged whether or not the build hung: REGRESSED fails; recorded (record mode),
+	 * report-only (off Actions, LOCAL_REASON) and unbaselined (no ceiling) never do.
+	 */
+	status: "ok" | "recorded" | "REGRESSED" | "report-only" | "unbaselined"
 }
 
 /**
@@ -100,7 +119,7 @@ export type Verdict = {
 export function judgeBuild(input: {
 	builds: readonly number[]
 	ceiling: BuildCeiling | undefined
-	mode: "judge" | "record"
+	mode: BuildMode
 	referenceMs: number
 	runtime: RuntimeId
 }): Verdict {
@@ -112,11 +131,13 @@ export function judgeBuild(input: {
 	const status =
 		input.mode === "record"
 			? "recorded"
-			: input.ceiling === undefined
-				? "unbaselined"
-				: ratio > input.ceiling.ceiling
-					? "REGRESSED"
-					: "ok"
+			: input.mode === "local"
+				? "report-only"
+				: input.ceiling === undefined
+					? "unbaselined"
+					: ratio > input.ceiling.ceiling
+						? "REGRESSED"
+						: "ok"
 	if (status === "REGRESSED") {
 		failures.push(
 			`build ratio ${ratio} over its ${input.ceiling?.ceiling} ceiling (CI median ${input.ceiling?.baseline})`,

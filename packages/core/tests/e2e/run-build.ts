@@ -38,6 +38,7 @@ import {
 import {
 	BUILD_SAMPLES,
 	judgeBuild,
+	LOCAL_REASON,
 	median,
 	modeOf,
 	ratioLine,
@@ -259,13 +260,17 @@ async function runBuild(spec: BuildSpec, runtime: RuntimeId): Promise<Result> {
 
 const results: Result[] = []
 console.log(`build runtimes=${runtimes.join(",")} targets=${specs.map((s) => s.id).join(",")}\n`)
-console.log(
-	mode === "record"
-		? "build gate: record mode, ratios printed and not judged (the hang guard still judges)\n"
-		: recordedCells(baseline) === 0
-			? `build gate: no recorded ceilings in blueprint/baselines/build.json, ratios report-only${baseline === undefined ? "" : `: ${baseline.note}`}\n`
-			: `build gate: ratios of the median of ${BUILD_SAMPLES} builds judged against blueprint/baselines/build.json\n`,
-)
+/* what this run does with its ratios, and why; the hang guard judges in every case */
+function gateLine(): string {
+	if (mode === "record") return "record mode, ratios printed and not judged (the hang guard still judges)"
+	if (mode === "local") return `${LOCAL_REASON} (the hang guard still judges)`
+	if (recordedCells(baseline) === 0) {
+		const why = baseline === undefined ? "" : `: ${baseline.note}`
+		return `no recorded ceilings in blueprint/baselines/build.json, ratios report-only${why}`
+	}
+	return `ratios of the median of ${BUILD_SAMPLES} builds judged against blueprint/baselines/build.json`
+}
+console.log(`build gate: ${gateLine()}\n`)
 
 for (const runtime of runtimes) {
 	for (const spec of specs) {
