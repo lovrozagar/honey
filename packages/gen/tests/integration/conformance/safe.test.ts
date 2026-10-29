@@ -1,13 +1,15 @@
 /**
  * The safe variant's coverage (bit 21 i0, R-i6 c): the response kinds come from the grid's own cells, a safe variant
  * runs one cell per kind, and an enabled language whose safe variant leaves a kind uncovered reds. i1 enables TS, i2 Python, i3
- * Go, i4 Rust, i5 C#, so the real leg holds over it; the synthetic legs prove it reds for a language missing a kind.
+ * Go, i4 Rust, i5 C# and i6 Java, so the real leg holds over all six; the synthetic legs prove it reds for a language
+ * missing a kind.
  */
 import { describe, expect, it } from "vitest"
 import { SDKS } from "./features.ts"
 import { OVER_CAP_SDKS } from "./features-sdk.ts"
 import { type Cell, cellsFor, FEATURES } from "./matrix.ts"
 import {
+	isSafeVariant,
 	responseKindOf,
 	responseKinds,
 	SAFE_ENABLED,
@@ -85,15 +87,25 @@ describe("the safe selection", () => {
 		expect(keysOf(cells)).not.toContain("decode/undecodable-2xx")
 	})
 
-	it("runs no cell for a language its phase has not enabled", () => {
-		for (const sdk of SDKS.filter((s) => !SAFE_ENABLED.has(s)))
-			expect(safeCellsFor(sdk)).toEqual({ cells: [], uncovered: [] })
+	/* i6 enabled the last SDK: SAFE_ENABLED is SDKS, so i7 retires it */
+	it("is enabled for every SDK: since i6 no language runs without its safe variant", () => {
+		expect([...SAFE_ENABLED].sort()).toEqual([...SDKS].sort())
+	})
+
+	it("is the safe style for SAFE and for SAFE on another axis (Java's JDKs), and for no other variant", () => {
+		expect(["safe", "safe JDK 17", "JDK 17", "safer", undefined].map(isSafeVariant)).toEqual([
+			true,
+			true,
+			false,
+			false,
+			false,
+		])
 	})
 })
 
 describe("every enabled language's safe variant covers every kind", () => {
-	/* i1 enables TS, i2 Python, i3 Go, i4 Rust and i5 C#; i6 adds Java */
-	it.each(["ts", "python", "go", "rust", "csharp"] as const)(
+	/* i1 enables TS, i2 Python, i3 Go, i4 Rust, i5 C# and i6 Java */
+	it.each(["ts", "python", "go", "rust", "csharp", "java"] as const)(
 		"holds for SAFE_ENABLED, %s among it with one cell per kind",
 		(sdk) => {
 			expect(safeCoverageProblems(SAFE_ENABLED)).toEqual([])

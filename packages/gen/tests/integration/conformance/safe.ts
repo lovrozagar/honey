@@ -11,8 +11,15 @@ export type Sdk = (typeof SDKS)[number]
 /** The variant name a target's safe-style runner carries (TargetRunner.variant). */
 export const SAFE = "safe"
 
-/** The SDKs whose safe variant runs: each of i1–i6 adds its language. */
-export const SAFE_ENABLED: ReadonlySet<Sdk> = new Set<Sdk>(["ts", "python", "go", "rust", "csharp"])
+/** The SDKs whose safe variant runs: each of i1–i6 added its language, so all six run it. */
+export const SAFE_ENABLED: ReadonlySet<Sdk> = new Set<Sdk>(["ts", "python", "go", "rust", "csharp", "java"])
+
+/**
+ * Whether a runner's `variant` is the safe style: SAFE itself, or SAFE on one of the target's other axes, titled
+ * `safe <axis>` (Java's `safe JDK 17`: the safe style on every JDK the grid runs, bit 21 i6).
+ */
+export const isSafeVariant = (variant: string | undefined): boolean =>
+	variant === SAFE || variant?.startsWith(`${SAFE} `) === true
 
 /** An expectation as a record of its members, or null for one that is no record (a matcher list, a literal). */
 const recordOf = (value: Expected | undefined): Readonly<Record<string, unknown>> | null =>

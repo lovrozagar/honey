@@ -10,7 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { BUILT_INS } from "../../../src/emit/cli/commands.ts"
 import { recordCell } from "./gate.ts"
 import { type Cell, cellsFor, compareCell, type Observed, type Target, type WireHop } from "./matrix.ts"
-import { SAFE, safeCellsFor, type Sdk } from "./safe.ts"
+import { isSafeVariant, safeCellsFor, type Sdk } from "./safe.ts"
 /* the bound of a hook or leg that starts the reference app or compiles an SDK: the shared spawn scale */
 export { SPAWN_TIMEOUT } from "../../../src/gen/__fixtures__/spawn-timeout.ts"
 
@@ -45,10 +45,12 @@ export type TargetRunner = {
 	/** a cell's `it` is titled `<key> (<title>)` when it has one: a v0 port, a case's live leg */
 	readonly titles?: Readonly<Record<string, string>>
 	/**
-	 * a second runner of one target, titled `conformance × <target> (<variant>)`; SAFE (safe.ts) runs the target's safe
-	 * style on one cell per response kind once its phase enables it, and no cell before
+	 * a second runner of one target, titled `conformance × <target> (<variant>)`; SAFE (safe.ts), or `safe <axis>`
+	 * (isSafeVariant), runs the target's safe style on one cell per response kind
 	 */
 	readonly variant?: string
+	/** ends what `prepare` kept for the file's cells (a kept JVM, bit 21 i6), after its last cell */
+	finish?(): void
 	/** how the file's app starts, when not as startReferenceApp() does: the mounted MCP endpoint's (bit 21 e) */
 	readonly start?: () => Promise<ReferenceApp>
 }
@@ -168,7 +170,7 @@ export const originsOf = (app: ReferenceApp): Origins => ({
 
 /** The cells `runner` runs, and those it lacks by design: the safe variant's per-kind selection, else the target's grid. */
 function cellsOf(runner: TargetRunner): { readonly cells: readonly Cell[]; readonly lacked: readonly Cell[] } {
-	if (runner.variant === SAFE) {
+	if (isSafeVariant(runner.variant)) {
 		const selection = safeCellsFor(runner.target as Sdk, runner.lacks)
 		if (selection.uncovered.length > 0)
 			throw new Error(`${runner.target}'s safe variant covers no cell of: ${selection.uncovered.join(", ")}`)
@@ -177,15 +179,6 @@ function cellsOf(runner: TargetRunner): { readonly cells: readonly Cell[]; reado
 	const all = cellsFor(runner.target)
 	const lacked = all.filter((cell) => runner.lacks?.(cell))
 	return { cells: all.filter((cell) => !lacked.includes(cell)), lacked }
-}
-
-/**
- * `runner` as its target's safe variant (SAFE). Until `phase` (i1–i6) drives the target's safe style, a cell it is
- * given throws, so enabling the target in SAFE_ENABLED before its driver speaks the safe style reds every cell.
- */
-export function safeVariant(runner: TargetRunner, phase: string): TargetRunner {
-	const pending = new Error(`${runner.target}'s safe style is driven from bit 21 ${phase}, not yet`)
-	return { ...runner, run: () => Promise.reject(pending), variant: SAFE }
 }
 
 /** The CLI's local commands, and cobra's completion entry: a CLI-only call running one reaches no operation. */
@@ -234,7 +227,10 @@ export function targetSuite(runner: TargetRunner): () => ReferenceApp {
 			expect(unknownOperations(cells, app.document), "operations the grid calls but the document lacks").toEqual([])
 			for (const { key } of lacked) recordCell(RECORD, { key, lacks: true, target })
 		}, runner.prepareTimeoutMs)
-		afterAll(() => app?.stop())
+		afterAll(() => {
+			runner.finish?.()
+			return app?.stop()
+		})
 		for (const cell of cells) {
 			const title = runner.titles?.[cell.key]
 			it(title === undefined ? cell.key : `${cell.key} (${title})`, async () => {

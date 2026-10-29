@@ -12,7 +12,7 @@ export const SDKS = ["ts", "go", "rust", "python", "csharp", "java"] as const sa
 /**
  * The SDKs whose 2xx past the response cap is their decode error (bit 21 i1's carry-in: the status and headers
  * arrived, so it is an answer whose body was not read). TS since i1, Python since i2, Go since i3, Rust since i4,
- * C# since i5; i6 adds Java as it moves off no-answer, and i7 retires this list once it is SDKS.
+ * C# since i5, Java since i6: it is SDKS now, so i7 retires this list.
  */
 export const OVER_CAP_SDKS = [
 	"ts",
@@ -20,6 +20,7 @@ export const OVER_CAP_SDKS = [
 	"go",
 	"rust",
 	"csharp",
+	"java",
 ] as const satisfies readonly (typeof SDKS)[number][]
 
 const decode: Scenario[] = [
