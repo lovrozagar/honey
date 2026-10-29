@@ -619,12 +619,17 @@ export type Answer = { data: unknown; response: Response }
 /** Object keys of `{ 400: ... }` are `400` or `"400"` depending on the TS version. */
 export type StatusOf<K> = K extends number ? K : K extends `${infer N extends number}` ? N : never
 
-/** The error each declared status answers with, its body typed; a ClientError when none is declared. */
+/** 0 to N-1 as literals. */
+type Upto<N extends number, A extends number[] = []> = A["length"] extends N ? A[number] : Upto<N, [...A, A["length"]]>
+
+/** Each declared status's error, its body typed; the base ClientError at every other error status, 300 to 599. */
 type StatusErrors<E> = [E] extends [never]
 	? ClientError
 	: [keyof E] extends [never]
 		? ClientError
-		: { [K in keyof E]: ClientError<E[K]> & { readonly status: StatusOf<K> } }[keyof E]
+		:
+				| { [K in keyof E]: ClientError<E[K]> & { readonly status: StatusOf<K> } }[keyof E]
+				| (ClientError & { readonly status: Exclude<Exclude<Upto<600>, Upto<300>>, StatusOf<keyof E>> })
 
 /** A safe call's outcome: its data (and declared headers), or the answer's error; the response on both. */
 export type Result<T, TErrors = never, THeaders = never> =

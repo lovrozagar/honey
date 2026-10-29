@@ -8,7 +8,8 @@ export type Json = Record<string, unknown>
 
 /**
  * What every consumer starts with: the SDK, an instance and its safe twin, and the assertion helpers. `Data`,
- * `Failure` and `Declared` read a safe call's Result: its Ok arm's data, its Err arm, and the declared statuses' errors.
+ * `Failure`, `Declared` and `Base` read a safe call's Result: its Ok arm's data, its Err arm, the declared statuses'
+ * errors (a typed body), and the base ClientError at every other error status (its body unknown).
  */
 const prelude = (stem: string) => `import { ClientError, DecodeError, TestSDK } from "./${stem}.index.gen.ts"
 type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false
@@ -18,7 +19,10 @@ type Fn = (...args: never[]) => unknown
 type Result<F extends Fn> = Awaited<ReturnType<F>>
 type Data<F extends Fn> = Extract<Result<F>, { ok: true }> extends { data: infer D } ? D : never
 type Failure<F extends Fn> = Extract<Result<F>, { ok: false }>
-type Declared<F extends Fn> = Failure<F> extends { error: infer E } ? Exclude<E, DecodeError> : never
+type Errors<F extends Fn> = Failure<F> extends { error: infer E } ? Exclude<E, DecodeError> : never
+type Typed<E> = E extends { body: infer B } ? (unknown extends B ? never : E) : never
+type Declared<F extends Fn> = Typed<Errors<F>>
+type Base<F extends Fn> = Exclude<Errors<F>, Declared<F>>
 type Input<F extends Fn> = NonNullable<Parameters<F>[0]>
 const sdk = new TestSDK({ baseURL: "https://api.example.com" })
 const safe = sdk.safe

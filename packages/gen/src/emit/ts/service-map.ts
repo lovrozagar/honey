@@ -8,6 +8,7 @@ import { openApiPathParams } from "../../ir/slots.ts"
 import { tsString } from "../shared/escape.ts"
 import { compareCodeUnits } from "../shared/lang.ts"
 import { quoteKey } from "../shared/literals.ts"
+import { MIRROR } from "../shared/mirror.ts"
 
 /** One operation as the runtime's service map holds it (`runtime/ts/sdk.ts` `ServiceEntry`). */
 export type ServiceEntry = {
@@ -30,7 +31,7 @@ export type ServiceEntry = {
 export type ServiceMapNode = ServiceEntry | { [key: string]: ServiceMapNode }
 
 /** Members a generated client already has; a resource of the same name would hide them. */
-const ROOT_MEMBERS: readonly string[] = ["dispose", "safe", "state"]
+const ROOT_MEMBERS: readonly string[] = ["dispose", MIRROR, "state"]
 
 /**
  * Names JavaScript machinery reads off any object: a `then` member makes the client a thenable,

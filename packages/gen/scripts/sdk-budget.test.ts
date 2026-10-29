@@ -61,6 +61,31 @@ describe("the v1 SDK within the budget (bit 11)", () => {
 })
 
 /*
+ * G13 (bit 21 i1): TS's own per-operation ceiling, not sdkCli's 234. Measured over the five e2e apps' 71 surfaces
+ * (`v1SdkSurfaces`: each operation's one member line, `HoneyCall<…>` or `HoneyStream<…>`, which types its raw
+ * overload, its value and its safe twin's Result alike): max 81 (kitchen, SDK.postApiV1Organizations), sum 2,694; at
+ * 425f0a4 the two overload lines measured max 162, sum 5,258. 81 + 20% headroom = 98. An operation over it is fixed
+ * in the schema, never by raising the ceiling.
+ */
+const TS_SDK_CEILING = ceilingOf([81], 0.2)
+
+describe("the TS SDK within its own budget (bit 21 i1, G13)", () => {
+	it(`keeps every e2e app's TS operations within ${TS_SDK_CEILING} tokens, each measured once for both styles`, () => {
+		const over: string[] = []
+		let surfaces = 0
+		for (const app of APPS) {
+			const { files, stem } = generateSdk(appSpec(app), { name: "SDK" })
+			for (const [name, text] of v1SdkSurfaces(files[`${stem}.types.gen.ts`] ?? "")) {
+				surfaces++
+				const tokens = countTokens(text)
+				if (tokens > TS_SDK_CEILING) over.push(`${app}/${name}: ${tokens}`)
+			}
+		}
+		expect({ ceiling: TS_SDK_CEILING, over, surfaces }).toEqual({ ceiling: 98, over: [], surfaces: 71 })
+	})
+})
+
+/*
  * G13 (bit 12): Go's own per-operation ceiling, not sdkCli's 234. Measured over the five e2e apps'
  * 72 operations in both throwOnError modes (144 surfaces, `v1GoSdkSurfaces` over the pre-gofmt
  * client.go): max 78 (surface, PutInAllByResourceId, safe mode), median 43; gofmt's field alignment
@@ -605,8 +630,12 @@ describe("the C# runtime within its byte budget (bit 15, G14)", () => {
  * sdk.ts at its 300-line cap (sdk.ts +530). Net of both: http.ts -351 (the
  * stream's open split out as openStream, `later` its lazy form), app-types.ts -334 (SafeReturnFor and SafeMethod in),
  * app.ts -184 (safeMethods in), config.ts -24.
+ * Bit 21 i1 fold-in, +267 B to 122,273: the Err arm widened once, inside Result (never per operation), with the base
+ * ClientError at every undeclared error status: Upto, 0 to N-1 as literals, with its comment (+150); the base member,
+ * its status 300 to 599 less the declared ones, so a declared status still narrows its body (+117, the comment
+ * rewritten included). response.ts alone.
  */
-const TS_RUNTIME_BYTES = 122_006
+const TS_RUNTIME_BYTES = 122_273
 
 describe("the TS runtime within its byte budget (bit 11, G14)", () => {
 	it(

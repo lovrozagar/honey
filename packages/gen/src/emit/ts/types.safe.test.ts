@@ -84,11 +84,35 @@ void safe.safe`
 		})
 		const consumer = `export async function narrow() {
 	const r = await sdk.safe.notes.get({ params: { id: "1" } })
-	if (r.ok || r.error instanceof DecodeError) return
-	expectType<Equal<typeof r.error.status, 404>>()
+	if (r.ok || r.error instanceof DecodeError || r.error.status !== 404) return
 	expectType<Equal<typeof r.error.body, string>>()
 }`
 		expect(check(text, consumer)).toEqual([])
+	})
+})
+
+describe("the safe twin's undeclared statuses (bit 21 i1)", () => {
+	it("narrows an undeclared status (500) to the base ClientError, its body unknown, beside a declared one", () => {
+		const declared = doc({
+			"/items/{id}": {
+				get: {
+					operationId: "items.get",
+					parameters: [param("id")],
+					responses: { 200: json(STRING), 404: json(object({ reason: STRING })) },
+				},
+			},
+		})
+		const consumer = `export async function narrow() {
+	const r = await sdk.safe.items.get({ params: { id: "1" } })
+	if (r.ok || r.error instanceof DecodeError) return
+	if (r.error.status === 500) {
+		expectType<Equal<typeof r.error.body, unknown>>()
+		expectType<Equal<typeof r.error.status, 500>>()
+		return
+	}
+	if (r.error.status === 404) expectType<Equal<typeof r.error.body, { reason: string }>>()
+}`
+		expect(check(declared, consumer)).toEqual([])
 	})
 
 	it("names a component past the safe twin's names, so a schema called Result or HoneyCall keeps compiling", () => {

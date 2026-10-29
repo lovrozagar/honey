@@ -251,6 +251,23 @@ describe("the generate report (bit 18 phase d)", () => {
 	)
 })
 
+describe("the generate report: the safe mirror (bit 21 i1)", () => {
+	it(
+		"names on stderr a TS root group renamed off the safe mirror, and still writes the SDK",
+		{ timeout: SPAWN_TIMEOUT },
+		async () => {
+			const get = { get: { operationId: "safe.get", responses: { 204: { description: "none" } } } }
+			const { out, spec } = specDir({ ...(shop() as Record<string, unknown>), paths: { "/safe": get } })
+			const ran = await run(["generate", "--spec", spec, "--target", "ts", "--out", out])
+			expect([ran.status, ran.err, filesUnder(out).some((file) => file.endsWith(".types.gen.ts"))]).toEqual([
+				0,
+				'honey-codegen: ts: the root group "safe" is emitted as "safe_": "safe" is the client\'s safe mirror\n',
+				true,
+			])
+		},
+	)
+})
+
 describe.skipIf(!GO)("the go and cli trees through gofmt (phase h)", SLOW, () => {
 	it("writes the whole cli and go trees gofmt-clean, the embedded SDK under internal/sdk included", async () => {
 		const { out, spec } = specDir()

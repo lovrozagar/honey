@@ -57,8 +57,11 @@ function filesOf(
 	report: (line: string) => void,
 ): Readonly<Record<string, string>> {
 	switch (target) {
-		case "ts":
-			return generateSdk(document, { name: "SDK", ...options } as Parameters<typeof generateSdk>[1]).files
+		case "ts": {
+			const sdk = generateSdk(document, { name: "SDK", ...options } as Parameters<typeof generateSdk>[1])
+			for (const notice of sdk.notices) report(`honey-codegen: ${notice}\n`)
+			return sdk.files
+		}
 		case "go":
 			return generateGoSdk(document, options).files
 		case "rust":

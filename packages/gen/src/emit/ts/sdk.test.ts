@@ -203,6 +203,19 @@ describe("generateSdk: names it refuses, and renames that collide", () => {
 		expect(() => generateSdk(doc(USERS), { name: "TestSDK", stem: "../x" })).toThrow(/must be a plain file name/)
 	})
 
+	it("names a root group renamed off the safe mirror, never silently, and nothing for any other", () => {
+		const clashing = generateSdk(doc({ "/a": { get: op("safe.get") }, "/b": { get: op("safe_.list") } }), {
+			name: "TestSDK",
+		})
+		const nested = generateSdk(doc({ "/a": { get: op("users.safe") }, "/s": { get: op("state.get") } }), {
+			name: "TestSDK",
+		})
+		expect([clashing.notices, nested.notices]).toEqual([
+			['ts: the root group "safe" is emitted as "safe__": "safe" is the client\'s safe mirror'],
+			[],
+		])
+	})
+
 	it("renames a shadowing member past a name the document already uses", () => {
 		const tree = ir({ "/a": { get: op("state.get") }, "/b": { get: op("state_.list") } })
 		expect(Object.fromEntries(sdkMemberPaths(tree))).toEqual({

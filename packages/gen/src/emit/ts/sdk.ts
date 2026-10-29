@@ -6,10 +6,11 @@
 import { type OpenApiDocument, toIR } from "../../ir/build.ts"
 import type { IRAuth } from "../../ir/model.ts"
 import { tsString } from "../shared/escape.ts"
-import { words } from "../shared/lang.ts"
+import { compareCodeUnits, words } from "../shared/lang.ts"
+import { MIRROR, mirrorNotice } from "../shared/mirror.ts"
 import { runtimeSource } from "./http.ts"
 import { sdkTypesText } from "./sdk-types.ts"
-import { serviceMapText } from "./service-map.ts"
+import { memberTree, serviceMapText } from "./service-map.ts"
 
 export { sdkMemberPaths, serviceMapOf } from "./service-map.ts"
 
@@ -20,7 +21,12 @@ export type SdkOptions = {
 	readonly stem?: string
 }
 
-export type GeneratedSdk = { readonly files: Readonly<Record<string, string>>; readonly stem: string }
+/** The SDK's files, its stem, and what the generation tells its caller: a root group renamed off the safe mirror. */
+export type GeneratedSdk = {
+	readonly files: Readonly<Record<string, string>>
+	readonly notices: readonly string[]
+	readonly stem: string
+}
 
 const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/
 
@@ -132,6 +138,10 @@ export function generateSdk(document: Record<string, unknown>, options: SdkOptio
 	const { name, stem } = validated(options)
 	const ir = toIR(document as OpenApiDocument, { deriveOperationIds: true, duplicateOperationIds: "throw" })
 	const runtime = `${stem}.runtime.gen`
+	/* memberTree emits the root groups in code-unit order, each renamed in place */
+	const emitted = [...memberTree(ir.tree).entries.keys()]
+	const groups = [...ir.tree.entries.keys()].sort(compareCodeUnits)
+	const notices = groups.flatMap((group, i) => mirrorNotice("ts", MIRROR, group, emitted[i] as string) ?? [])
 	return {
 		files: {
 			[`${stem}.client.gen.ts`]: clientText(name, stem, ir.servers[0], ir.auth),
@@ -140,6 +150,7 @@ export function generateSdk(document: Record<string, unknown>, options: SdkOptio
 			[`${stem}.runtime.gen.ts`]: runtimeSource(),
 			[`${stem}.types.gen.ts`]: sdkTypesText(ir, name, runtime),
 		},
+		notices,
 		stem,
 	}
 }

@@ -84,8 +84,12 @@ export async function probe(sdk: TestSDK): Promise<void> {
 		if (error.status === 500) {
 			const key: "internal_error" = error.body.error_key
 		}
-		// @ts-expect-error 418 is no declared status
-		if (error.status === 418) continue
+		/* an undeclared status narrows to the base ClientError, its body unknown */
+		if (error.status === 418) {
+			const body: unknown = error.body
+			// @ts-expect-error an undeclared status's body is no envelope
+			const key: string = error.body.error_key
+		}
 	}
 }
 `

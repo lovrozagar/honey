@@ -97,10 +97,15 @@ expectType<Same<Extract<D, { status: 409 }>["body"], { error_key: string; messag
 	})
 
 	// v0: 53e990f9e5
-	it("keys the Err arm by exactly the declared statuses beside DecodeError, with no unknown fallback arm", () => {
+	it("keys the typed Err arms by exactly the declared statuses, every other error status the base ClientError", () => {
 		const consumer = `type D = Declared<typeof safe.items.get>
+type B = Base<typeof safe.items.get>
 expectType<Equal<D["status"], 404 | 409>>()
-expectType<unknown extends D["body"] ? false : true>()`
+expectType<unknown extends D["body"] ? false : true>()
+expectType<Equal<B["body"], unknown>>()
+expectType<[404 | 409] extends [B["status"]] ? false : true>()
+expectType<300 | 418 | 500 | 599 extends B["status"] ? true : false>()
+expectType<[299 | 600] extends [B["status"]] ? false : true>()`
 		expect(check(RESULTS, consumer)).toEqual([])
 	})
 
@@ -116,8 +121,15 @@ expectType<unknown extends D["body"] ? false : true>()`
 		expectType<Equal<typeof r.error.body, string | null>>()
 		return
 	}
-	expectType<Same<typeof r.error.body, { reason: string } | { error_key: string; message: string }>>()
-	expectType<Equal<typeof r.error.status, 404 | 409>>()
+	if (r.error.status === 404) {
+		expectType<Same<typeof r.error.body, { reason: string }>>()
+		return
+	}
+	if (r.error.status === 409) {
+		expectType<Same<typeof r.error.body, { error_key: string; message: string }>>()
+		return
+	}
+	expectType<Equal<typeof r.error.body, unknown>>()
 }`
 		expect(check(RESULTS, consumer)).toEqual([])
 	})
@@ -144,6 +156,7 @@ expectType<Equal<Extract<D, { status: 401 }>["body"]["error_key"], "unauthorized
 	const r = await sdk.safe.secure.get()
 	if (!r.ok) {
 		if (r.error instanceof DecodeError) return
+		if (r.error.status !== 400 && r.error.status !== 401 && r.error.status !== 404) return
 		expectType<Equal<typeof r.error.body.error_key, "bad_request" | "unauthorized" | "not_found">>()
 		expectType<Equal<typeof r.error.status, 400 | 401 | 404>>()
 		return
