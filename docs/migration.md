@@ -186,7 +186,8 @@ resolve `Result<Answer<T>, Error>`:
   `Call<T, S = Throw, H = ()>`. Code naming `Call<T, H>` with typed headers names `Call<T, Throw, H>` now.
 - A root resource or method named `safe` is emitted as `safe_` (`safe()` is the mirror), and the generation names it
   on stderr. A component named `S` (the style parameter) or like a new runtime type (`Answer`, `SafeError`,
-  `DecodeError`, `Style`, `Safe`, `Throw`) is emitted as `<Name>Model`, as every runtime-named one is.
+  `DecodeError`, `Style`, `Safe`, `Throw`) is emitted as `<Name>Model`, as every runtime- or prelude-named one is, and
+  the generation names each such rename on stderr.
 
 ```text v0
 let r = client.users().get("u1", &Default::default()).await?; // generated with throwOnError false

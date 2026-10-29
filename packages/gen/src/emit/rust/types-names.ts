@@ -34,6 +34,7 @@ export function plainNames(): RustTypeNames {
 		claim: (base) => base,
 		cyclic: new Set(),
 		hoist: (_key, base) => base,
+		renamed: new Map(),
 		ref: rustTypeIdent,
 		resolve: (schema) => schema,
 	}
@@ -41,15 +42,20 @@ export function plainNames(): RustTypeNames {
 
 /**
  * Names for the SDK of `ir`: each component claims its Rust name in code-unit order, as `<Name>Model`
- * when the runtime or the prelude owns it; hoisted types and the client's declarations claim after
+ * when the runtime, the emitter (`ErrorKey`, the style parameter `S`) or the prelude owns it, kept in `renamed` so
+ * the generation names it (bit 21 i4: never a silent rename); hoisted types and the client's declarations claim after
  * them, a hoist key always getting the name it got first; `cyclic` is every component on a by-value cycle.
  */
 export function irNames(ir: IR): RustTypeNames {
 	const scope = new NameScope([...runtimeIdentifiers(), ...EMITTED])
 	const components = new Map<string, string>()
+	const renamed = new Map<string, string>()
 	for (const name of Object.keys(ir.schemas).sort(compareCodeUnits)) {
 		const base = rustTypeIdent(name)
-		components.set(name, scope.claim(scope.has(base) || isRustPreludeType(base) ? `${base}Model` : base))
+		const taken = scope.has(base) || isRustPreludeType(base)
+		const claimed = scope.claim(taken ? `${base}Model` : base)
+		components.set(name, claimed)
+		if (taken) renamed.set(name, claimed)
 	}
 	/* a joined name can spell a prelude one (`Hash` + `map`): that one is taken too, so the claim moves on */
 	const claim = (base: string) => {
@@ -66,6 +72,7 @@ export function irNames(ir: IR): RustTypeNames {
 			return name
 		},
 		ref: (name) => components.get(name) ?? rustTypeIdent(name),
+		renamed,
 		resolve: irResolver(ir.schemas),
 	}
 }

@@ -10,7 +10,8 @@ import { type OpenApiDocument, toIR } from "../../ir/build.ts"
 import type { IR, IRInfo, IRSchema } from "../../ir/model.ts"
 import { sdkModel } from "../../ir/sdk-model.ts"
 import { lineComment } from "../shared/escape.ts"
-import { compareCodeUnits } from "../shared/lang.ts"
+import { compareCodeUnits, rustTypeIdent } from "../shared/lang.ts"
+import { renameNotice } from "../shared/mirror.ts"
 import { rustErrorKeys } from "./errors.ts"
 import { needsWebSocket, publicItems, runtimeFiles } from "./http.ts"
 import { cargoLock, cargoToml, validateCrateName, validateCrateVersion } from "./sdk-cargo.ts"
@@ -25,7 +26,7 @@ export type RustSdkOptions = {
 	readonly version?: string
 }
 
-/** The crate's files by path, and what the generation reports: a root member renamed for the safe mirror. */
+/** The crate's files by path, and what the generation reports: a component or a root member renamed (never silently). */
 export type GeneratedRustSdk = { readonly files: Readonly<Record<string, string>>; readonly notices: readonly string[] }
 
 /* the marker rustfmt and linguist read */
@@ -87,7 +88,15 @@ function emitRust(document: Record<string, unknown>, options: RustSdkOptions) {
 	const at = rustTypeContext(ir)
 	/* components first: the client's hoisted types then land beside them */
 	const components = componentDecls(ir, at)
-	const notices: string[] = []
+	/* every component emitted under another name is noticed, as the mirror's rename is */
+	const notices = [...at.names.renamed].map(([name, emitted]) =>
+		renameNotice("rust", {
+			because: `"${rustTypeIdent(name)}" is a name the SDK's crate root or the Rust prelude holds`,
+			name,
+			renamed: emitted,
+			what: "component",
+		}),
+	)
 	const client = clientDecls(ir, { at, notices, ops: model.opsById })
 	/* before the hoisted are read: each key's <Key>Data lands among them; an API without operations answers no error */
 	const errorKeys = model.ops.length > 0 ? [rustErrorKeys(model, at)] : []

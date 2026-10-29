@@ -38,7 +38,7 @@ const TAKEN = {
 }
 
 /** The registry SDK `key` compiled with the driver, which must compile (a cached one spawns no cargo). */
-function driven(key: "fixtures" | "http"): DrivenRustSdk {
+function driven(key: "fixtures" | "http" | "lenient"): DrivenRustSdk {
 	const sdk = drivenRustSdk(key)
 	expect(sdk.built, sdk.stderr).toBe(true)
 	return sdk
@@ -125,6 +125,40 @@ describe.skipIf(!RUST)(
 				],
 			})
 		}, 600_000)
+	},
+)
+
+/* lenient's two operations: answers a fallback (null, any value) would fit */
+const ANY: Call = { operation: "any.get", route: { method: "GET", path: "/any" } }
+const MAYBE: Call = { operation: "maybe.get", route: { method: "GET", path: "/maybe" } }
+
+describe.skipIf(!RUST)(
+	"a decode failure is never Ok, whatever the answer type would accept (the runtime's, not the type's)",
+	() => {
+		it.each([
+			["the client: Err(Error::Decode)", false],
+			["client.safe(): Answer::Err(SafeError::Decode)", true],
+		] as const)(
+			"answers an undecodable 2xx to a serde_json::Value and an Option<T> op as its decode error, on %s",
+			async (_, safe) => {
+				const torn: Reply = { headers: { "content-type": "application/json" }, status: 200, text: '{"id":' }
+				const sdk = driven("lenient")
+				const run = await served([torn, torn], (server) =>
+					sdk.runCalls({ calls: [ANY, MAYBE], setup: {} }, server, {}, safe),
+				)
+				const decoded = safe
+					? ["result", "Decode", undefined, undefined, undefined, missed(200)]
+					: ["return", "Decode", undefined, undefined, undefined, undefined]
+				expect({ landed: run.trace?.calls.map(landed), observed: run.observed }, run.stderr).toEqual({
+					landed: [decoded, decoded],
+					observed: [
+						{ kind: "decode", status: 200 },
+						{ kind: "decode", status: 200 },
+					],
+				})
+			},
+			600_000,
+		)
 	},
 )
 

@@ -29,6 +29,25 @@ export type RustFixture =
 	| { readonly document: () => Readonly<Record<string, unknown>>; readonly options?: RustSdkOptions }
 	| { readonly files: Readonly<Record<string, string>> }
 
+/** A 200 whose JSON body is `schema`. */
+const okJson = (schema: unknown) => ({ 200: { content: { "application/json": { schema } }, description: "ok" } })
+
+/**
+ * Answers a fallback would fit (bit 21 i4): any JSON value (`serde_json::Value`) and a nullable object (`Option<T>`),
+ * so an undecodable 2xx that became Ok would show, which a struct answer cannot.
+ */
+function lenient(): Readonly<Record<string, unknown>> {
+	const maybe = { properties: { id: { type: "string" } }, required: ["id"], type: ["object", "null"] }
+	return {
+		info: { title: "Lenient", version: "1" },
+		openapi: "3.1.0",
+		paths: {
+			"/any": { get: { operationId: "any.get", responses: okJson({}) } },
+			"/maybe": { get: { operationId: "maybe.get", responses: okJson(maybe) } },
+		},
+	}
+}
+
 /** a4673b6e42's nine v0 fixtures as one document. */
 function fixtures(): Readonly<Record<string, unknown>> {
 	return merged({
@@ -71,6 +90,8 @@ export const FIXTURES = {
 	fixtures: { document: fixtures },
 	/** the HTTP runtime's document (contract 19 §4.3): request build, auth, hooks, answers, stale marks, binary */
 	http: { document: http },
+	/** a decode failure on answers a fallback would fit, never Ok (bit 21 i4) */
+	lenient: { document: lenient },
 	/** the header-rule paths Python, C# and Java add to `http` (bit 19 d1): a declared key, a map header and query */
 	keyed: { document: () => ({ info: { title: "Keyed", version: "1" }, openapi: "3.1.0", paths: httpExtraPaths() }) },
 	/** the realtime connections (contract 20 §4.3): a typed feed, and one declaring every stream field's name */

@@ -431,8 +431,43 @@ describe("rustCallPlans", () => {
 	it("plans a JSON answer for an op with error envelopes: one plan, which both styles call", () => {
 		expect(rustCallPlans(errorKeys)["users.create"]?.response).toBe("json")
 	})
+})
 
-	/* bit 21 i4 (shared/mirror.ts): `safe()` is the client's mirror, so a root member spelled so moves, and says so */
+describe("generateRustSdk: a rename is never silent (bit 21 i4)", () => {
+	/* a component the crate root or the prelude already names is <Name>Model, and the generation says so */
+	it("names every component it emits as <Name>Model on the shared rename notice, never silently, and keeps the rest quiet", () => {
+		const object = { properties: { id: { type: "string" } }, type: "object" }
+		const names = ["Answer", "Item", "Option", "S", "Safe", "Throw"]
+		const doc = {
+			components: { schemas: Object.fromEntries(names.map((name) => [name, object])) },
+			info: { title: "Renamed", version: "1" },
+			openapi: "3.1.0",
+			paths: {
+				"/a": {
+					get: {
+						operationId: "a.get",
+						responses: {
+							200: {
+								content: { "application/json": { schema: { $ref: "#/components/schemas/Answer" } } },
+								description: "ok",
+							},
+						},
+					},
+				},
+			},
+		}
+		const { files, notices } = generateRustSdk(doc)
+		const held = (name: string) =>
+			`rust: the component "${name}" is emitted as "${name}Model": "${name}" is a name the SDK's crate root or the Rust prelude holds`
+		expect({ item: (files["src/types.rs"] ?? "").includes("pub struct Item {"), notices }).toEqual({
+			item: true,
+			notices: ["Answer", "Option", "S", "Safe", "Throw"].map(held),
+		})
+	})
+})
+
+describe("generateRustSdk: the safe mirror's name (bit 21 i4)", () => {
+	/* shared/mirror.ts: `safe()` is the client's mirror, so a root member spelled so moves, and says so */
 	it("emits a root group or method spelled safe as safe_, noticed, and keeps a nested one", () => {
 		const none = { responses: { 204: { description: "none" } } }
 		const doc = {

@@ -21,6 +21,8 @@ export type RustTypeNames = {
 	claim(base: string): string
 	/** the components that reach themselves by value: a reference to one is a `Box` */
 	cyclic: ReadonlySet<string>
+	/** each component emitted under another name than its own (`<Name>Model`), to its emitted name */
+	renamed: ReadonlyMap<string, string>
 	resolve(schema: IRSchema): IRSchema
 }
 
