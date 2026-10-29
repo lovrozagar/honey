@@ -4,7 +4,6 @@ package sdk
 
 import (
 	"context"
-	"errors"
 	"io"
 	"net/http"
 	"sync"
@@ -38,6 +37,7 @@ func (t *LongpollTransport) Connect(_ context.Context, rawURL string, opts *Tran
 		lp.cursor.ReconnectToken, lp.cursor.LastEventID = opts.ReconnectToken, opts.LastEventID
 		lp.headers = opts.headers()
 		lp.hooks = &TransportOpts{onRequest: opts.onRequest, onResponse: opts.onResponse}
+		lp.send = opts.send
 	}
 	lp.client = transportClient(client)
 	return lp, nil
@@ -52,6 +52,7 @@ type longpollConn struct {
 	mu          sync.Mutex
 	cursor      TransportOpts /* ReconnectToken and LastEventID only */
 	closed      bool
+	send        func(context.Context, any) error
 }
 
 func (c *longpollConn) Kind() TransportKind { return TransportLongpoll }
@@ -108,8 +109,8 @@ func advanceCursor(o *TransportOpts, id, token string) {
 	}
 }
 
-func (c *longpollConn) Send(context.Context, any) error {
-	return errors.New("honey: longpoll transport is receive-only")
+func (c *longpollConn) Send(ctx context.Context, data any) error {
+	return posted(ctx, c.send, "longpoll", data)
 }
 
 func (c *longpollConn) Close() error {

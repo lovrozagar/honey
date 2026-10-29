@@ -116,18 +116,25 @@ internal static class Observe
     /// </summary>
     public static Outcome Thrown(Sdk sdk, Exception error, Lens lens, object? raw = null)
     {
-        var seen = Graded(sdk, error, lens.Raw);
         if (lens.Scripted)
         {
-            return new Outcome(seen, Traces.ErrorOf(sdk, error, "return", lens.Envelope));
+            return new Outcome(Graded(sdk, error, lens.Raw), Traces.ErrorOf(sdk, error, "return", lens.Envelope));
         }
-        seen ??= NoAnswer(sdk, error) is { } failed ? new JsonObject { ["kind"] = failed }
-            : sdk.Is(error, "DecodeException") && raw is not null ? Undecodable(raw)
-            : null;
+        var seen = OfCall(sdk, error, lens, raw);
         return seen is null
             ? throw new DriverException($"the call threw {error.GetType().Name}, which the grid has no outcome for: {error.Message}")
             : new Outcome(seen);
     }
+
+    /// <summary>
+    /// A call's error as the grid observes it: a status error, a timeout, no answer, or an undecodable answer (its
+    /// status read from <paramref name="raw"/>); else null.
+    /// </summary>
+    public static JsonNode? OfCall(Sdk sdk, Exception error, Lens lens, object? raw) =>
+        Graded(sdk, error, lens.Raw)
+        ?? (NoAnswer(sdk, error) is { } failed ? new JsonObject { ["kind"] = failed }
+            : sdk.Is(error, "DecodeException") && raw is not null ? Undecodable(raw)
+            : null);
 
     /// <summary>A status error or a timeout as the grid observes it, else null.</summary>
     public static JsonNode? Graded(Sdk sdk, Exception error, bool raw) =>

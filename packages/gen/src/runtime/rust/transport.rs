@@ -9,6 +9,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use serde_json::Value;
 
+use crate::answer;
 use crate::call::{Overrides, RawResponse};
 use crate::config::{Client, Inner};
 use crate::errors::{ApiError, Error};
@@ -157,11 +158,13 @@ impl Dial {
         *self.opened.lock().unwrap_or_else(PoisonError::into_inner) = Some(raw);
     }
 
-    /// POSTs `text` as JSON to the endpoint: an SSE or long-poll connection's send.
+    /// POSTs `text` as JSON to the endpoint: an SSE or long-poll connection's send, answered as a
+    /// call is (a 2xx past the cap `Error::Decode`).
     pub(crate) async fn post(&self, url: &str, text: &str) -> Result<(), Error> {
         let (mut spec, ov) = self.spec("POST", url);
         spec.text(text, "application/json");
-        ok(&self.inner, &mut spec, &ov).await.map(drop)
+        answer::none(Arc::clone(&self.inner), spec, ov).await?;
+        Ok(())
     }
 }
 

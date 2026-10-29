@@ -108,7 +108,7 @@ func (r *runner) perform(i int, c call) (any, error) {
 		return nil, err
 	}
 	r.rec.called(time.Since(start), o, j.d)
-	grid := o.err == nil || gridError(o.err, p.Stream != nil)
+	grid := o.err == nil || gridError(o.err, p.Stream != nil && !o.sent)
 	if !grid && r.script == nil {
 		return nil, o.err
 	}

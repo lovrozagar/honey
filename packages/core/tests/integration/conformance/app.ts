@@ -20,6 +20,7 @@ import { serveOpenApi } from "../../../src/openapi/serve.ts"
 import { honey } from "../../../src/routing/app.ts"
 import { listenDropFront } from "./drop-front.ts"
 import { createReferenceServer } from "./reference-server.ts"
+import { realtimeRoutes } from "./app-realtime.ts"
 import { secureRoutes } from "./app-secure.ts"
 import { ws } from "../../../src/ws/route.ts"
 
@@ -287,35 +288,6 @@ function faultRoutes(app: ConformanceApp): void {
 		)
 }
 
-/**
- * The realtime feeds every transport dials (bit 19 e): `realtime.refused` refuses each with 403; `realtime.mixed`
- * 404s the upgrade, 503s every poll and the first event stream since the wire mark, then streams `{ n: 1 }`.
- */
-function realtimeRoutes(app: ConformanceApp, streams: { dialed: number }): void {
-	const feed = { "text/event-stream": { ok: z.object({ n: z.number().int() }) } }
-	app
-		.get("/realtime/refused")
-		.meta({ extensions: { "x-realtime": true }, operationId: "realtime.refused", mcp: true })
-		.errors("limit_reached")
-		.output(feed)
-		.handler(() => {
-			throw errors.limit_reached()
-		})
-	app
-		.get("/realtime/mixed")
-		.meta({ extensions: { "x-realtime": true }, operationId: "realtime.mixed", mcp: true })
-		.output(feed)
-		.handler((ctx) => {
-			if (ctx.req.headers.get("upgrade") !== null) return ctx.res.raw(new Response(null, { status: 404 }))
-			const stream = ctx.req.headers.get("accept")?.includes("text/event-stream") === true
-			if (!stream || streams.dialed++ === 0) return ctx.res.raw(new Response(null, { status: 503 }))
-			return ctx.res.sse(async (sse) => {
-				await sse.send({ data: { n: 1 }, event: "message", id: "1" })
-				sse.close()
-			})
-		})
-}
-
 /** `timing.slow`, `echo.get` and `redirect.crossOrigin`: per-call overrides, request ids and auth hops. */
 function hopRoutes(app: ConformanceApp, origins: () => Origins | null): void {
 	app
@@ -443,7 +415,7 @@ export function createConformanceApp(origins: () => Origins | null = () => null)
 	itemRoutes(app)
 	streamRoutes(app)
 	faultRoutes(app)
-	realtimeRoutes(app, streams)
+	realtimeRoutes(app, streams, errors)
 	hopRoutes(app, origins)
 	harnessRoutes(app)
 	socketRoutes(app)

@@ -1,16 +1,17 @@
 /**
  * The grid's SDK-only rows (bit 21 i0, features-sdk.ts), in the default run: they reach the six SDKs and no other
- * target, so the CLI and the MCP server keep exactly their cells, and every SDK holds the same five; the over-cap row
- * (i2, go since i3, rust since i4, csharp since i5, java since i6) reaches OVER_CAP_SDKS, all six SDKs now; i7
- * retires the list.
+ * target, so the CLI and the MCP server keep exactly their cells, and every SDK holds the same seven, the over-cap row
+ * (staged per SDK from i2 to i6) and the realtime send past the cap (i7) among them.
  */
 import { describe, expect, it } from "vitest"
-import { OVER_CAP_SDKS, SDK_ROWS } from "./features-sdk.ts"
+import { SDK_ROWS } from "./features-sdk.ts"
 import { SDKS } from "./features.ts"
 import { cellsFor, FEATURES, TARGETS } from "./matrix.ts"
 
 const SDK_CELLS = [
 	"decode/undecodable-2xx",
+	"over-cap/over-cap-2xx",
+	"realtime/send-over-cap",
 	"stream/initial-error",
 	"stream/mid-drop",
 	"text/plain",
@@ -31,22 +32,22 @@ describe("the SDK-only rows", () => {
 			"transport",
 			"stream",
 			"text",
+			"over-cap",
+			"realtime",
 		])
-		expect(SDK_ROWS.map((row) => row.id)).toEqual(["decode", "transport", "stream", "text", "over-cap"])
+		expect(SDK_ROWS.map((row) => row.id)).toEqual(["decode", "transport", "stream", "text", "over-cap", "realtime"])
 	})
 
-	it("give every SDK the same five cells, OVER_CAP_SDKS the over-cap one too, and the CLI and the MCP server none", () => {
-		const capped = [...SDK_CELLS, "over-cap/over-cap-2xx"].sort()
-		expect(OVER_CAP_SDKS).toEqual(["ts", "python", "go", "rust", "csharp", "java"])
+	it("give every SDK the same seven cells, and the CLI and the MCP server none", () => {
 		expect(Object.fromEntries(TARGETS.map((target) => [target, sdkCellsOf(target)]))).toEqual({
 			cli: [],
-			csharp: capped,
-			go: capped,
-			java: capped,
+			csharp: SDK_CELLS,
+			go: SDK_CELLS,
+			java: SDK_CELLS,
 			mcp: [],
-			python: capped,
-			rust: capped,
-			ts: capped,
+			python: SDK_CELLS,
+			rust: SDK_CELLS,
+			ts: SDK_CELLS,
 		})
 	})
 })

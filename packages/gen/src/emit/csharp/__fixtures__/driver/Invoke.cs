@@ -51,7 +51,7 @@ internal static class Invoke
         {
             /* a safe SSE call answers a Result of its stream; a connection is the very method on both clients */
             var settles = envelope.Safe && plan.Stream == "sse" ? raw : null;
-            var streamCall = new StreamCall(sdk, plan, call, entry, lens);
+            var streamCall = new StreamCall(sdk, plan, call, entry, lens, raw);
             return await Streams.ObserveAsync(streamCall, async () => await ResultAsync(target, method, args)
                 ?? throw new DriverException($"{plan.Method} opened nothing"), settles);
         }

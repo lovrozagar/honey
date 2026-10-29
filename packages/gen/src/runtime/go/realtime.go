@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -107,6 +108,10 @@ func newRealtime(ctx context.Context, cfg Config, c *call, topts TransportOpts, 
 	}
 	topts.headersOf = func() http.Header { return mergeHeaders(cfg, cfg.auth.current(cfg), "", c.headers, rc.headers) }
 	topts.onRequest, topts.onResponse = cfg.OnRequest, cfg.OnResponse
+	topts.send = func(ctx context.Context, data any) error {
+		_, err := doRequest(ctx, cfg, c.sent(data), opts)
+		return err
+	}
 	if cfg.OnAuthExpired != nil {
 		topts.refresh = func(ctx context.Context) bool {
 			_, err := cfg.auth.refresh(ctx, cfg, cfg.auth.current(cfg))
@@ -211,7 +216,8 @@ func (r *ResumableConnection) Close() error {
 	return nil
 }
 
-// Send writes data on the active transport; SSE and long-poll are receive-only and fail.
+// Send writes data on the active transport: a WebSocket frame, else a POST answered as a call is
+// (a 2xx past MaxResponseBytes a *DecodeError).
 func (r *ResumableConnection) Send(ctx context.Context, data any) error {
 	r.mu.Lock()
 	conn := r.conn
@@ -220,4 +226,14 @@ func (r *ResumableConnection) Send(ctx context.Context, data any) error {
 		return errors.New("honey: ResumableConnection not connected")
 	}
 	return conn.Send(ctx, data)
+}
+
+// sent is a send's POST over SSE or long-poll: a string as text, any other value as JSON.
+func (c *call) sent(data any) *call {
+	body := jsonBody(data)
+	if text, ok := data.(string); ok {
+		body = rawBody([]byte(text), "text/plain")
+	}
+	op := http.MethodPost + strings.TrimPrefix(c.operation, c.method)
+	return &call{method: http.MethodPost, path: c.path, operation: op, query: c.query, headers: c.headers, body: body, stale: c.stale}
 }

@@ -450,13 +450,14 @@ await rc.close()`
 		expect(drove.bodies[2]?.toString()).toBe('{"hi":1}')
 	})
 
-	it("POSTs on an SSE connection; a POST answered 405 raises its status error, no frames", async () => {
+	it("POSTs on an SSE connection; a POST answered 405 raises its status error, observed as the call's error", async () => {
 		const replies = [refused, sse([ev(1)], "hold"), { json: { message: "no" }, status: 405 }]
 		const drove = await drive(replies, [live({ send: ['{"hi":1}'], take: 1 })], { script: QUICK, setup: TOK })
 		const e = call0(drove)?.error
 		expect(drove.hops[2], drove.run.stderr).toMatchObject({ ...JSON_POST, headers: { authorization: "Bearer tok" } })
 		const seen = [drove.run.observed, e?.chain.includes("APIStatusError"), e?.status, e?.via]
-		expect(seen).toEqual([frames(), true, 405, "stream"])
+		const rejected = [{ body: { message: "no" }, errorKey: null, kind: "error", status: 405 }]
+		expect(seen).toEqual([rejected, true, 405, "stream"])
 	})
 })
 

@@ -442,13 +442,13 @@ Note(await Read(rc)); Note(await Read(rc)); Note($"{rc.State}"); Note(rc.Options
 	})
 
 	/* ported: python realtime.test.ts:451 (a 405 has no class of its own: UnexpectedStatusException, Fb14) */
-	it("POSTs on an SSE connection; a POST answered 405 throws its status exception, no frames", async () => {
+	it("POSTs on an SSE connection; a POST answered 405 throws its status exception, observed as the call's error", async () => {
 		const replies = [refused, sse([ev(1)], "hold"), { json: { message: "no" }, status: 405 }]
 		const drove = await drive(replies, [live({ send: ['{"hi":1}'], take: 1 })], { script: QUICK, setup: TOK })
-		const e = call(drove)?.error
 		expect(drove.hops[2], drove.run.stderr).toMatchObject({ ...JSON_POST, headers: { authorization: "Bearer tok" } })
-		const seen = [drove.run.observed, e?.type, e?.chain.includes("ApiStatusException"), e?.status, e?.via]
-		expect(seen).toEqual([frames(), "UnexpectedStatusException", true, 405, "stream"])
+		const seen = [drove.run.observed, failure(drove), call(drove)?.error?.chain.includes("ApiStatusException")]
+		const rejected = [{ body: { message: "no" }, errorKey: null, kind: "error", status: 405 }]
+		expect(seen).toEqual([rejected, ["UnexpectedStatusException", 405, "stream"], true])
 	})
 
 	/* ported: python realtime.test.ts:477 (C#'s clash.feed in the realtime document, contract 50 §4.1) */

@@ -135,7 +135,7 @@ internal sealed class Dial(Transport client, Operation op, Call call)
 
     public async Task PostAsync(string text, CancellationToken cancellationToken)
     {
-        var post = With(op with { Method = "POST", Accept = null }, call with { Body = Body.Text(text, "application/json") }, false, null, true);
+        var post = With(op with { Method = "POST", Accept = null }, call with { Body = Body.Text(text, "application/json") }, false, null, true, dial: false);
         var (_, error) = await post.RunAsync(cancellationToken).ConfigureAwait(false);
         if (error is not null)
         {
@@ -152,11 +152,11 @@ internal sealed class Dial(Transport client, Operation op, Call call)
     private Call Cursored(TransportOptions cursor) =>
         call with { Query = [.. call.Query, Arg.Text("last_event_id", cursor.LastEventId), Arg.Text("reconnect_token", cursor.ReconnectToken)] };
 
-    private Exchange With(Operation dialed, Call at, bool stream, TimeSpan? timeout, bool refreshes = false)
+    private Exchange With(Operation dialed, Call at, bool stream, TimeSpan? timeout, bool refreshes = false, bool dial = true)
     {
         var options = at.Options ?? new RequestOptions();
         _used = client.Auth.Token;
-        return new Exchange(client, dialed, at with { Options = options with { Raw = new RawResponse(), Timeout = timeout ?? options.Timeout } }, stream, refreshes, dial: true);
+        return new Exchange(client, dialed, at with { Options = options with { Raw = new RawResponse(), Timeout = timeout ?? options.Timeout } }, stream, refreshes, dial);
     }
 }
 

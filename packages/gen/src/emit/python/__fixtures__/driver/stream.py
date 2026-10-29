@@ -112,7 +112,7 @@ async def observe(
         return await events(opened, prepared, call.get("take"), lens)
     if kind == "ws":
         return await frames(opened, call, directives.get("ws", {}), lens)
-    return await live(opened, call, lens)
+    return await live(opened, call, lens, prepared.raw.status)
 
 
 def event_of(event: Any) -> dict[str, Any]:
@@ -272,22 +272,25 @@ def wire_of(text: str) -> Any:
         return text
 
 
-async def live(conn: Any, call: Call, lens: Lens) -> Outcome:
+async def live(conn: Any, call: Call, lens: Lens, status: int) -> Outcome:
     """A ``ResumableConnection``: each grid ``send`` as its JSON value (else as raw text), then
     ``take`` values read (invoke.py refuses a realtime call without one). The first send or read
     error ends them, a read error also kept in ``realtime.errors``; a connection that ends first ends
-    them quietly. Then ``close``, and the trace: the frames, the cursor ``conn.opts`` settled on
-    (None as ""), the proven transport and the read errors."""
+    them quietly. A send's error is observed as a call's, a ``DecodeError`` on ``status`` (the call's
+    ``RawResponse``'s, the connection's 2xx: a send's error holds no response). Then ``close``, and
+    the trace: the frames, the cursor ``conn.opts`` settled on (None as ""), the proven transport
+    and the read errors."""
     read: list[Any] = []
     errors: list[str] = []
     failure: Exception | None = None
+    unsent = False
     for text in call.get("send", []):
         try:
             await conn.send(wire_of(text))
         except Exception as error:
             if outside(error, lens):
                 raise
-            failure = error
+            failure, unsent = error, True
             break
     while failure is None and len(read) < call.get("take", 0):
         try:
@@ -315,7 +318,13 @@ async def live(conn: Any, call: Call, lens: Lens) -> Outcome:
         },
         "yields": len(read),
     }
-    # a first read failing before any frame is the open's error: the grid's error or timeout
+    # a send's error is a call's; a first read failing before any frame is the open's error
+    answered = (
+        None if failure is None or not unsent else grid_outcome(failure, lens, status)
+    )
+    if failure is not None and answered is not None:
+        error = python_error(failure, "stream", lens.envelope)
+        return Outcome(answered, error if lens.scripted else None, None, trace)
     refused = None if read or failure is None else grid_outcome(failure, lens)
     if failure is not None and errors and refused is not None:
         error = python_error(failure, "stream", lens.envelope)

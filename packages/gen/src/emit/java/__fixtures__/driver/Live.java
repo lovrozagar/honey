@@ -7,15 +7,17 @@ import tools.jackson.databind.node.ObjectNode;
  * A realtime call (bit 16 phase d2b; C#'s Stream.cs LiveAsync): each grid {@code send} as its JSON
  * value through sendJson, else as text, until the first error; then {@code take} values read by
  * receive (Protocol refuses a realtime call without one), a read's error also kept in {@code
- * realtime.errors}; a connection that ends first ends them quietly. Then close(), and the trace:
- * the frames, the cursor the options settled on (null as ""), the proven transport and the read
- * errors.
+ * realtime.errors}; a connection that ends first ends them quietly. A send's error is observed as
+ * a call's (Observe.graded, a DecodeException on the call's raw box: the connection's 2xx, since a
+ * send's error holds no response). Then close(), and the trace: the frames, the cursor the options
+ * settled on (null as ""), the proven transport and the read errors.
  */
 final class Live {
   private Live() {}
 
   static Observe.Outcome frames(Streams.At at, Object conn) {
-    RuntimeException failure = sent(conn, at.call());
+    RuntimeException unsent = sent(conn, at.call());
+    RuntimeException failure = unsent;
     ArrayNode read = Wire.array();
     ArrayNode errors = Wire.array();
     if (failure == null) {
@@ -46,9 +48,9 @@ final class Live {
         "proven",
         proven == null ? null : proven.toString().replace("_", "").toLowerCase(Locale.ROOT));
     trace.set("realtime", realtime);
-    /* a connection whose first read failed, refused before any frame, ends in its open's error: the grid's error, timeout or transport */
+    /* a send's error is a call's; a connection whose first read failed, refused before any frame, ends in its open's error: the grid's error, timeout or transport */
     JsonNode refused =
-        read.isEmpty() && !errors.isEmpty()
+        unsent != null || (read.isEmpty() && !errors.isEmpty())
             ? Observe.graded(at.run().sdk(), failure, at.raw(), at.ask())
             : null;
     if (refused != null) {

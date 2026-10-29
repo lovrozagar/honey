@@ -46,8 +46,11 @@ function errorKind(expected: Expectation, scenario: Scenario, call: Call): strin
 const KINDS: Readonly<Record<string, (expected: Expectation, scenario: Scenario, call: Call) => string>> = {
 	bytes: () => "binary",
 	data: dataKind,
-	/* a 2xx whose body does not decode, or one past the cell's response cap */
-	decode: (_, scenario) => (scenario.setup?.maxResponseBytes === undefined ? "decode" : "decode over cap"),
+	/* a 2xx whose body does not decode, or one past the cell's response cap: a call's, or a realtime send's (i7) */
+	decode: (_, scenario, call) => {
+		if (scenario.setup?.maxResponseBytes === undefined) return "decode"
+		return call.send === undefined ? "decode over cap" : "realtime send decode over cap"
+	},
 	error: errorKind,
 	events: (expected) => (expected.failed === undefined ? "events" : `events failed ${String(expected.failed)}`),
 	frames: () => "frames",

@@ -148,9 +148,10 @@ const overCapOwed = (complete: number, text: string) =>
 	complete >= 21 && /\bOVER_CAP_SDKS\b/.test(text) ? [OVER_CAP_FIX] : []
 
 describe("bit 21's staged over-cap list (i2)", () => {
+	/* i7 deleted the list, so the leg seeds it back into today's source to prove the guard still reds on it */
 	it("names its fix once the bit closes while features-sdk.ts declares it, and nothing without it", () => {
-		const without = source().replaceAll("OVER_CAP_SDKS", "SDKS")
-		expect([overCapOwed(21, source()), overCapOwed(21, without), overCapOwed(20, source())]).toEqual([
+		const staged = `${source()}\nexport const OVER_CAP_SDKS = ["ts"] as const\n`
+		expect([overCapOwed(21, staged), overCapOwed(21, source()), overCapOwed(20, staged)]).toEqual([
 			[OVER_CAP_FIX],
 			[],
 			[],

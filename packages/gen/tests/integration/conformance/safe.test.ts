@@ -6,7 +6,6 @@
  */
 import { describe, expect, it } from "vitest"
 import { SDKS } from "./features.ts"
-import { OVER_CAP_SDKS } from "./features-sdk.ts"
 import { type Cell, cellsFor, FEATURES } from "./matrix.ts"
 import {
 	isSafeVariant,
@@ -21,11 +20,8 @@ import {
 
 const keysOf = (cells: readonly Cell[]) => cells.map((cell) => cell.key)
 
-/** Whether `sdk`'s over-cap 2xx is its decode error yet (bit 21 i2): the over-cap row reaches it. */
-const capped = (sdk: Sdk) => (OVER_CAP_SDKS as readonly Sdk[]).includes(sdk)
-
 describe("response kinds, derived from features.ts", () => {
-	it("are the grid's 17 distinct answers, in grid order", () => {
+	it("are the grid's 18 distinct answers, in grid order", () => {
 		expect([...responseKinds(cellsFor("ts")).keys()]).toEqual([
 			"json",
 			"empty",
@@ -44,13 +40,13 @@ describe("response kinds, derived from features.ts", () => {
 			"events failed transport",
 			"text",
 			"decode over cap",
+			"realtime send decode over cap",
 		])
 	})
 
-	it("are the same for every SDK: the six run one grid, the over-cap kind on OVER_CAP_SDKS alone (i2)", () => {
+	it("are the same for every SDK: the six run one grid", () => {
 		const kinds = (sdk: Sdk) => [...responseKinds(cellsFor(sdk)).keys()]
-		for (const sdk of SDKS)
-			expect(kinds(sdk), sdk).toEqual(kinds("ts").filter((kind) => capped(sdk) || kind !== "decode over cap"))
+		for (const sdk of SDKS) expect(kinds(sdk), sdk).toEqual(kinds("ts"))
 	})
 
 	it("follow the cells, with no list to edit: the text row is the text kind, and without it there is none", () => {
@@ -111,7 +107,7 @@ describe("every enabled language's safe variant covers every kind", () => {
 			expect(safeCoverageProblems(SAFE_ENABLED)).toEqual([])
 			const { cells, uncovered } = safeCellsFor(sdk)
 			const kinds = new Set(cells.flatMap((cell) => cell.calls.map((_, i) => responseKindOf(cell, i))))
-			expect([SAFE_ENABLED.has(sdk), uncovered, kinds.size, cells.length]).toEqual([true, [], 17, 17])
+			expect([SAFE_ENABLED.has(sdk), uncovered, kinds.size, cells.length]).toEqual([true, [], 18, 18])
 		},
 	)
 

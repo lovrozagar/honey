@@ -4,7 +4,6 @@ package sdk
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -73,6 +72,9 @@ func (t *SseTransport) Connect(ctx context.Context, rawURL string, opts *Transpo
 		return nil, err
 	}
 	sc := &sseConn{resp: resp, next: make(chan sseResult, 1), done: make(chan struct{}), cancel: cancel}
+	if opts != nil {
+		sc.send = opts.send
+	}
 	go sc.run(streamCtx)
 	return sc, nil
 }
@@ -107,6 +109,7 @@ type sseConn struct {
 	closed bool
 	lastID string
 	once   sync.Once
+	send   func(context.Context, any) error
 }
 
 func (c *sseConn) Kind() TransportKind { return TransportSse }
@@ -161,9 +164,7 @@ func (c *sseConn) lastEventID() string {
 	return c.lastID
 }
 
-func (c *sseConn) Send(context.Context, any) error {
-	return errors.New("honey: sse transport is receive-only")
-}
+func (c *sseConn) Send(ctx context.Context, data any) error { return posted(ctx, c.send, "sse", data) }
 
 func (c *sseConn) Close() error {
 	c.once.Do(func() {

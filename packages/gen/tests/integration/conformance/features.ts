@@ -10,7 +10,7 @@ import { SDK_ROWS } from "./features-sdk.ts"
 import type { Call, Expected, Feature, Scenario } from "./matrix.ts"
 
 export const TARGETS = ["ts", "go", "rust", "python", "csharp", "java", "cli", "mcp"] as const
-export { OVER_CAP_SDKS, SDKS } from "./features-sdk.ts"
+export { SDKS } from "./features-sdk.ts"
 
 const getItem = (id: string, more: Partial<Call> = {}) =>
 	call("items.get", "GET", "/v1/items/:id", { params: { id }, ...more })
@@ -285,6 +285,7 @@ const REFERENCE_INDEX = [
 	"items patch <id> --data json",
 	"items update <id> [--flag] [--limit integer] [--q string] [--ratio number] [--tags string...] [--x-trace string] --data json",
 	"ping",
+	"realtime capped (realtime)",
 	"realtime echo (realtime)",
 	"realtime mixed (realtime)",
 	"realtime refused (realtime)",

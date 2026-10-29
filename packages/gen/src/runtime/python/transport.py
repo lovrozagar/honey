@@ -137,12 +137,14 @@ class Dial:
 
     async def post(self, text: str) -> None:
         op = replace(
-            self.op, method="POST", body="text", content_type="application/json"
+            self.op,
+            method="POST",
+            body="text",
+            content_type="application/json",
+            answer="none",
         )
         x = self.exchange({}, {}, op=op, body=text)
-        await self.core.run(x)
-        if x.failure is not None:
-            raise x.failure
+        x.decoded((await self.core.run(x))[0])
 
 
 def advance(opts: TransportOpts, id: str | None, payload: object) -> None:

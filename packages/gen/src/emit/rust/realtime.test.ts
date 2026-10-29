@@ -379,7 +379,8 @@ rustDescribe("send on a degraded connection POSTs the JSON to the endpoint throu
 	}, 600_000)
 
 	// v0: 6810f1bf1d
-	it("POSTs on an SSE connection, Ok on a 2xx; a POST answered 405 is a typed Api error, no frames", async () => {
+	/* bit 21 i7b: a send's error is graded as a call's, so the 405 is the call's error, not frames */
+	it("POSTs on an SSE connection, Ok on a 2xx; a POST answered 405 is a typed Api error, observed as the call's error", async () => {
 		const call = live({ send: ['{"hi":1}'], take: 1 })
 		const sent = await drive(posted(ok), [call], { script: QUICK, setup: TOK })
 		const no = await drive(posted({ json: { message: "no" }, status: 405 }), [call], { script: QUICK, setup: TOK })
@@ -390,7 +391,7 @@ rustDescribe("send on a degraded connection POSTs the JSON to the endpoint throu
 		}
 		expect([outcome(sent), outcome(no)], sent.run.stderr + no.run.stderr).toEqual([
 			[frames(frame(1)), undefined, []],
-			[frames(), ["Api", 405, "stream"], []],
+			[[{ body: { message: "no" }, errorKey: null, kind: "error", status: 405 }], ["Api", 405, "stream"], []],
 		])
 	}, 600_000)
 })

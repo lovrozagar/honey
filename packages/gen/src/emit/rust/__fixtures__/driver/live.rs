@@ -15,7 +15,8 @@ use crate::trace::rust_error;
 /// wire carries the text; then `take` values read (protocol.rs refuses a realtime call without one),
 /// each as its JSON. The first send or read error is traced via "stream" and ends the reads, a read
 /// error also kept in `realtime.errors`; a connection that ends first (closed or canceled) ends them
-/// quietly. Then `close`, and the trace: the frames read, the settled resume cursor (`""` when
+/// quietly. A send's error is observed as a call's (observe.rs `failed`, its status the send's
+/// answer's, which the status hook saw). Then `close`, and the trace: the frames read, the settled resume cursor (`""` when
 /// unset), the proven transport and the read errors, with `close`'s error.
 pub async fn observe_live<E>(
     p: Prepared<sdk::ResumableConnection<E>, sdk::Throw, ()>,
@@ -29,14 +30,14 @@ where
         Ok((rc, _)) => rc,
         Err(e) => return failed(e, &how, "return"),
     };
-    let (mut frames, mut errors, mut failure) = (Vec::new(), Vec::new(), None);
+    let (mut frames, mut errors, mut failure, mut unsent) = (Vec::new(), Vec::new(), None, false);
     for text in call.send.iter().flatten() {
         let sent = match serde_json::from_str::<Value>(text) {
             Ok(message) => rc.send(&message).await,
             Err(_) => rc.send_text(text).await,
         };
         if let Err(e) = sent {
-            failure = Some(e);
+            (failure, unsent) = (Some(e), true);
             break;
         }
     }
@@ -71,6 +72,17 @@ where
     );
     st.insert("yields".into(), json!(frames.len()));
     match failure {
+        /* a send's error is a call's: an error status, a timeout, an undecodable or over-cap 2xx, no answer */
+        Some(
+            e @ (sdk::Error::Api(_)
+            | sdk::Error::Timeout
+            | sdk::Error::Decode(_)
+            | sdk::Error::Transport(_)),
+        ) if unsent => {
+            let mut outcome = failed(e, &how, "stream")?;
+            outcome.stream = Some(Value::Object(st));
+            Ok(outcome)
+        }
         /* a connection whose first read failed, refused before any frame, ends in its open's error: the grid's error or timeout */
         Some(e @ (sdk::Error::Api(_) | sdk::Error::Timeout)) if frames.is_empty() && !errors.is_empty() => {
             let mut outcome = failed(e, &how, "stream")?;

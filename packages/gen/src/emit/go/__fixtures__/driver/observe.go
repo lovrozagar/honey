@@ -27,6 +27,7 @@ type outcome struct {
 	result *resultTrace
 	resp   *http.Response
 	stream *streamTrace
+	sent   bool // err is a realtime send's: graded as a call's, a *DecodeError included
 }
 
 // outcomeOf splits a method's return values: the last is its error; a Client.Safe() method's

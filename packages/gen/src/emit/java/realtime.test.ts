@@ -303,12 +303,19 @@ describe.skipIf(!JAVA)("a send POSTs on the SSE and long-poll transports, its er
 	})
 
 	/* new: C# realtime.test.ts:444 (a 405 has no class of its own: UnexpectedStatusException) */
-	it("POSTs on an SSE connection; a POST answered 405 throws its status exception, no frames", async () => {
+	/* bit 21 i7b: a send's error is graded as a call's, so the 405 is the call's error, not frames */
+	it("POSTs on an SSE connection; a POST answered 405 throws its status exception, observed as the call's error", async () => {
 		const replies = [refused, sse([ev(1)], "hold"), { json: { message: "no" }, status: 405 }]
 		const drove = await drive(replies, [live({ send: ['{"hi":1}'], take: 1 })], { script: QUICK, setup: TOK })
 		const e = call(drove)?.error
 		expect(drove.hops[2], drove.run.stderr).toMatchObject({ ...JSON_POST, headers: { authorization: "Bearer tok" } })
 		const seen = [drove.run.observed, e?.type, e?.chain.includes("ApiException"), e?.status, e?.via]
-		expect(seen).toEqual([frames(), "UnexpectedStatusException", true, 405, "stream"])
+		expect(seen).toEqual([
+			[{ body: { message: "no" }, errorKey: null, kind: "error", status: 405 }],
+			"UnexpectedStatusException",
+			true,
+			405,
+			"stream",
+		])
 	})
 })

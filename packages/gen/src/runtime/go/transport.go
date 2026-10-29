@@ -5,6 +5,7 @@ package sdk
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -42,6 +43,8 @@ type TransportOpts struct {
 	refresh              func(context.Context) bool    // a realtime method's: OnAuthExpired once, whether it gave a token
 	onRequest            []func(*RequestContext) error // a realtime method's: the client's hooks, run on each HTTP dial
 	onResponse           []func(*ResponseContext) error
+	// a realtime method's: an SSE or long-poll send, POSTed through the client
+	send func(context.Context, any) error
 }
 
 const (
@@ -228,4 +231,12 @@ func (c *wsConn) Send(ctx context.Context, data any) error { return writeFrame(c
 func (c *wsConn) Close() error {
 	c.stop()
 	return c.conn.Close(websocket.StatusNormalClosure, "client close")
+}
+
+// posted is an SSE or long-poll send: a realtime method's POST, else receive-only.
+func posted(ctx context.Context, send func(context.Context, any) error, name string, data any) error {
+	if send == nil {
+		return fmt.Errorf("honey: %s transport is receive-only", name)
+	}
+	return send(ctx, data)
 }

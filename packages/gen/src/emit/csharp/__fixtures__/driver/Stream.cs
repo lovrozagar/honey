@@ -4,8 +4,8 @@ using System.Text.Json.Nodes;
 
 namespace Honey.Driver;
 
-/// <summary>A stream call: the SDK, its plan, the grid call, its script entry and how it is observed.</summary>
-internal sealed record StreamCall(Sdk Sdk, Plan Plan, Call Call, CallScript? Entry, Lens Lens);
+/// <summary>A stream call: the SDK, its plan, the grid call, its script entry, how it is observed and its raw response.</summary>
+internal sealed record StreamCall(Sdk Sdk, Plan Plan, Call Call, CallScript? Entry, Lens Lens, object Raw);
 
 /// <summary>
 /// A stream call's reads (contract 50 §4.3; Python's stream.py, Rust's stream.rs, socket.rs and live.rs): awaiting
@@ -254,14 +254,16 @@ internal static class Streams
     /// A <c>ResumableConnection&lt;T&gt;</c>: each grid <c>send</c> as its JSON value through the SDK's JSON overload,
     /// else as text, until the first error; then <c>take</c> values read by enumeration (Protocol.cs refuses a
     /// realtime call without one), a read error also kept in <c>realtime.errors</c>; a connection that ends first
-    /// ends them quietly. Then <c>CloseAsync</c>, and the trace: the frames, the cursor <c>Options</c> settled on
-    /// (null as ""), the proven transport and the read errors.
+    /// ends them quietly. A send's error is observed as a call's, a <c>DecodeException</c> on the call's raw response
+    /// (the connection's 2xx: a send's error holds no response). Then <c>CloseAsync</c>, and the trace: the frames, the
+    /// cursor <c>Options</c> settled on (null as ""), the proven transport and the read errors.
     /// </summary>
     private static async Task<Outcome> LiveAsync(StreamCall at, object conn)
     {
-        var failure = await SentAsync(conn, at.Call.Send ?? [], (target, text) => Calls.TryParse(text, out var node)
+        var unsent = await SentAsync(conn, at.Call.Send ?? [], (target, text) => Calls.TryParse(text, out var node)
             ? Calls.SendJson(target, node)
             : Calls.Run(target, "SendAsync", [typeof(string), typeof(CancellationToken)], [text, CancellationToken.None]));
+        var failure = unsent;
         var (read, errors) = (new JsonArray(), new JsonArray());
         if (failure is null)
         {
@@ -285,6 +287,11 @@ internal static class Streams
             ["errors"] = errors,
             ["proven"] = Sdk.Get(conn, "ProvenTransport")?.ToString()?.ToLowerInvariant(),
         };
+        if (unsent is not null && Observe.OfCall(at.Sdk, unsent, at.Lens, at.Raw) is { } answered)
+        {
+            var sent = at.Lens.Scripted ? Traces.ErrorOf(at.Sdk, unsent, "stream", at.Lens.Envelope) : null;
+            return new Outcome(answered, sent, Stream: trace);
+        }
         /* a connection whose first read failed, refused before any frame, ends in its open's error: the grid's error or timeout */
         if (read.Count == 0 && errors.Count > 0 && Observe.Graded(at.Sdk, failure!, at.Lens.Raw) is { } refused)
         {

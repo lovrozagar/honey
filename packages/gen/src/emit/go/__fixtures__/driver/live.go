@@ -3,6 +3,8 @@ package main
 import (
 	"errors"
 	"reflect"
+
+	sdk "honey.test/driver/sdk"
 )
 
 // realtimeTrace is a realtime connection read after Close (Close waits for the read loop, so the
@@ -18,8 +20,9 @@ type realtimeTrace struct {
 }
 
 // driveRealtime drives the method's open *ResumableConnection: the grid's send through Send, then
-// take values from Events(); a value on Errors() is terminal, traced and ends the reads. Then
-// Close, and the connection's cursor and proven transport.
+// take values from Events(); a value on Errors() is terminal, traced and ends the reads. A send's
+// error ends them too, observed as a call's (sendObserved). Then Close, and the connection's
+// cursor and proven transport.
 func driveRealtime(s streamCall) streamed {
 	out := s.method.CallSlice(s.args)
 	if err := errOf(out[1]); err != nil {
@@ -27,9 +30,15 @@ func driveRealtime(s streamCall) streamed {
 	}
 	conn := out[0]
 	rt := &realtimeTrace{Errors: []string{}}
-	frames, failed, err := liveFrames(conn, s, rt)
+	unsent, err := sendAll(conn, s)
 	if err != nil {
 		return streamed{err: err}
+	}
+	frames, failed := []any{}, unsent
+	if unsent == nil {
+		if frames, failed, err = liveFrames(conn, s, rt); err != nil {
+			return streamed{err: err}
+		}
 	}
 	if _, err := invoke(conn, "Close"); err != nil {
 		return streamed{err: err}
@@ -42,21 +51,47 @@ func driveRealtime(s streamCall) streamed {
 		return streamed{err: err}
 	}
 	st := &streamTrace{Yields: len(frames), Realtime: rt}
-	return streamed{seen: observedStream("frames", frames, failed), o: outcome{err: failed, via: "stream", stream: st}}
+	seen := observedStream("frames", frames, failed)
+	if unsent != nil {
+		seen = sendObserved(unsent)
+	}
+	return streamed{seen: seen, o: outcome{err: failed, via: "stream", stream: st, sent: unsent != nil}}
 }
 
-// liveFrames sends the grid's send, then reads take values off Events(), or until Errors() gives
-// one; the frames, the error that ended them, or a failure of the run.
-func liveFrames(conn reflect.Value, s streamCall, rt *realtimeTrace) ([]any, error, error) {
+// sendAll sends the grid's send through Send in order; the first send's error, or a failure of
+// the run.
+func sendAll(conn reflect.Value, s streamCall) (error, error) {
 	for _, text := range s.j.c.Send {
 		out, err := invoke(conn, "Send", s.ctx, text)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		if failed := errOf(out[0]); failed != nil {
-			return []any{}, failed, nil
+			return failed, nil
 		}
 	}
+	return nil, nil
+}
+
+// sendObserved is a send's error as the grid observes a call's: no answer, a *DecodeError (an
+// undecodable 2xx or one past the cap) with its answer's status, or an error status; else null.
+func sendObserved(err error) any {
+	var de *sdk.DecodeError
+	var ce *sdk.ClientError
+	switch {
+	case noAnswerOf(err) != "":
+		return map[string]any{"kind": noAnswerOf(err)}
+	case errors.As(err, &de) && de.Response != nil:
+		return map[string]any{"kind": "decode", "status": de.Response.StatusCode}
+	case errors.As(err, &ce):
+		return errorOf(ce)
+	}
+	return nil
+}
+
+// liveFrames reads take values off Events(), or until Errors() gives one; the frames, the error
+// that ended them, or a failure of the run.
+func liveFrames(conn reflect.Value, s streamCall, rt *realtimeTrace) ([]any, error, error) {
 	events, err := invoke(conn, "Events")
 	if err != nil {
 		return nil, nil, err

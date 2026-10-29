@@ -1,6 +1,7 @@
 /**
  * The SDK-only rows of the conformance grid (bit 21 i0): the answers no shared row had, each through the NORMAL client
- * of the six SDKs, and a text answer no shared row had (F2); and a 2xx past the response cap (i2), on OVER_CAP_SDKS. An undecodable 2xx is the target's decode error: TS's and Python's DecodeError, Go's *DecodeError
+ * of the six SDKs, and a text answer no shared row had (F2); a 2xx past the response cap (i2, on every SDK since i6); and a realtime
+ * send's 2xx past it (i7). An undecodable 2xx is the target's decode error: TS's and Python's DecodeError, Go's *DecodeError
  * (i3), Rust's Error::Decode (its DecodeError since i4), C#'s and Java's DecodeException: each driver reads its target's. Every expectation is what the reference app (core `conformance/app.ts`) answers.
  */
 import { call, data, error, events, hop } from "./cells.ts"
@@ -8,20 +9,6 @@ import type { Feature, Scenario, Target } from "./matrix.ts"
 
 /** The SDK targets: the six generated clients, each with its normal (throwing) and safe styles (bit 21 i). */
 export const SDKS = ["ts", "go", "rust", "python", "csharp", "java"] as const satisfies readonly Target[]
-
-/**
- * The SDKs whose 2xx past the response cap is their decode error (bit 21 i1's carry-in: the status and headers
- * arrived, so it is an answer whose body was not read). TS since i1, Python since i2, Go since i3, Rust since i4,
- * C# since i5, Java since i6: it is SDKS now, so i7 retires this list.
- */
-export const OVER_CAP_SDKS = [
-	"ts",
-	"python",
-	"go",
-	"rust",
-	"csharp",
-	"java",
-] as const satisfies readonly (typeof SDKS)[number][]
 
 const decode: Scenario[] = [
 	{
@@ -32,7 +19,10 @@ const decode: Scenario[] = [
 	},
 ]
 
-/* the item's 28-byte answer past a 16-byte cap: the client reads no more of it, and the answer is its decode error */
+/*
+ * the item's 28-byte answer past a 16-byte cap: the status and headers arrived, so it is an answer whose body the
+ * client reads no further, its decode error
+ */
 const overCap: Scenario[] = [
 	{
 		calls: [call("items.get", "GET", "/v1/items/:id", { params: { id: "i1" } })],
@@ -40,6 +30,20 @@ const overCap: Scenario[] = [
 		id: "over-cap-2xx",
 		setup: { maxResponseBytes: 16 },
 		wire: [hop("GET", "/v1/items/i1")],
+	},
+]
+
+/*
+ * a realtime send is a POST on the open connection, so its 2xx past the cap is an answer, the target's decode error
+ * (i7), never no answer: the upgrade 404s, the event stream opens quiet, the send's answer is past 16 bytes. A client
+ * that took it reads the `{ n: 1 }` the app then streams. A dial past the cap stays no answer (each SDK's unit legs).
+ */
+const realtime: Scenario[] = [
+	{
+		calls: [call("realtime.capped", "GET", "/v1/realtime/capped", { send: [JSON.stringify({ say: "hi" })], take: 1 })],
+		expect: [{ kind: "decode", status: 200 }],
+		id: "send-over-cap",
+		setup: { maxResponseBytes: 16 },
 	},
 ]
 
@@ -96,10 +100,10 @@ export const SDK_ROWS: readonly Feature[] = [
 		stream,
 	),
 	sdks("text", "a text/plain answer is the exact string, never decoded as JSON", text),
-	{
-		asserted: "a 2xx past the response cap is the target's decode error, never no answer",
-		id: "over-cap",
-		scenarios: overCap,
-		targets: OVER_CAP_SDKS,
-	},
+	sdks("over-cap", "a 2xx past the response cap is the target's decode error, never no answer", overCap),
+	sdks(
+		"realtime",
+		"a realtime send's 2xx past the response cap is the target's decode error, never no answer",
+		realtime,
+	),
 ]

@@ -230,6 +230,7 @@ describe.skipIf(!PY)("python toolchain", () => {
 				"reconnect/refusal-mixed-retries",
 				"stream/initial-error",
 				"stream/mid-drop",
+				"realtime/send-over-cap",
 			])
 		})
 	})

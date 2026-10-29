@@ -519,8 +519,13 @@ describe("runtimeBytes", () => {
  * call), sse.go +312 (wireBody: a read failing mid-stream is a call's wrapped no-answer error, not a bare
  * io.ErrUnexpectedEOF), request.go +266 (a body past the cap is an answer: requestResult.over, a 2xx's DecodeError
  * after the stale settle), options.go +88 (the safe call's slot, deliver reporting to it).
+ * Bit 21 i7, +1,169 B to 99,240 B: a realtime send over SSE or long-poll POSTs (both were receive-only), answered as
+ * a call is, so a 2xx past the cap is its *DecodeError, as in the other five SDKs. Nothing left dead: the two
+ * receive-only errors fold into `posted`, the dial's no-answer path is unchanged. realtime.go +633 (newRealtime's
+ * send through doRequest, call.sent: the POST, a string as text and any other value as JSON; Send's doc),
+ * transport.go +423 (TransportOpts.send, posted), transport_sse.go +64, transport_longpoll.go +49 (each conn's send).
  */
-const GO_RUNTIME_BYTES = 98_071
+const GO_RUNTIME_BYTES = 99_240
 
 describe("the Go runtime within its byte budget (bit 12, G14)", () => {
 	it(
@@ -552,8 +557,10 @@ describe("the Go runtime within its byte budget (bit 12, G14)", () => {
  * exchange.rs +220 (an answer past the cap read as an answer, its `over` mark), events.rs +67 (an opening status
  * answered); answer.rs -996 (one read path, the over-cap 2xx its decode error), request.rs -536, the call sites of
  * Error::decode -102.
+ * Bit 21 i7, +110 B to 137,986 B: transport.rs +110, a realtime send's POST read through answer::none, the one answer
+ * path, so its 2xx past the cap is Error::Decode, not a dial's Error::Transport (`ok` still answers the dials).
  */
-const RUST_RUNTIME_BYTES = 137_876
+const RUST_RUNTIME_BYTES = 137_986
 
 describe("the Rust runtime within its byte budget (bit 13, G14)", () => {
 	it(
@@ -600,8 +607,10 @@ describe("the Rust runtime within its byte budget (bit 13, G14)", () => {
  * limit(), decoded's over-cap DecodeError, read's no-answer raise cut); transport_longpoll.py +149 (a poll past the
  * cap stays no answer: mid-stream, f2); ws.py +73 (a refusal's body past the cap is left unread, its status error
  * kept).
+ * Bit 21 i7, +18 B to 90,982 B: transport.py +18, a realtime send's POST read by `decoded` as an answer-less op, so
+ * its 2xx past the cap is its DecodeError (before, it was taken; its error status raises as before).
  */
-const PYTHON_RUNTIME_BYTES = 90_964
+const PYTHON_RUNTIME_BYTES = 90_982
 
 describe("the Python runtime within its byte budget (bit 14, G14)", () => {
 	it(
@@ -659,8 +668,10 @@ describe("the Python runtime within its byte budget (bit 14, G14)", () => {
  * ApiStatusException and DecodeException), Exchange.cs +501 (a body past the cap read as an answer, a 2xx's
  * DecodeException; a realtime dial's still no answer), Transport.cs -678 (the five twins cut, Transport.Safe's two
  * overloads, the twins' one path), Adapters.cs +12 (the dial flag).
+ * Bit 21 i7, +25 B to 134,903 B: Adapters.cs +25, a realtime send's POST no dial (`With`'s dial parameter), so its
+ * 2xx past the cap is the exchange's DecodeException, not ApiConnectionException.
  */
-const CSHARP_RUNTIME_BYTES = 134_878
+const CSHARP_RUNTIME_BYTES = 134_903
 
 describe("the C# runtime within its byte budget (bit 15, G14)", () => {
 	it(
