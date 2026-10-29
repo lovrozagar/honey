@@ -69,7 +69,13 @@ function configOf(app: ReferenceApp, setup: Setup = {}): Input {
 	const headers: Record<string, string> = { ...setup.headers }
 	if (setup.auth?.kind === "bearer") headers.authorization = `Bearer ${setup.auth.token}`
 	else if (setup.auth) headers[setup.auth.name] = setup.auth.value
-	return { baseURL: app.url, headers, redirect: setup.redirect, timeout: setup.timeoutMs }
+	return {
+		baseURL: app.url,
+		headers,
+		maxResponseBytes: setup.maxResponseBytes,
+		redirect: setup.redirect,
+		timeout: setup.timeoutMs,
+	}
 }
 
 /** The client input for `call`: params, search, headers, body, per-call overrides and resume cursors. */

@@ -1,6 +1,6 @@
 /**
  * The SDK-only rows of the conformance grid (bit 21 i0): the answers no shared row had, each through the NORMAL client
- * of the six SDKs, and a text answer no shared row had (F2). An undecodable 2xx is the target's decode error: Python's DecodeError, Rust's Error::Decode, C#'s
+ * of the six SDKs, and a text answer no shared row had (F2); and a 2xx past the response cap (i2), on OVER_CAP_SDKS. An undecodable 2xx is the target's decode error: Python's DecodeError, Rust's Error::Decode, C#'s
  * and Java's DecodeException. TS has no decode class yet (the ClientError parseBody throws, on the 2xx status; i1 adds
  * DecodeError) and Go no decode type (the wrapped decode error, no ClientError; i3 adds *DecodeError): each driver
  * reads its target's as it is today. Every expectation is what the reference app (core `conformance/app.ts`) answers.
@@ -11,12 +11,30 @@ import type { Feature, Scenario, Target } from "./matrix.ts"
 /** The SDK targets: the six generated clients, each with its normal (throwing) and safe styles (bit 21 i). */
 export const SDKS = ["ts", "go", "rust", "python", "csharp", "java"] as const satisfies readonly Target[]
 
+/**
+ * The SDKs whose 2xx past the response cap is their decode error (bit 21 i1's carry-in: the status and headers
+ * arrived, so it is an answer whose body was not read). TS since i1, Python since i2; each of i3–i6 adds its
+ * language as it moves off no-answer, and i7 retires this list once it is SDKS.
+ */
+export const OVER_CAP_SDKS = ["ts", "python"] as const satisfies readonly (typeof SDKS)[number][]
+
 const decode: Scenario[] = [
 	{
 		calls: [call("faults.undecodable", "GET", "/v1/faults/undecodable")],
 		expect: [{ kind: "decode", status: 200 }],
 		id: "undecodable-2xx",
 		wire: [hop("GET", "/v1/faults/undecodable")],
+	},
+]
+
+/* the item's 28-byte answer past a 16-byte cap: the client reads no more of it, and the answer is its decode error */
+const overCap: Scenario[] = [
+	{
+		calls: [call("items.get", "GET", "/v1/items/:id", { params: { id: "i1" } })],
+		expect: [{ kind: "decode", status: 200 }],
+		id: "over-cap-2xx",
+		setup: { maxResponseBytes: 16 },
+		wire: [hop("GET", "/v1/items/i1")],
 	},
 ]
 
@@ -73,4 +91,10 @@ export const SDK_ROWS: readonly Feature[] = [
 		stream,
 	),
 	sdks("text", "a text/plain answer is the exact string, never decoded as JSON", text),
+	{
+		asserted: "a 2xx past the response cap is the target's decode error, never no answer",
+		id: "over-cap",
+		scenarios: overCap,
+		targets: OVER_CAP_SDKS,
+	},
 ]

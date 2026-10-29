@@ -1,10 +1,11 @@
 /**
  * The safe variant's coverage (bit 21 i0, R-i6 c): the response kinds come from the grid's own cells, a safe variant
- * runs one cell per kind, and an enabled language whose safe variant leaves a kind uncovered reds. i1 enables TS, so
+ * runs one cell per kind, and an enabled language whose safe variant leaves a kind uncovered reds. i1 enables TS, i2 Python, so
  * the real leg holds over it; the synthetic legs prove it reds for a language missing a kind.
  */
 import { describe, expect, it } from "vitest"
 import { SDKS } from "./features.ts"
+import { OVER_CAP_SDKS } from "./features-sdk.ts"
 import { type Cell, cellsFor, FEATURES } from "./matrix.ts"
 import {
 	responseKindOf,
@@ -18,8 +19,11 @@ import {
 
 const keysOf = (cells: readonly Cell[]) => cells.map((cell) => cell.key)
 
+/** Whether `sdk`'s over-cap 2xx is its decode error yet (bit 21 i2): the over-cap row reaches it. */
+const capped = (sdk: Sdk) => (OVER_CAP_SDKS as readonly Sdk[]).includes(sdk)
+
 describe("response kinds, derived from features.ts", () => {
-	it("are the grid's 16 distinct answers, in grid order", () => {
+	it("are the grid's 17 distinct answers, in grid order", () => {
 		expect([...responseKinds(cellsFor("ts")).keys()]).toEqual([
 			"json",
 			"empty",
@@ -37,12 +41,14 @@ describe("response kinds, derived from features.ts", () => {
 			"stream open error 403",
 			"events failed transport",
 			"text",
+			"decode over cap",
 		])
 	})
 
-	it("are the same for every SDK: the six run one grid", () => {
+	it("are the same for every SDK: the six run one grid, the over-cap kind on OVER_CAP_SDKS alone (i2)", () => {
 		const kinds = (sdk: Sdk) => [...responseKinds(cellsFor(sdk)).keys()]
-		for (const sdk of SDKS) expect(kinds(sdk), sdk).toEqual(kinds("ts"))
+		for (const sdk of SDKS)
+			expect(kinds(sdk), sdk).toEqual(kinds("ts").filter((kind) => capped(sdk) || kind !== "decode over cap"))
 	})
 
 	it("follow the cells, with no list to edit: the text row is the text kind, and without it there is none", () => {
@@ -86,12 +92,12 @@ describe("the safe selection", () => {
 })
 
 describe("every enabled language's safe variant covers every kind", () => {
-	/* i1 enables TS; every phase after adds its language */
-	it("holds for SAFE_ENABLED, TS among it with one cell per kind", () => {
+	/* i1 enables TS and i2 Python; every phase after adds its language */
+	it.each(["ts", "python"] as const)("holds for SAFE_ENABLED, %s among it with one cell per kind", (sdk) => {
 		expect(safeCoverageProblems(SAFE_ENABLED)).toEqual([])
-		const { cells, uncovered } = safeCellsFor("ts")
+		const { cells, uncovered } = safeCellsFor(sdk)
 		const kinds = new Set(cells.flatMap((cell) => cell.calls.map((_, i) => responseKindOf(cell, i))))
-		expect([SAFE_ENABLED.has("ts"), uncovered, kinds.size]).toEqual([true, [], responseKinds(cellsFor("ts")).size])
+		expect([SAFE_ENABLED.has(sdk), uncovered, kinds.size, cells.length]).toEqual([true, [], 17, 17])
 	})
 
 	it("reds a synthetic enabled language missing a kind", () => {

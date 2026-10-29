@@ -10,7 +10,7 @@ import { SDK_ROWS } from "./features-sdk.ts"
 import type { Call, Expected, Feature, Scenario } from "./matrix.ts"
 
 export const TARGETS = ["ts", "go", "rust", "python", "csharp", "java", "cli", "mcp"] as const
-export { SDKS } from "./features-sdk.ts"
+export { OVER_CAP_SDKS, SDKS } from "./features-sdk.ts"
 
 const getItem = (id: string, more: Partial<Call> = {}) =>
 	call("items.get", "GET", "/v1/items/:id", { params: { id }, ...more })

@@ -4,16 +4,20 @@
  * sent by the fixed reflection driver, one process per cell, `Observed[]` back. Four suites run the grid:
  * `AsyncSDK` at the pins; `SDK`, which has no method for the streams (G2, Fe1); `AsyncSDK` under the 3.11.4
  * floor with the floor constraints (Fe3); and `AsyncSDK` on the newest set the manifest's dependencies resolve
- * to online (Fe4). Opt-in: `vitest run --mode harness`.
+ * to online (Fe4). The safe variant (bit 21 i2, R-i6) runs `AsyncSDK`'s `client.safe` on one cell per response
+ * kind, the driver reading each Result strictly, and its compile leg holds every operation's safe call on both
+ * clients under mypy --strict. Opt-in: `vitest run --mode harness`.
  */
 import { readFileSync } from "node:fs"
 import { describe, expect, it } from "vitest"
 import type { GateOptions } from "../../../src/emit/python/__fixtures__/compiled.ts"
 import { type DrivenPythonSdk, servedPythonSdk } from "../../../src/emit/python/__fixtures__/driven.ts"
 import { PY_FLOOR, resolve, withPython } from "../../../src/emit/python/__fixtures__/python-env.ts"
+import type { PythonCallPlan } from "../../../src/emit/python/sdk-plan.ts"
 import { generatePythonSdk, pythonCallPlans } from "../../../src/emit/python/sdk.ts"
-import { originsOf, SPAWN_TIMEOUT, safeVariant, type TargetRunner, targetSuite } from "./harness.ts"
+import { originsOf, type ReferenceApp, SPAWN_TIMEOUT, type TargetRunner, targetSuite } from "./harness.ts"
 import { type Cell, cellsFor, type Observed } from "./matrix.ts"
+import { SAFE } from "./safe.ts"
 
 const PY = withPython()
 const FLOOR = withPython(PY_FLOOR)
@@ -45,9 +49,10 @@ const keysWhere = (keep: (cell: Cell) => boolean): string[] =>
 		.filter(keep)
 		.map((cell) => cell.key)
 
-/** Which client a runner drives, under which gate, and how its suite is titled. */
+/** Which client a runner drives (its `safe` mirror when `safe`), under which gate, and how its suite is titled. */
 type How = {
 	readonly client: "async" | "sync"
+	readonly safe?: boolean
 	readonly python?: GateOptions["python"]
 	readonly titles?: Readonly<Record<string, string>>
 	readonly variant?: string
@@ -81,7 +86,7 @@ function pythonRunner(how: How): TargetRunner {
 		},
 		async run(cell, app) {
 			if (sdk === undefined) throw new Error("the Python runner ran a cell before prepare")
-			const ran = await sdk.runCalls(cell, originsOf(app), { client: how.client })
+			const ran = await sdk.runCalls(cell, originsOf(app), { client: how.client, safe: how.safe })
 			if (ran.status !== 0) throw new Error(`driver exit ${ran.status}: ${ran.stderr}`)
 			return ran.observed as readonly Observed[]
 		},
@@ -89,6 +94,84 @@ function pythonRunner(how: How): TargetRunner {
 		...(how.titles === undefined ? {} : { titles: how.titles }),
 		...(how.variant === undefined ? {} : { variant: how.variant }),
 	}
+}
+
+/** The compile leg (R-i6 a): safeDriver over the safe suite's served SDK, clean under mypy, and not vacuous. */
+function compileLeg(app: () => ReferenceApp) {
+	describe("conformance × python (safe): every operation's safe call compiles", () => {
+		const how = "type-checks each safe call against its normal twin and narrows it, on both clients"
+		it(how, { timeout: SPAWN_TIMEOUT }, () => {
+			const plans = Object.values(pythonCallPlans(app().document))
+			const served = servedPythonSdk(app().document)
+			const sse = plans.filter((plan) => plan.stream === "sse").length
+			const connections = plans.filter((plan) => plan.stream === "ws" || plan.stream === "realtime").length
+			expect({ calls: plans.length > 20, connections: connections > 0, streams: sse > 0 }).toEqual({
+				calls: true,
+				connections: true,
+				streams: true,
+			})
+			expect(served.check(safeDriver(served.package, plans))).toEqual([])
+		})
+	})
+}
+
+/** One operation's lines in the compile leg's program, the `i`th. */
+function safeOp(plan: PythonCallPlan, i: number): string[] {
+	const path = [...plan.accessors, plan.method].join(".")
+	const connection = plan.stream === "ws" || plan.stream === "realtime"
+	const body = connection
+		? [`    ident([a.safe.${path}], [a.${path}])`]
+		: [
+				`    same_async([a.safe.${path}], [a.${path}])`,
+				`    narrow(await a.safe.${path}(*args, **kwargs))`,
+				...(plan.sync
+					? [`    same_sync([c.safe.${path}], [c.${path}])`, `    narrow(c.safe.${path}(*args, **kwargs))`]
+					: []),
+			]
+	return ["", "", `async def op_${i}(a: sdk.AsyncSDK, c: sdk.SDK, *args: Any, **kwargs: Any) -> None:`, ...body]
+}
+
+/**
+ * The compile leg's program (R-i6 a): for every operation, each client's safe twin held to its normal method by
+ * `same` (the same parameters, and `Result[T]` of the very `T` the normal call answers: the lists make both exact) and
+ * its answer narrowed by `match`, Ok's response a RawResponse, Err's error the base status error or DecodeError; a
+ * connection the very same method on the mirror.
+ */
+function safeDriver(pkg: string, plans: readonly PythonCallPlan[]): string {
+	return [
+		"from collections.abc import Callable, Coroutine",
+		"from typing import Any, ParamSpec, TypeVar, assert_type",
+		"",
+		`import ${pkg} as sdk`,
+		"",
+		'P = ParamSpec("P")',
+		'T = TypeVar("T")',
+		'R = TypeVar("R")',
+		"",
+		"",
+		"def same_async(",
+		"    safe: list[Callable[P, Coroutine[Any, Any, sdk.Result[T]]]], normal: list[Callable[P, Coroutine[Any, Any, T]]]",
+		") -> None: ...",
+		"",
+		"",
+		"def same_sync(safe: list[Callable[P, sdk.Result[T]]], normal: list[Callable[P, T]]) -> None: ...",
+		"",
+		"",
+		"def ident(safe: list[Callable[P, R]], normal: list[Callable[P, R]]) -> None: ...",
+		"",
+		"",
+		"def narrow(r: sdk.Result[T]) -> T | None:",
+		"    match r:",
+		"        case sdk.Ok(data, response):",
+		"            assert_type(response, sdk.RawResponse)",
+		"            return data",
+		"        case sdk.Err(error, response):",
+		"            assert_type(error, sdk.APIStatusError | sdk.DecodeError)",
+		"            assert_type(response, sdk.RawResponse)",
+		"            return None",
+		...plans.flatMap(safeOp),
+		"",
+	].join("\n")
 }
 
 /** The committed floor constraints, as the floor gate installs them. */
@@ -100,7 +183,9 @@ const direct = (text: string): string[] => text.split("\n").filter((line) => /^(
 describe.skipIf(!PY)("python toolchain", () => {
 	targetSuite(pythonRunner({ client: "async", titles: V0_PORTS }))
 	targetSuite(pythonRunner({ client: "sync", variant: "SDK" }))
-	targetSuite(safeVariant(pythonRunner({ client: "async" }), "i2"))
+	const safe = targetSuite(pythonRunner({ client: "async", safe: true, variant: SAFE }))
+
+	compileLeg(safe)
 
 	/*
 	 * format.test.ts imports the omnibus under the floor; this suite runs the served SDK's every cell there,

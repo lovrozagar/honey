@@ -6,7 +6,7 @@ import { existsSync } from "node:fs"
 import { join, matchesGlob } from "node:path"
 import { describe, expect, it } from "vitest"
 import config, { HARNESS, TOOLCHAIN_PROJECTS } from "../../../vitest.config.ts"
-import { FEATURES, SDKS } from "./features.ts"
+import { FEATURES, OVER_CAP_SDKS, SDKS } from "./features.ts"
 import { unknownOperations } from "./harness.ts"
 import {
 	type Cell,
@@ -99,8 +99,8 @@ function reds(target: Cell, runs: readonly (readonly Observed[])[], wire: readon
 /** The ts cell keyed `key`. */
 const tsCell = (key: string) => cellsFor("ts").find((c) => c.key === key)
 
-/** A row's targets are all eight, the six SDKs (bit 21 i0), or a CLI-only or MCP-only row's own. */
-const ownTargets = (targets: readonly string[]) => [TARGETS.join(), SDKS.join(), "cli", "mcp"].includes(targets.join())
+/** A row's own targets: all eight, the six SDKs (bit 21 i0) or OVER_CAP_SDKS (i2), or a CLI or MCP row's own. */
+const OWN_TARGETS = [TARGETS, SDKS, OVER_CAP_SDKS, ["cli"], ["mcp"]].map(String)
 
 /** The cells `target` should get: each scenario of every row that lists it, keyed feature/scenario. */
 const cellsOfRows = (target: (typeof TARGETS)[number]) =>
@@ -146,9 +146,9 @@ describe("the grid's shape", () => {
 		]).toEqual([["ts", "go", "rust", "python", "csharp", "java", "cli", "mcp"], [], []])
 	})
 
-	it("targets a shared row at all eight, an SDK row at the six SDKs, and a CLI or MCP row at itself alone", () => {
+	it("targets a shared row at all eight, an SDK row at the six SDKs or OVER_CAP_SDKS, a CLI or MCP row at itself", () => {
 		expect([
-			FEATURES.filter((f) => !ownTargets(f.targets)).map((f) => f.id),
+			FEATURES.filter((f) => !OWN_TARGETS.includes(`${f.targets}`)).map((f) => f.id),
 			FEATURES.filter((f) => f.targets.length === TARGETS.length)
 				.map((f) => f.id)
 				.sort(),

@@ -29,6 +29,8 @@ export type Setup = {
 	readonly headers?: Readonly<Record<string, string>>
 	readonly redirect?: "follow" | "none" | "same-origin"
 	readonly timeoutMs?: number
+	/** the client's response cap in bytes (bit 21 i2's over-cap row) */
+	readonly maxResponseBytes?: number
 }
 export type Body =
 	| { readonly kind: "json"; readonly value: Json }

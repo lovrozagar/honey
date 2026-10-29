@@ -12,7 +12,7 @@ export type Sdk = (typeof SDKS)[number]
 export const SAFE = "safe"
 
 /** The SDKs whose safe variant runs: each of i1–i6 adds its language. */
-export const SAFE_ENABLED: ReadonlySet<Sdk> = new Set<Sdk>(["ts"])
+export const SAFE_ENABLED: ReadonlySet<Sdk> = new Set<Sdk>(["ts", "python"])
 
 /** An expectation as a record of its members, or null for one that is no record (a matcher list, a literal). */
 const recordOf = (value: Expected | undefined): Readonly<Record<string, unknown>> | null =>
@@ -39,7 +39,8 @@ function errorKind(expected: Expectation, scenario: Scenario, call: Call): strin
 const KINDS: Readonly<Record<string, (expected: Expectation, scenario: Scenario, call: Call) => string>> = {
 	bytes: () => "binary",
 	data: dataKind,
-	decode: () => "decode",
+	/* a 2xx whose body does not decode, or one past the cell's response cap */
+	decode: (_, scenario) => (scenario.setup?.maxResponseBytes === undefined ? "decode" : "decode over cap"),
 	error: errorKind,
 	events: (expected) => (expected.failed === undefined ? "events" : `events failed ${String(expected.failed)}`),
 	frames: () => "frames",
