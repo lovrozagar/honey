@@ -78,4 +78,4 @@ Closed at f, on e3's e92e73d; the closing CI run is this stack's push, after the
 
 **Decisions:** docs are markdown under docs/ (a site deploy is the owner's call after 1.0); no agent bundle beyond the measured SKILL.md (tokens.json stays v0-derived by design); per-target READMEs are not a generated artifact.
 
-**Open at close:** j3 (cf prod) waits for the repository's Cloudflare secrets; the first `@lovrozagar/honey-codegen` npm publish and the trusted-publisher entries are the owner's; deploying docs/ as a site is the owner's call; the R5 Anyrow note awaits the owner's approval.
+**Open at close:** ~~j3 (cf prod) waits for the repository's Cloudflare secrets~~ done after the close: the live leg ran on the owner's account at 4e505e0, all 5 apps as `honey-e2e-<app>` Workers (103 passed, 1 skipped), each torn down by exact name; the first `@lovrozagar/honey-codegen` npm publish and the trusted-publisher entries are the owner's; deploying docs/ as a site is the owner's call; the R5 Anyrow note awaits the owner's approval.

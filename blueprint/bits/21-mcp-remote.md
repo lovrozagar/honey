@@ -58,3 +58,14 @@ The file argument's wire shape follows `io.modelcontextprotocol/files`. That is 
 - **One module** owns that shape, and a structure leg holds that no other file names `x-mcp-file`.
 - **Re-checked at every phase start and at the close:** a change in the PR is a one-module diff plus its legs.
 - **No shipping client implements it yet;** the legs use a minimal extension client of our own.
+
+## Recorded during the bit
+- **Host refusal is 421** (Misdirected Request, RFC 9110 §15.5.20) where the TypeScript MCP SDK answers 403. A request for a host the server is not is misdirected, not forbidden.
+- **`ctx.res.json(key)` has no runtime check** of a `.output()` key. The types are the contract. `assertOutputKeys` runs only where the document and route tree are generated, so the minimal bundle stays under its 26,200 B lock. A decided limit.
+- **An upload store's claim lives in D1 or a Durable Object, its bytes in R2.** D1 rows and SQLite Durable Object values cap near 2 MB, while uploads default to 50 MiB. The plan's "D1 or DO" for the whole store was wrong; the docs and `UploadStore`'s comment say so.
+- **A honey-built Worker passes its entry's named exports on** (h), so the Durable Object an upload store needs can be exported. Without it the production setup the docs recommend could not be built. `default` stays honey's fetch; a second default is refused.
+- **Deleting a Worker by name removes its own Durable Object namespaces.** A probe on the owner's account (wrangler 4.110, `wrangler delete --name`, no `--force`) left the account's namespace ids exactly as before. The live MCP leg relies on this, and its teardown asserts it rather than deleting a namespace itself.
+- **The live leg's upload store is a Durable Object,** not memory: a memory store would make the leg's verdict depend on which isolate answered. `wrangler dev` runs one isolate, so cross-isolate one-shot is shown only live (`upload-raced`).
+- **api-key-on-origin stays a LACKS row** with its exact reason (h); lifting it needs a change to the reference document, not to the emitters.
+- **Every test or hook that spawns declares its bound** (`honey/spawn-timeout`): three spawning legs passed locally and timed out under vitest's defaults on slow CI runners. Core and gen each hold `SPAWN_TIMEOUT`, and a structure leg keeps the twins equal.
+- **Open for the close:** whether the repo guards the Bun version (the owner's machine runs 1.4.4, CI pins 1.3.11; two Bun-only gaps surfaced this bit: `headersDistinct`, and jiti's `Error.prepareStackTrace` hook under Vite).

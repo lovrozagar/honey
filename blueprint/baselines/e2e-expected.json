@@ -109,7 +109,8 @@
 				"mcp.test.ts > MCP mounted at /api/mcp > modern at 2026-07-28 calls the five tools, each file intact under the caller's ApiKey",
 				"mcp.test.ts > MCP mounted at /api/mcp > refuses an unauthenticated tools/list before any dispatch, the official client too",
 				"mcp.test.ts > MCP mounted at /api/mcp > sdk at 2025-11-25 calls the five tools, each file intact under the caller's ApiKey",
-				"mcp.test.ts > MCP uploads at /api/mcp (bit 21 g) > asks for a file without data, takes its PUT once, and runs the call on its bytes"
+				"mcp.test.ts > MCP uploads at /api/mcp (bit 21 g) > asks for a file without data, takes its PUT once, and runs the call on its bytes",
+				"mcp.test.ts > MCP uploads at /api/mcp, raced (bit 21 h) > lets one of eight racing PUTs claim the upload, the rest 409, and runs the call on its bytes once"
 			],
 			"skipped": []
 		},
@@ -254,7 +255,8 @@
 				"mcp.test.ts > MCP mounted at /api/mcp > modern at 2026-07-28 calls the five tools, each file intact under the caller's ApiKey",
 				"mcp.test.ts > MCP mounted at /api/mcp > refuses an unauthenticated tools/list before any dispatch, the official client too",
 				"mcp.test.ts > MCP mounted at /api/mcp > sdk at 2025-11-25 calls the five tools, each file intact under the caller's ApiKey",
-				"mcp.test.ts > MCP uploads at /api/mcp (bit 21 g) > asks for a file without data, takes its PUT once, and runs the call on its bytes"
+				"mcp.test.ts > MCP uploads at /api/mcp (bit 21 g) > asks for a file without data, takes its PUT once, and runs the call on its bytes",
+				"mcp.test.ts > MCP uploads at /api/mcp, raced (bit 21 h) > lets one of eight racing PUTs claim the upload, the rest 409, and runs the call on its bytes once"
 			],
 			"skipped": []
 		},
@@ -399,7 +401,8 @@
 				"mcp.test.ts > MCP mounted at /api/mcp > modern at 2026-07-28 calls the five tools, each file intact under the caller's ApiKey",
 				"mcp.test.ts > MCP mounted at /api/mcp > refuses an unauthenticated tools/list before any dispatch, the official client too",
 				"mcp.test.ts > MCP mounted at /api/mcp > sdk at 2025-11-25 calls the five tools, each file intact under the caller's ApiKey",
-				"mcp.test.ts > MCP uploads at /api/mcp (bit 21 g) > asks for a file without data, takes its PUT once, and runs the call on its bytes"
+				"mcp.test.ts > MCP uploads at /api/mcp (bit 21 g) > asks for a file without data, takes its PUT once, and runs the call on its bytes",
+				"mcp.test.ts > MCP uploads at /api/mcp, raced (bit 21 h) > lets one of eight racing PUTs claim the upload, the rest 409, and runs the call on its bytes once"
 			],
 			"skipped": []
 		},
@@ -545,7 +548,8 @@
 				"mcp.test.ts > MCP mounted at /api/mcp > modern at 2026-07-28 calls the five tools, each file intact under the caller's ApiKey",
 				"mcp.test.ts > MCP mounted at /api/mcp > refuses an unauthenticated tools/list before any dispatch, the official client too",
 				"mcp.test.ts > MCP mounted at /api/mcp > sdk at 2025-11-25 calls the five tools, each file intact under the caller's ApiKey",
-				"mcp.test.ts > MCP uploads at /api/mcp (bit 21 g) > asks for a file without data, takes its PUT once, and runs the call on its bytes"
+				"mcp.test.ts > MCP uploads at /api/mcp (bit 21 g) > asks for a file without data, takes its PUT once, and runs the call on its bytes",
+				"mcp.test.ts > MCP uploads at /api/mcp, raced (bit 21 h) > lets one of eight racing PUTs claim the upload, the rest 409, and runs the call on its bytes once"
 			],
 			"skipped": []
 		},
@@ -689,7 +693,8 @@
 				"mcp.test.ts > MCP mounted at /api/mcp > modern at 2026-07-28 calls the five tools, each file intact under the caller's ApiKey",
 				"mcp.test.ts > MCP mounted at /api/mcp > refuses an unauthenticated tools/list before any dispatch, the official client too",
 				"mcp.test.ts > MCP mounted at /api/mcp > sdk at 2025-11-25 calls the five tools, each file intact under the caller's ApiKey",
-				"mcp.test.ts > MCP uploads at /api/mcp (bit 21 g) > asks for a file without data, takes its PUT once, and runs the call on its bytes"
+				"mcp.test.ts > MCP uploads at /api/mcp (bit 21 g) > asks for a file without data, takes its PUT once, and runs the call on its bytes",
+				"mcp.test.ts > MCP uploads at /api/mcp, raced (bit 21 h) > lets one of eight racing PUTs claim the upload, the rest 409, and runs the call on its bytes once"
 			],
 			"skipped": []
 		},
@@ -834,7 +839,8 @@
 				"mcp.test.ts > MCP mounted at /api/mcp > modern at 2026-07-28 calls the five tools, each file intact under the caller's ApiKey",
 				"mcp.test.ts > MCP mounted at /api/mcp > refuses an unauthenticated tools/list before any dispatch, the official client too",
 				"mcp.test.ts > MCP mounted at /api/mcp > sdk at 2025-11-25 calls the five tools, each file intact under the caller's ApiKey",
-				"mcp.test.ts > MCP uploads at /api/mcp (bit 21 g) > asks for a file without data, takes its PUT once, and runs the call on its bytes"
+				"mcp.test.ts > MCP uploads at /api/mcp (bit 21 g) > asks for a file without data, takes its PUT once, and runs the call on its bytes",
+				"mcp.test.ts > MCP uploads at /api/mcp, raced (bit 21 h) > lets one of eight racing PUTs claim the upload, the rest 409, and runs the call on its bytes once"
 			],
 			"skipped": []
 		},
