@@ -6,8 +6,17 @@
 import { createHash } from "node:crypto"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { emittedApp, emittedSdk } from "../../../src/emit/ts/__fixtures__/emitted.ts"
-import { type ReferenceApp, SPAWN_TIMEOUT, startReferenceApp, targetSuite } from "./harness.ts"
-import { type Call, type Cell, cellsFor, compareCell, type Json, type Observed, type Setup } from "./matrix.ts"
+import { type ReferenceApp, SPAWN_TIMEOUT, safeVariant, startReferenceApp, targetSuite } from "./harness.ts"
+import {
+	type Call,
+	type Cell,
+	cellsFor,
+	compareCell,
+	type Json,
+	type NoAnswer,
+	type Observed,
+	type Setup,
+} from "./matrix.ts"
 
 type Input = Record<string, unknown>
 type Result = { data: unknown; error: unknown; headers?: Record<string, string>; status: number }
@@ -22,6 +31,9 @@ type SdkClass = new (config: Input) => Sdk
 /** A service map node, read for two facts: `empty`, an operation declaring no success body, and `realtime`. */
 type MapNode = { empty?: boolean; realtime?: boolean } & Record<string, unknown>
 type App = Record<string, (path: string, input: Input) => Promise<unknown>>
+type ErrorClass = abstract new (...args: never[]) => Error
+/** The emitted SDK's error classes the grid tells apart: an error status, and no answer. */
+type Errors = { readonly APIConnectionError: ErrorClass; readonly ClientError: ErrorClass }
 
 /** Each titled cell's v0 port, or the C5 case whose live leg it is: the suite names its `it` `<key> (<title>)`. */
 const V0_PORTS: Readonly<Record<string, string>> = {
@@ -51,7 +63,7 @@ function inputOf(call: Call, app: ReferenceApp): Input {
 		search: call.search,
 		timeout: call.timeoutMs,
 	}
-	if (call.origin === "alt") input.baseURL = app.alt
+	if (call.origin !== undefined) input.baseURL = app[call.origin]
 	if (call.body?.kind === "json") input.json = call.body.value
 	else if (call.body) {
 		input.body = Uint8Array.from({ length: call.body.size }, (_, i) => i & 0xff)
@@ -97,8 +109,31 @@ async function untypedOf(response: Response): Promise<Observed> {
 	return { data, kind: "data", status: response.status }
 }
 
-/** A safe-mode result as the grid observes it: an error by status and key, bytes by digest, else data. */
-function settled(result: Result): Observed {
+/**
+ * What failed with no answer, as the grid observes it: a timeout or an abort, or the SDK's APIConnectionError; else
+ * null (no outcome the grid has).
+ */
+function noAnswerOf(e: unknown, errors: Errors): NoAnswer | null {
+	if (e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError")) return "timeout"
+	return e instanceof errors.APIConnectionError ? "transport" : null
+}
+
+/**
+ * A ClientError on a 2xx status: the answer's body did not decode. TS has no decode class yet (bit 21 i1 adds
+ * DecodeError), so the normal client's decode error is the ClientError parseBody throws, the 2xx status kept.
+ */
+function isUndecodable(e: unknown, errors: Errors): e is Error & { status: number } {
+	const status = (e as { status?: unknown } | null)?.status
+	return e instanceof errors.ClientError && typeof status === "number" && Math.floor(status / 100) === 2
+}
+
+/**
+ * A safe-mode result as the grid observes it: an error by status and key, bytes by digest, else data. An undecodable
+ * 2xx, the ClientError the normal client throws, comes back in the safe result's error (response.ts finishRequest, the
+ * decided divergence bit 21 i1 ends): observed as the normal client throws it.
+ */
+function settled(result: Result, errors: Errors): Observed {
+	if (isUndecodable(result.error, errors)) return { kind: "decode", status: result.error.status }
 	if (result.error) {
 		const body = (result.error instanceof Error ? (result.error as { body?: unknown }).body : result.error) as Json
 		const key = (body as { error_key?: unknown } | null)?.error_key
@@ -112,17 +147,30 @@ function settled(result: Result): Observed {
 	return result.headers ? { ...data, headers: result.headers } : data
 }
 
-/** Up to `take` events of a stream, then the stream is closed (`break`). */
-async function eventsOf(stream: AsyncIterable<Event>, take = Number.POSITIVE_INFINITY): Promise<Event[]> {
+/**
+ * Up to `take` events of a stream, then the stream is closed (`break`). A stream that fails with no answer after its
+ * first event is the events delivered and how it `failed`; any other failure is the call's.
+ */
+async function eventsOf(
+	stream: AsyncIterable<Event>,
+	errors: Errors,
+	take = Number.POSITIVE_INFINITY,
+): Promise<Observed> {
 	const events: Event[] = []
-	for await (const { data, event, id } of stream) {
-		const seen: Event = { data }
-		if (event !== undefined) seen.event = event
-		if (id !== undefined) seen.id = id
-		events.push(seen)
-		if (events.length >= take) break
+	try {
+		for await (const { data, event, id } of stream) {
+			const seen: Event = { data }
+			if (event !== undefined) seen.event = event
+			if (id !== undefined) seen.id = id
+			events.push(seen)
+			if (events.length >= take) break
+		}
+	} catch (e) {
+		const failed = events.length > 0 ? noAnswerOf(e, errors) : null
+		if (failed === null) throw e
+		return { events, failed, kind: "events" }
 	}
-	return events
+	return { events, kind: "events" }
 }
 
 /** Send the call's frames, read `take` text frames as JSON, then close 1000; resolves once the socket closes. */
@@ -186,25 +234,35 @@ async function liveOf(connection: Resumable, call: Call, connected?: Promise<unk
 }
 
 /** One call's answer, normalized: a raw response, a socket, a realtime connection, an event stream or a safe-mode result. */
-async function observe(answer: unknown, call: Call, connected?: Promise<unknown>): Promise<Observed> {
+async function observe(answer: unknown, call: Call, errors: Errors, connected?: Promise<unknown>): Promise<Observed> {
 	if (answer instanceof Response) {
 		const headers = Object.fromEntries(answer.headers)
 		return { body: await answer.text(), headers, kind: "raw", status: answer.status }
 	}
 	if (isSocket(answer)) return { frames: await framesOf(answer, call), kind: "frames" }
 	if (isResumable(answer)) return { frames: await liveOf(answer, call, connected), kind: "frames" }
-	if (isStream(answer)) return { events: await eventsOf(answer, call.take), kind: "events" }
-	return settled(answer as Result)
+	if (isStream(answer)) return eventsOf(answer, errors, call.take)
+	return settled(answer as Result, errors)
 }
 
-/** Send one call: a timeout or abort is `timeout`, a thrown ClientError (a stream's non-2xx) an error. */
-async function attempt(fire: () => unknown, call: Call, connected?: Promise<unknown>): Promise<Observed> {
+/**
+ * Send one call: a timeout or abort is `timeout`, APIConnectionError `transport`, a thrown ClientError (a stream's
+ * non-2xx, the thrower's undecodable 2xx) an error or a decode; any other throw fails the cell.
+ */
+async function attempt(
+	fire: () => unknown,
+	call: Call,
+	errors: Errors,
+	connected?: Promise<unknown>,
+): Promise<Observed> {
 	try {
-		return await observe(await fire(), call, connected)
+		return await observe(await fire(), call, errors, connected)
 	} catch (e) {
-		if (e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError")) return { kind: "timeout" }
+		const failed = noAnswerOf(e, errors)
+		if (failed !== null) return { kind: failed }
 		const status = (e as { status?: unknown } | null)?.status
-		if (e instanceof Error && typeof status === "number") return settled({ data: null, error: e, status })
+		if (e instanceof errors.ClientError && typeof status === "number")
+			return settled({ data: null, error: e, status }, errors)
 		throw e
 	}
 }
@@ -213,27 +271,32 @@ async function attempt(fire: () => unknown, call: Call, connected?: Promise<unkn
  * One call through `safe`; an operation declaring no success body goes `raw: true` through
  * `thrower` instead, so an error status still throws its ClientError and a 2xx is read untyped.
  */
-async function callOf(clients: { map: MapNode; safe: Sdk; thrower: Sdk }, call: Call, app: ReferenceApp) {
+async function callOf(clients: Clients, call: Call, app: ReferenceApp) {
 	const input = inputOf(call, app)
+	const { errors } = clients
 	/* a realtime op opens one connection, whatever its body: its sends wait for the open */
 	if (isRealtime(clients.map, call.operation)) {
 		const connected = new Promise((resolve) => (input.onReconnected = resolve))
-		return attempt(() => operationOf(clients.safe, call.operation)(input), call, connected)
+		return attempt(() => operationOf(clients.safe, call.operation)(input), call, errors, connected)
 	}
 	if (call.raw || !declaresNoBody(clients.map, call.operation))
-		return attempt(() => operationOf(clients.safe, call.operation)(input), call)
+		return attempt(() => operationOf(clients.safe, call.operation)(input), call, errors)
 	const send = async () =>
 		untypedOf((await operationOf(clients.thrower, call.operation)({ ...input, raw: true })) as Response)
-	return attempt(send, call)
+	return attempt(send, call, errors)
 }
+
+/** What a cell's calls go through: the service map, both clients and the SDK's error classes. */
+type Clients = { readonly errors: Errors; readonly map: MapNode; readonly safe: Sdk; readonly thrower: Sdk }
 
 /** The TS runner: the emitted SDK class built once from the served document, one instance per mode per cell. */
 function tsRunner() {
-	let built: { ConformanceSDK: SdkClass; map: MapNode } | undefined
+	let built: { ConformanceSDK: SdkClass; errors: Errors; map: MapNode } | undefined
 	return {
 		async prepare(app: ReferenceApp): Promise<void> {
 			const sdk = await emittedSdk(app.document, { name: "ConformanceSDK" })
-			built = { ConformanceSDK: sdk.ConformanceSDK as SdkClass, map: sdk.serviceMap as MapNode }
+			const errors = { APIConnectionError: sdk.APIConnectionError, ClientError: sdk.ClientError } as Errors
+			built = { ConformanceSDK: sdk.ConformanceSDK as SdkClass, errors, map: sdk.serviceMap as MapNode }
 		},
 		async run(cell: Cell, app: ReferenceApp): Promise<readonly Observed[]> {
 			if (!built) throw new Error("the TS runner ran a cell before prepare")
@@ -242,7 +305,8 @@ function tsRunner() {
 			const thrower = new built.ConformanceSDK({ ...config, throwOnError: true })
 			const observed: Observed[] = []
 			try {
-				for (const call of cell.calls) observed.push(await callOf({ map: built.map, safe, thrower }, call, app))
+				const clients = { errors: built.errors, map: built.map, safe, thrower }
+				for (const call of cell.calls) observed.push(await callOf(clients, call, app))
 			} finally {
 				safe.dispose()
 				thrower.dispose()
@@ -255,6 +319,7 @@ function tsRunner() {
 }
 
 targetSuite(tsRunner())
+targetSuite(safeVariant(tsRunner(), "i1"))
 
 describe("conformance × ts titles", () => {
 	it("titles only cells the grid holds for ts", () => {
@@ -276,11 +341,11 @@ describe("app front", () => {
 		const cell = cellsFor("ts").find((c) => c.key === "verbs/reference-request")
 		expect(cell?.calls).toHaveLength(1)
 		const [call] = (cell as Cell).calls as [Call]
-		const { createClient } = (await emittedApp()) as unknown as { createClient: (config: Input) => App }
-		const client = createClient(configOf(live, (cell as Cell).setup))
+		const front = (await emittedApp()) as unknown as Errors & { createClient: (config: Input) => App }
+		const client = front.createClient(configOf(live, (cell as Cell).setup))
 		const method = call.route.method.toLowerCase()
 		const since = await live.mark()
-		const observed = await attempt(() => client[method]?.(call.route.path, inputOf(call, live)), call)
+		const observed = await attempt(() => client[method]?.(call.route.path, inputOf(call, live)), call, front)
 		expect(compareCell(cell as Cell, [observed], await live.wire(since))).toEqual([])
 	})
 })

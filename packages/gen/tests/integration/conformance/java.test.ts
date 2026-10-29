@@ -9,7 +9,7 @@
 import { describe } from "vitest"
 import { type DrivenJavaSdk, servedJavaSdk } from "../../../src/emit/java/__fixtures__/driven.ts"
 import { withJava } from "../../../src/emit/java/__fixtures__/java-env.ts"
-import { type TargetRunner, targetSuite } from "./harness.ts"
+import { originsOf, safeVariant, type TargetRunner, targetSuite } from "./harness.ts"
 import type { Observed } from "./matrix.ts"
 
 const JAVA = withJava()
@@ -32,7 +32,7 @@ function javaRunner(jdk: 17 | 21 | 25, variant?: string): TargetRunner {
 		},
 		async run(cell, app) {
 			if (sdk === undefined) throw new Error("the Java runner ran a cell before prepare")
-			const ran = await sdk.runCalls(cell, { alt: app.alt, url: app.url }, { jdk })
+			const ran = await sdk.runCalls(cell, originsOf(app), { jdk })
 			if (ran.status !== 0) throw new Error(`driver exit ${ran.status}: ${ran.stderr}`)
 			return ran.observed as readonly Observed[]
 		},
@@ -45,4 +45,5 @@ describe.skipIf(!JAVA)("java toolchain", () => {
 	targetSuite(javaRunner(21))
 	targetSuite(javaRunner(17, "JDK 17"))
 	targetSuite(javaRunner(25, "JDK 25"))
+	targetSuite(safeVariant(javaRunner(21), "i6"))
 })

@@ -1,7 +1,7 @@
 /**
  * The conformance harness (bit 11): spawns core's reference app on bun and drives it over HTTP
  * alone. gen never imports core (H2): the app's path is a process argument. The child prints one
- * readiness line `{"url","alt"}` once both its listeners are up; it stops on SIGTERM or when its
+ * readiness line `{"url","alt","drop"}` once its listeners are up; it stops on SIGTERM or when its
  * stdin closes, so a killed vitest worker never orphans it. Opt-in: `vitest run --mode harness`.
  */
 import { type ChildProcess, spawn } from "node:child_process"
@@ -10,6 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { BUILT_INS } from "../../../src/emit/cli/commands.ts"
 import { recordCell } from "./gate.ts"
 import { type Cell, cellsFor, compareCell, type Observed, type Target, type WireHop } from "./matrix.ts"
+import { SAFE, safeCellsFor, type Sdk } from "./safe.ts"
 /* the bound of a hook or leg that starts the reference app or compiles an SDK: the shared spawn scale */
 export { SPAWN_TIMEOUT } from "../../../src/gen/__fixtures__/spawn-timeout.ts"
 
@@ -18,9 +19,13 @@ export type ReferenceApp = {
 	readonly alt: string
 	/** GET {url}/v1/openapi.json at start */
 	readonly document: Record<string, unknown>
+	/** same app behind a raw front that cuts each answer's connection at its end, no terminal chunk (bit 21 i0) */
+	readonly drop: string
 	/** the wire cursor now: `wire(mark())` holds only the requests sent after it */
 	mark(): Promise<number>
 	stop(): Promise<void>
+	/** where nothing listens: a call there gets no answer (REFUSED) */
+	readonly refused: string
 	/** primary origin */
 	readonly url: string
 	/** the requests the app received after cursor `since`, in arrival order */
@@ -39,7 +44,10 @@ export type TargetRunner = {
 	readonly target: Target
 	/** a cell's `it` is titled `<key> (<title>)` when it has one: a v0 port, a case's live leg */
 	readonly titles?: Readonly<Record<string, string>>
-	/** a second runner of one target, titled `conformance × <target> (<variant>)` */
+	/**
+	 * a second runner of one target, titled `conformance × <target> (<variant>)`; SAFE (safe.ts) runs the target's safe
+	 * style on one cell per response kind once its phase enables it, and no cell before
+	 */
 	readonly variant?: string
 	/** how the file's app starts, when not as startReferenceApp() does: the mounted MCP endpoint's (bit 21 e) */
 	readonly start?: () => Promise<ReferenceApp>
@@ -48,15 +56,21 @@ export type TargetRunner = {
 const APP = fileURLToPath(new URL("../../../../core/tests/integration/conformance/app.ts", import.meta.url))
 /** where each cell's observation is recorded for the release's conformance gate (gate.ts); unset, nowhere */
 const RECORD = process.env.HONEY_CONFORMANCE_RECORD
+/**
+ * An origin nothing listens on, so a connection there is refused (ECONNREFUSED): port 2 is privileged, so no test binds
+ * it and the OS never assigns it. Not port 1, which the CLI's exit-codes row dials: the Fetch standard's blocked-port
+ * list holds 1, and Node's fetch rejects it as "bad port" without dialing, which is no refused connection.
+ */
+export const REFUSED = "http://127.0.0.1:2"
 const READY_MS = 15_000
 const KILL_MS = 5_000
 /** stderr kept for a failure message */
 const TAIL = 8_192
 
-type Origins = { readonly alt: string; readonly url: string }
+type Ready = { readonly alt: string; readonly drop: string; readonly url: string }
 
 /** The child's readiness line; rejects on a non-JSON line, an early exit or after 15 s, with its stderr. */
-function ready(child: ChildProcess, stderr: () => string): Promise<Origins> {
+function ready(child: ChildProcess, stderr: () => string): Promise<Ready> {
 	return new Promise((resolve, reject) => {
 		let out = ""
 		const fail = (why: string) => {
@@ -73,11 +87,13 @@ function ready(child: ChildProcess, stderr: () => string): Promise<Origins> {
 			child.off("exit", onExit)
 			clearTimeout(timer)
 			try {
-				const line = JSON.parse(out.slice(0, newline)) as Partial<Origins>
-				if (typeof line.url !== "string" || typeof line.alt !== "string") throw new Error("no url and alt")
-				resolve({ alt: line.alt, url: line.url })
+				const line = JSON.parse(out.slice(0, newline)) as Partial<Ready>
+				const { alt, drop, url } = line
+				if (typeof url !== "string" || typeof alt !== "string" || typeof drop !== "string")
+					throw new Error("no url, alt and drop")
+				resolve({ alt, drop, url })
 			} catch {
-				fail(`printed a readiness line that is not {"url","alt"}: ${JSON.stringify(out.slice(0, newline))}`)
+				fail(`printed a readiness line that is not {"url","alt","drop"}: ${JSON.stringify(out.slice(0, newline))}`)
 			}
 		}
 		const onExit = (code: number | null, signal: string | null) => fail(`exited early (code ${code}, signal ${signal})`)
@@ -121,12 +137,14 @@ export async function startReferenceApp(env: Readonly<Record<string, string>> = 
 	process.once("exit", kill)
 	const stop = stopper(child, kill)
 	try {
-		const { alt, url } = await ready(child, () => err)
+		const { alt, drop, url } = await ready(child, () => err)
 		const document = await json<Record<string, unknown>>(`${url}/v1/openapi.json`)
 		return {
 			alt,
 			document,
+			drop,
 			mark: async () => (await json<{ since: number }>(`${url}/v1/__conformance/mark`, { method: "POST" })).since,
+			refused: REFUSED,
 			stop,
 			url,
 			wire: (since) => json<WireHop[]>(`${url}/v1/__conformance/wire?since=${since}`),
@@ -135,6 +153,39 @@ export async function startReferenceApp(env: Readonly<Record<string, string>> = 
 		await stop()
 		throw e
 	}
+}
+
+/** The origins a driver aims a cell's calls at: the primary, and the alt, drop and refused ones a call may name. */
+export type Origins = { readonly alt: string; readonly drop: string; readonly refused: string; readonly url: string }
+
+/** `app`'s origins, as every driver's envelope carries them. */
+export const originsOf = (app: ReferenceApp): Origins => ({
+	alt: app.alt,
+	drop: app.drop,
+	refused: app.refused,
+	url: app.url,
+})
+
+/** The cells `runner` runs, and those it lacks by design: the safe variant's per-kind selection, else the target's grid. */
+function cellsOf(runner: TargetRunner): { readonly cells: readonly Cell[]; readonly lacked: readonly Cell[] } {
+	if (runner.variant === SAFE) {
+		const selection = safeCellsFor(runner.target as Sdk, runner.lacks)
+		if (selection.uncovered.length > 0)
+			throw new Error(`${runner.target}'s safe variant covers no cell of: ${selection.uncovered.join(", ")}`)
+		return { cells: selection.cells, lacked: [] }
+	}
+	const all = cellsFor(runner.target)
+	const lacked = all.filter((cell) => runner.lacks?.(cell))
+	return { cells: all.filter((cell) => !lacked.includes(cell)), lacked }
+}
+
+/**
+ * `runner` as its target's safe variant (SAFE). Until `phase` (i1–i6) drives the target's safe style, a cell it is
+ * given throws, so enabling the target in SAFE_ENABLED before its driver speaks the safe style reds every cell.
+ */
+export function safeVariant(runner: TargetRunner, phase: string): TargetRunner {
+	const pending = new Error(`${runner.target}'s safe style is driven from bit 21 ${phase}, not yet`)
+	return { ...runner, run: () => Promise.reject(pending), variant: SAFE }
 }
 
 /** The CLI's local commands, and cobra's completion entry: a CLI-only call running one reaches no operation. */
@@ -163,19 +214,19 @@ export function unknownOperations(cells: readonly Cell[], document: Record<strin
  * One `it` per cell of `runner.target` against one app for the file: mark the wire, run the cell,
  * read the wire, compare. Nothing is skippable: a runner that cannot express a cell throws, and only
  * the cells it `lacks` by design are left out. Each cell's observation, and each cell lacked, is recorded for the
- * release's conformance gate. Returns the file's app, for a target's extra cases.
+ * release's conformance gate. A runner with no cell (a safe variant its phase has not enabled) registers no suite: no
+ * app starts. Returns the file's app, for a target's extra cases.
  */
 export function targetSuite(runner: TargetRunner): () => ReferenceApp {
 	const { target } = runner
-	const all = cellsFor(target)
-	const lacked = all.filter((cell) => runner.lacks?.(cell))
-	const cells = all.filter((cell) => !lacked.includes(cell))
+	const { cells, lacked } = cellsOf(runner)
 	const variant = runner.variant === undefined ? "" : ` (${runner.variant})`
 	let app: ReferenceApp | undefined
 	const current = (): ReferenceApp => {
 		if (app === undefined) throw new Error("the reference app is not started: read it inside a test")
 		return app
 	}
+	if (cells.length === 0 && lacked.length === 0) return current
 	describe(`conformance × ${runner.target}${variant}`, () => {
 		beforeAll(async () => {
 			app = await (runner.start ?? startReferenceApp)()

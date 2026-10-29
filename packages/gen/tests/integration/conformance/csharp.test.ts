@@ -8,7 +8,7 @@
 import { describe } from "vitest"
 import { type DrivenCSharpSdk, servedCSharpSdk } from "../../../src/emit/csharp/__fixtures__/driven.ts"
 import { withDotnet } from "../../../src/emit/csharp/__fixtures__/csharp-env.ts"
-import { type TargetRunner, targetSuite } from "./harness.ts"
+import { originsOf, safeVariant, type TargetRunner, targetSuite } from "./harness.ts"
 import type { Observed } from "./matrix.ts"
 
 const DOTNET = withDotnet()
@@ -31,7 +31,7 @@ function csharpRunner(): TargetRunner {
 		},
 		async run(cell, app) {
 			if (sdk === undefined) throw new Error("the C# runner ran a cell before prepare")
-			const ran = await sdk.runCalls(cell, { alt: app.alt, url: app.url })
+			const ran = await sdk.runCalls(cell, originsOf(app))
 			if (ran.status !== 0) throw new Error(`driver exit ${ran.status}: ${ran.stderr}`)
 			return ran.observed as readonly Observed[]
 		},
@@ -41,4 +41,5 @@ function csharpRunner(): TargetRunner {
 
 describe.skipIf(!DOTNET)("csharp toolchain", () => {
 	targetSuite(csharpRunner())
+	targetSuite(safeVariant(csharpRunner(), "i5"))
 })

@@ -27,10 +27,10 @@ export type DriverRun = {
 
 /** The SDK compiled with the driver beside it. */
 export type DrivenRustSdk = RustCrate & {
-	/** run `cell` on one client aimed at `origins.url` (`alt`: a call's other origin), under `script` when given */
+	/** run `cell` on one client aimed at `origins.url` (`alt`, `drop`, `refused`: the other origins a call may name), under `script` when given */
 	runCalls(
 		cell: DriverCell,
-		origins: { readonly alt?: string; readonly url: string },
+		origins: { readonly alt?: string; readonly drop?: string; readonly refused?: string; readonly url: string },
 		script?: Script,
 	): Promise<DriverRun & { readonly trace?: Trace<RustError> }>
 }
@@ -61,7 +61,15 @@ function drivenFixture(fixture: RustFixture): DrivenRustSdk {
 	return {
 		...crate,
 		runCalls: async (cell, origins, script) => {
-			const input = { alt: origins.alt, base: origins.url, cell, plans, script }
+			const input = {
+				alt: origins.alt,
+				base: origins.url,
+				drop: origins.drop,
+				refused: origins.refused,
+				cell,
+				plans,
+				script,
+			}
 			const ran = await crate.exec("driver", JSON.stringify(input))
 			const out = ran.status === 0 ? parsed(ran.stdout, script !== undefined) : { observed: undefined }
 			return { ...out, status: ran.status, stderr: ran.stderr }

@@ -12,7 +12,7 @@ import type { GateOptions } from "../../../src/emit/python/__fixtures__/compiled
 import { type DrivenPythonSdk, servedPythonSdk } from "../../../src/emit/python/__fixtures__/driven.ts"
 import { PY_FLOOR, resolve, withPython } from "../../../src/emit/python/__fixtures__/python-env.ts"
 import { generatePythonSdk, pythonCallPlans } from "../../../src/emit/python/sdk.ts"
-import { SPAWN_TIMEOUT, type TargetRunner, targetSuite } from "./harness.ts"
+import { originsOf, SPAWN_TIMEOUT, safeVariant, type TargetRunner, targetSuite } from "./harness.ts"
 import { type Cell, cellsFor, type Observed } from "./matrix.ts"
 
 const PY = withPython()
@@ -81,7 +81,7 @@ function pythonRunner(how: How): TargetRunner {
 		},
 		async run(cell, app) {
 			if (sdk === undefined) throw new Error("the Python runner ran a cell before prepare")
-			const ran = await sdk.runCalls(cell, { alt: app.alt, url: app.url }, { client: how.client })
+			const ran = await sdk.runCalls(cell, originsOf(app), { client: how.client })
 			if (ran.status !== 0) throw new Error(`driver exit ${ran.status}: ${ran.stderr}`)
 			return ran.observed as readonly Observed[]
 		},
@@ -100,6 +100,7 @@ const direct = (text: string): string[] => text.split("\n").filter((line) => /^(
 describe.skipIf(!PY)("python toolchain", () => {
 	targetSuite(pythonRunner({ client: "async", titles: V0_PORTS }))
 	targetSuite(pythonRunner({ client: "sync", variant: "SDK" }))
+	targetSuite(safeVariant(pythonRunner({ client: "async" }), "i2"))
 
 	/*
 	 * format.test.ts imports the omnibus under the floor; this suite runs the served SDK's every cell there,
@@ -142,6 +143,8 @@ describe.skipIf(!PY)("python toolchain", () => {
 				"reconnect/sse-from-start",
 				"reconnect/refusal-terminal",
 				"reconnect/refusal-mixed-retries",
+				"stream/initial-error",
+				"stream/mid-drop",
 			])
 		})
 	})

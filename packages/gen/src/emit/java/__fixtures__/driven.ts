@@ -29,14 +29,14 @@ export type DrivenJavaSdk = CompiledJavaSdk & {
 	readonly built: boolean
 	readonly diagnostics: readonly string[]
 	/**
-	 * run `cell` on one client aimed at `origins.url` (`alt`: a call's other origin), under `script` when given, with
+	 * run `cell` on one client aimed at `origins.url` (`alt`, `drop`, `refused`: the other origins a call may name), under `script` when given, with
 	 * `jvmArgs` on the JVM's command line, on the `jdk` release's java (21 by default; the SDK and the driver are
 	 * `--release 17`, so 17 and 25 run the same classes). `probe` runs the probe class instead of the driver: the driver's run, then the
 	 * process-global `jdk.httpclient.allowRestrictedHeaders` reported on stderr after it (`honey-probe …=`).
 	 */
 	runCalls(
 		cell: DriverCell,
-		origins: { readonly alt?: string; readonly url: string },
+		origins: { readonly alt?: string; readonly drop?: string; readonly refused?: string; readonly url: string },
 		run?: {
 			readonly script?: Script
 			readonly jvmArgs?: readonly string[]
@@ -94,7 +94,9 @@ function drivenFixture(fixture: JavaFixture): DrivenJavaSdk {
 				alt: origins.alt,
 				base: origins.url,
 				cell,
+				drop: origins.drop,
 				plans: { ...plans, ...opts.plans },
+				refused: origins.refused,
 				script: opts.script,
 				sdk: { client, package: pkg },
 			}

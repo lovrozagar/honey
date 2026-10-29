@@ -50,10 +50,13 @@ export type DriverRun = {
 
 /** The SDK compiled with the driver beside it. */
 export type DrivenSdk = Compiled & {
-	/** run `cell` on one client aimed at `origins.url` (`alt`: a call's other origin), under `script` when given */
+	/**
+	 * run `cell` on one client aimed at `origins.url` (`alt`, `drop`, `refused`: the other origins a call may name),
+	 * under `script` when given
+	 */
 	runCalls(
 		cell: DriverCell,
-		origins: { readonly alt?: string; readonly url: string },
+		origins: { readonly alt?: string; readonly drop?: string; readonly refused?: string; readonly url: string },
 		script?: Script,
 	): Promise<DriverRun & { readonly trace?: Trace }>
 }
@@ -228,7 +231,15 @@ export function drivenSdk(
 	return {
 		...compiled,
 		runCalls: async (cell, origins, script) => {
-			const input = { alt: origins.alt, base: origins.url, cell, plans, script }
+			const input = {
+				alt: origins.alt,
+				base: origins.url,
+				cell,
+				drop: origins.drop,
+				plans,
+				refused: origins.refused,
+				script,
+			}
 			const ran = await compiled.exec(JSON.stringify(input))
 			const out = ran.status === 0 ? parsed(ran.stdout, script !== undefined) : { observed: undefined }
 			return { ...out, status: ran.status, stderr: ran.stderr }

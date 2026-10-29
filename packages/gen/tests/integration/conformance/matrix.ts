@@ -51,7 +51,11 @@ export type Call = {
 		| { readonly read: "annotations" | "outputSchema"; readonly tools: readonly string[] }
 		| { readonly read: "content" }
 	readonly operation: string // operationId in the served document
-	readonly origin?: "alt" // per-call base URL (C2)
+	/**
+	 * per-call base URL (C2): the alt origin; the drop origin, which cuts the answer's connection at its end; or the
+	 * refused origin, where nothing listens (bit 21 i0)
+	 */
+	readonly origin?: "alt" | "drop" | "refused"
 	readonly params?: Readonly<Record<string, string>>
 	readonly raw?: true // raw-response accessor (C2)
 	readonly reconnectToken?: string // WS resume
@@ -77,12 +81,18 @@ export type Observed =
 			readonly kind: "raw"
 			readonly status: number
 	  }
+	/** the events a stream delivered, then the stream's own error when it ended in one instead of its end (f2) */
 	| {
 			readonly events: readonly { readonly data: Json; readonly event?: string; readonly id?: string }[]
+			readonly failed?: NoAnswer
 			readonly kind: "events"
 	  }
 	| { readonly frames: readonly Json[]; readonly kind: "frames" }
 	| { readonly kind: "timeout" }
+	/** a 2xx answer whose body did not decode: the target's decode error, the answer's status kept (bit 21 i0) */
+	| { readonly kind: "decode"; readonly status: number }
+	/** no answer at all: the target's connection error (f2) */
+	| { readonly kind: "transport" }
 	/** an MCP-only row's read of the server: tool names, annotations, outputSchemas, tokens or a result's content */
 	| { readonly kind: "mcp"; readonly value: Json }
 	/** the CLI's own observation for a CLI-only row: its exit code, its stdout lines, each stderr line as JSON, a `$FILE` written */
@@ -93,6 +103,8 @@ export type Observed =
 			readonly stderr: readonly Json[]
 			readonly stdout: readonly string[]
 	  }
+/** what a call or a stream fails with when no answer arrives, as the grid observes it (bit 19 f2) */
+export type NoAnswer = "timeout" | "transport"
 /** one request the app received (the harness reads these over HTTP); header names lower case */
 export type WireHop = {
 	readonly body: {
@@ -103,7 +115,7 @@ export type WireHop = {
 	}
 	readonly headers: Readonly<Record<string, string>>
 	readonly method: string
-	readonly origin: "alt" | "primary"
+	readonly origin: "alt" | "drop" | "primary"
 	readonly url: string
 }
 /** an expected hop: only the header names listed are compared; `$absent` must not arrive; a body by its listed keys */
@@ -111,7 +123,7 @@ export type Hop = {
 	readonly body?: Expected
 	readonly headers?: Readonly<Record<string, string | Matcher>>
 	readonly method: string
-	readonly origin: "alt" | "primary"
+	readonly origin: "alt" | "drop" | "primary"
 	readonly url: string
 }
 export type Scenario = {

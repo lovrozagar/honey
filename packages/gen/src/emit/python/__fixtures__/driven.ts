@@ -25,10 +25,10 @@ export type DriverRun = {
 
 /** The SDK with the driver aimed at it: under a script, the trace records each error as a `PythonError`. */
 export type DrivenPythonSdk = PythonSdk & {
-	/** run `cell` on one client ("async" or "sync") aimed at `origins.url` (`alt`: a call's other origin), under `script` when given */
+	/** run `cell` on one client ("async" or "sync") aimed at `origins.url` (`alt`, `drop`, `refused`: the other origins a call may name), under `script` when given */
 	runCalls(
 		cell: DriverCell,
-		origins: { readonly alt?: string; readonly url: string },
+		origins: { readonly alt?: string; readonly drop?: string; readonly refused?: string; readonly url: string },
 		run: { readonly client: "async" | "sync"; readonly script?: Script },
 	): Promise<DriverRun & { readonly trace?: Trace<PythonError> }>
 }
@@ -53,7 +53,16 @@ function drivenFixture(fixture: PythonFixture, options: GateOptions): DrivenPyth
 	return {
 		...sdk,
 		runCalls: async (cell, origins, run) => {
-			const envelope = { alt: origins.alt, base: origins.url, cell, client: run.client, plans, script: run.script }
+			const envelope = {
+				alt: origins.alt,
+				base: origins.url,
+				drop: origins.drop,
+				refused: origins.refused,
+				cell,
+				client: run.client,
+				plans,
+				script: run.script,
+			}
 			const input = { ...envelope, sdk: { package: sdk.package, root: sdk.root } }
 			const ran = await execPython(sdk.venv, [driverEntry()], { cwd: sdk.dir, input: JSON.stringify(input) })
 			const out = ran.status === 0 ? parsed(ran.stdout, run.script !== undefined) : { observed: undefined }

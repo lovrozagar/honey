@@ -6,9 +6,11 @@
  */
 import { ABSENT, ANY, call, data, error, events, hop, JSON_TYPE, OCTET, SHA_256B, SHA_64K } from "./cells.ts"
 import { MCP_ROWS } from "./features-mcp.ts"
+import { SDK_ROWS } from "./features-sdk.ts"
 import type { Call, Expected, Feature, Scenario } from "./matrix.ts"
 
 export const TARGETS = ["ts", "go", "rust", "python", "csharp", "java", "cli", "mcp"] as const
+export { SDKS } from "./features-sdk.ts"
 
 const getItem = (id: string, more: Partial<Call> = {}) =>
 	call("items.get", "GET", "/v1/items/:id", { params: { id }, ...more })
@@ -271,6 +273,7 @@ const REFERENCE_INDEX = [
 	"events append",
 	"events socket (ws)",
 	"events stream (sse)",
+	"faults undecodable",
 	"files get <name>",
 	"files put <name> --data binary",
 	"health",
@@ -286,6 +289,7 @@ const REFERENCE_INDEX = [
 	"realtime mixed (realtime)",
 	"realtime refused (realtime)",
 	"redirect cross-origin",
+	"ticks refused (sse)",
 	"ticks stream (sse)",
 	"timing slow --ms integer",
 	"uploads blob --data binary",
@@ -307,6 +311,7 @@ const REFERENCE_COMPLETION = [
 	"echo",
 	"errors",
 	"events",
+	"faults",
 	"files",
 	"health",
 	"help\tHelp about any command",
@@ -453,6 +458,7 @@ export const FEATURES: readonly Feature[] = [
 	]),
 	shared("auth", "a credential goes on-origin and is dropped on a cross-origin redirect (H18.10)", auth),
 	shared("request-id", "x-request-id round-trips: the hop's id is the one the app answers with", requestId),
+	...SDK_ROWS,
 	cliOnly(
 		"exit-codes",
 		"the exit code by outcome: 0 ok, 1 a 4xx, 2 a 5xx, 3 no answer, 4 usage, 5 a redirect not followed",

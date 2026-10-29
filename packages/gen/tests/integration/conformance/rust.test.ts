@@ -8,7 +8,7 @@
 import { describe, expect, it } from "vitest"
 import { type DrivenRustSdk, servedRustSdk } from "../../../src/emit/rust/__fixtures__/driven.ts"
 import { RUST_FLOOR, withRust } from "../../../src/emit/rust/__fixtures__/rust-env.ts"
-import { type TargetRunner, targetSuite } from "./harness.ts"
+import { originsOf, safeVariant, type TargetRunner, targetSuite } from "./harness.ts"
 import { cellsFor, type Observed } from "./matrix.ts"
 
 const RUST = withRust()
@@ -43,7 +43,7 @@ function rustRunner(): TargetRunner {
 		prepareTimeoutMs: 600_000,
 		async run(cell, app) {
 			if (sdk === undefined) throw new Error("the Rust runner ran a cell before prepare")
-			const ran = await sdk.runCalls(cell, { alt: app.alt, url: app.url })
+			const ran = await sdk.runCalls(cell, originsOf(app))
 			if (ran.status !== 0) throw new Error(`driver exit ${ran.status}: ${ran.stderr}`)
 			return ran.observed as readonly Observed[]
 		},
@@ -54,6 +54,7 @@ function rustRunner(): TargetRunner {
 
 describe.skipIf(!RUST)("rust toolchain", () => {
 	const app = targetSuite(rustRunner())
+	targetSuite(safeVariant(rustRunner(), "i4"))
 
 	describe("conformance × rust titles", () => {
 		it("titles only cells the grid holds for rust", () => {

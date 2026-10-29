@@ -30,10 +30,13 @@ export type DriverRun = {
 
 /** The SDK with the driver aimed at it: under a script, the trace records each error as a `CsError`. */
 export type DrivenCSharpSdk = CSharpSdk & {
-	/** run `cell` on one client aimed at `origins.url` (`alt`: a call's other origin), under `script` when given */
+	/**
+	 * run `cell` on one client aimed at `origins.url` (`alt`, `drop`, `refused`: the other origins a call may name),
+	 * under `script` when given
+	 */
 	runCalls(
 		cell: DriverCell,
-		origins: { readonly alt?: string; readonly url: string },
+		origins: { readonly alt?: string; readonly drop?: string; readonly refused?: string; readonly url: string },
 		run?: { readonly script?: Script },
 	): Promise<DriverRun & { readonly trace?: Trace<CsError> }>
 }
@@ -79,7 +82,16 @@ function drivenFixture(fixture: CSharpFixture): DrivenCSharpSdk {
 		...sdk,
 		runCalls: async (cell, origins, run = {}) => {
 			const target = { ...clientOf(sdk), dll: sdk.dll }
-			const envelope = { alt: origins.alt, base: origins.url, cell, plans, script: run.script, sdk: target }
+			const envelope = {
+				alt: origins.alt,
+				base: origins.url,
+				drop: origins.drop,
+				refused: origins.refused,
+				cell,
+				plans,
+				script: run.script,
+				sdk: target,
+			}
 			const ran = await execDotnet([driverDll()], { cwd: sdk.dir, input: JSON.stringify(envelope) })
 			const out = ran.status === 0 ? parsed(ran.stdout, run.script !== undefined) : { observed: undefined }
 			return { ...out, status: ran.status, stderr: ran.stderr }

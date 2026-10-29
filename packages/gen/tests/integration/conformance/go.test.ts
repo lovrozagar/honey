@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest"
 import { compileGo, compiledSdk, type DrivenSdk } from "../../../src/emit/go/__fixtures__/compiled.ts"
 import { GO_FLOOR, withGo } from "../../../src/emit/go/__fixtures__/go-env.ts"
 import { generateGoSdk } from "../../../src/emit/go/sdk.ts"
-import { type TargetRunner, targetSuite } from "./harness.ts"
+import { originsOf, safeVariant, type TargetRunner, targetSuite } from "./harness.ts"
 import { cellsFor, type Observed } from "./matrix.ts"
 
 /* the module path both Go harness files compile the conformance SDK under, so they share one cache dir */
@@ -35,7 +35,7 @@ function goRunner(): TargetRunner {
 		},
 		async run(cell, app) {
 			if (sdk === undefined) throw new Error("the Go runner ran a cell before prepare")
-			const ran = await sdk.runCalls(cell, { alt: app.alt, url: app.url })
+			const ran = await sdk.runCalls(cell, originsOf(app))
 			if (ran.status !== 0) throw new Error(`driver exit ${ran.status}: ${ran.stderr}`)
 			return ran.observed as readonly Observed[]
 		},
@@ -46,6 +46,7 @@ function goRunner(): TargetRunner {
 
 describe.skipIf(!withGo())("go toolchain", () => {
 	const app = targetSuite(goRunner())
+	targetSuite(safeVariant(goRunner(), "i3"))
 
 	describe("conformance × go titles", () => {
 		it("titles only cells the grid holds for go", () => {
