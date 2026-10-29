@@ -327,3 +327,74 @@ describe("the e2e build gate's derive across commits: the runner classes it asks
 		])
 	})
 })
+
+/*
+ * CI's own record runs, 5 at 7731b1f and 6 at 51fe6c3 (bit 21 h's named-exports pass-through between them): the Bun
+ * ratios of two surface cells per commit and runner class. Locally the two commits build surface×bun at 15.02 and
+ * 14.95 (9 interleaved rounds each), no shift; per-class ranges of 2-4 samples called both cells shifted.
+ */
+const CI_SAMPLES: Record<string, Record<string, Partial<Record<"fast" | "middle" | "slow", number[]>>>> = {
+	"surface×bun": {
+		"51fe6c3": {
+			fast: [18.06],
+			middle: [19.36, 19.84, 19.69, 20.68],
+			slow: [17.16, 20.94, 20.04, 20.67, 20.95, 19.49, 20.89],
+		},
+		"7731b1f": { middle: [20.04, 19.78, 19.95], slow: [20.01, 20.2, 18.95, 19.57, 20.72, 21.18, 20.26] },
+	},
+	"surface×cloudflare": {
+		"51fe6c3": {
+			fast: [18.91, 18.81],
+			middle: [20.26, 19.54, 19.99, 20.15],
+			slow: [17.97, 20.97, 18.51, 22.55, 20.5, 20.48],
+		},
+		"7731b1f": { fast: [19.64, 19.6], slow: [19.91, 21.51, 20.17, 19.56, 21.04, 20.8, 20.6, 19.75] },
+	},
+}
+const CLASS_MS = { fast: 2_700, middle: 3_500, slow: 4_600 } as const
+
+/** Each CI sample of `cell` (or each of `samples`) as its own job and run, its class set by its surface build's ms. */
+function ciJobs(cell: string, samples = CI_SAMPLES[cell] ?? {}): gate.CommitJob[] {
+	const created = { "51fe6c3": "2026-10-29T02:00:00Z", "7731b1f": "2026-10-28T21:00:00Z" } as Record<string, string>
+	return Object.entries(samples).flatMap(([commit, byClass]) =>
+		(Object.entries(byClass) as ["fast" | "middle" | "slow", number[]][]).flatMap(([runner, ratios]) =>
+			ratios.map((ratio, i) => ({
+				commit,
+				created: created[commit] as string,
+				job: "build (bun)",
+				ratios: [{ cell, key: KEY, ms: CLASS_MS[runner], ratio, referenceMs: CLASS_MS[runner] / ratio }],
+				run: `${commit}-${runner}-${i}`,
+			})),
+		),
+	)
+}
+
+/*
+ * The newest commit 8% slower in every class, its runs mostly on fast runners where the older commit's were mostly
+ * slow: mixed raw, or centred on all samples, the two groups' medians fall inside each other's ranges.
+ */
+const CONFOUNDED: Record<string, Partial<Record<"fast" | "slow", number[]>>> = {
+	"51fe6c3": {
+		fast: [19.44, 19.55, 19.4, 19.5, 19.48, 19.52, 19.46, 19.5],
+		slow: [21.6, 21.5],
+	},
+	"7731b1f": {
+		fast: [18.0, 18.1],
+		slow: [20.0, 19.9, 20.1, 20.05, 19.95, 20.0, 20.02, 19.98],
+	},
+}
+
+describe("the e2e build gate's derive across commits, on CI's own samples", () => {
+	it("pools surface's Bun cells across 7731b1f and 51fe6c3: the classes both carry, compared as one", () => {
+		const decided = ["surface×bun", "surface×cloudflare"].map((cell) => gate.deriveByCommit(ciJobs(cell))[0])
+		expect(decided.map((each) => [each?.cell, each?.decision, each?.n])).toEqual([
+			["surface×bun", "pooled", 22],
+			["surface×cloudflare", "pooled", 22],
+		])
+	})
+
+	it("calls an 8% shift shifted though the groups' class mixes differ: each group weighs alike in a class's centre", () => {
+		const decided = gate.deriveByCommit(ciJobs(CELL, CONFOUNDED))[0]
+		expect([decided?.decision, decided?.n, decided?.ceiling?.ceiling]).toEqual(["new-only", 10, 23.76])
+	})
+})

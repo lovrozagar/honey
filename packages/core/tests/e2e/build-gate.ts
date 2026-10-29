@@ -235,19 +235,28 @@ export type CellDecision = {
 const within = (value: number, range: readonly number[]) => value >= Math.min(...range) && value <= Math.max(...range)
 
 /**
- * Whether two commit groups of one cell measure the same code: for every runner class both carry (a Node job's is
- * `unclassified`, so Node compares its whole range), each group's median lies within the other's min-max. Groups
- * with no class in common cannot be shown to agree.
+ * Whether two commit groups of one cell measure the same code: each group's median lies within the other's min-max,
+ * over the runner classes both carry, each sample divided by its class's centre, the midpoint of the two groups'
+ * medians of that class. A slower runner class carries a higher ratio, so classes are centred rather than mixed raw,
+ * and each group weighs alike in a centre, so a shift stays visible when the groups' class mixes differ (a centre
+ * over all samples sits on whichever group has more of that class and hides it). Simulated on the record runs'
+ * class layouts with 4% noise (cfb shift-cause.md), shifted with no shift / caught at +10%: Bun ×bun 3% / 98%,
+ * ×cloudflare 6% / 99%, a mix of fast 2 slow 8 against fast 8 slow 2 8% / 97%. Judged class by class instead,
+ * Bun's 1-4 samples a class gave ranges too narrow to hold one distribution: 56%, 79% and 80% shifted with no shift.
+ * A Node job's class is `unclassified`, one class, so Node compares its plain ratios. Groups with no class in common
+ * cannot be shown to agree.
  */
 function agree(a: readonly Sample[], b: readonly Sample[]): boolean {
 	const shared = classesOf(a).filter((each) => classesOf(b).includes(each))
-	return (
-		shared.length > 0 &&
-		shared.every((each) => {
-			const [x, y] = [ratiosOf(a, each), ratiosOf(b, each)]
-			return within(median(x), y) && within(median(y), x)
+	if (shared.length === 0) return false
+	const centre = new Map(shared.map((each) => [each, (median(ratiosOf(a, each)) + median(ratiosOf(b, each))) / 2]))
+	const centred = (samples: readonly Sample[]) =>
+		samples.flatMap((sample) => {
+			const by = centre.get(sample.class)
+			return by === undefined ? [] : [sample.ratio / by]
 		})
-	)
+	const [x, y] = [centred(a), centred(b)]
+	return within(median(x), y) && within(median(y), x)
 }
 
 /**
