@@ -29,12 +29,11 @@ import {
 	type Setup,
 } from "./matrix.ts"
 import { SAFE } from "./safe.ts"
+import type { Result as RuntimeResult } from "../../../src/runtime/ts/response.ts"
 
 type Input = Record<string, unknown>
-/** A safe call's Result as the grid reads it. */
-type Result =
-	| { data: unknown; headers?: Record<string, string>; ok: true; response: Response }
-	| { error: unknown; ok: false; response: Response }
+/** A safe call's Result as the runtime declares it, with or without declared headers: never a shape of this file's. */
+type Result = RuntimeResult<unknown> | RuntimeResult<unknown, never, Record<string, string>>
 type Event = { data: Json; event?: string; id?: string }
 type Socket = {
 	close(code?: number): void
@@ -268,7 +267,7 @@ async function resulted(result: Result, call: Call, errors: Errors, names?: read
 	const status = result.response.status
 	const stream = await streamed(result.data, call, errors)
 	if (stream !== null) return stream
-	const headers = result.headers ?? (names === undefined ? undefined : {})
+	const headers = ("headers" in result ? result.headers : undefined) ?? (names === undefined ? undefined : {})
 	return valueOf(result.data, status, headers)
 }
 
