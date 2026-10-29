@@ -40,6 +40,17 @@ impl<T, H> Prepared<T, H> {
     }
 }
 
+/// The origin `call` names (alt, drop or refused) as the input gives it; none for the base. main.rs
+/// refuses a call naming one the input lacks.
+pub fn origin_of<'a>(call: &Call, input: &'a Input) -> Option<&'a String> {
+    match call.origin.as_deref()? {
+        "alt" => input.alt.as_ref(),
+        "drop" => input.drop.as_ref(),
+        "refused" => input.refused.as_ref(),
+        _ => None,
+    }
+}
+
 /// `c` with `call`'s timeout, undeclared headers and origin, and `d`'s cancel, applied.
 pub fn apply<T, H>(
     c: sdk::Call<T, H>,
@@ -61,8 +72,8 @@ pub fn apply<T, H>(
             c = c.header(name.clone(), value.clone());
         }
     }
-    if let (Some("alt"), Some(alt)) = (call.origin.as_deref(), &input.alt) {
-        c = c.base_url(alt.clone());
+    if let Some(origin) = origin_of(call, input) {
+        c = c.base_url(origin.clone());
     }
     match d.cancel {
         None => {}

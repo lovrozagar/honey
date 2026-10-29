@@ -96,7 +96,7 @@ describe.skipIf(!RUST)(
 			const expected = (first: Trace<RustError>["calls"][number]["result"]) => ({
 				calls: [{ error: undefined, result: first }, undecoded],
 				hops: ["/users/1", "/users/1"],
-				observed: [data({ id: "u1" }), null],
+				observed: [data({ id: "u1" }), { kind: "decode", status: 200 }],
 				status: 0,
 			})
 			expect({ safe: decoding(safe), thrown: decoding(thrown) }, thrown.run.stderr + safe.run.stderr).toEqual({
@@ -202,7 +202,7 @@ describe.skipIf(!RUST)("a refused connection is a transport error, never Cancele
 		).toEqual({
 			canceled: false,
 			error: { source: true, status: undefined, variant: "Transport", via: "return" },
-			observed: [null],
+			observed: [{ kind: "transport" }],
 			status: 0,
 			text: true,
 		})

@@ -229,7 +229,7 @@ describe.skipIf(!RUST)("typed response headers: <Op>Headers through FromHeaders"
 				observed: [
 					{ data, headers: { "x-etag": "e1", "x-item-version": "3" }, kind: "data", status: 200 },
 					{ data, headers: { "x-item-version": "3" }, kind: "data", status: 200 },
-					null,
+					{ kind: "decode", status: 200 },
 				],
 			})
 		},

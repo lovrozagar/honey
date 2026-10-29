@@ -240,7 +240,7 @@ describe.skipIf(!RUST)(
 				run.stderr,
 			).toEqual({
 				log: [start, failed(expect.stringContaining("transport: "))],
-				observed: [null],
+				observed: [{ kind: "transport" }],
 				secrets: [],
 				status: 0,
 			})

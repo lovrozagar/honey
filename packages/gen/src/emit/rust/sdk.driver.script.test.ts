@@ -197,13 +197,13 @@ describe.skipIf(!RUST)("the Rust test driver's script: client config", () => {
 		])
 	}, 600_000)
 
-	it("caps a buffered answer by maxResponseBytes: a non-grid error observed as null, traced as Transport", async () => {
+	it("caps a buffered answer by maxResponseBytes: observed as transport, the SDK's Transport variant", async () => {
 		const script: Script = { config: { maxResponseBytes: 10 } }
 		const replies: Reply[] = [{ bytes: 64, headers: { "content-type": "application/json" }, status: 200 }]
 		const { run } = await drive(driven("http"), replies, [ECHO], { script })
 		expect({ error: run.trace?.calls[0]?.error, observed: run.observed, status: run.status }, run.stderr).toEqual({
 			error: plain({ source: true, text: "transport: the answer exceeds 10 bytes", variant: "Transport" }),
-			observed: [null],
+			observed: [{ kind: "transport" }],
 			status: 0,
 		})
 	}, 600_000)
@@ -355,7 +355,7 @@ describe.skipIf(!RUST)(
 						kind: "data",
 						status: 200,
 					},
-					null,
+					{ kind: "decode", status: 200 },
 				],
 			})
 		}, 600_000)

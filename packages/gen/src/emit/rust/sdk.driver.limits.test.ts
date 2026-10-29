@@ -57,7 +57,7 @@ describe.skipIf(!RUST)(
 				).toEqual({
 					encoding: "gzip,deflate",
 					error: plain({ source: true, text: `transport: the answer exceeds ${MiB} bytes`, variant: "Transport" }),
-					observed: [null],
+					observed: [{ kind: "transport" }],
 				})
 			},
 			600_000,

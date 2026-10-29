@@ -21,6 +21,8 @@ pub struct Input {
     pub plans: BTreeMap<String, Plan>,
     pub base: String,
     pub alt: Option<String>,
+    pub drop: Option<String>,
+    pub refused: Option<String>,
     pub script: Option<Value>,
 }
 
@@ -251,8 +253,17 @@ pub enum Observed {
         status: u16,
     },
     Timeout,
+    /// a 2xx whose body did not decode (`Error::Decode`), at the status the answer carried
+    Decode {
+        status: u16,
+    },
+    /// no answer: `Error::Transport`
+    Transport,
     Events {
         events: Vec<Value>,
+        /// the no-answer error the stream ended in after its events, when it did (f2)
+        #[serde(skip_serializing_if = "Option::is_none")]
+        failed: Option<&'static str>,
     },
     Frames {
         frames: Vec<Value>,

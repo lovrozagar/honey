@@ -76,7 +76,7 @@ describe.skipIf(!RUST)("safe mode: an error status in SdkResult.error, every oth
 		expect({ found, gone, observed: [run.observed, lost.observed] }, run.stderr + lost.stderr).toEqual({
 			found: ["result", "Api", "NotFound", 404, "None", missed(404)],
 			gone: ["return", "Transport", undefined, undefined, undefined, undefined],
-			observed: [[failed(404)], [null]],
+			observed: [[failed(404)], [{ kind: "transport" }]],
 		})
 	}, 600_000)
 
@@ -101,7 +101,7 @@ describe.skipIf(!RUST)("safe mode: an error status in SdkResult.error, every oth
 				["return", "Canceled", undefined, undefined, undefined, undefined],
 				["return", "Hook", undefined, undefined, undefined, undefined],
 			],
-			observed: [[null, { kind: "timeout" }, null], [null]],
+			observed: [[{ kind: "decode", status: 200 }, { kind: "timeout" }, null], [null]],
 		})
 	}, 600_000)
 

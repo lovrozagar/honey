@@ -226,7 +226,7 @@ describe.skipIf(!RUST)("an SSE open through a plain call's pipeline: on_log, by 
 		const run = await sseSdk().runCalls({ calls: [pending("p-secret")], setup }, { url: closed }, { log: true })
 		expect({ log: run.trace?.log, observed: run.observed, status: run.status }, run.stderr).toEqual({
 			log: [start(PENDING), logged(PENDING, "error", "error", { error: expect.stringMatching(/^transport: /) })],
-			observed: [null],
+			observed: [{ kind: "transport" }],
 			status: 0,
 		})
 		expect(leaked(run.trace?.log)).toEqual([])

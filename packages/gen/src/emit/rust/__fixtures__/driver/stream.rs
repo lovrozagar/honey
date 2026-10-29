@@ -54,6 +54,8 @@ where
         Err(e) => return failed(e, &how, "return"),
     };
     let (mut events, mut retry, mut yields, mut error) = (Vec::new(), Vec::new(), 0, None);
+    /* the no-answer error the stream ended in after its first event, while no event followed it */
+    let mut ended: Option<&'static str> = None;
     while take.is_none_or(|n| (events.len() as u64) < n) {
         let Some(item) = stream.next().await else {
             break;
@@ -61,10 +63,14 @@ where
         yields += 1;
         match item {
             Ok(event) => {
+                ended = None;
                 retry.push(json!(event.retry));
                 events.push(event_of(event)?);
             }
             Err(e) => {
+                if error.is_none() && !events.is_empty() {
+                    ended = no_answer(&e);
+                }
                 error.get_or_insert_with(|| rust_error(&e, "stream", how.envelope));
             }
         }
@@ -77,7 +83,17 @@ where
     if let Some(headers) = headers.filter(|h| !h.is_empty()) {
         st.insert("headers".into(), json!(headers));
     }
-    streamed(Observed::Events { events }, error, st)
+    let failed = ended.filter(|_| error.is_some());
+    streamed(Observed::Events { events, failed }, error, st)
+}
+
+/// A stream's error as the grid's no-answer kind (f2): `Transport` or `Timeout`; none for another.
+fn no_answer(e: &sdk::Error) -> Option<&'static str> {
+    match e {
+        sdk::Error::Transport(_) => Some("transport"),
+        sdk::Error::Timeout => Some("timeout"),
+        _ => None,
+    }
 }
 
 /// An event as the grid observes it: its data as JSON (a string for text events), its event name

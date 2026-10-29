@@ -5,7 +5,8 @@
 //!
 //! Stdin is one JSON object, the shared envelope:
 //!
-//!   { "cell": { "setup"?: Setup, "calls": Call[] }, "plans": { <operationId>: plan }, "base": url, "alt"?: url, "script"?: Script }
+//!   { "cell": { "setup"?: Setup, "calls": Call[] }, "plans": { <operationId>: plan }, "base": url, "alt"?: url,
+//!     "drop"?: url, "refused"?: url, "script"?: Script }
 //!
 //! `cell` is the grid's Cell (its other members are ignored); `plans` are the emitter's call plans
 //! (`rustCallPlans`). Every call of a cell runs in order on one client. Stdout is the grid's
@@ -70,6 +71,7 @@ async fn drive() -> Result<String, String> {
     };
     let recorder = Recorder::default();
     let mut config = config_of(&input)?;
+    config.on_response.push(observe::answered_status());
     if let Some(s) = &script {
         s.apply(&mut config, &recorder)
             .map_err(|e| format!("script: {e}"))?;
@@ -120,13 +122,16 @@ impl Runner<'_> {
             tokio::time::sleep(Duration::from_millis(ms)).await;
         }
         self.recorder.begin(i);
+        observe::forget_status();
         let start = Instant::now();
         let outcome = perform(&self.client, call, self.input, d).await?;
         self.recorder.called(start.elapsed(), &outcome);
         let ungraded = match (&outcome.error, &outcome.observed) {
             (Some(_), None) => !self.scripted,
             (Some(e), Some(seen)) if !self.scripted => {
-                e["via"] == "stream" && matches!(seen["kind"].as_str(), Some("events" | "frames"))
+                e["via"] == "stream"
+                    && matches!(seen["kind"].as_str(), Some("events" | "frames"))
+                    && seen.get("failed").is_none()
             }
             _ => false,
         };
@@ -163,8 +168,10 @@ async fn perform(
             "the script sets idempotencyKey, and the method has no idempotency key field".into(),
         );
     }
-    if call.origin.as_deref() == Some("alt") && input.alt.is_none() {
-        return Err("the call asks for the alt origin, and the input names none".into());
+    if let (Some(origin), None) = (call.origin.as_deref(), apply::origin_of(call, input)) {
+        return Err(format!(
+            "the call asks for the {origin:?} origin, and the input names none"
+        ));
     }
     let sent = dispatch::dispatch(client, call, input, d);
     if plan.stream.is_none() {

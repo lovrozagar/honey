@@ -214,7 +214,14 @@ describe.skipIf(!RUST)("each way a call fails, one Error variant each: never Api
 		const observed = [run.observed, lost.observed]
 		expect({ hops: hops.length, observed, shapes, texts }, run.stderr + lost.stderr).toEqual({
 			hops: 2,
-			observed: [[{ body: { message: "gone" }, errorKey: null, kind: "error", status: 404 }, null, null], [null]],
+			observed: [
+				[
+					{ body: { message: "gone" }, errorKey: null, kind: "error", status: 404 },
+					{ kind: "decode", status: 200 },
+					null,
+				],
+				[{ kind: "transport" }],
+			],
 			shapes: [
 				["Api", 404, false, "return"],
 				["Decode", undefined, false, "return"],

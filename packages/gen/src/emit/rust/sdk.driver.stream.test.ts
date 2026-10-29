@@ -233,24 +233,21 @@ describe.skipIf(!RUST)("the Rust test driver: SSE, EventStream<T>", () => {
 })
 
 describe.skipIf(!RUST)("the Rust test driver: how an SSE call fails", () => {
-	it("observes the events before a dropped connection, the stream's error traced; unscripted, the run fails", async () => {
+	/* bit 21 i0: a drop after events is the grid's `failed: "transport"` (f2), so the unscripted run observes it too */
+	it("observes the events before a dropped connection, then failed transport, the stream's error traced", async () => {
 		const sdk = driven("sse")
 		const dropped = sse([tick(1), { waitMs: 50 }], "drop")
 		const { run } = await drive(sdk, [dropped], [ticks()], {})
 		const call = run.trace?.calls[0]
+		const observed = [{ events: [{ data: { n: 1 } }], failed: "transport", kind: "events" }]
 		expect({ observed: run.observed, stream: call?.stream, via: call?.error?.via }, run.stderr).toEqual({
-			observed: [{ events: [{ data: { n: 1 } }], kind: "events" }],
+			observed,
 			stream: { retry: [null], yields: 2 },
 			via: "stream",
 		})
 		expect(call?.error?.variant).toBe("Transport")
 		const bare = await drive(sdk, [dropped], [ticks()])
-		expect({ status: bare.run.status, stderr: bare.run.stderr }).toEqual({
-			status: 1,
-			stderr: expect.stringMatching(
-				/^driver: call 0 \(ticks\.stream\): the call ended in an error the grid has no outcome for: /,
-			),
-		})
+		expect({ observed: bare.run.observed, status: bare.run.status }, bare.run.stderr).toEqual({ observed, status: 0 })
 	}, 600_000)
 
 	it("observes an error status at the open as error and a path failing before any stream as null, both via return", async () => {

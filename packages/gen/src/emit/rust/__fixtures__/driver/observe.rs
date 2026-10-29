@@ -7,6 +7,8 @@
 //! stream.rs, socket.rs and live.rs.
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU16, Ordering};
 
 use serde::Serialize;
 use serde_json::Value;
@@ -111,12 +113,37 @@ fn answered<T: Serialize>(
     })
 }
 
-/// An error, traced: an error status and a timeout are grid outcomes; any other observes nothing.
+/* the status of the call's last answer, as the `on_response` hook saw it; 0 before any */
+static ANSWERED: AtomicU16 = AtomicU16::new(0);
+
+/// An `on_response` hook keeping each answer's status: `Error::Decode` carries none, so an
+/// undecodable 2xx is read at the status its answer came with. The driver runs one call at a time.
+pub fn answered_status() -> sdk::OnResponseHook {
+    Arc::new(keep_status)
+}
+
+fn keep_status(ctx: &mut sdk::ResponseContext) -> sdk::HookFuture<'_> {
+    ANSWERED.store(ctx.status, Ordering::SeqCst);
+    Box::pin(async { Ok(()) })
+}
+
+/// Before a call: no answer seen yet.
+pub fn forget_status() {
+    ANSWERED.store(0, Ordering::SeqCst);
+}
+
+/// An error, traced: an error status, a timeout, an undecodable 2xx (`Error::Decode` after a 2xx
+/// answer) and no answer (`Error::Transport`) are grid outcomes; any other observes nothing.
 pub fn failed(e: sdk::Error, how: &How, via: &str) -> Result<Outcome, String> {
     let error = Some(rust_error(&e, via, how.envelope));
+    let answered = ANSWERED.load(Ordering::SeqCst);
     let seen = match &e {
         sdk::Error::Api(api) => Some(api_error(api, how.raw)),
         sdk::Error::Timeout => Some(Observed::Timeout),
+        sdk::Error::Decode(_) if (200..300).contains(&answered) => {
+            Some(Observed::Decode { status: answered })
+        }
+        sdk::Error::Transport(_) => Some(Observed::Transport),
         _ => None,
     };
     let observed = seen
