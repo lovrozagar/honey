@@ -12,7 +12,7 @@ export type Sdk = (typeof SDKS)[number]
 export const SAFE = "safe"
 
 /** The SDKs whose safe variant runs: each of i1–i6 adds its language. */
-export const SAFE_ENABLED: ReadonlySet<Sdk> = new Set<Sdk>(["ts", "python"])
+export const SAFE_ENABLED: ReadonlySet<Sdk> = new Set<Sdk>(["ts", "python", "go"])
 
 /** An expectation as a record of its members, or null for one that is no record (a matcher list, a literal). */
 const recordOf = (value: Expected | undefined): Readonly<Record<string, unknown>> | null =>
