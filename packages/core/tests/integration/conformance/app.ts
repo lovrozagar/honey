@@ -1,7 +1,8 @@
 /**
  * The conformance reference app (bit 11): the live target every generated client is measured
  * against. gen's harness spawns this file on bun; it serves one app on two loopback listeners (the
- * alt one is another origin) and prints `{"url","alt"}` once both listen. Everything crosses HTTP:
+ * alt one is another origin) and a third, the drop origin, that cuts each answer's connection at its end
+ * (drop-front.ts), and prints `{"url","alt","drop"}` once all listen. Everything crosses HTTP:
  * the routes, the document at `/v1/openapi.json`, and the wire log at `/v1/__conformance/*`.
  *
  * Every public route names an `operationId`, the key the matrix joins targets on. A root
@@ -17,12 +18,13 @@ import { requestId } from "../../../src/middleware/request-id.ts"
 import { type McpHandler, mcp } from "../../../src/mcp/mount.ts"
 import { serveOpenApi } from "../../../src/openapi/serve.ts"
 import { honey } from "../../../src/routing/app.ts"
+import { listenDropFront } from "./drop-front.ts"
 import { createReferenceServer } from "./reference-server.ts"
 import { secureRoutes } from "./app-secure.ts"
 import { ws } from "../../../src/ws/route.ts"
 
-/** The app's two origins, known once both listeners are up. */
-export type Origins = { readonly alt: string; readonly url: string }
+/** The app's origins, known once every listener is up: the drop origin cuts each answer at its end (drop-front.ts). */
+export type Origins = { readonly alt: string; readonly drop: string; readonly url: string }
 
 /** One request the app received, as `GET /v1/__conformance/wire` answers it. */
 export type WireHop = {
@@ -34,7 +36,7 @@ export type WireHop = {
 	}
 	readonly headers: Readonly<Record<string, string>>
 	readonly method: string
-	readonly origin: "alt" | "primary"
+	readonly origin: "alt" | "drop" | "primary"
 	readonly url: string
 }
 
@@ -233,7 +235,7 @@ function itemRoutes(app: ConformanceApp): void {
 		.handler((ctx) => ctx.res.noContent())
 }
 
-/** `files.*` and `ticks.stream`: bytes both ways and a typed event stream. */
+/** `files.*` and `ticks.*`: bytes both ways, a typed event stream, and one refused at open (bit 21 i0). */
 function streamRoutes(app: ConformanceApp): void {
 	app
 		.get("/files/:name")
@@ -263,6 +265,25 @@ function streamRoutes(app: ConformanceApp): void {
 				for (let n = 1; n <= 3; n++) await stream.send({ data: { n }, event: "tick", id: String(n) })
 				stream.close()
 			}),
+		)
+	app
+		.get("/ticks/refused")
+		.meta({ operationId: "ticks.refused" })
+		.errors("limit_reached")
+		.output({ "text/event-stream": { ok: z.object({ n: z.number().int() }) } })
+		.handler(() => {
+			throw errors.limit_reached()
+		})
+}
+
+/** `faults.undecodable`: a 200 declared as an item whose body is no JSON at all (bit 21 i0). */
+function faultRoutes(app: ConformanceApp): void {
+	app
+		.get("/faults/undecodable")
+		.meta({ operationId: "faults.undecodable" })
+		.output({ "application/json": { ok: Item } })
+		.handler((ctx) =>
+			ctx.res.raw(new Response("not json", { headers: { "content-type": "application/json" }, status: 200 })),
 		)
 }
 
@@ -405,8 +426,11 @@ function socketRoutes(app: ConformanceApp): void {
 /** The conformance app; `origins` names its two listeners once they are up (none in process). */
 export function createConformanceApp(origins: () => Origins | null = () => null) {
 	const originOf = (request: Request): WireHop["origin"] => {
-		const alt = origins()?.alt
-		return alt !== undefined && new URL(request.url).host === new URL(alt).host ? "alt" : "primary"
+		const host = new URL(request.url).host
+		const known = origins()
+		if (known === null) return "primary"
+		if (host === new URL(known.alt).host) return "alt"
+		return host === new URL(known.drop).host ? "drop" : "primary"
 	}
 	const wire = createWire(originOf)
 	const captured = configured(wire)
@@ -418,6 +442,7 @@ export function createConformanceApp(origins: () => Origins | null = () => null)
 	const streams = { dialed: 0 }
 	itemRoutes(app)
 	streamRoutes(app)
+	faultRoutes(app)
 	realtimeRoutes(app, streams)
 	hopRoutes(app, origins)
 	harnessRoutes(app)
@@ -438,8 +463,8 @@ export function createConformanceApp(origins: () => Origins | null = () => null)
 }
 
 /**
- * Serve on two loopback listeners, print the readiness line, and stop on a signal or a closed stdin. With
- * $HONEY_CONFORMANCE_MCP naming a generated MCP handler module, it is mounted at /v1/mcp (bit 21 e).
+ * Serve on two loopback listeners and the drop origin, print the readiness line, and stop on a signal or a closed
+ * stdin. With $HONEY_CONFORMANCE_MCP naming a generated MCP handler module, it is mounted at /v1/mcp (bit 21 e).
  */
 async function main(): Promise<void> {
 	let origins: Origins | null = null
@@ -448,12 +473,14 @@ async function main(): Promise<void> {
 	if (handler !== undefined) mcp(app, "/mcp", ((await import(handler)) as { mcpHandler: McpHandler }).mcpHandler)
 	const listeners: ServeHandle[] = await Promise.all([0, 1].map(() => serve(app, { hostname: "127.0.0.1", port: 0 })))
 	const [primary, alt] = listeners as [ServeHandle, ServeHandle]
-	origins = { alt: alt.url, url: primary.url }
-	process.stdout.write(`${JSON.stringify({ url: primary.url, alt: alt.url })}\n`)
+	const drop = await listenDropFront(app)
+	origins = { alt: alt.url, drop: drop.url, url: primary.url }
+	process.stdout.write(`${JSON.stringify({ url: primary.url, alt: alt.url, drop: drop.url })}\n`)
 	let stopping = false
 	const stop = () => {
 		if (stopping) return
 		stopping = true
+		drop.server.close()
 		void Promise.all(listeners.map((listener) => listener.close(100))).finally(() => process.exit(0))
 	}
 	process.once("SIGTERM", stop)
