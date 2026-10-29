@@ -1,3 +1,4 @@
+import { createServer } from "node:http"
 import type { AddressInfo } from "node:net"
 import { connect } from "node:net"
 import { afterEach, describe, expect, it, vi } from "vitest"
@@ -323,8 +324,14 @@ describe("server options", () => {
 			timeouts,
 		)
 		const plain = (await listen(answering(() => new Response()))).server
-		const seen = [server.headersTimeout, server.requestTimeout, server.keepAliveTimeout, plain.keepAliveTimeout]
-		expect(seen).toEqual([1000, 2000, 3000, 5000])
+		// Node's own defaults, read off a bare server: they move between majors (keepAliveTimeout 5000 → 65000 in 27)
+		const node = createServer()
+		const seen = [server.headersTimeout, server.requestTimeout, server.keepAliveTimeout]
+		const left = [plain.headersTimeout, plain.requestTimeout, plain.keepAliveTimeout]
+		expect([seen, left]).toEqual([
+			[1000, 2000, 3000],
+			[node.headersTimeout, node.requestTimeout, node.keepAliveTimeout],
+		])
 	})
 
 	// v0: a1d56ee617
