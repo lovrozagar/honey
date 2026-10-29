@@ -96,8 +96,13 @@ describe.skipIf(!PY)("safe mode: an error status in SDKResult.error, every other
 					["return", "APIConnectionError", undefined, undefined],
 				],
 				observed: [
-					[{ body: { message: "m" }, errorKey: null, kind: "error", status: 404 }, null, { kind: "timeout" }, null],
-					[null],
+					[
+						{ body: { message: "m" }, errorKey: null, kind: "error", status: 404 },
+						{ kind: "decode", status: 200 },
+						{ kind: "timeout" },
+						null,
+					],
+					[{ kind: "transport" }],
 				],
 			})
 		},

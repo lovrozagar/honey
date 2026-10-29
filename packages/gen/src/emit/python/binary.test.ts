@@ -256,8 +256,8 @@ describe.skipIf(!PY)("typed response headers: headers_into fills <Op>Headers (G5
 				observed: [
 					{ data, headers: { "x-etag": "e1", "x-item-version": "3" }, kind: "data", status: 200 },
 					{ data, headers: { "x-item-version": "3" }, kind: "data", status: 200 },
-					null,
-					null,
+					{ kind: "decode", status: 200 },
+					{ kind: "decode", status: 200 },
 				],
 			})
 		},

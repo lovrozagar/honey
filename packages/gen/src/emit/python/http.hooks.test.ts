@@ -253,7 +253,7 @@ describe.skipIf(!PY)(
 				run.stderr,
 			).toEqual({
 				log: [start, failed(expect.stringContaining("APIConnectionError: the request failed: ConnectError"))],
-				observed: [null],
+				observed: [{ kind: "transport" }],
 				secrets: [],
 				status: 0,
 			})

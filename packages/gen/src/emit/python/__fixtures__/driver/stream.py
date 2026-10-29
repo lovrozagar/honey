@@ -1,8 +1,9 @@
 """A stream call's reads (contract 34 §5.2; Rust's stream.rs, socket.rs and live.rs). Streams are
 ``AsyncSDK``'s alone (G2): awaiting the method opens the stream. An error at the open is the grid's
-``error`` (an ``APIStatusError``) or ``timeout``, and any other observes null, each traced via
-"return". Once open, the call observes what the stream delivered, SSE events or WebSocket and
-realtime frames, and an error the stream raised is traced via "stream". Unscripted, an error the
+``error`` (an ``APIStatusError``), ``timeout`` or ``transport``, and any other observes null, each
+traced via "return". Once open, the call observes what the stream delivered, SSE events or WebSocket
+and realtime frames, and an error the stream raised is traced via "stream"; SSE events ending in no
+answer (a drop, a timeout) after the first observe it as ``failed`` (f2). Unscripted, an error the
 grid has no outcome for (one a stream raised among them) fails the run, and an exception outside the
 SDK's ``HoneyError`` propagates, as on a unary call. ``bounded`` fails a stream call that has not
 ended after ``STALL_AFTER`` seconds instead of hanging the run.
@@ -16,11 +17,12 @@ from collections.abc import Callable, Coroutine
 from typing import Any, Literal
 
 from invoke import Prepared
-from observe import Lens, Outcome, grid_outcome, typed_headers
+from observe import Lens, Outcome, grid_outcome, no_answer, typed_headers
 from protocol import (
     Call,
     CallScript,
     DriverError,
+    EventsObserved,
     HandlerRun,
     Observed,
     StreamTrace,
@@ -107,7 +109,8 @@ async def events(
     """An ``EventStream`` read until ``take`` events (absent: until its end), then closed. A raised
     error is kept (the first) and the reads carry on, as Rust's driver does, so a stream that does
     not end after its error shows in ``yields``. The trace holds the yields (events and errors),
-    each event's ``retry`` (null when unset) and the typed headers the open filled."""
+    each event's ``retry`` (null when unset) and the typed headers the open filled. Events that end
+    in no answer observe it as ``failed``: unscripted, that is no failure of the run."""
     seen: list[dict[str, Any]] = []
     retry: list[int | None] = []
     yields, failure = 0, None
@@ -132,7 +135,13 @@ async def events(
     headers = typed_headers(prepared.plan, prepared.headers_into or {})
     if headers:
         trace["headers"] = headers
-    return streamed({"events": seen, "kind": "events"}, failure, trace, lens)
+    observed: EventsObserved = {"events": seen, "kind": "events"}
+    failed = None if failure is None or not seen else no_answer(failure, lens)
+    if failed is not None:
+        observed["failed"] = failed
+        if not lens.scripted:
+            return Outcome(observed, None, None, trace)
+    return streamed(observed, failure, trace, lens)
 
 
 def sendable(value: Any) -> Any:

@@ -56,7 +56,7 @@ class Call(TypedDict):
     body: NotRequired[JsonBody | BinaryBody]
     headers: NotRequired[dict[str, str]]
     lastEventId: NotRequired[str]
-    origin: NotRequired[Literal["alt"]]
+    origin: NotRequired[Literal["alt", "drop", "refused"]]
     params: NotRequired[dict[str, str]]
     raw: NotRequired[bool]
     reconnectToken: NotRequired[str]
@@ -124,8 +124,21 @@ class TimeoutObserved(TypedDict):
     kind: Literal["timeout"]
 
 
+class DecodeObserved(TypedDict):
+    kind: Literal["decode"]
+    status: int
+
+
+class TransportObserved(TypedDict):
+    kind: Literal["transport"]
+
+
+NoAnswer = Literal["timeout", "transport"]
+
+
 class EventsObserved(TypedDict):
     events: list[dict[str, Any]]
+    failed: NotRequired[NoAnswer]
     kind: Literal["events"]
 
 
@@ -135,7 +148,14 @@ class FramesObserved(TypedDict):
 
 
 Answered = DataObserved | ErrorObserved | BytesObserved | RawObserved
-Observed = Answered | TimeoutObserved | EventsObserved | FramesObserved
+Observed = (
+    Answered
+    | TimeoutObserved
+    | DecodeObserved
+    | TransportObserved
+    | EventsObserved
+    | FramesObserved
+)
 
 
 class AfterMs(TypedDict):
@@ -294,4 +314,6 @@ class Envelope(TypedDict):
     plans: dict[str, Plan]
     base: str
     alt: NotRequired[str]
+    drop: NotRequired[str]
+    refused: NotRequired[str]
     script: NotRequired[Script]

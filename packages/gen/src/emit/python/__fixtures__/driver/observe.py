@@ -4,8 +4,9 @@ A result is ``data`` with the raw response's status (and the typed response head
 declares them), the bytes' size and SHA-256 for a binary answer, or ``raw`` when the call asks for
 it; a safe-mode ``SDKResult`` observes its data or its error. An operation with no typed answer
 observes its raw body as data: JSON, else text, else null. ``APIStatusError`` is ``error`` with
-its status, its key (``str(e.key)``) and its body's JSON, and ``APITimeoutError`` is ``timeout``.
-Unscripted, any other error is a DriverError. Under a script, a call's error is traced too
+its status, its key (``str(e.key)``) and its body's JSON, ``APITimeoutError`` is ``timeout``, any
+other ``APIConnectionError`` (no answer, f2) is ``transport``, and ``DecodeError`` on a 2xx (the
+status the call's ``RawResponse`` holds) is ``decode``. Unscripted, any other error is a DriverError. Under a script, a call's error is traced too
 (``via: "return"``, or ``"result"`` for a safe-mode ``SDKResult.error``, with the result's summary),
 and an error the grid has no outcome for observes null.
 """
@@ -21,6 +22,7 @@ from invoke import Prepared
 from protocol import (
     DriverError,
     ErrorObserved,
+    NoAnswer,
     Observed,
     Plan,
     PythonError,
@@ -139,18 +141,35 @@ def status_observed(error: Any, raw: bool) -> Observed:
     return seen
 
 
-def grid_outcome(error: BaseException, lens: Lens) -> Observed | None:
-    """An error status or a lapsed timeout as the grid observes it; None for any other error."""
+def no_answer(error: BaseException, lens: Lens) -> NoAnswer | None:
+    """No answer as the grid observes it: ``APITimeoutError`` a timeout, any other
+    ``APIConnectionError`` (refused, cut off) transport; None for any other error."""
     if isinstance(error, lens.module.APITimeoutError):
-        return {"kind": "timeout"}
-    if isinstance(error, lens.module.APIStatusError):
-        return status_observed(error, lens.raw)
+        return "timeout"
+    if isinstance(error, lens.module.APIConnectionError):
+        return "transport"
     return None
 
 
-def raised(error: BaseException, lens: Lens) -> Outcome:
-    """A call that raised ``error``: traced under a script; unscripted, a grid outcome or a DriverError."""
-    seen = grid_outcome(error, lens)
+def grid_outcome(error: BaseException, lens: Lens, status: int = 0) -> Observed | None:
+    """No answer, an error status, or a ``DecodeError`` on a 2xx (``status``: what the call's
+    ``RawResponse`` holds) as the grid observes it; None for any other error."""
+    failed = no_answer(error, lens)
+    if failed == "timeout":
+        return {"kind": "timeout"}
+    if failed == "transport":
+        return {"kind": "transport"}
+    if isinstance(error, lens.module.APIStatusError):
+        return status_observed(error, lens.raw)
+    if isinstance(error, lens.module.DecodeError) and 200 <= status < 300:
+        return {"kind": "decode", "status": status}
+    return None
+
+
+def raised(error: BaseException, lens: Lens, status: int = 0) -> Outcome:
+    """A call that raised ``error`` (``status``: its ``RawResponse``'s): traced under a script;
+    unscripted, a grid outcome or a DriverError."""
+    seen = grid_outcome(error, lens, status)
     if lens.scripted:
         return Outcome(seen, python_error(error, "return", lens.envelope))
     if seen is None:

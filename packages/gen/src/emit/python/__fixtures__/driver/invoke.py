@@ -5,8 +5,8 @@ The method is found with ``getattr``: from the client through each of ``plan["ac
 the body: a JSON value as given, or a binary body of ``size`` bytes ``i & 0xff`` (in memory, or under
 ``oneShotBody`` a generator of that one chunk, async on ``AsyncSDK``). Query and header params pass
 as keywords by ``plan["query"]`` and ``plan["headers"]``; a call header the plan declares no param
-for goes in ``options["headers"]`` (F6). ``options`` also carries the call's timeout, the alt
-origin's ``base_url``, the script's ``cancel`` event, and always a ``RawResponse`` to read; the
+for goes in ``options["headers"]`` (F6). ``options`` also carries the call's timeout, the
+``base_url`` of the origin it names (alt, drop or refused), the script's ``cancel`` event, and always a ``RawResponse`` to read; the
 script's ``idempotencyKey`` is the method's idempotency keyword. A stream call adds its fields:
 ``last_event_id`` from ``lastEventId``, ``reconnect_token`` from ``reconnectToken``, and the
 script's ``protocols`` and ``realtime`` (``max_reconnect_attempts``, ``reconnect_delay_ms``).
@@ -123,8 +123,9 @@ def refusal(
         return "the script sets idempotencyKey, and the method has no idempotency key field"
     if envelope["client"] == "sync" and not plan["sync"]:
         return "SDK has no method for this operation"
-    if call.get("origin") == "alt" and "alt" not in envelope:
-        return "the call asks for the alt origin, and the input names none"
+    origin = call.get("origin")
+    if origin is not None and origin not in envelope:
+        return f"the call asks for the {origin} origin, and the input names none"
     return None
 
 
@@ -234,8 +235,9 @@ def options_of(
         options["timeout"] = call["timeoutMs"] / 1000
     if extra:
         options["headers"] = extra
-    if call.get("origin") == "alt":
-        options["base_url"] = target.envelope["alt"]
+    origin = call.get("origin")
+    if origin is not None:
+        options["base_url"] = target.envelope[origin]
     if "cancel" in directives:
         options["cancel"] = cancel_event(
             directives["cancel"], target.envelope["client"]

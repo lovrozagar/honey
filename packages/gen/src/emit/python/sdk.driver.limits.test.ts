@@ -68,7 +68,7 @@ describe.skipIf(!PY)(
 						text: `the answer exceeds ${MiB} bytes`,
 						type: "APIConnectionError",
 					}),
-					observed: [null],
+					observed: [{ kind: "transport" }],
 				})
 			},
 		)

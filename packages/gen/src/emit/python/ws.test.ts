@@ -394,7 +394,8 @@ describe.skipIf(!PY)("what fails before or at the handshake, nothing read", SLOW
 		const origin = { url: "http://127.0.0.1:9" }
 		const run = await driven().runCalls({ calls: [rooms()] }, origin, { client: "async", script: {} })
 		const error = run.trace?.calls[0]?.error
-		expect([run.observed, error?.type, error?.via], run.stderr).toEqual([[null], "APIConnectionError", "return"])
+		const outcome = [run.observed, error?.type, error?.via]
+		expect(outcome, run.stderr).toEqual([[{ kind: "transport" }], "APIConnectionError", "return"])
 	})
 
 	/* H18.10: an upgrade follows no redirect, even through a caller client that follows them */

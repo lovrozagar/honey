@@ -120,7 +120,7 @@ def sync_call(
     except Exception as error:
         if not lens.scripted and not isinstance(error, lens.module.HoneyError):
             raise
-        return raised(error, lens)
+        return raised(error, lens, prepared.raw.status)
     return returned(result, prepared, runner.plan(call), lens)
 
 
@@ -164,7 +164,7 @@ async def async_call(
     except Exception as error:
         if not lens.scripted and not isinstance(error, lens.module.HoneyError):
             raise
-        return raised(error, lens)
+        return raised(error, lens, prepared.raw.status)
     return returned(result, prepared, runner.plan(call), lens)
 
 

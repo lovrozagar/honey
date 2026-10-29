@@ -102,7 +102,7 @@ const truncated = (first: Trace<PythonError>["calls"][number]["result"]) => ({
 		{ error: UNDECODED, result: undefined },
 	],
 	hops: ["/users/1", "/users/1"],
-	observed: [data({ id: "u1" }), null],
+	observed: [data({ id: "u1" }), { kind: "decode", status: 200 }],
 	status: 0,
 })
 
@@ -131,7 +131,7 @@ describe.skipIf(!PY)(
 				expect(decoding(run), run.run.stderr).toEqual({
 					calls: [{ error: UNDECODED, result: undefined }],
 					hops: ["/users/1"],
-					observed: [null],
+					observed: [{ kind: "decode", status: 200 }],
 					status: 0,
 				})
 			},
@@ -241,7 +241,7 @@ describe.skipIf(!PY)("a refused connection is a transport error, never CanceledE
 				text: expect.stringMatching(/^the request failed: ConnectError/),
 				type: "APIConnectionError",
 			}),
-			observed: [null],
+			observed: [{ kind: "transport" }],
 			status: 0,
 		})
 	})

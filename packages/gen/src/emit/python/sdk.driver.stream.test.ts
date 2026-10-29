@@ -190,23 +190,22 @@ describe.skipIf(!PY)("the Python test driver: SSE, EventStream[T]", SLOW, () => 
 })
 
 describe.skipIf(!PY)("the Python test driver: how an SSE call fails", SLOW, () => {
-	it("observes the events before a dropped connection, the stream's error traced; unscripted, the run fails", async () => {
+	it("observes the events before a dropped connection, then the drop as failed: transport (f2), traced under a script", async () => {
 		const sdk = driven("sse")
 		const dropped = sse([tick(1), { waitMs: 50 }], "drop")
+		const seen = { events: [{ data: { n: 1 } }], failed: "transport", kind: "events" }
 		const { run } = await drive(sdk, [dropped], [ticks()], {})
 		const call = run.trace?.calls[0]
 		expect({ observed: run.observed, stream: call?.stream, via: call?.error?.via }, run.stderr).toEqual({
-			observed: [{ events: [{ data: { n: 1 } }], kind: "events" }],
+			observed: [seen],
 			stream: { retry: [null], yields: 2 },
 			via: "stream",
 		})
 		expect(call?.error?.chain).toEqual(["APIConnectionError", "HoneyError"])
 		const bare = await drive(sdk, [dropped], [ticks()])
-		expect({ status: bare.run.status, stderr: bare.run.stderr }).toEqual({
-			status: 1,
-			stderr: expect.stringMatching(
-				/^driver: call 0 \(ticks\.stream\): the call ended in an error the grid has no outcome for: /,
-			),
+		expect({ observed: bare.run.observed, status: bare.run.status }, bare.run.stderr).toEqual({
+			observed: [seen],
+			status: 0,
 		})
 	})
 

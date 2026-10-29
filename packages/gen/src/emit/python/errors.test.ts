@@ -249,7 +249,14 @@ describe.skipIf(!PY)("each way a call fails, one HoneyError class each: a status
 			const observed = [run.observed, lost.observed]
 			expect({ hops: hops.length, observed, shapes, texts }, run.stderr + lost.stderr).toEqual({
 				hops: 2,
-				observed: [[{ body: { message: "gone" }, errorKey: null, kind: "error", status: 404 }, null, null], [null]],
+				observed: [
+					[
+						{ body: { message: "gone" }, errorKey: null, kind: "error", status: 404 },
+						{ kind: "decode", status: 200 },
+						null,
+					],
+					[{ kind: "transport" }],
+				],
 				shapes: [
 					[statusChain("NotFoundError"), 404, null],
 					[["DecodeError", "HoneyError"], undefined, null],

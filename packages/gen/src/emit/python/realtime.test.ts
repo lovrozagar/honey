@@ -416,7 +416,7 @@ describe.skipIf(!PY)("the SSE and long-poll dials ride the shared exchange; the 
 		const capped = await drive([refused, unavailable, big], [live({ take: 1 })], { script })
 		const seen = [capped.run.observed, failure(capped), call0(capped)?.stream?.realtime?.errors]
 		expect(seen, capped.run.stderr).toEqual([
-			frames(),
+			[{ kind: "transport" }],
 			["APIConnectionError", undefined, "stream"],
 			["the answer exceeds 64 bytes"],
 		])

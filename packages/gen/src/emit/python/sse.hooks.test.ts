@@ -275,7 +275,7 @@ describe.skipIf(!PY)(
 					start(PENDING),
 					logged(PENDING, "error", "error", { error: expect.stringMatching(/^APIConnectionError: /) }),
 				],
-				observed: [null],
+				observed: [{ kind: "transport" }],
 				status: 0,
 			})
 			expect(leaked(run.trace?.log)).toEqual([])

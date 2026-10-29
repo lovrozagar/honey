@@ -170,7 +170,7 @@ describe.skipIf(!PY)("the Python test driver's script: client config", SLOW, () 
 		])
 	})
 
-	it.each(CLIENTS)("%s: maxResponseBytes caps an answer: observed null, traced", async (client) => {
+	it.each(CLIENTS)("%s: maxResponseBytes caps an answer: observed as no answer (transport), traced", async (client) => {
 		const script: Script = { config: { maxResponseBytes: 10 } }
 		const replies: Reply[] = [{ bytes: 64, headers: { "content-type": "application/json" }, status: 200 }]
 		const { run } = await drive(on(client), replies, [ECHO], { script })
@@ -180,7 +180,7 @@ describe.skipIf(!PY)("the Python test driver's script: client config", SLOW, () 
 				text: "the answer exceeds 10 bytes",
 				type: "APIConnectionError",
 			}),
-			observed: [null],
+			observed: [{ kind: "transport" }],
 			status: 0,
 		})
 	})
@@ -354,7 +354,7 @@ describe.skipIf(!PY)(
 			const text = "the X-Item-Version header is missing"
 			expect({ error: run.trace?.calls[0]?.error, observed: run.observed }, run.stderr).toEqual({
 				error: plain({ chain: ["DecodeError", "HoneyError"], text, type: "DecodeError" }),
-				observed: [null],
+				observed: [{ kind: "decode", status: 200 }],
 			})
 		})
 	},
