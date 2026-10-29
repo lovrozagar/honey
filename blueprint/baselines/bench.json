@@ -5,7 +5,9 @@
 				"native-json": {
 					"baseline": 3.13,
 					"catches": "+19%",
-					"ceiling": 3.718
+					"ceiling": 3.718,
+					"reportOnly": true,
+					"reason": "report-only from bit 21 i7 until the k-pass re-record: record dispatch 40913885826 at 530b637 read stacked-json 2.36 over its 2.354 ceiling with v1 unchanged (the same code read 1.62, 1.78 and 2.00 in three other runs; every adapter scenario was high in that run at once, so the run, not a scenario, shifted). The step's 15 samples span ~1.7 s, so one burst on the runner decides a run; judged again once each scenario's ratio is the median of k passes interleaved across scenarios, re-recorded over 6+ CI runs."
 				},
 				"post-1kib": {
 					"baseline": 4.61,
@@ -17,12 +19,16 @@
 				"routed-json": {
 					"baseline": 1.57,
 					"catches": "+14%",
-					"ceiling": 1.793
+					"ceiling": 1.793,
+					"reportOnly": true,
+					"reason": "report-only from bit 21 i7 until the k-pass re-record: record dispatch 40913885826 at 530b637 read stacked-json 2.36 over its 2.354 ceiling with v1 unchanged (the same code read 1.62, 1.78 and 2.00 in three other runs; every adapter scenario was high in that run at once, so the run, not a scenario, shifted). The step's 15 samples span ~1.7 s, so one burst on the runner decides a run; judged again once each scenario's ratio is the median of k passes interleaved across scenarios, re-recorded over 6+ CI runs."
 				},
 				"stacked-json": {
 					"baseline": 2.07,
 					"catches": "+14%",
-					"ceiling": 2.354
+					"ceiling": 2.354,
+					"reportOnly": true,
+					"reason": "report-only from bit 21 i7 until the k-pass re-record: record dispatch 40913885826 at 530b637 read stacked-json 2.36 over its 2.354 ceiling with v1 unchanged (the same code read 1.62, 1.78 and 2.00 in three other runs; every adapter scenario was high in that run at once, so the run, not a scenario, shifted). The step's 15 samples span ~1.7 s, so one burst on the runner decides a run; judged again once each scenario's ratio is the median of k passes interleaved across scenarios, re-recorded over 6+ CI runs."
 				}
 			}
 		},
