@@ -248,7 +248,8 @@ goDescribe("safe mode: an error status in SDKResult.Err, every other failure the
 				{ data: false, ok: false, response: true, status: 404 },
 			],
 			lost: ["return", undefined, false, [], undefined],
-			observed: [[failed(404)], [null]],
+			/* bit 21 i0: the refused connection's error return is the grid's transport */
+			observed: [[failed(404)], [{ kind: "transport" }]],
 		})
 	}, 600_000)
 
@@ -305,7 +306,8 @@ goDescribe("safe mode: a failure without an error status is the error return, ne
 				["return", undefined, true, [], undefined],
 				["return", undefined, false, [], undefined],
 			],
-			observed: [[null, { kind: "timeout" }, null], [null]],
+			/* bit 21 i0: the undecodable 2xx's error return is the grid's decode; the cancel and the hook throw none */
+			observed: [[{ kind: "decode", status: 200 }, { kind: "timeout" }, null], [null]],
 		})
 	}, 600_000)
 })

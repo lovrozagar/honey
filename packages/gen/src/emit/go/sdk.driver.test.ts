@@ -381,14 +381,23 @@ goDescribe("the Go test driver: what it cannot express", () => {
 		expect(hops).toEqual([])
 	}, 600_000)
 
-	it("fails a call ending in a Go error the grid has no Observed for: an undecodable success", async () => {
+	/* bit 21 i0: an undecodable success is the grid's decode now, its 2xx status kept; a refused path param is still none */
+	it("fails a call ending in a Go error the grid has no Observed for: a refused path param, not an undecodable success", async () => {
 		const sdk = notesSdk()
 		const replies: Reply[] = [{ headers: { "content-type": "application/json" }, status: 200, text: '{"id":' }]
-		const run = await served(replies, (server) => sdk.runCalls({ calls: [CREATE] }, server))
-		expect({ ...outcome(run), stderr: run.stderr.trim() }).toEqual({
-			observed: undefined,
-			status: 1,
-			stderr: expect.stringMatching(/orgs\.members\.notes\.create.*honey: decode response/),
+		const dotted: Call = { ...CREATE, params: { member: "m", org: ".." } }
+		const [decoded, refused] = await served(replies, (server) =>
+			Promise.all([sdk.runCalls({ calls: [CREATE] }, server), sdk.runCalls({ calls: [dotted] }, server)]),
+		)
+		expect({ decoded: outcome(decoded), refused: { ...outcome(refused), stderr: refused.stderr.trim() } }).toEqual({
+			decoded: { observed: [{ kind: "decode", status: 200 }], status: 0 },
+			refused: {
+				observed: undefined,
+				status: 1,
+				stderr: expect.stringMatching(
+					/orgs\.members\.notes\.create.*Invalid path param "org": "\.\." is not a path segment/,
+				),
+			},
 		})
 	}, 600_000)
 })

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"reflect"
 	"sort"
@@ -61,22 +62,54 @@ func isResult(t reflect.Type) bool {
 	return t.Kind() == reflect.Struct && strings.HasPrefix(t.Name(), "SDKResult[")
 }
 
-// gridError reports whether err is an outcome the grid observes: an error status or a timeout.
-func gridError(err error) bool {
+// gridError reports whether err is an outcome the grid observes: an error status, no answer (a
+// timeout, a lost or refused connection), or, for a call, a 2xx whose body did not decode. An
+// event of a stream that does not decode is none: it fails the run.
+func gridError(err error, stream bool) bool {
 	var ce *sdk.ClientError
-	return errors.As(err, &ce) || errors.Is(err, context.DeadlineExceeded)
+	return errors.As(err, &ce) || noAnswerOf(err) != "" || (!stream && isUndecodable(err))
 }
 
-// observedOf normalizes a call's outcome to the grid's Observed: a timeout, the raw response for
-// raw: true, error for an error status, else bytes for a binary answer and data for any other
-// (the JSON of the answer, a text answer as a string, the stored body for a method with no typed
-// answer, with the typed response headers when the plan has them). o.err, when set, is a grid
-// error.
+// noAnswerOf is how err failed with no answer, as the grid names it: "timeout" for a lapsed
+// deadline; "transport" for a connection refused or lost, the *net.OpError a dial or read failed
+// with or the io.ErrUnexpectedEOF net/http reads from a body cut mid-answer; "" for any other.
+func noAnswerOf(err error) string {
+	var op *net.OpError
+	switch {
+	case errors.Is(err, context.DeadlineExceeded):
+		return "timeout"
+	case errors.As(err, &op), errors.Is(err, io.ErrUnexpectedEOF):
+		return "transport"
+	}
+	return ""
+}
+
+// isUndecodable reports whether err is a 2xx body that did not decode. The SDK has no decode
+// type yet (bit 21 i3 adds *DecodeError): decodeJSON wraps encoding/json's own error, a
+// *json.SyntaxError or *json.UnmarshalTypeError, with no *ClientError around it.
+func isUndecodable(err error) bool {
+	var ce *sdk.ClientError
+	var syntax *json.SyntaxError
+	var typed *json.UnmarshalTypeError
+	return !errors.As(err, &ce) && (errors.As(err, &syntax) || errors.As(err, &typed))
+}
+
+// observedOf normalizes a call's outcome to the grid's Observed: no answer (a timeout or
+// transport), a decode with the 2xx status, the raw response for raw: true, error for an error
+// status, else bytes for a binary answer and data for any other (the JSON of the answer, a text
+// answer as a string, the stored body for a method with no typed answer, with the typed response
+// headers when the plan has them). o.err, when set, is a grid error.
 func observedOf(j job, o outcome, resp *http.Response, target any) (any, error) {
 	var ce *sdk.ClientError
 	switch {
+	case o.err != nil && noAnswerOf(o.err) != "":
+		return map[string]any{"kind": noAnswerOf(o.err)}, nil
+	case o.err != nil && isUndecodable(o.err) && resp == nil:
+		return nil, fmt.Errorf("a decode failure without a response to read the status from: %w", o.err)
+	case o.err != nil && isUndecodable(o.err):
+		return map[string]any{"kind": "decode", "status": resp.StatusCode}, nil
 	case o.err != nil && !errors.As(o.err, &ce):
-		return map[string]any{"kind": "timeout"}, nil
+		return nil, fmt.Errorf("an error the grid has no Observed for: %w", o.err)
 	case j.c.Raw:
 		return rawOf(resp)
 	case ce != nil:

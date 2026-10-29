@@ -106,10 +106,11 @@ func (r *runner) perform(i int, c call) (any, error) {
 		return nil, err
 	}
 	r.rec.called(time.Since(start), o, j.d)
-	if o.err != nil && !gridError(o.err) && r.script == nil {
+	grid := o.err == nil || gridError(o.err, p.Stream != nil)
+	if !grid && r.script == nil {
 		return nil, o.err
 	}
-	if p.Stream != nil || (o.err != nil && !gridError(o.err)) {
+	if p.Stream != nil || !grid {
 		return seen, nil
 	}
 	return observedOf(j, o, resp, target)
@@ -139,11 +140,12 @@ func requestOptions(in input, j job, resp **http.Response) ([]sdk.RequestOption,
 	opts := []sdk.RequestOption{sdk.WithResponseInto(resp)}
 	switch j.c.Origin {
 	case "":
-	case "alt":
-		if in.Alt == "" {
-			return nil, nil, errors.New("the call goes to the alt origin, and the input names none")
+	case "alt", "drop", "refused":
+		origin := map[string]string{"alt": in.Alt, "drop": in.Drop, "refused": in.Refused}[j.c.Origin]
+		if origin == "" {
+			return nil, nil, fmt.Errorf("the call goes to the %s origin, and the input names none", j.c.Origin)
 		}
-		opts = append(opts, sdk.WithBaseURL(in.Alt))
+		opts = append(opts, sdk.WithBaseURL(origin))
 	default:
 		return nil, nil, fmt.Errorf("origin %q is not one the driver knows", j.c.Origin)
 	}

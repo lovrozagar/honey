@@ -178,26 +178,34 @@ func eventOf(ev reflect.Value) (map[string]any, error) {
 	return out, nil
 }
 
-// observedStream is a stream's Observed: kind ("events" or "frames") holding items, unless it
-// failed before any item with an error status (error) or a lapsed deadline (timeout).
+// observedStream is a stream's Observed: kind ("events" or "frames") holding items, and how it
+// failed with no answer after them (f2); unless it failed before any item with an error status
+// (error) or a lapsed deadline (timeout).
 func observedStream(kind string, items []any, failed error) any {
 	var ce *sdk.ClientError
+	seen := map[string]any{"kind": kind, kind: items}
 	switch {
-	case len(items) > 0 || failed == nil:
+	case failed == nil:
+	case len(items) > 0 && noAnswerOf(failed) != "":
+		seen["failed"] = noAnswerOf(failed)
+	case len(items) > 0:
 	case errors.As(failed, &ce):
 		return errorOf(ce)
 	case errors.Is(failed, context.DeadlineExceeded):
 		return map[string]any{"kind": "timeout"}
 	}
-	return map[string]any{"kind": kind, kind: items}
+	return seen
 }
 
-// openFailed is a stream method that failed before any stream existed: an error status or a
-// timeout as the grid observes it, else null.
+// openFailed is a stream method that failed before any stream existed: an error status or no
+// answer (a timeout, a refused connection) as the grid observes it, else null.
 func openFailed(err error) streamed {
 	o := outcome{err: err, via: "return"}
-	if !gridError(err) {
+	switch {
+	case !gridError(err, true):
 		return streamed{o: o}
+	case noAnswerOf(err) != "":
+		return streamed{seen: map[string]any{"kind": noAnswerOf(err)}, o: o}
 	}
 	return streamed{seen: observedStream("frames", nil, err), o: o}
 }

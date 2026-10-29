@@ -248,6 +248,10 @@ goDescribe("OnLog: the exchange by its operation template, never a path value, q
 async function refused() {
 	const closed = REFUSED_URL
 	const run = await hooksSdk().runCalls({ calls: [GET], setup: BEARER }, { url: closed }, { log: true })
-	expect({ observed: run.observed, status: run.status }, run.stderr).toEqual({ observed: [null], status: 0 })
+	/* bit 21 i0: the refused connection is the grid's transport */
+	expect({ observed: run.observed, status: run.status }, run.stderr).toEqual({
+		observed: [{ kind: "transport" }],
+		status: 0,
+	})
 	return run.trace?.log ?? []
 }

@@ -148,7 +148,8 @@ goDescribe("a JSON answer decodes into the operation's type; an undecodable one 
 		const expected = (first: Trace["calls"][number]["result"]) => ({
 			calls: [{ error: undefined, result: first }, undecoded],
 			hops: ["/items/i1", "/items/i1"],
-			observed: [data({ id: "i1", name: "one" }), null],
+			/* bit 21 i0: the grid observes the error return as its decode, the 2xx status kept */
+			observed: [data({ id: "i1", name: "one" }), { kind: "decode", status: 200 }],
 			status: 0,
 		})
 		expect({ safe: decoding(safe), thrown: decoding(thrown) }).toEqual({

@@ -311,7 +311,8 @@ goDescribe("the Go test driver's script: a call's Go error", () => {
 		])
 	}, 600_000)
 
-	it("traces a refused path param as *sdk.PathParamError, nothing sent, and an undecodable body as null", async () => {
+	/* bit 21 i0: the undecodable body is observed as the grid's decode, its trace unchanged */
+	it("traces a refused path param as *sdk.PathParamError, nothing sent, and an undecodable body as a decode", async () => {
 		const undecodable: Reply = { headers: { "content-type": "application/json" }, status: 200, text: '{"id":' }
 		const calls: Call[] = [{ ...GET, params: { id: "..", org: "o" } }, GET]
 		const { hops, run } = await drive(scriptedSdk(), [undecodable], calls, { script: {} })
@@ -324,7 +325,7 @@ goDescribe("the Go test driver's script: a call's Go error", () => {
 		}).toEqual({
 			decoded: [[], true],
 			hops: ["/orgs/o/notes/n1"],
-			observed: [null, null],
+			observed: [null, { kind: "decode", status: 200 }],
 			refused: plain({
 				chain: ["*sdk.PathParamError"],
 				pathParam: { missing: false, name: "id", value: ".." },

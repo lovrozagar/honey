@@ -5,7 +5,8 @@
 //
 // Stdin is one JSON object, G11's envelope:
 //
-//	{ "cell": { "setup"?: Setup, "calls": Call[] }, "plans": { <operationId>: plan }, "base": url, "alt"?: url, "script"?: Script }
+//	{ "cell": { "setup"?: Setup, "calls": Call[] }, "plans": { <operationId>: plan }, "base": url, "alt"?: url,
+//	  "drop"?: url, "refused"?: url, "script"?: Script }
 //
 // cell is the grid's Cell as is (its other members are ignored); plans are the emitter's call plans
 // (goCallPlans). Every call of a cell runs in order on one client, so state a call leaves (a
@@ -40,11 +41,13 @@ import (
 
 // input is the envelope on stdin.
 type input struct {
-	Cell   cell            `json:"cell"`
-	Plans  map[string]plan `json:"plans"`
-	Base   string          `json:"base"`
-	Alt    string          `json:"alt"`
-	Script json.RawMessage `json:"script"`
+	Cell    cell            `json:"cell"`
+	Plans   map[string]plan `json:"plans"`
+	Base    string          `json:"base"`
+	Alt     string          `json:"alt"`
+	Drop    string          `json:"drop"`
+	Refused string          `json:"refused"`
+	Script  json.RawMessage `json:"script"`
 }
 
 // cell holds what the driver reads of a grid Cell; the calls are decoded strictly one by one.
