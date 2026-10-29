@@ -11,7 +11,6 @@ import { type Sink, WIDTH } from "./layout-doc.ts"
  */
 function piecesOf(body: string): string[] {
 	const out: string[] = []
-	let piece = ""
 	let start = 0
 	for (let i = 0; i < body.length; i += 1) {
 		if (/\s/.test(body[i] as string) || body.startsWith("\\t", i)) {
@@ -19,14 +18,10 @@ function piecesOf(body: string): string[] {
 		} else if (body.startsWith("\\r", i) || body.startsWith("\\n", i)) {
 			while (body.startsWith("\\r", i) || body.startsWith("\\n", i)) i += 2
 		} else continue
-		piece += body.slice(start, i)
-		out.push(piece)
-		piece = ""
+		out.push(body.slice(start, i))
 		start = i
 	}
-	if (piece !== "") out.push(piece)
-	if (start < body.length) piece = body.slice(start)
-	if (piece !== "") out.push(piece)
+	if (start < body.length) out.push(body.slice(start))
 	return out
 }
 
@@ -46,7 +41,6 @@ function reflow(start: number, trailing: number, pieces: readonly string[], firs
 			length += text.length
 			if (text.endsWith("\\n") || text.endsWith("\\r")) break
 		}
-		if (line.length === 0) line.push(queue.shift() as string)
 		lines.push(line.join(""))
 		if (first) {
 			room -= 6

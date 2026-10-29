@@ -58,7 +58,7 @@ const literal = (value: number) => (value >= INT_MIN && value <= INT_MAX ? Strin
 /** `public enum <name>` of an integer enum: one constant per value, then the `long` value and its JSON creator. */
 function intEnumDecl(name: string, values: readonly number[]): string {
 	const constants = values.flatMap((value, i) =>
-		enumConstant(2, label(value), [literal(value)], i < values.length - 1 ? "," : ";"),
+		enumConstant(2, label(value), literal(value), i < values.length - 1 ? "," : ";"),
 	)
 	return [...enumHeader(name), ...constants, ...intEnumJsonLines(name), "}"].join("\n")
 }

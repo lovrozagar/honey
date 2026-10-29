@@ -63,7 +63,7 @@ const wrapperText = (wrapper: string, union: string, payload: string): string =>
 		annotations: [{ name: "JsonDeserialize" }],
 		components: [{ annotations: [{ name: "JsonValue" }], name: "value", type: payload }],
 		end: "{}",
-		implements: [union],
+		implements: union,
 		kind: "record",
 		modifiers: ["public"],
 		name: wrapper,

@@ -29,7 +29,8 @@ type Level = {
 	readonly indent: Indent
 	readonly docs: Doc[]
 	oneLine: boolean
-	splits: Doc[][]
+	/* the docs between its breaks, as the layout splits them */
+	splits: Split[]
 	breaks: Break[]
 }
 type Break = {
@@ -47,6 +48,7 @@ type Break = {
  */
 type Text = { readonly k: "text"; readonly text: string; readonly str?: "first" | "later" }
 type Doc = Text | Level | Break
+type Split = (Text | Level)[]
 
 const level = (indent: Indent): Level => ({ breaks: [], docs: [], indent, k: "level", oneLine: false, splits: [] })
 
@@ -72,9 +74,8 @@ type State = {
 }
 const fresh = (indent: number, column: number): State => ({ column, indent, lastIndent: indent, mustBreak: false })
 
-function compute(doc: Doc, state: State): State {
+function compute(doc: Text | Level, state: State): State {
 	if (doc.k === "text") return { ...state, column: state.column + doc.text.length }
-	if (doc.k === "break") throw new Error("a break is laid out by its level")
 	const own = widthOf(doc)
 	if (state.column + own <= WIDTH) {
 		doc.oneLine = true
@@ -91,16 +92,15 @@ function computeBroken(doc: Level, start: State): State {
 		if (child.k === "break") {
 			doc.breaks.push(child)
 			doc.splits.push([])
-		} else (doc.splits.at(-1) as Doc[]).push(child)
+		} else (doc.splits.at(-1) as Split).push(child)
 	}
-	let state = breakAndSplit(start, undefined, doc.splits[0] as Doc[])
-	doc.breaks.forEach((brk, i) => {
-		state = breakAndSplit(state, brk, doc.splits[i + 1] as Doc[])
-	})
-	return state
+	return doc.splits.reduce<State>(
+		(state, split, i) => breakAndSplit(state, i === 0 ? undefined : doc.breaks[i - 1], split),
+		start,
+	)
 }
 
-function breakAndSplit(state: State, brk: Break | undefined, split: readonly Doc[]): State {
+function breakAndSplit(state: State, brk: Break | undefined, split: Split): State {
 	const breakWidth = brk === undefined ? 0 : widthOf(brk)
 	const splitWidth = sumOf(split)
 	const shouldBreak = brk?.fill === "unified" || state.mustBreak || state.column + breakWidth + splitWidth > WIDTH
@@ -126,13 +126,11 @@ function write(doc: Doc, out: Sink): void {
 	if (doc.k === "text") put(doc, out)
 	else if (doc.k === "break") out.text += doc.broken ? `\n${" ".repeat(doc.newIndent)}` : doc.flat
 	else if (doc.oneLine) for (const child of doc.docs) writeFlat(child, out)
-	else {
-		for (const child of doc.splits[0] ?? []) write(child, out)
-		doc.breaks.forEach((brk, i) => {
-			write(brk, out)
-			for (const child of doc.splits[i + 1] ?? []) write(child, out)
+	else
+		doc.splits.forEach((split, i) => {
+			if (i > 0) write(doc.breaks[i - 1] as Break, out)
+			for (const child of split) write(child, out)
 		})
-	}
 }
 function writeFlat(doc: Doc, out: Sink): void {
 	if (doc.k === "level") for (const child of doc.docs) writeFlat(child, out)
@@ -189,6 +187,13 @@ export class Builder {
 		this.open(0)
 		this.brk("independent", " ")
 		this.close()
+	}
+
+	/** The doc on one line: every level flat, every break its flat text. */
+	flat(): string {
+		const out: Sink = { strings: [], text: "" }
+		writeFlat(this.base, out)
+		return out.text
 	}
 
 	/** The doc laid out from `indent` columns, as GJF's block level lays out one statement: its text and literals. */

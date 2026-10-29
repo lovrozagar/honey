@@ -6,6 +6,8 @@
  * Java's presence, as the C# files gate on .NET (`java-env.ts`). The default run compiles on 21; the CI matrix
  * compiles on 17, 21 and 25.
  */
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
 import { basename, join } from "node:path"
 import { describe, expect, it } from "vitest"
 import { compiledJavaSdk } from "./__fixtures__/compiled.ts"
@@ -13,6 +15,7 @@ import { FIXTURES, type FixtureKey, type JavaFixture } from "./__fixtures__/docu
 import { runGjf, withJava } from "./__fixtures__/java-env.ts"
 import { errors } from "../shared/__fixtures__/documents-http.ts"
 import { LONG_LENGTHS, longNames } from "../shared/__fixtures__/documents-long.ts"
+import { call, type Expr, exprStmt, field, id, statement } from "./layout.ts"
 import { generateJavaSdk } from "./sdk.ts"
 
 type Json = Record<string, unknown>
@@ -189,5 +192,53 @@ describe.skipIf(!JAVA)("google-java-format --dry-run on the long-name SDK (bit 2
 				(end) => sources.some((name) => name.endsWith(end)),
 			),
 		}).toEqual({ diagnostics: [], format: [], past: true, reached: [true, true, true, true, true] })
+	})
+})
+
+/*
+ * bit 21 i7a: `--dry-run` takes any wrapping of a long string whose lines fit, so the reflow is held to GJF's own: the
+ * Prose enum's values, each `+` chain joined back into the one literal it was, formatted by GJF, give the emitted text
+ */
+describe.skipIf(!JAVA)("google-java-format on the shapes SDK's long strings (bit 21 i7a)", SLOW, () => {
+	it("reflows each one as GJF reflows the literal whole", () => {
+		const emitted = generateJavaSdk(FIXTURES.shapes.document()).files["src/main/java/ai/anyrow/Prose.java"] ?? ""
+		const dir = mkdtempSync(join(tmpdir(), "honey-gjf-"))
+		try {
+			const path = join(dir, "Prose.java")
+			writeFileSync(path, emitted.replace(/"\n\s*\+ "/g, ""))
+			const formatted = runGjf([path]).stdout
+			expect({ chains: emitted.split('\n          + "').length - 1, formatted }).toEqual({
+				chains: 7,
+				formatted: emitted,
+			})
+		} finally {
+			rmSync(dir, { force: true, recursive: true })
+		}
+	})
+})
+
+/*
+ * bit 21 i7a: the layout holds only what the emitter writes, so a shape the nodes can still spell but the layout no
+ * longer lays out is refused by name, never laid out off GJF's; every SDK the gates build is held to meeting none
+ */
+describe("the Java layout: a shape it does not lay out is refused by name (bit 21 i7a)", () => {
+	const laid = (e: Expr) => () => statement(4, exprStmt(e))
+	it.each([
+		["a cast expression", laid({ k: "cast" } as unknown as Expr)],
+		["the type `Map>`", () => field(2, { name: "x", type: "Map>" })],
+		["the type ``", () => field(2, { name: "x", type: "" })],
+		["the `super.` chain super.base.close", laid(call("super.base", "close"))],
+		["the chain past a call a.b.c", laid(call(call("a", "b"), "c"))],
+		["the names past a prefix in Type.member.rest", laid(id("Type.member.rest"))],
+		["a chain led by two upper-case names", laid(id("AB.CD.Name"))],
+	])("refuses %s", (what, lay) => {
+		expect(lay).toThrow(`no Java layout for ${what}`)
+	})
+
+	it("refuses none of what every fixture, the long-name and the twin documents emit", () => {
+		const documents = [...Object.values(FIXTURES), { document: longNames }, { document: () => LONG_NAMES }]
+		expect(() => {
+			for (const d of documents as JavaFixture[]) generateJavaSdk(d.document(), d.options)
+		}).not.toThrow()
 	})
 })

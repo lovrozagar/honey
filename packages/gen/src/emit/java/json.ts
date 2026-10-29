@@ -62,7 +62,6 @@ export function deserializerLines(
 		"",
 		"    @Override",
 		...methodHeader(4, {
-			end: "{",
 			modifiers: ["public"],
 			name: "deserialize",
 			params: [param("JsonParser", "p"), param("DeserializationContext", "ctxt")],
@@ -92,7 +91,7 @@ export function intEnumJsonLines(name: string): string[] {
 		"",
 		"  private final long value;",
 		"",
-		...methodHeader(2, { end: "{", name, params: [param("long", "value")] }),
+		...methodHeader(2, { name, params: [param("long", "value")] }),
 		"    this.value = value;",
 		"  }",
 		"",
@@ -103,7 +102,6 @@ export function intEnumJsonLines(name: string): string[] {
 		"",
 		"  @JsonCreator",
 		...methodHeader(2, {
-			end: "{",
 			modifiers: ["public", "static"],
 			name: "fromValue",
 			params: [param("JsonNode", "node")],

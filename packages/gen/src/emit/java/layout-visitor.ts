@@ -1,15 +1,12 @@
 /**
  * google-java-format's expression layouts, ported (bit 21 i7a; JavaInputAstVisitor): each expression the emitter
  * writes emits the ops GJF's visitor emits for it. Arguments (addArguments, argList, a format string's first argument
- * apart), `new`, array initializers, a lambda, a binary (its operands filled when all are short), a cast, an
- * assignment, a method reference, a conditional and a parameterized type; a dot chain is layout-dot.ts's.
+ * apart), `new`, array initializers, a lambda, a binary (its operands filled when all are short), an assignment, a
+ * method reference, a conditional and a parameterized type; a dot chain is layout-dot.ts's.
  */
-import { type Expr, flatText, id, type Of, type Type } from "./layout-ast.ts"
-import type { Builder, Fill, Indent } from "./layout-doc.ts"
+import { type Expr, id, type Of, refuse, type Type } from "./layout-ast.ts"
+import { Builder, type Fill, type Indent } from "./layout-doc.ts"
 import { dot, type Emit } from "./layout-dot.ts"
-
-/* hasOnlyShortItems: every item under MAX_ITEM_LENGTH_FOR_FILLING (10) characters */
-const shortItems = (items: readonly Expr[]): boolean => items.every((item) => flatText(item).length < 10)
 
 const isString = (e: Expr): boolean => e.k === "lit" && e.text.startsWith('"')
 
@@ -22,15 +19,6 @@ export class Visitor implements Emit {
 		assign: (e) => this.infix(e.to, "=", e.value),
 		bin: (e) => this.binary(e),
 		call: (e) => dot(this, e),
-		cast: (e) => {
-			this.b.open(4)
-			this.b.token("(")
-			this.type(e.type)
-			this.b.token(")")
-			this.b.breakOp(" ")
-			this.expr(e.of)
-			this.b.close()
-		},
 		cond: (e) => {
 			this.b.open(4)
 			this.expr(e.test)
@@ -58,11 +46,24 @@ export class Visitor implements Emit {
 			this.b.close()
 		},
 		sel: (e) => dot(this, e),
-		type: (e) => this.type(e.type),
 	}
 
 	expr(e: Expr): void {
-		;(this.kinds[e.k] as (e: Expr) => void)(e)
+		const lay = this.kinds[e.k] as ((e: Expr) => void) | undefined
+		if (lay === undefined) refuse(`a ${e.k} expression`)
+		lay(e)
+	}
+
+	/** `e` on one line, as its source reads: GJF's measure of an item's length. */
+	flat(e: Expr): string {
+		const b = new Builder()
+		new Visitor(b).expr(e)
+		return b.flat()
+	}
+
+	/* hasOnlyShortItems: every item under MAX_ITEM_LENGTH_FOR_FILLING (10) characters */
+	private shortItems(items: readonly Expr[]): boolean {
+		return items.every((item) => this.flat(item).length < 10)
 	}
 
 	/** visitAssignment: `to =`, a unified break, the value. */
@@ -111,27 +112,12 @@ export class Visitor implements Emit {
 		else this.b.token(name)
 	}
 
-	/** addTypeArguments: `<`, the arguments filled, `>`. */
-	typeArgs(targs: readonly Type[], indent: Indent): void {
-		this.b.token("<")
-		this.b.open(indent)
-		targs.forEach((t, i) => {
-			if (i > 0) {
-				this.b.token(",")
-				this.b.breakToFill(" ")
-			}
-			this.type(t)
-		})
-		this.b.close()
-		this.b.token(">")
-	}
-
 	/** addArguments: `(`, a break, the argument list; a format string's first argument apart (isFormatMethod). */
 	args(args: readonly Expr[], indent: Indent): void {
 		this.b.open(indent)
 		this.b.token("(")
 		const first = args[0]
-		if (first !== undefined && args.length >= 2 && isString(first) && /%|\{[0-9]\}/.test(flatText(first))) {
+		if (first !== undefined && args.length >= 2 && isString(first) && /%|\{[0-9]\}/.test(this.flat(first))) {
 			this.b.breakOp()
 			this.b.open(0)
 			this.expr(first)
@@ -151,7 +137,7 @@ export class Visitor implements Emit {
 
 	private argList(args: readonly Expr[]): void {
 		this.b.open(0)
-		const fill: Fill = shortItems(args) ? "independent" : "unified"
+		const fill: Fill = this.shortItems(args) ? "independent" : "unified"
 		args.forEach((arg, i) => {
 			if (i > 0) {
 				this.b.token(",")
@@ -199,7 +185,7 @@ export class Visitor implements Emit {
 			this.b.token("}")
 			return
 		}
-		const fill: Fill = shortItems(items) ? "independent" : "unified"
+		const fill: Fill = this.shortItems(items) ? "independent" : "unified"
 		this.b.open(2)
 		this.b.token("{")
 		this.b.breakOp()
@@ -217,19 +203,10 @@ export class Visitor implements Emit {
 		this.b.token("}")
 	}
 
-	/** visitLambdaExpression with an expression body: the parameters, `->`, a unified break, the body at +4. */
+	/** visitLambdaExpression with one parameter and an expression body: `param ->`, a unified break, the body at +4. */
 	private lambda(e: Of<"lambda">): void {
-		const parens = e.params.length !== 1
-		this.b.open(parens ? 4 : 0)
-		if (parens) this.b.token("(")
-		e.params.forEach((name, i) => {
-			if (i > 0) {
-				this.b.token(",")
-				this.b.breakOp(" ")
-			}
-			this.b.token(name)
-		})
-		if (parens) this.b.token(")")
+		this.b.open(0)
+		this.b.token(e.param)
 		this.b.close()
 		this.b.space()
 		this.b.token("->")
@@ -241,7 +218,7 @@ export class Visitor implements Emit {
 
 	/** visitBinary: one precedence's operands, a break before each operator; StringWrapper's chain marked. */
 	private binary(e: Of<"bin">): void {
-		const fill: Fill = shortItems(e.operands) ? "independent" : "unified"
+		const fill: Fill = this.shortItems(e.operands) ? "independent" : "unified"
 		this.b.open(4)
 		this.expr(e.operands[0] as Expr)
 		e.operands.slice(1).forEach((operand, i) => {
@@ -250,7 +227,7 @@ export class Visitor implements Emit {
 			this.b.space()
 			/* a literal in a `+` after a non-literal operand reflows under its own quote */
 			const later = e.op === "+" && isString(operand) && !e.operands.slice(0, i + 1).every(isString)
-			if (later) this.b.literal(flatText(operand), true)
+			if (later) this.b.literal(this.flat(operand), true)
 			else this.expr(operand)
 		})
 		this.b.close()

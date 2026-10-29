@@ -53,7 +53,7 @@ function returnsOf(op: SdkOp, env: OpEnv): string {
  * the options with a raw box.
  */
 const safeCall = (helper: string, name: string, args: readonly string[]): string[] =>
-	statement(4, returnStmt(call("Answer", helper, ["options", lambda(["o"], call("_n", name, [...args, "o"]))])))
+	statement(4, returnStmt(call("Answer", helper, ["options", lambda("o", call("_n", name, [...args, "o"]))])))
 
 /**
  * The twin's lines on the safe mirror (bit 21 i6): each overload of the normal method restated. A connection's twin
@@ -68,7 +68,7 @@ function twinLines(op: SdkOp, name: string, headers: JavaHeaders | null, env: Op
 	const connection = op.stream === "ws" || op.stream === "realtime"
 	const type = connection ? returns : `Result<${returns === "void" ? "Void" : returns}>`
 	const signature = (args: readonly Declaration[]) =>
-		methodHeader(2, { end: "{", modifiers: ["public"], name, params: args, returns: type })
+		methodHeader(2, { modifiers: ["public"], name, params: args, returns: type })
 	const method = (args: readonly Declaration[], body: readonly string[]) => [
 		doc,
 		...signature(args),
@@ -120,7 +120,7 @@ function mirrorLines(node: Node, own: string, normal: string, env: SurfaceEnv): 
 			...children.flatMap(({ child, name }) => finalField(mirrorName(child.path, env), name)),
 		],
 		[
-			...methodHeader(2, { end: "{", name: own, params: [param(normal, "_n")] }),
+			...methodHeader(2, { name: own, params: [param(normal, "_n")] }),
 			...(held ? ["    this._n = _n;"] : []),
 			...children.flatMap(({ child, name }) =>
 				statement(4, exprStmt(assign(`this.${name}`, newOf(mirrorName(child.path, env), [call("_n", name)])))),

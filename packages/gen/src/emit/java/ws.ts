@@ -38,7 +38,7 @@ export function wsMethodLines(op: SdkOp, site: WsSite): string[] {
 		`${op.id}: the open socket. A refused handshake throws; once open, no timeout bounds it. Close it, or open it in try-with-resources.`,
 	)
 	const signature = (args: readonly Declaration[]) =>
-		methodHeader(2, { end: "{", modifiers: ["public"], name, params: args, returns: "TypedWebSocket" })
+		methodHeader(2, { modifiers: ["public"], name, params: args, returns: "TypedWebSocket" })
 	const dial = callOf("WsDial", "open", ["exchange", constant, "call", "options", callOf("params", "protocols")])
 	return [
 		doc,

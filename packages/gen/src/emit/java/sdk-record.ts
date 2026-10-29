@@ -29,7 +29,6 @@ const setterLines = (f: Field): string[] => [
 	"",
 	docOf(`Sets {@code ${f.name}}.`, "    "),
 	...methodHeader(4, {
-		end: "{",
 		modifiers: ["public"],
 		name: f.field,
 		params: [param(f.type, f.field)],
@@ -72,7 +71,7 @@ export function paramsRecord(name: string, id: string, fields: readonly Field[])
 		...setters,
 		"",
 		"    /** Builds the parameters. */",
-		...methodHeader(4, { end: "{", modifiers: ["public"], name: "build", params: [], returns: name }),
+		...methodHeader(4, { modifiers: ["public"], name: "build", params: [], returns: name }),
 		...checks,
 		...statement(
 			6,
@@ -120,7 +119,6 @@ export function multipartHelper(op: SdkOp, env: OpEnv): string[] {
 	})
 	return [
 		...methodHeader(2, {
-			end: "{",
 			modifiers: ["private", "static"],
 			name: "multipart",
 			params: [param(name, "body")],

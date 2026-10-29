@@ -131,6 +131,65 @@ function lenient(): Json {
 	}
 }
 
+/* a string past the width once quoted, cut at its spaces */
+const PROSE = "a value long enough to pass the width of a line once it is quoted and indented as an enum constant is"
+
+/**
+ * The layout's input-driven shapes (bit 21 i7a), each past the width so its google-java-format layout shows: a format
+ * string's first argument apart (`%` in the server, the builder's three arguments), upper-case type names (a
+ * TypeNameClassifier ambiguous start: `NAME.class` a regular dot, broken before `.class` past a short name like `AB`
+ * only, `NAME.Deserializer.class` a type prefix), a name with
+ * no letter (`_0`), long strings reflowed at their spaces, quotes and `\n` escapes, and a union of no selectable variant.
+ */
+function shapes(): Json {
+	/* an upper-case name past the width once `.class` and its indent follow it: javaTypeName keeps it upper case */
+	const CAPS = "CAPITALIZEDNAME".repeat(6).slice(0, 88)
+	const S = { type: "string" }
+	const variant = (kind: string) => ({
+		properties: { kind: { const: kind, type: "string" }, note: S },
+		required: ["kind"],
+		type: "object",
+	})
+	return {
+		components: {
+			schemas: {
+				[`${CAPS}A`]: variant("first"),
+				[`${CAPS}B`]: variant("second"),
+				AB: variant("third"),
+				[CAPS]: {
+					discriminator: { propertyName: "kind" },
+					oneOf: [`${CAPS}A`, `${CAPS}B`, "AB"].map((name) => ({ $ref: `#/components/schemas/${name}` })),
+				},
+				Lone: { discriminator: { propertyName: "kind" }, oneOf: [S, { type: "integer" }] },
+				Prose: {
+					enum: [
+						PROSE,
+						`"quotes" first, then ${PROSE} and a \\ backslash`,
+						`one line\nthen ${PROSE}`,
+						`${PROSE} and a newline last\n`,
+						`${PROSE}\r\n\r\nafter a blank line`,
+					],
+					type: "string",
+				},
+			},
+		},
+		info: { title: "Shapes", version: "1" },
+		openapi: "3.1.0",
+		paths: {
+			"/shapes/{0}": {
+				get: {
+					operationId: "shapes.get",
+					parameters: [{ in: "path", name: "0", required: true, schema: S }],
+					responses: okJson({ $ref: `#/components/schemas/${CAPS}` }),
+				},
+			},
+			"/prose": { get: { operationId: "prose.get", responses: okJson({ $ref: "#/components/schemas/Prose" }) } },
+			"/lone": { get: { operationId: "lone.get", responses: okJson({ $ref: "#/components/schemas/Lone" }) } },
+		},
+		servers: [{ url: "https://api.example.com/v1/with%20an%20encoded%20path/long/enough/to/pass/the/builder/width" }],
+	}
+}
+
 /** Every Java SDK the gates build, by key. */
 export const FIXTURES = {
 	errors: { document: errors },
@@ -148,6 +207,8 @@ export const FIXTURES = {
 	derived: { document: derivedIds },
 	/** every stream kind in one SDK: the core, the WebSocket and the realtime files together (the gating combinations) */
 	streams: { document: () => merged({ realtime: realtime(), sse: streams.sse(), ws: streams.ws() }) },
+	/** the layout's input-driven shapes, each past the width (bit 21 i7a) */
+	shapes: { document: shapes },
 } as const satisfies Record<string, JavaFixture>
 
 export type FixtureKey = keyof typeof FIXTURES

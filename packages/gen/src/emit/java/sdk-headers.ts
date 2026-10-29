@@ -74,7 +74,7 @@ function scalarOf(
 		return { java: "Double", parse: ref("Double", "parseDouble"), word: "number" }
 	if (resolved.kind === "scalar" && resolved.type === "boolean")
 		return { java: "Boolean", parse: ref("Answer", "flag"), word: "boolean" }
-	return { java: "String", parse: lambda(["value"], id("value")), word: "text" }
+	return { java: "String", parse: lambda("value", id("value")), word: "text" }
 }
 
 /** `<Op>Headers` for `op`, or null when its 2xx responses declare no header. */

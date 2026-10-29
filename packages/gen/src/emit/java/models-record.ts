@@ -11,7 +11,7 @@
 import type { IRField, IRSchema } from "../../ir/model.ts"
 import { javaString } from "../shared/escape.ts"
 import { camelWords, compareCodeUnits, isJavaReserved, NameScope } from "../shared/lang.ts"
-import { type Annotation, type Declaration, typeHeader } from "./layout.ts"
+import { type Annotation, type Component, typeHeader } from "./layout.ts"
 import { JSON_NODE } from "./models-names.ts"
 import type { JavaTypeContext, Member } from "./models.ts"
 
@@ -65,7 +65,7 @@ function claimField(scope: NameScope, key: string): string {
 }
 
 /** One component: `@JsonProperty` with its inclusion rule, then its type as the field's shape decides. */
-function component(field: IRField, name: string, member: Member, at: JavaTypeContext): Declaration {
+function component(field: IRField, name: string, member: Member, at: JavaTypeContext): Component {
 	const type = member(field.schema, field.name)
 	const key: Annotation = { args: [javaString(field.name)], name: "JsonProperty" }
 	const nullable = at.names.resolve(field.schema).kind === "nullable"

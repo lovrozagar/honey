@@ -18,8 +18,8 @@ export {
 	assign,
 	bin,
 	call,
-	cast,
 	classOf,
+	type Component,
 	cond,
 	type Declaration,
 	type Expr,
@@ -45,7 +45,7 @@ function laid(indent: number, build: (v: Visitor) => void): string[] {
 /** A statement the emitter writes; an `if` or a `for` ends at its `{`, a switch rule at its `;`. */
 export type Statement =
 	| { readonly k: "expr"; readonly expr: Expr }
-	| { readonly k: "return"; readonly expr?: Expr }
+	| { readonly k: "return"; readonly expr: Expr }
 	| { readonly k: "throw"; readonly expr: Expr }
 	| { readonly k: "local"; readonly decl: Declaration }
 	| { readonly k: "if"; readonly cond: Expr }
@@ -64,7 +64,7 @@ const STATEMENTS: { readonly [K in Statement["k"]]: (v: Visitor, s: Extract<Stat
 		v.b.space()
 		v.b.token("(")
 		v.b.open(0)
-		declareOne(v, { init: s.of, name: s.name, type: s.type }, { equals: ":", kind: "none" })
+		declareOne(v, { init: s.of, name: s.name, type: s.type }, { equals: ":", kind: "variable" })
 		v.b.close()
 		v.b.token(")")
 		v.b.close()
@@ -82,7 +82,7 @@ const STATEMENTS: { readonly [K in Statement["k"]]: (v: Visitor, s: Extract<Stat
 		v.b.token("{")
 		v.b.close()
 	},
-	local: (v, s) => declareOne(v, s.decl, { kind: "none", trailing: ";" }),
+	local: (v, s) => declareOne(v, s.decl, { kind: "variable", trailing: ";" }),
 	return: (v, s) => keyword(v, "return", s.expr),
 	rule: (v, s) => {
 		/* visitCase, a rule: `case label ->` or `default ->`, a unified break, the value at +4 */
@@ -106,12 +106,10 @@ const STATEMENTS: { readonly [K in Statement["k"]]: (v: Visitor, s: Extract<Stat
 }
 
 /** visitReturn and visitThrow: the word, the expression after a space, `;`. */
-function keyword(v: Visitor, word: string, e: Expr | undefined): void {
+function keyword(v: Visitor, word: string, e: Expr): void {
 	v.b.token(word)
-	if (e !== undefined) {
-		v.b.space()
-		v.expr(e)
-	}
+	v.b.space()
+	v.expr(e)
 	v.b.token(";")
 }
 
@@ -121,8 +119,7 @@ export const statement = (indent: number, s: Statement): string[] =>
 
 /** Shorthands for the statements. */
 export const exprStmt = (e: Expr): Statement => ({ expr: e, k: "expr" })
-export const returnStmt = (e?: Expr | string): Statement =>
-	e === undefined ? { k: "return" } : { expr: expr(e), k: "return" }
+export const returnStmt = (e: Expr | string): Statement => ({ expr: expr(e), k: "return" })
 export const throwStmt = (e: Expr): Statement => ({ expr: e, k: "throw" })
 export const local = (decl: Declaration): Statement => ({ decl, k: "local" })
 export const ifOpen = (test: Expr): Statement => ({ cond: test, k: "if" })
@@ -134,21 +131,21 @@ export const forOpen = (of: string, name: string, iterable: Expr): Statement => 
 })
 export const rule = (label: Expr | null, value: Expr): Statement => ({ k: "rule", label, value })
 
-/** A field declaration at `indent`, its annotations on their own lines when any takes arguments. */
+/** A field declaration at `indent`. */
 export const field = (indent: number, d: Declaration): string[] =>
-	laid(indent, (v) => declareOne(v, d, { kind: "field", trailing: ";" }))
+	laid(indent, (v) => declareOne(v, d, { kind: "variable", trailing: ";" }))
 
-/** A method's or constructor's header at `indent`. */
+/** A method's or constructor's header at `indent`, through its ` {`. */
 export const methodHeader = (indent: number, m: MethodHeader): string[] => laid(indent, (v) => method(v, m))
 
 /** A single annotation on its own line at `indent`. */
 export const annotationLine = (indent: number, a: Annotation): string[] => laid(indent, (v) => annotation(v, a))
 
-/** An enum constant at `indent`: its name, and its arguments as addArguments lays them; `trailing` closes it. */
-export const enumConstant = (indent: number, name: string, args: readonly (Expr | string)[], trailing: string) =>
+/** An enum constant at `indent`: its name, and its argument as addArguments lays it; `trailing` closes it. */
+export const enumConstant = (indent: number, name: string, arg: Expr | string, trailing: string) =>
 	laid(indent, (v) => {
 		v.b.token(name)
-		if (args.length > 0) v.args(args.map(expr), 4)
+		v.args([expr(arg)], 4)
 		v.b.token(trailing)
 	})
 
@@ -164,7 +161,7 @@ export const finalField = (of: string, name: string) => field(2, { modifiers: ["
 
 /** An accessor: `public Type name() { return name; }`. */
 export const accessor = (of: string, name: string) => [
-	...methodHeader(2, { end: "{", modifiers: ["public"], name, params: [], returns: of }),
+	...methodHeader(2, { modifiers: ["public"], name, params: [], returns: of }),
 	...statement(4, returnStmt(name)),
 	"  }",
 ]

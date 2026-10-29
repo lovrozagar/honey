@@ -133,7 +133,6 @@ function resourceLines(node: Node, env: SurfaceEnv): string[] {
 		["  private final Exchange exchange;", ...children.flatMap(({ child, name }) => finalField(own(child, env), name))],
 		[
 			...methodHeader(2, {
-				end: "{",
 				name: resourceName(node.path, env.ctx),
 				params: [{ name: "exchange", type: "Exchange" }],
 			}),
@@ -192,7 +191,6 @@ export function clientLines(ir: IR, root: Node, env: SurfaceEnv, mirror: string)
 		ops.flatMap(({ op }) => op.constantLines),
 		[
 			...methodHeader(2, {
-				end: "{",
 				modifiers: ["private"],
 				name: env.client,
 				params: [{ name: "config", type: "ClientConfig" }],
@@ -225,7 +223,7 @@ export function clientLines(ir: IR, root: Node, env: SurfaceEnv, mirror: string)
 			"",
 			...SETTERS.flatMap(([name, type]) => [...setter(name, type, name), ""]),
 			`    /** Builds the client. */`,
-			...methodHeader(4, { end: "{", modifiers: ["public"], name: "build", params: [], returns: env.client }),
+			...methodHeader(4, { modifiers: ["public"], name: "build", params: [], returns: env.client }),
 			...statement(6, returnStmt(newOf(env.client, [call("config", "build")]))),
 			"    }",
 			"  }",

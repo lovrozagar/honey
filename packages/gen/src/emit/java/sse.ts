@@ -61,7 +61,7 @@ export function sseMethodLines(op: SdkOp, site: SseSite, ctx: JavaTypeContext): 
 		`${op.id}: the open stream. An error status throws before any event, and no timeout bounds it after that. ${RELEASE}`,
 	)
 	const signature = (args: readonly Declaration[]) =>
-		methodHeader(2, { end: "{", modifiers: ["public"], name, params: args, returns: `EventStream<${type}>` })
+		methodHeader(2, { modifiers: ["public"], name, params: args, returns: `EventStream<${type}>` })
 	const holder = headers === null ? "null" : cond(bin("==", "headersInto", "null"), "null", ref("headersInto", "read"))
 	const open = [
 		...call,

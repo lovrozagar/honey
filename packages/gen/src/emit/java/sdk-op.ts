@@ -175,7 +175,7 @@ function methodLines(op: SdkOp, site: MethodSite, env: OpEnv): string[] {
 	]
 	const shorter = headers === null ? body : delegate(["params", "null", "options"])
 	const signature = (args: readonly Declaration[]) =>
-		methodHeader(2, { end: "{", modifiers: ["public"], name, params: args, returns })
+		methodHeader(2, { modifiers: ["public"], name, params: args, returns })
 	return [
 		docParagraphs(paragraphsOf(op)),
 		...signature([param(params, "params")]),

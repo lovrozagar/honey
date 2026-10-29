@@ -71,7 +71,7 @@ export function realtimeMethodLines(op: SdkOp, site: RealtimeSite, ctx: JavaType
 		`${op.id}: the connection over WebSocket, else SSE, else long-poll. It reconnects after a drop and resumes after the last message it delivered; close() ends it.`,
 	)
 	const signature = (args: readonly Declaration[]) =>
-		methodHeader(2, { end: "{", modifiers: ["public"], name, params: args, returns: `ResumableConnection<${type}>` })
+		methodHeader(2, { modifiers: ["public"], name, params: args, returns: `ResumableConnection<${type}>` })
 	const transport = callOf(
 		"TransportOptions",
 		"of",
