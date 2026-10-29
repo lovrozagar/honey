@@ -97,7 +97,6 @@ const plan = (
 	response: "none",
 	responseHeaders: null,
 	stream,
-	throws: true,
 })
 const PLANS: Readonly<Record<string, CSharpCallPlan>> = {
 	"echo.get": plan("echo.get", "Echo", "GetAsync", null),

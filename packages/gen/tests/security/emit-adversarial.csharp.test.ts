@@ -1,6 +1,6 @@
 /**
  * The C# half of gen's adversarial suite (bit 15): the shared adversarial corpus with C#'s hostile names merged in
- * (adversarial-csharp.ts), built warnings-as-errors and format-clean in both throwOnError modes, every hostile name a
+ * (adversarial-csharp.ts), built warnings-as-errors and format-clean with its `client.Safe` mirror, every hostile name a
  * C# identifier, every value a literal, the emitted source free of raw control code points, and Object.prototype
  * untouched. Its U+FFFE and U+FFFF doc corpus builds on its own, since a doc-comment diagnostic (CS1570) is masked by
  * any other error in its compilation. Each hostile class is also proven raw on today's pinned SDK, so no case is
@@ -50,12 +50,6 @@ const USINGS =
 
 /* a code point no emitted C# file may carry raw: NUL, BEL, the BOM, and the three C# line terminators (NEL, LS, PS) */
 const RAW = ["\u0000", "\u0007", "\uFEFF", "\u0085", "\u2028", "\u2029"]
-
-/* the two throwOnError modes the corpus is built in: the default, and the safe mode that returns instead of throwing */
-const MODES = [
-	{ label: "throwOnError", options: {} },
-	{ label: "safe", options: { throwOnError: false } },
-] as const
 
 /** One raw file: its id (the file is `Raw/<id>.cs`), its member, and the sorted distinct diagnostic codes it must draw. */
 type Case = { readonly body: string; readonly codes: readonly string[]; readonly id: string }
@@ -230,25 +224,25 @@ describe.skipIf(!DOTNET)("gen adversarial: the C# SDK emitter", () => {
 	/* v1 gates the emitted SDK with warnings as errors (TreatWarningsAsErrors, IsAotCompatible: the AOT analyzers run in
 	 * the same build) and dotnet format (Fe1), so the corpus's clean build is the AOT gate; the emitter's escape and
 	 * reservation fixes are red-first here */
-	it("builds warnings-as-errors and format-clean in both throwOnError modes, every hostile name a C# identifier, and leaves Object.prototype untouched", () => {
-		const modes = MODES.map(({ label, options }) => {
-			const sdk = compiledFixture({ document: csharpCorpus, options })
-			return { built: sdk.built, diagnostics: sdk.diagnostics, format: sdk.format(), label }
-		})
-		expect([modes, ({} as Record<string, unknown>).polluted, ({} as Record<string, unknown>).y]).toEqual([
-			MODES.map(({ label }) => ({ built: true, diagnostics: [], format: [], label })),
+	/* bit 21 i5: one SDK holds both styles, so one gate holds the client and its client.Safe twins together */
+	it("builds warnings-as-errors and format-clean, its client.Safe twins included, every hostile name a C# identifier, and leaves Object.prototype untouched", () => {
+		const sdk = compiledFixture({ document: csharpCorpus })
+		const twins = (generateCSharpSdk(csharpCorpus()).files["Client.cs"] ?? "").includes(
+			"Transport.Safe(options, _o => _n.",
+		)
+		const gated = { built: sdk.built, diagnostics: sdk.diagnostics, format: sdk.format(), twins }
+		expect([gated, ({} as Record<string, unknown>).polluted, ({} as Record<string, unknown>).y]).toEqual([
+			{ built: true, diagnostics: [], format: [], twins: true },
 			undefined,
 			undefined,
 		])
 	}, 600_000)
 
 	/* the vendored runtime's Sse.cs:65 spells `"\ufeff"u8` with a raw BOM; the runtime is copied verbatim (no runtime change), so it is pinned here, not hidden */
-	it("writes no raw NUL, BEL, BOM, NEL, U+2028 or U+2029 into the emitted source beyond the vendored runtime's one BOM, in either mode", () => {
-		const raw = MODES.map(({ options }) => {
-			const files = generateCSharpSdk(csharpCorpus(), options).files
-			return Object.keys(files).filter((name) => RAW.some((point) => (files[name] ?? "").includes(point)))
-		})
-		expect(raw).toEqual([["Runtime/Sse.cs"], ["Runtime/Sse.cs"]])
+	it("writes no raw NUL, BEL, BOM, NEL, U+2028 or U+2029 into the emitted source beyond the vendored runtime's one BOM", () => {
+		const files = generateCSharpSdk(csharpCorpus()).files
+		const raw = Object.keys(files).filter((name) => RAW.some((point) => (files[name] ?? "").includes(point)))
+		expect(raw).toEqual(["Runtime/Sse.cs"])
 	})
 
 	it("builds the non-characters alone clean: U+FFFE and U+FFFF hidden in their `///` lines", () => {

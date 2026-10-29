@@ -21,14 +21,23 @@ public sealed class ConfigException(string message) : HoneyException(message);
 /// <summary>A path param that is empty, <c>.</c> or <c>..</c>: nothing is sent.</summary>
 public sealed class PathParamException(string message) : HoneyException(message);
 
-/// <summary>No answer: the connection failed or broke, or the answer ran past the largest the client reads.</summary>
+/// <summary>No answer: the connection failed or broke, or a realtime dial's answer ran past the largest the client reads.</summary>
 public sealed class ApiConnectionException(string message, Exception? inner = null) : HoneyException(message, inner);
 
 /// <summary>The call ran past its timeout.</summary>
 public sealed class ApiTimeoutException(string message, Exception inner) : HoneyException(message, inner);
 
-/// <summary>An answer that does not decode as the declared type; the JSON error, if any, is the inner exception.</summary>
-public sealed class DecodeException(string message, Exception? inner = null) : HoneyException(message, inner);
+/// <summary>An answer the call does not return: an error status or a 2xx that does not decode; a <c>client.Safe</c> Result's Err.</summary>
+public abstract class SdkException : HoneyException
+{
+    private protected SdkException(string message, Exception? inner = null)
+        : base(message, inner)
+    {
+    }
+}
+
+/// <summary>An answer that does not decode as the declared type, or a 2xx past the cap; the JSON error, if any, is the inner exception.</summary>
+public sealed class DecodeException(string message, Exception? inner = null) : SdkException(message, inner);
 
 /// <summary>A hook or <c>OnAuthExpired</c> threw; what it threw is the inner exception.</summary>
 public sealed class HookException(string message, Exception? inner = null) : HoneyException(message, inner);
@@ -37,7 +46,7 @@ public sealed class HookException(string message, Exception? inner = null) : Hon
 /// A status outside 2xx: one class per common status, <see cref="UnexpectedStatusException"/> for the rest. Its
 /// message is <c>HTTP &lt;status&gt;: &lt;Detail&gt;</c>, or <c>HTTP &lt;status&gt;</c> without a detail.
 /// </summary>
-public abstract class ApiStatusException : HoneyException
+public abstract class ApiStatusException : SdkException
 {
     private readonly JsonSerializerOptions _json;
 

@@ -13,7 +13,7 @@ honey-codegen generate --spec openapi.json --target ts --out sdk
 
 ## Errors and the safe mirror
 
-TypeScript, Python, Go and Rust today; the other SDKs as their phases land.
+TypeScript, Python, Go, Rust and C# today; the other SDKs as their phases land.
 
 - **The normal call** answers its value and throws on any failure: an error status as its typed error
   (`NotFoundError` and so on, each a `ClientError`), and an undecodable or over-cap 2xx as a `DecodeError`.
@@ -110,6 +110,31 @@ async fn listing(client: &Client) -> String {
         Err(no_answer) => format!("no answer: {no_answer}"), // never sent, refused, timed out or canceled
     }
 }
+```
+
+In C#, `client.Safe` mirrors the client (`client.Safe.<Group>.<Op>Async(…)`): each method takes the very parameters
+and answers `Task<Result<T>>` where the normal one answers `Task<T>` (`Task<Result>` for one that answers no body),
+calling the normal method. `IsOk` reports the answer, `Value` is it, and `Error` is what the normal method throws for
+that answer, an `SdkException`: the status's `ApiStatusException` (`UnexpectedStatusException` for one without a class
+of its own), or a `DecodeException` for a 2xx, or a declared header, that does not read, a 2xx past
+`MaxResponseBytes` included. Reading `Value` on an Err, or `Error` on an Ok, throws `InvalidOperationException`;
+`Match(onOk, onErr)` and `TryGetValue(out T)` never do. `Response` is the answer's `RawResponse` on both (the one
+`RequestOptions.Raw` holds, when given). No answer still throws. An event stream's twin answers once it opens (`Value`
+is the `EventStream<T>`), its error status at the opening the Err; a WebSocket or realtime method is the very method.
+
+```csharp
+    public static async Task<string> Listing(HoneySdkClient client, string id)
+    {
+        var result = await client.Safe.GetApiAsync(id); // no answer (never sent, refused, timed out, canceled) still throws
+        return result.Match(
+            found => $"answered {result.Response.Status}: {found}",
+            error => error switch
+            {
+                DecodeException unreadable => $"answered {result.Response.Status}, unreadable: {unreadable.Message}",
+                ApiStatusException failed => $"answered {failed.Status}: {failed.Key}",
+                _ => error.Message,
+            });
+    }
 ```
 
 ## Reference

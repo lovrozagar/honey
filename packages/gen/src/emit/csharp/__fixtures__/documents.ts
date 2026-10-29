@@ -73,6 +73,28 @@ function fixtures(): Readonly<Record<string, unknown>> {
 	})
 }
 
+/** A 200 whose JSON body is `schema`. */
+const okJson = (schema: unknown) => ({ 200: { content: { "application/json": { schema } }, description: "ok" } })
+
+/**
+ * Answers a fallback would fit (bit 21 i5, Rust i4's lesson): any JSON value (`JsonElement`), a nullable object
+ * (`MaybeGetResponse?`) and a nullable integer (`long?`), so an undecodable 2xx that became Ok (a default, a null)
+ * would show, which a non-null answer's own null check would hide.
+ */
+function lenient(): Readonly<Record<string, unknown>> {
+	const maybe = { properties: { id: { type: "string" } }, required: ["id"], type: ["object", "null"] }
+	return {
+		info: { title: "Lenient", version: "1" },
+		openapi: "3.1.0",
+		paths: {
+			"/any": { get: { operationId: "any.get", responses: okJson({}) } },
+			"/count": { get: { operationId: "count.get", responses: okJson({ type: ["integer", "null"] }) } },
+			"/maybe": { get: { operationId: "maybe.get", responses: okJson(maybe) } },
+		},
+		servers: [{ url: "http://lenient.test" }],
+	}
+}
+
 /** Every SDK a default run gates: at most 16 (G17; tests/structure/csharp-toolchain.test.ts). */
 export const FIXTURES = {
 	/** the gate cache's self-test and the lean-build leg: a dependency-free project */
@@ -97,10 +119,10 @@ export const FIXTURES = {
 	docs: { document: docsDocument },
 	errors: { document: errors },
 	fixtures: { document: fixtures },
-	"fixtures-safe": { document: fixtures, options: { throwOnError: false } },
-	/** the HTTP runtime's document (contract 47 §4.1): bit 13's `http`, the extra paths and `merge.patch`, both modes */
+	/** the HTTP runtime's document (contract 47 §4.1): bit 13's `http`, the extra paths and `merge.patch`, both styles */
 	http: { document: csharpHttp },
-	"http-safe": { document: csharpHttp, options: { throwOnError: false } },
+	/** a decode failure on answers a fallback would fit, never Ok (bit 21 i5) */
+	lenient: { document: lenient },
 	/** the resumable connections (contract 50 §4.1): bit 13's `realtime` document, shared, and the C#-only `clash.feed` */
 	realtime: { document: csharpRealtime },
 	/** a relative first server: a client needs an absolute `BaseUrl` (R7) */

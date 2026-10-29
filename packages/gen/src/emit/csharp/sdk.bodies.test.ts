@@ -1,7 +1,7 @@
 /**
  * The C# method shapes past JSON (contract 47 §5.12, §2.1, §2.2): every kind phase b refused (Fb1) emits, the
  * bodies and bytes since phase c and the streams since phase d (contract 50 §2); each body and answer kind's method
- * on `http`, and the bytes and text twins on `http-safe`; the multipart `<Op>Body` records with `FilePart` parts;
+ * on `http`, and the bytes and text twins on its `client.Safe` (bit 21 i5); the multipart `<Op>Body` records with `FilePart` parts;
  * Fc7's `<Op>Headers` holder and its `Read`, typed by each header's scalar, none for a WebSocket or realtime op; what
  * the JSON context lists and never lists; and the names `headersInto` and `Part` push to `…2`. Each is the emitted
  * text.
@@ -110,7 +110,6 @@ const NAMES = single(
 
 const filesOf = (document: Json): Files => generateCSharpSdk(document).files
 const http = (): Files => generateCSharpSdk(FIXTURES.http.document()).files
-const httpSafe = (): Files => generateCSharpSdk(FIXTURES["http-safe"].document(), FIXTURES["http-safe"].options).files
 
 /** What generating `document` throws, or null when it emits. */
 function refusal(document: Json): string | null {
@@ -250,19 +249,16 @@ describe("generateCSharpSdk: each body and answer kind's method (§2.1)", () => 
 		).toEqual(Object.fromEntries(METHODS.map(([op, , signature, call]) => [op, [signature, call]])))
 	})
 
-	it("answers bytes and text as SdkResult<byte[]> and SdkResult<string> on http-safe", () => {
-		const files = httpSafe()
-		const bytes = `    public Task<SdkResult<byte[]>> GetAsync(string name, ${OPTIONS}) =>`
-		const text = `    public Task<SdkResult<string>> CreateAsync(string body, ${OPTIONS}) =>`
+	it("answers bytes and text as Result<byte[]> and Result<string> on their client.Safe twins, through the methods", () => {
+		const files = http()
+		const bytes = `    public Task<Result<byte[]>> GetAsync(string name, ${OPTIONS}) =>`
+		const text = `    public Task<Result<string>> CreateAsync(string body, ${OPTIONS}) =>`
 		expect({
-			bytes: methodAt(classOf(files, "FilesResource"), bytes),
-			text: methodAt(classOf(files, "NotesResource"), text),
+			bytes: methodAt(classOf(files, "SafeFilesResource"), bytes),
+			text: methodAt(classOf(files, "SafeNotesResource"), text),
 		}).toEqual({
-			bytes: [bytes, "        _t.BytesResultAsync(_get, new([name], [], [], null, null, options), cancellationToken);"],
-			text: [
-				text,
-				'        _t.TextResultAsync(_create, new([], [], [], Body.Text(body, "text/plain"), null, options), cancellationToken);',
-			],
+			bytes: [bytes, "        Transport.Safe(options, _o => _n.GetAsync(name, _o, cancellationToken));"],
+			text: [text, "        Transport.Safe(options, _o => _n.CreateAsync(body, _o, cancellationToken));"],
 		})
 	})
 })
@@ -317,7 +313,7 @@ describe("generateCSharpSdk: <Op>Headers (Fc7, §2.2)", () => {
 		const { csResponseHeaders } = await import("./sdk-answer.ts")
 		const ir = toIR(STREAMED as OpenApiDocument, { deriveOperationIds: true })
 		const model = sdkModel(ir)
-		const env = { at: csTypeContext(ir), throwOnError: true }
+		const env = { at: csTypeContext(ir) }
 		const plan = (id: string) => csResponseHeaders(model.opsById.get(id) as SdkOp, env)?.plan ?? null
 		expect({ plain: plan("plain.get"), realtime: plan("live.connect"), ws: plan("ws.subscribe") }).toEqual({
 			plain: { fields: { "X-Trace": "XTrace" }, type: "PlainGetHeaders" },

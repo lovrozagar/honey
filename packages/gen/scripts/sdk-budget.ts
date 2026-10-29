@@ -124,19 +124,36 @@ export function v1PythonSdkSurfaces(clientPy: string): Map<string, string> {
  * Each operation method of a v1 emitted C# `Client.cs` (bit 15, G13), as `generateCSharpSdk` writes it: the
  * `public … <Op>Async(…)` signature line of the client class or a `<X>Resource` class, without its indent and its
  * ` => …` body, what a reader of the SDK takes in to call it once. Keyed `Class.method`. A signature that does not
- * close on its own line throws: a wrapped signature never measures short.
+ * close on its own line throws: a wrapped signature never measures short. Since bit 21 i5 each surface is both styles
+ * (R-i5): the signature, a newline, then its `client.Safe` twin's, read from the twin class its summary names
+ * (`/// <summary><see cref="X"/>'s safe mirror`); an operation with no twin throws, so a mirror that drops one never
+ * measures short either.
  */
 export function v1CSharpSdkSurfaces(clientCs: string): Map<string, string> {
 	const out = new Map<string, string>()
+	const twins = new Map<string, string>()
 	let type = ""
+	let mirrors: string | undefined
+	let named: string | undefined
 	for (const line of clientCs.split("\n")) {
-		type = /^public (?:sealed )?(?:partial )?class (\w+)/.exec(line)?.[1] ?? type
+		named = /^\/\/\/ <summary><see cref="(\w+)"\/>'s safe mirror/.exec(line)?.[1] ?? named
+		const declared = /^public (?:sealed )?(?:partial )?class (\w+)/.exec(line)?.[1]
+		if (declared !== undefined) {
+			type = declared
+			mirrors = named
+			named = undefined
+		}
 		const name = /^ {4}public \S.* (\w+Async)\(/.exec(line)?.[1]
 		if (name === undefined) continue
-		const key = `${type}.${name}`
+		const key = `${mirrors ?? type}.${name}`
 		const signature = line.trim().replace(/ =>.*$/, "")
-		if (!signature.endsWith(")")) throw new Error(`${key} spans lines`)
-		out.set(key, signature)
+		if (!signature.endsWith(")")) throw new Error(`${mirrors === undefined ? "" : "the twin of "}${key} spans lines`)
+		;(mirrors === undefined ? out : twins).set(key, signature)
+	}
+	for (const [key, signature] of out) {
+		const twin = twins.get(key)
+		if (twin === undefined) throw new Error(`${key} has no client.Safe twin`)
+		out.set(key, `${signature}\n${twin}`)
 	}
 	return out
 }

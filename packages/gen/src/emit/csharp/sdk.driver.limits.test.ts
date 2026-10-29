@@ -2,7 +2,8 @@
  * The C# SDK's refusal of a header it cannot send (bit 19 b1), through the test driver: any control character but tab
  * in a value, or a name outside the token grammar, is a ConfigException before anything goes out, naming the header
  * and never quoting its value. A bad name was dropped silently before (TryAddWithoutValidation), and `\u0001` and DEL
- * went out raw. Its response cap counts decoded bytes for every encoding its handler asks for: gzip, deflate and br.
+ * went out raw. Its response cap counts decoded bytes for every encoding its handler asks for: gzip, deflate and br;
+ * a 2xx past it is the call's DecodeException (bit 21 i5: the status and headers arrived, so it is an answer).
  */
 import { describe, expect, it } from "vitest"
 import type { Call } from "../../../tests/integration/conformance/matrix.ts"
@@ -132,9 +133,9 @@ describe.skipIf(!DOTNET)(
 				).toEqual({
 					encoding: "gzip, deflate, br",
 					error: plain({
-						chain: ["ApiConnectionException", "HoneyException"],
+						chain: ["DecodeException", "SdkException", "HoneyException"],
 						text: `the answer exceeds ${MiB} bytes`,
-						type: "ApiConnectionException",
+						type: "DecodeException",
 					}),
 					observed: [null],
 				})

@@ -109,6 +109,10 @@ internal static class Program
         {
             Sdk.Set(config, "Headers", new Dictionary<string, string>(headers));
         }
+        if (setup.MaxResponseBytes is { } max)
+        {
+            Sdk.Set(config, "MaxResponseBytes", max);
+        }
         if (setup.Redirect is { } redirect)
         {
             var policy = redirect switch

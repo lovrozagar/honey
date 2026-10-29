@@ -166,7 +166,7 @@ const plain = (entry: Partial<CsError>) => ({
 	via: "return",
 	...entry,
 })
-const statusChain = (type: string) => [type, "ApiStatusException", "HoneyException"]
+const statusChain = (type: string) => [type, "ApiStatusException", "SdkException", "HoneyException"]
 /** An error status with no key whose detail is `message`, as the trace records it. */
 const unkeyed = (status: number, type: string, message = "m") =>
 	plain({
@@ -278,7 +278,7 @@ describe.skipIf(!DOTNET)(
 				path: 'path param id: ".." is not a path segment',
 				shapes: [
 					[statusChain("NotFoundException"), 404, null],
-					[["DecodeException", "HoneyException"], undefined, "JsonException"],
+					[["DecodeException", "SdkException", "HoneyException"], undefined, "JsonException"],
 					[["PathParamException", "HoneyException"], undefined, null],
 					[["ApiConnectionException", "HoneyException"], undefined, "HttpRequestException"],
 				],

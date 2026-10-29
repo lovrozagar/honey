@@ -156,7 +156,7 @@ internal sealed class Dial(Transport client, Operation op, Call call)
     {
         var options = at.Options ?? new RequestOptions();
         _used = client.Auth.Token;
-        return new Exchange(client, dialed, at with { Options = options with { Raw = new RawResponse(), Timeout = timeout ?? options.Timeout } }, stream, refreshes);
+        return new Exchange(client, dialed, at with { Options = options with { Raw = new RawResponse(), Timeout = timeout ?? options.Timeout } }, stream, refreshes, dial: true);
     }
 }
 

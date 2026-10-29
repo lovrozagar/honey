@@ -4,7 +4,7 @@
  * exception's members (`Trace<CsError>`); client config, hooks, refresh, log, cancel and sleep; a caller handler
  * chain under the SDK's strip; the `bytes` outcome's SHA-256 (.NET's `SHA256`) against node:crypto; binary bodies
  * (`byte[]` and one-shot), the idempotency key and typed response headers; and what the driver refuses. Driven
- * against `http` and `http-safe` on C#'s one async client: there is no second client, so no drift check.
+ * against `http` on C#'s one async client and its `client.Safe` mirror: there is no second client, so no drift check.
  */
 import { createHash } from "node:crypto"
 import { describe, expect, it } from "vitest"
@@ -53,19 +53,20 @@ const ITEM: Call = { operation: "items.get", params: { id: "i1" }, route: { meth
 const ITEM_JSON = { id: "i1", name: "n" }
 
 /** The registry SDK `key` with the driver aimed at it (it must build). */
-function on(key: "http" | "http-safe" = "http"): DrivenCSharpSdk {
-	const sdk = drivenCSharpSdk(key)
+function on(): DrivenCSharpSdk {
+	const sdk = drivenCSharpSdk("http")
 	expect(sdk.built, sdk.diagnostics.join("\n")).toBe(true)
 	return sdk
 }
 
-type Options = { readonly script?: Script; readonly setup?: Setup }
+type Options = { readonly script?: Script; readonly setup?: Setup; readonly safe?: boolean }
 
-/** `calls` run on `sdk` under `options` against a server answering `replies`: the run, the hops, their raw lines and the origin. */
+/** `calls` run on `sdk` (its `client.Safe` under `safe`) under `options` against a server answering `replies`: the run, the hops, their raw lines and the origin. */
 async function drive(sdk: DrivenCSharpSdk, replies: readonly Reply[], calls: readonly Call[], options: Options) {
 	return served(replies, async (server) => {
 		const cell = { calls, setup: options.setup ?? {} }
-		const run = await sdk.runCalls(cell, { alt: server.alt, url: server.url }, { script: options.script })
+		const origins = { alt: server.alt, url: server.url }
+		const run = await sdk.runCalls(cell, origins, { script: options.script }, options.safe)
 		return { hops: [...server.hops], lines: [...server.rawHeaders], run, url: server.url }
 	})
 }
@@ -169,15 +170,16 @@ describe.skipIf(!DOTNET)("the C# test driver's script: client config", SLOW, () 
 		])
 	})
 
-	it("maxResponseBytes caps an answer: observed null, traced", async () => {
+	/* bit 21 i5: the status and headers arrived, so a 2xx past the cap is an answer whose body was not read */
+	it("maxResponseBytes caps an answer: a 2xx past it is its DecodeException, traced", async () => {
 		const script: Script = { config: { maxResponseBytes: 10 } }
 		const replies: Reply[] = [{ bytes: 64, headers: { "content-type": "application/json" }, status: 200 }]
 		const { run } = await drive(on(), replies, [ECHO], { script })
 		expect({ error: run.trace?.calls[0]?.error, observed: run.observed, status: run.status }, run.stderr).toEqual({
 			error: plain({
-				chain: ["ApiConnectionException", "HoneyException"],
+				chain: ["DecodeException", "SdkException", "HoneyException"],
 				text: "the answer exceeds 10 bytes",
-				type: "ApiConnectionException",
+				type: "DecodeException",
 			}),
 			observed: [null],
 			status: 0,
@@ -349,7 +351,7 @@ describe.skipIf(!DOTNET)(
 			const { run } = await drive(on(), replies, [ITEM], { script: {} })
 			const text = "the X-Item-Version header is missing"
 			expect({ error: run.trace?.calls[0]?.error, observed: run.observed }, run.stderr).toEqual({
-				error: plain({ chain: ["DecodeException", "HoneyException"], text, type: "DecodeException" }),
+				error: plain({ chain: ["DecodeException", "SdkException", "HoneyException"], text, type: "DecodeException" }),
 				observed: [null],
 			})
 		})
@@ -381,7 +383,7 @@ describe.skipIf(!DOTNET)("the C# test driver: the bytes outcome", SLOW, () => {
 const MISSING: Reply = { json: { error_key: "member.missing", message: "gone" }, status: 404 }
 /** MISSING as the trace records it, read through ApiStatusException's members. */
 const MISSING_ERROR = plain({
-	chain: ["NotFoundException", "ApiStatusException", "HoneyException"],
+	chain: ["NotFoundException", "ApiStatusException", "SdkException", "HoneyException"],
 	key: "member.missing",
 	keyMember: null,
 	message: "gone",
@@ -392,9 +394,9 @@ const MISSING_ERROR = plain({
 const MISSING_SEEN = { body: MISSING.json, errorKey: "member.missing", kind: "error", status: 404 }
 
 describe.skipIf(!DOTNET)("the C# test driver's script: a call's C# error", SLOW, () => {
-	it("an error status through its members; safe mode's via result", async () => {
+	it("an error status through its members; client.Safe's via result", async () => {
 		const thrown = await drive(on(), [MISSING], [MEMBERS], { script: {} })
-		const safe = await drive(on("http-safe"), [MISSING, FOUND], [MEMBERS, MEMBERS], { script: {} })
+		const safe = await drive(on(), [MISSING, FOUND], [MEMBERS, MEMBERS], { safe: true, script: {} })
 		const stderr = thrown.run.stderr + safe.run.stderr
 		expect({ safe: safe.run.trace?.calls, thrown: thrown.run.trace?.calls }, stderr).toEqual({
 			safe: [

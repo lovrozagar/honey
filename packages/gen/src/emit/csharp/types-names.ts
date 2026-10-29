@@ -18,6 +18,8 @@ export type CsTypeNames = {
 	hoist(key: string, base: string): string
 	/** a unique name for any other declaration (a converter, a resource class) */
 	claim(base: string): string
+	/** each component emitted as `<Name>Model`, by its spec name: what the generation reports (bit 21 i5) */
+	readonly renamed: ReadonlyMap<string, string>
 	/** the schema of the component `name` when C# declares nothing for it, so a ref to it is its use type */
 	alias(name: string): IRSchema | undefined
 	resolve(schema: IRSchema): IRSchema
@@ -170,11 +172,14 @@ export function irNames(
 ): CsTypeNames {
 	const scope = new NameScope(reserved(taken))
 	const components = new Map<string, string>()
+	const renamed = new Map<string, string>()
 	for (const name of Object.keys(schemas)
 		.sort(compareCodeUnits)
 		.filter((n) => declares(schemas[n] as IRSchema))) {
 		const base = csTypeName(name)
-		components.set(name, scope.claim(scope.has(base) ? `${base}Model` : base))
+		const claimed = scope.claim(scope.has(base) ? `${base}Model` : base)
+		components.set(name, claimed)
+		if (claimed !== base) renamed.set(name, claimed)
 	}
 	const hoisted = new Map<string, string>()
 	return {
@@ -190,6 +195,7 @@ export function irNames(
 		},
 		/* a ref reaches here only for a declared component: `alias` answers for every other one */
 		ref: (name) => components.get(name) as string,
+		renamed,
 		resolve: irResolver(schemas),
 	}
 }

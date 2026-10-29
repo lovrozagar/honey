@@ -4,7 +4,7 @@
  * Nothing is generated for the driver, and it holds no reference to any SDK: it is built once per driver-source
  * hash by the gates' own build step, loads the SDK's dll at run time, walks the emitter's call plans
  * (`csharpCallPlans`) by reflection, and binds every argument through the SDK's own `JsonSerializerContext`. C# has
- * one client, so a run names none. `drivenCSharpSdk` drives a registry entry (`FIXTURES`); `servedCSharpSdk`
+ * one client, so a run names none; `safe` sends every call through its `client.Safe` mirror (bit 21 i5). `drivenCSharpSdk` drives a registry entry (`FIXTURES`); `servedCSharpSdk`
  * drives the harness files' served document (the reference app's), outside the registry, which a structure test
  * keeps to those files (G17).
  */
@@ -38,6 +38,7 @@ export type DrivenCSharpSdk = CSharpSdk & {
 		cell: DriverCell,
 		origins: { readonly alt?: string; readonly drop?: string; readonly refused?: string; readonly url: string },
 		run?: { readonly script?: Script },
+		safe?: boolean,
 	): Promise<DriverRun & { readonly trace?: Trace<CsError> }>
 }
 
@@ -80,7 +81,7 @@ function drivenFixture(fixture: CSharpFixture): DrivenCSharpSdk {
 	const sdk = compiledFixture(fixture)
 	return {
 		...sdk,
-		runCalls: async (cell, origins, run = {}) => {
+		runCalls: async (cell, origins, run = {}, safe = false) => {
 			const target = { ...clientOf(sdk), dll: sdk.dll }
 			const envelope = {
 				alt: origins.alt,
@@ -88,6 +89,7 @@ function drivenFixture(fixture: CSharpFixture): DrivenCSharpSdk {
 				drop: origins.drop,
 				refused: origins.refused,
 				cell,
+				safe,
 				plans,
 				script: run.script,
 				sdk: target,

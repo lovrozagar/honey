@@ -36,7 +36,6 @@ const NOTES: Json = {
 }
 
 const http = (): Files => generateCSharpSdk(FIXTURES.http.document()).files
-const httpSafe = (): Files => generateCSharpSdk(FIXTURES["http-safe"].document(), FIXTURES["http-safe"].options).files
 
 /** Client.cs's class `public sealed class <name>`, through its closing brace. */
 function classOf(files: Files, name: string): string[] {
@@ -95,17 +94,17 @@ describe("generateCSharpSdk: the Operation fields (§2)", () => {
 })
 
 describe("generateCSharpSdk: the Call (§2)", () => {
-	it("passes headersInto's Read as the seventh member where the op declares headers, in both modes, and six members elsewhere", () => {
+	it("passes headersInto's Read as the seventh member where the op declares headers, its client.Safe twin passing headersInto on, and six members elsewhere", () => {
 		const files = http()
 		expect({
 			items: callOf(files, "ItemsResource", `${TASK}Item> GetAsync(`),
 			itemsPut: callOf(files, "ItemsResource", `${TASK}ItemsPutResponse> PutAsync(`),
-			itemsSafe: callOf(httpSafe(), "ItemsResource", `${TASK}SdkResult<Item>> GetAsync(`),
+			itemsSafe: callOf(files, "SafeItemsResource", `${TASK}Result<Item>> GetAsync(`),
 			users: callOf(files, "UsersResource", `${TASK}UsersGetResponse> GetAsync(`),
 		}).toEqual({
 			items: `        _t.CallAsync(_get, new([id], [], [], null, null, options, headersInto is null ? null : headersInto.Read), ${CONTEXT}.Item, cancellationToken);`,
 			itemsPut: `        _t.CallAsync(_put, new([uuid, str], [], [], null, idempotencyKey, options), ${CONTEXT}.ItemsPutResponse, cancellationToken);`,
-			itemsSafe: `        _t.ResultAsync(_get, new([id], [], [], null, null, options, headersInto is null ? null : headersInto.Read), ${CONTEXT}.Item, cancellationToken);`,
+			itemsSafe: "        Transport.Safe(options, _o => _n.GetAsync(id, headersInto, _o, cancellationToken));",
 			users: `        _t.CallAsync(_get, new([id], [], [], null, null, options), ${CONTEXT}.UsersGetResponse, cancellationToken);`,
 		})
 	})

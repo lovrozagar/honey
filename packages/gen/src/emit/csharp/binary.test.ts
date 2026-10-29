@@ -4,8 +4,9 @@
  * A binary body is a `BinaryBody`: a `byte[]` goes out sized and is sent again on a 401, a `Stream` goes out chunked
  * and never again. A multipart file is a `FilePart` held in memory and sent again too, under a `honey-<uuid>`
  * boundary, and an empty map is no part. Declared response headers fill a caller's `<Op>Headers` (`headersInto`),
- * and a missing or unparsable required one is a `DecodeException`. Driven in both error modes on `http` and
- * `http-safe` on C#'s one async client (no drift check); answer types and multipart bodies are consumer programs,
+ * and a missing or unparsable required one is a `DecodeException` (on `client.Safe` an answer, so its Result's Err).
+ * Driven in both styles on `http`, C#'s one async client and its `client.Safe` (no drift check); answer types and
+ * multipart bodies are consumer programs,
  * the types csc's findings. Ported from Python's binary.test.ts:92-485 (contract 47 §6).
  */
 import { createHash } from "node:crypto"
@@ -22,12 +23,13 @@ const DOTNET = withDotnet()
 /** Every executed describe's bound: a cold gate builds the SDK and the driver first. */
 const SLOW = { timeout: 600_000 }
 
-type Key = "http" | "http-safe"
+/** The style a run calls through: the client, or its `client.Safe` mirror (bit 21 i5). */
+type Key = "normal" | "safe"
 
-/* both error modes: a binary or text answer has the same shape in SdkResult.Data as returned */
+/* both styles: a binary or text answer has the same shape in a Result's Value as returned */
 const MODES = [
-	["throw", "http"],
-	["safe", "http-safe"],
+	["throw", "normal"],
+	["safe", "safe"],
 ] as const
 
 const route = (method: string, path: string) => ({ method, path })
@@ -61,23 +63,24 @@ const plain = (entry: Partial<CsError>) => ({
 	...entry,
 })
 const decodeError = (text: string) =>
-	plain({ chain: ["DecodeException", "HoneyException"], text, type: "DecodeException" })
+	plain({ chain: ["DecodeException", "SdkException", "HoneyException"], text, type: "DecodeException" })
 
-/** The registry SDK `key` with the driver aimed at it (it must build). */
-function on(key: Key): DrivenCSharpSdk {
-	const sdk = drivenCSharpSdk(key)
+/** The `http` SDK with the driver aimed at it (it must build). */
+function on(): DrivenCSharpSdk {
+	const sdk = drivenCSharpSdk("http")
 	expect(sdk.built, sdk.diagnostics.join("\n")).toBe(true)
 	return sdk
 }
 
 type Options = { readonly script?: Script; readonly setup?: Setup }
 
-/** `calls` run by `key`'s driver under `o` against a server answering `replies`, with what the server got. */
+/** `calls` run in `key`'s style under `o` against a server answering `replies`, with what the server got. */
 async function drive(key: Key, replies: readonly Reply[], calls: readonly Call[], o: Options = {}) {
-	const sdk = on(key)
+	const sdk = on()
 	return served(replies, async (server) => {
 		const cell = { calls, setup: o.setup ?? {} }
-		const run = await sdk.runCalls(cell, { alt: server.alt, url: server.url }, { script: o.script })
+		const origins = { alt: server.alt, url: server.url }
+		const run = await sdk.runCalls(cell, origins, { script: o.script }, key === "safe")
 		return { bodies: [...server.bodies], hops: [...server.hops], run }
 	})
 }
@@ -105,7 +108,7 @@ describe.skipIf(!DOTNET)("binary answers: byte[], never decoded, Accept the decl
 	// ported: python binary.test.ts:107
 	it("lets a per-call Accept (RequestOptions.Headers) win over the declared media type", async () => {
 		const call = { ...FILES_GET, headers: { accept: "*/*" } }
-		const { hops, run } = await drive("http", [octets(3, "application/octet-stream")], [call])
+		const { hops, run } = await drive("normal", [octets(3, "application/octet-stream")], [call])
 		expect({ accept: hops.map((h) => h.headers.accept), observed: run.observed }, run.stderr).toEqual({
 			accept: ["*/*"],
 			observed: [bytesOf(3)],
@@ -115,7 +118,7 @@ describe.skipIf(!DOTNET)("binary answers: byte[], never decoded, Accept the decl
 	// ported: python binary.test.ts:116
 	it("keeps the declared media type over a ClientConfig.Headers Accept", async () => {
 		const setup: Setup = { headers: { Accept: "application/json" } }
-		const { hops, run } = await drive("http", [octets(3, "application/octet-stream")], [FILES_GET], { setup })
+		const { hops, run } = await drive("normal", [octets(3, "application/octet-stream")], [FILES_GET], { setup })
 		expect({ accept: hops.map((h) => h.headers.accept), observed: run.observed }, run.stderr).toEqual({
 			accept: ["application/octet-stream"],
 			observed: [bytesOf(3)],
@@ -231,7 +234,7 @@ const item = (headers: Record<string, string>): Reply => ({ headers, json: { id:
 describe.skipIf(!DOTNET)("typed response headers: headersInto fills <Op>Headers (Fc7)", SLOW, () => {
 	// ported: python binary.test.ts:237
 	it.each(MODES)(
-		"fills the declared headers only, an absent optional one unset; a missing or unparsable required one is a DecodeException (%s)",
+		"fills the declared headers only, an absent optional one unset; a missing or unparsable required one is a DecodeException (%s: the safe one's Err)",
 		async (_, key) => {
 			const replies = [
 				item({ "x-etag": "e1", "x-item-version": "3", "x-undeclared": "u" }),
@@ -242,18 +245,21 @@ describe.skipIf(!DOTNET)("typed response headers: headersInto fills <Op>Headers 
 			const calls = [ITEMS_GET, ITEMS_GET, ITEMS_GET, ITEMS_GET]
 			const { run } = await drive(key, replies, calls, { script: {} })
 			const data = { id: "i1", name: "n" }
+			const safe = key === "safe"
+			const unread = (why: string) => (safe ? { ...decodeError(why), via: "result" } : decodeError(why))
+			const missed = safe ? { kind: "decode", status: 200 } : null
 			expect({ errors: run.trace?.calls.map((c) => c.error), observed: run.observed }, run.stderr).toEqual({
 				errors: [
 					undefined,
 					undefined,
-					decodeError("the X-Item-Version header is missing"),
-					decodeError("the X-Item-Version header is not a valid integer"),
+					unread("the X-Item-Version header is missing"),
+					unread("the X-Item-Version header is not a valid integer"),
 				],
 				observed: [
 					{ data, headers: { "X-Etag": "e1", "X-Item-Version": "3" }, kind: "data", status: 200 },
 					{ data, headers: { "X-Item-Version": "3" }, kind: "data", status: 200 },
-					null,
-					null,
+					missed,
+					missed,
 				],
 			})
 		},

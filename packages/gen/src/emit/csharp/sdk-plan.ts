@@ -26,7 +26,5 @@ export type CSharpCallPlan = {
 	readonly response: SdkResponseKind
 	/** the `<Op>Headers` holder the method takes as `headersInto`, each declared header to its property; null without one */
 	readonly responseHeaders: { readonly type: string; readonly fields: Readonly<Record<string, string>> } | null
-	/** false: the method answers `SdkResult` (`throwOnError: false`) */
-	readonly throws: boolean
 	readonly stream: SdkStream
 }

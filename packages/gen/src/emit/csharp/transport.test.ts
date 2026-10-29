@@ -219,6 +219,7 @@ const EXCEPTIONS = [
 	"NotFoundException",
 	"PathParamException",
 	"RateLimitException",
+	"SdkException",
 	"ServiceUnavailableException",
 	"UnauthorizedException",
 	"UnexpectedStatusException",
@@ -310,11 +311,11 @@ const declaring = (files: Record<string, string>, name: string) =>
 	})
 
 describe("runtimeTypeNames: the stream runtime's types (contract 50 §1, §3.1)", () => {
-	it("finds the runtime's public types, and a name in two files only for Transport, partial in each file that adds a stream entry point (one file may hold SdkResult and SdkResult<T>)", () => {
+	it("finds the runtime's public types, and a name in two files only for Transport, partial in each file that adds a stream entry point (one file may hold Result and Result<T>)", () => {
 		const files = runtimeFiles(FULL, "Acme")
 		const all = Object.values(files).flatMap((text) => [...new Set(runtimeTypeNames(text))])
 		expect([...new Set(all.filter((name, at) => all.indexOf(name) !== at))]).toEqual(["Transport"])
-		expect(all).toEqual(expect.arrayContaining(["ClientConfig", "RequestOptions", "SdkResult", "Transport"]))
+		expect(all).toEqual(expect.arrayContaining(["ClientConfig", "RequestOptions", "Result", "Transport"]))
 		expect(declaring(files, "Transport")).toEqual(
 			PARTIAL_TRANSPORT.map((name) => [name, [expect.stringMatching(/^internal sealed partial class Transport\b/)]]),
 		)

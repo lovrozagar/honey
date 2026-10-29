@@ -190,7 +190,7 @@ describe.skipIf(!DOTNET)("an SSE stream's failures and typed headers: thrown onc
 		]
 		const { run } = await drive(replies, [ticks(), ticks()], { script: {} })
 		const decoded = {
-			chain: ["DecodeException", "HoneyException"],
+			chain: ["DecodeException", "SdkException", "HoneyException"],
 			status: undefined,
 			text: expect.stringMatching(/^an event's data does not decode: /),
 			type: "DecodeException",
@@ -217,7 +217,7 @@ describe.skipIf(!DOTNET)("an SSE stream's failures and typed headers: thrown onc
 	})
 })
 
-const STATUS = ["ApiStatusException", "HoneyException"]
+const STATUS = ["ApiStatusException", "SdkException", "HoneyException"]
 /** An error status at the open as the trace records it: its class, the status class, the text, via return. */
 const statusError = (type: string, status: number, message: string) => ({
 	error: { chain: [type, ...STATUS], status, text: `HTTP ${status}: ${message}`, type, via: "return" },
@@ -252,12 +252,11 @@ describe.skipIf(!DOTNET)("an SSE open that fails: its status class thrown before
 	})
 })
 
-/** The `sse` SDK's Client.cs lines in throw mode or safe mode. */
-const clientLines = (throwOnError: boolean) =>
-	(generateCSharpSdk(FIXTURES.sse.document(), { throwOnError }).files["Client.cs"] ?? "").split("\n")
-/** Each stream method's two lines: its signature and its call. */
-const streamMethods = (lines: readonly string[]) =>
-	lines.flatMap((line, i) => (line.startsWith("    public Task<EventStream<") ? [[line, lines[i + 1] ?? ""]] : []))
+/** The `sse` SDK's Client.cs lines. */
+const clientLines = () => (generateCSharpSdk(FIXTURES.sse.document()).files["Client.cs"] ?? "").split("\n")
+/** Each method's two lines whose signature opens `head`: its signature and its call. */
+const methodsOf = (lines: readonly string[], head: string) =>
+	lines.flatMap((line, i) => (line.startsWith(`    public ${head}`) ? [[line, lines[i + 1] ?? ""]] : []))
 
 const OPTIONS = "RequestOptions? options = null, CancellationToken cancellationToken = default"
 const CONTEXT = "HoneySdkJsonContext.Default"
@@ -273,17 +272,28 @@ const EMITTED = [
 	"        _t.TextEventsAsync(_stream, new([id], [], [], null, null, options), lastEventId, cancellationToken);",
 ]
 
-describe("generateCSharpSdk: an SSE method in safe mode", () => {
-	/* ported: python sse.test.ts:284 (no sse-safe fixture: the method text proves it, contract 50 §4.1) */
-	it("emits each stream method as throw mode does: a stream ignores throwOnError and answers no SdkResult", () => {
-		const [thrown, safe] = [clientLines(true), clientLines(false)]
-		const methods = streamMethods(safe)
+/** The twin of a stream method's signature: the same parameters, a Result of the very stream. */
+const twinOf = (signature: string) =>
+	signature.replace(/^ {4}public Task<(EventStream<\w+>)>/, "    public Task<Result<$1>>")
+
+describe("generateCSharpSdk: an SSE method and its client.Safe twin (bit 21 i5)", () => {
+	/* ported: python sse.test.ts:284; R-i6's streams: the twin's Ok is the open stream, an opening error status its Err */
+	it("emits each stream method as before, and its twin a Result of the very stream through that method", () => {
+		const lines = clientLines()
+		const streams = methodsOf(lines, "Task<EventStream<")
+		const twins = methodsOf(lines, "Task<Result<EventStream<")
 		expect({
-			count: methods.length,
-			emitted: thrown,
-			result: methods.flat().filter((line) => line.includes("SdkResult")),
-			safe: methods,
-		}).toEqual({ count: 4, emitted: expect.arrayContaining(EMITTED), result: [], safe: streamMethods(thrown) })
+			count: [streams.length, twins.length],
+			emitted: lines,
+			headed: twins.find(([signature]) => signature?.includes("TicksStreamHeaders"))?.[1],
+			signatures: twins.map(([signature]) => signature),
+		}).toEqual({
+			count: [4, 4],
+			emitted: expect.arrayContaining(EMITTED),
+			headed:
+				"        Transport.Safe(options, _o => _n.StreamAsync(since, xTenant, headersInto, lastEventId, _o, cancellationToken));",
+			signatures: streams.map(([signature]) => twinOf(signature as string)),
+		})
 	})
 })
 

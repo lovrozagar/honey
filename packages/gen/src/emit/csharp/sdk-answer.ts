@@ -1,12 +1,12 @@
 /**
  * What a method answers (§2.1, C#2) and the response headers it can read (Fc7, §2.2). A JSON answer is its schema's
  * type through `CallAsync`/`NullableAsync`, text a `string` through `TextAsync`, bytes a `byte[]` through
- * `BytesAsync`, none a bare `Task`; in safe mode each is an `SdkResult` through the `…ResultAsync` twin. An
+ * `BytesAsync`, none a bare `Task` (its `client.Safe` twin a `Result` of each: sdk-method.ts). An
  * operation whose 2xx responses declare headers gets `<Op>Headers`, a class hoisted beside the types (never listed
  * in the JSON context) with one nullable `{ get; private set; }` property per header in code-unit order of its
  * name, typed by the header's scalar (`long?`, `double?`, `bool?`, else `string?`), and an `internal` `Read` the
  * transport calls on a 2xx; a WebSocket or realtime operation, whose 2xx no caller receives, gets none. A
- * stream operation answers as its `CsStream` says (`sse.ts`, `ws.ts`, `realtime.ts`), in either mode.
+ * stream operation answers as its `CsStream` says (`sse.ts`, `ws.ts`, `realtime.ts`).
  */
 import type { IRResponse, IRSchema } from "../../ir/model.ts"
 import type { SdkOp } from "../../ir/sdk-model.ts"
@@ -44,40 +44,28 @@ export const eventType = (events: IRSchema, op: SdkOp, env: MethodEnv) =>
 /** The `<Op>Headers` holder's type and each declared header (as written) to its property. */
 export type CsHeadersPlan = { readonly type: string; readonly fields: Readonly<Record<string, string>> }
 
-type Mode = "safe" | "thrown"
-
-/** How an answer is typed and which transport method reads it, by its kind (`json?` a nullable one) and mode. */
-const ANSWERS: Readonly<Record<string, Readonly<Record<Mode, (type: string) => [string, string]>>>> = {
-	binary: {
-		safe: () => ["Task<SdkResult<byte[]>>", "BytesResultAsync"],
-		thrown: () => ["Task<byte[]>", "BytesAsync"],
-	},
-	json: { safe: (t) => [`Task<SdkResult<${t}>>`, "ResultAsync"], thrown: (t) => [`Task<${t}>`, "CallAsync"] },
-	"json?": {
-		safe: (t) => [`Task<SdkResult<${t}>>`, "NullableResultAsync"],
-		thrown: (t) => [`Task<${t}>`, "NullableAsync"],
-	},
-	none: { safe: () => ["Task<SdkResult>", "ResultAsync"], thrown: () => ["Task", "CallAsync"] },
-	text: { safe: () => ["Task<SdkResult<string>>", "TextResultAsync"], thrown: () => ["Task<string>", "TextAsync"] },
+/** How an answer is typed and which transport method reads it, by its kind (`json?` a nullable one). */
+const ANSWERS: Readonly<Record<string, (type: string) => [string, string]>> = {
+	binary: () => ["Task<byte[]>", "BytesAsync"],
+	json: (t) => [`Task<${t}>`, "CallAsync"],
+	"json?": (t) => [`Task<${t}>`, "NullableAsync"],
+	none: () => ["Task", "CallAsync"],
+	text: () => ["Task<string>", "TextAsync"],
 }
 
 /** A signature's spelling of `type`: its runtime type, keeping a nullable reference's `?` at the top. */
 export const signatureType = (type: string, spell: Spelling) =>
 	`${spell.runtime(type).replace(/\?$/, "")}${type.endsWith("?") ? "?" : ""}`
 
-/** The answer of `op`: `T` typed as the signature spells it when thrown, as its runtime type in an `SdkResult`. */
+/** The answer of `op`: `T` typed as the signature spells it. */
 export function csAnswer(op: SdkOp, env: MethodEnv): CsAnswer {
 	const json = op.success.kind === "json"
 	const type = json
 		? csTypeOf(op.success.schema ?? UNKNOWN, { ...env.at, fieldName: "Response", parentName: op.id })
 		: null
 	const kind = type === null ? op.success.kind : `json${type.endsWith("?") ? "?" : ""}`
-	const mode: Mode = env.throwOnError ? "thrown" : "safe"
 	return {
-		render: (spell) => {
-			const shown = type === null ? "" : env.throwOnError ? signatureType(type, spell) : spell.runtime(type)
-			return (ANSWERS[kind] as (typeof ANSWERS)[string])[mode](shown)
-		},
+		render: (spell) => (ANSWERS[kind] as (typeof ANSWERS)[string])(type === null ? "" : signatureType(type, spell)),
 		type,
 	}
 }

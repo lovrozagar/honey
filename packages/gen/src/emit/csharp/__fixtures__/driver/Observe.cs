@@ -25,36 +25,89 @@ internal sealed record Outcome(JsonNode? Observed, JsonObject? Error = null, Jso
 /// A call's outcome as the grid observes it, and as a script traces it. A result is <c>data</c>, written back
 /// through the SDK's context, with the raw response's status and the typed response headers the holder got; a
 /// binary answer is <c>bytes</c>, its size and SHA-256; <c>raw</c> when the call asks for it. An operation with no
-/// typed answer observes its raw body (JSON, else text, else null). A safe-mode <c>SdkResult</c> observes its data
-/// or its error. An <c>ApiStatusException</c> is <c>error</c> with its status, its <c>Key</c> and its body (JSON,
+/// typed answer observes its raw body (JSON, else text, else null). A <c>client.Safe</c> call's <c>Result</c> (bit 21
+/// i5) is read strictly: an answer it throws, a Result whose response is not the call's own, an Ok on no 2xx and an
+/// Err whose response is not its error's each fail the run; its Ok observes its value as a normal call's answer,
+/// its Err its error. An <c>ApiStatusException</c> is <c>error</c> with its status, its <c>Key</c> and its body (JSON,
 /// else its text); an <c>ApiTimeoutException</c> is <c>timeout</c>. Unscripted, an <c>ApiConnectionException</c> is
 /// <c>transport</c> (no answer, f2) and a <c>DecodeException</c> is <c>decode</c> with the filled raw response's
 /// status (bit 21 i0); any other exception ends the run, named by its type. Under a script, a call's error is traced too (<c>via: "return"</c>, or <c>"result"</c> for a
-/// safe-mode <c>SdkResult.Error</c>, with the result's summary), and one the grid has no outcome for (a cancel, a
+/// safe call's <c>Result</c> Err, with the result's summary), and one the grid has no outcome for (a cancel, a
 /// hook's, a decode, a connection or a config error) observes null. A stream call's reads are Stream.cs's.
 /// </summary>
 internal static class Observe
 {
-    /// <summary>A method's answer as observed: a safe-mode result by its error or data, anything else as data.</summary>
+    /// <summary>A normal method's answer as observed: its task's result as data.</summary>
     public static Outcome Returned(Sdk sdk, Answer answer, Plan plan, Lens lens)
     {
-        if (plan.Throws)
+        if (sdk.Find("Result") is { } result && result.IsInstanceOfType(answer.Result))
         {
-            var type = answer.Declared.IsGenericType ? answer.Declared.GetGenericArguments()[0] : null;
-            return new Outcome(Answered(sdk, answer with { Declared = type ?? typeof(void) }, plan, lens));
+            throw new DriverException($"the normal call answered a Result: {answer.Declared}");
         }
-        var result = answer.Result ?? throw new DriverException("the safe-mode method returned no SdkResult");
-        var summary = lens.Scripted ? Traces.ResultOf(result) : null;
-        if (Sdk.Get(result, "Error") is Exception error)
-        {
-            var traced = lens.Scripted ? Traces.ErrorOf(sdk, error, "result", lens.Envelope) : null;
-            return new Outcome(StatusOf(sdk, error, lens.Raw), traced, summary);
-        }
-        var generic = result.GetType().IsGenericType;
-        var data = generic ? Sdk.Get(result, "Data") : null;
-        var declared = generic ? result.GetType().GetGenericArguments()[0] : typeof(void);
-        return new Outcome(Answered(sdk, answer with { Declared = declared, Result = data }, plan, lens), null, summary);
+        var type = answer.Declared.IsGenericType ? answer.Declared.GetGenericArguments()[0] : null;
+        return new Outcome(Answered(sdk, answer with { Declared = type ?? typeof(void) }, plan, lens));
     }
+
+    /// <summary>A safe call's Result, read strictly (Settle): its Ok as a normal call's answer, its Err as its error.</summary>
+    public static Outcome Safe(Sdk sdk, object? result, object raw, Plan plan, Lens lens)
+    {
+        var settled = Settle(sdk, result, raw, lens);
+        if (settled.Err is { } err)
+        {
+            return err;
+        }
+        var generic = result!.GetType().IsGenericType;
+        var declared = generic ? result.GetType().GetGenericArguments()[0] : typeof(void);
+        var answer = new Answer(declared, settled.Value, raw);
+        return new Outcome(Answered(sdk, answer, plan, lens), null, settled.Summary);
+    }
+
+    /// <summary>
+    /// A safe call's <paramref name="result"/>, its response held to <paramref name="raw"/> (the box the call passed):
+    /// its Ok's value (null for an operation with none), or the Outcome its Err observes; anything else fails the
+    /// run, as does an Ok on no 2xx and an Err whose response is not its error's.
+    /// </summary>
+    public static (object? Value, Outcome? Err, JsonObject? Summary) Settle(Sdk sdk, object? result, object raw, Lens lens)
+    {
+        if (result is null || !sdk.Is(result, "Result"))
+        {
+            throw new DriverException($"the safe call answered no Result: {result?.GetType().Name ?? "null"}");
+        }
+        var response = Sdk.Get(result, "Response") ?? throw new DriverException("a Result without its response");
+        var status = Convert.ToInt32(Sdk.Get(response, "Status"));
+        if (!ReferenceEquals(response, raw))
+        {
+            throw new DriverException($"a Result whose response ({status}) is not the call's answer");
+        }
+        var summary = lens.Scripted ? Traces.ResultOf(sdk, result) : null;
+        if ((bool)Sdk.Get(result, "IsOk")!)
+        {
+            if (status is < 200 or >= 300)
+            {
+                throw new DriverException($"a Result Ok whose response ({status}) is no 2xx");
+            }
+            return (result.GetType().IsGenericType ? Sdk.Get(result, "Value") : null, null, summary);
+        }
+        var error = (Exception)Sdk.Get(result, "Error")!;
+        var held = sdk.Is(error, "ApiStatusException") ? Convert.ToInt32(Sdk.Get(error, "Status")) == status
+            : sdk.Is(error, "DecodeException") && status is >= 200 and < 300;
+        if (!held)
+        {
+            throw new DriverException($"a Result Err whose response ({status}) is not its error's: {error.GetType().Name}: {error.Message}");
+        }
+        var traced = lens.Scripted ? Traces.ErrorOf(sdk, error, "result", lens.Envelope) : null;
+        var seen = sdk.Is(error, "DecodeException") ? Undecodable(response) : StatusOf(sdk, error, lens.Raw);
+        return (null, new Outcome(seen, traced, summary), summary);
+    }
+
+    /// <summary>
+    /// A safe call that threw <paramref name="error"/>: an answer (an error status, a decode) fails the run, since a
+    /// safe call returns it; anything else is no answer, observed as a normal call's (f2).
+    /// </summary>
+    public static Outcome ThrownSafe(Sdk sdk, Exception error, Lens lens) =>
+        sdk.Is(error, "SdkException")
+            ? throw new DriverException($"the safe call threw an API answer, not a Result: {error.GetType().Name}: {error.Message}")
+            : Thrown(sdk, error, lens);
 
     /// <summary>
     /// A call that threw <paramref name="error"/>: traced under a script; unscripted, a status error, a timeout, no

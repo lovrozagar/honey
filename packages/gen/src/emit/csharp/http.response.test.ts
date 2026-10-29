@@ -1,12 +1,12 @@
 /**
  * The C# HTTP runtime's answers (contract 47 §5.6, Python's and Rust's `http.response.test.ts` analog): a JSON
  * answer decoded into the operation's type, and an undecodable 2xx (truncated, or nested past the parser's depth)
- * as the method's own `DecodeException` in both modes, never a safe-mode `SdkResult.Error`; a deep error body kept
+ * as the method's own `DecodeException` (on `client.Safe` its Result's Err, bit 21 i5: R-i1); a deep error body kept
  * as its status class with an empty envelope and a cut `Detail`; every member the wire sent kept; a text answer as
  * the body verbatim, asked for by its media type; a call ended by its one deadline (across an auth retry), the
  * caller's token or a refused connection, none of them an `ApiStatusException`; and the answer's cap. Fc1: the
  * handler the SDK builds asks for and decodes gzip, deflate and brotli, the cap counts decoded bytes, and a caller's
- * own handler governs its decompression. Driven against `http` and `http-safe` on C#'s one async client.
+ * own handler governs its decompression. Driven against `http` on C#'s one async client and its `client.Safe`.
  */
 import { gzipSync } from "node:zlib"
 import { describe, expect, it } from "vitest"
@@ -59,19 +59,21 @@ const plain = (entry: Partial<CsError>) => ({
 	via: "return",
 	...entry,
 })
-/** The method's DecodeException for a 2xx whose body does not decode (§5.6 pins its class, not its text). */
-const UNDECODED = expect.objectContaining({
-	canceled: false,
-	chain: ["DecodeException", "HoneyException"],
-	type: "DecodeException",
-	via: "return",
-})
-/** The ApiConnectionException the cap throws: no inner (§1 rules). */
+/** The DecodeException for a 2xx whose body does not decode, thrown or a safe call's Err (§5.6 pins its class, not its text). */
+const undecoded = (via: "result" | "return") =>
+	expect.objectContaining({
+		canceled: false,
+		chain: ["DecodeException", "SdkException", "HoneyException"],
+		type: "DecodeException",
+		via,
+	})
+const UNDECODED = undecoded("return")
+/** The DecodeException a 2xx past the cap is (bit 21 i5: an answer whose body was not read): no inner (§1 rules). */
 const capped = (limit: number) =>
 	plain({
-		chain: ["ApiConnectionException", "HoneyException"],
+		chain: ["DecodeException", "SdkException", "HoneyException"],
 		text: `the answer exceeds ${limit} bytes`,
-		type: "ApiConnectionException",
+		type: "DecodeException",
 	})
 /** The deadline's ApiTimeoutException (phase b's text, kept); the canceled send is its inner. */
 const timedOut = (ms: number) =>
@@ -82,11 +84,12 @@ const timedOut = (ms: number) =>
 		type: "ApiTimeoutException",
 	})
 
-type Key = "http" | "http-safe"
+/** The style a run calls through: the client, or its `client.Safe` mirror. */
+type Key = "normal" | "safe"
 
-/** The registry SDK `key` with the driver aimed at it: it must build. */
-function driven(key: Key): DrivenCSharpSdk {
-	const sdk = drivenCSharpSdk(key)
+/** The `http` SDK with the driver aimed at it: it must build. */
+function driven(): DrivenCSharpSdk {
+	const sdk = drivenCSharpSdk("http")
 	expect(sdk.built, sdk.diagnostics.join("\n")).toBe(true)
 	return sdk
 }
@@ -95,16 +98,16 @@ type Options = { readonly key?: Key; readonly script?: Script; readonly setup?: 
 
 /** `calls` run under `options` against a server answering `replies`: the run and the hops. */
 async function drive(replies: readonly Reply[], calls: readonly Call[], options: Options = {}) {
-	const sdk = driven(options.key ?? "http")
+	const sdk = driven()
 	return served(replies, async (server) => {
 		const cell = { calls, setup: options.setup ?? {} }
-		const run = await sdk.runCalls(cell, { url: server.url }, { script: options.script })
+		const run = await sdk.runCalls(cell, { url: server.url }, { script: options.script }, options.key === "safe")
 		return { hops: [...server.hops], run }
 	})
 }
 type Driven = Awaited<ReturnType<typeof drive>>
 
-/** A traced call as these tests pin it: its error and its SdkResult, without the time. */
+/** A traced call as these tests pin it: its error and its Result, without the time. */
 const traced = ({ error, result }: Trace<CsError>["calls"][number]) => ({ error, result })
 
 /** A decoding run: each call traced, the urls hit, what was observed, the exit status. */
@@ -118,14 +121,17 @@ const decoding = ({ hops, run }: Driven) => ({
 /** A run as the plain legs pin it: the urls hit, what was observed, the exit status. */
 const wire = ({ hops, run }: Driven) => ({ hops: hops.map((h) => h.url), observed: run.observed, status: run.status })
 
-/** The decoding run of a user and then a truncated body, the first call's SdkResult `first`. */
-const truncated = (first: Trace<CsError>["calls"][number]["result"]) => ({
+/** The decoding run of a user and then a truncated body: thrown by the client, a Result Err on `client.Safe` (R-i1). */
+const truncated = (safe: boolean) => ({
 	calls: [
-		{ error: undefined, result: first },
-		{ error: UNDECODED, result: undefined },
+		{ error: undefined, result: safe ? { data: true, ok: true, response: true, status: 200 } : undefined },
+		{
+			error: undecoded(safe ? "result" : "return"),
+			result: safe ? { data: false, ok: false, response: true, status: 200 } : undefined,
+		},
 	],
 	hops: ["/users/1", "/users/1"],
-	observed: [data({ id: "u1" }), null],
+	observed: [data({ id: "u1" }), safe ? { kind: "decode", status: 200 } : null],
 	status: 0,
 })
 
@@ -137,13 +143,13 @@ describe.skipIf(!DOTNET)(
 	SLOW,
 	() => {
 		/* ported: python http.response.test.ts:117 */
-		it("the decoded user, then a truncated body as DecodeException in both modes", async () => {
+		it("the decoded user, then a truncated body as DecodeException: thrown, and client.Safe's Err", async () => {
 			const replies = [found({ id: "u1" }), claimed('{"id":')]
 			const run = (key: Key) => drive(replies, [USER, USER], { key, script: {} })
-			const [thrown, safe] = await Promise.all([run("http"), run("http-safe")])
+			const [thrown, safe] = await Promise.all([run("normal"), run("safe")])
 			expect({ safe: decoding(safe), thrown: decoding(thrown) }, thrown.run.stderr + safe.run.stderr).toEqual({
-				safe: truncated({ data: true, ok: true, response: true, status: 200 }),
-				thrown: truncated(undefined),
+				safe: truncated(true),
+				thrown: truncated(false),
 			})
 		})
 
@@ -157,7 +163,7 @@ describe.skipIf(!DOTNET)(
 					{ error: UNDECODED, result: undefined },
 					{
 						error: plain({
-							chain: ["NotFoundException", "ApiStatusException", "HoneyException"],
+							chain: ["NotFoundException", "ApiStatusException", "SdkException", "HoneyException"],
 							envelope: { extraKeys: [] },
 							key: null,
 							keyMember: null,
@@ -201,10 +207,10 @@ const answered = ({ hops, run }: Driven) => ({
 
 /* ported: python http.response.test.ts:160 (phase b sent no Accept on a text answer, a defect fixed here) */
 describe.skipIf(!DOTNET)("a text answer is the body as a string, asked for by its media type", SLOW, () => {
-	it("a text/plain body verbatim, never JSON-decoded, accept text/plain, both modes", async () => {
+	it("a text/plain body verbatim, never JSON-decoded, accept text/plain, both styles", async () => {
 		const reply: Reply = { headers: { "content-type": "text/plain" }, status: 200, text: '{"a":1}' }
 		const run = (key: Key) => drive([reply], [TEXT], { key })
-		const [thrown, safe] = await Promise.all([run("http"), run("http-safe")])
+		const [thrown, safe] = await Promise.all([run("normal"), run("safe")])
 		const expected = { accept: ["text/plain"], observed: [data('{"a":1}')], status: 0 }
 		expect({ safe: answered(safe), thrown: answered(thrown) }, thrown.run.stderr + safe.run.stderr).toEqual({
 			safe: expected,
@@ -292,7 +298,7 @@ describe.skipIf(!DOTNET)(
 describe.skipIf(!DOTNET)("a refused connection is a transport error, never a cancel", SLOW, () => {
 	it("ApiConnectionException with HttpRequestException inner, and no status", async () => {
 		const closed = REFUSED_URL
-		const run = await driven("http").runCalls({ calls: [USER], setup: {} }, { url: closed }, { script: {} })
+		const run = await driven().runCalls({ calls: [USER], setup: {} }, { url: closed }, { script: {} })
 		expect({ error: run.trace?.calls[0]?.error, observed: run.observed, status: run.status }, run.stderr).toEqual({
 			error: plain({
 				chain: ["ApiConnectionException", "HoneyException"],
@@ -316,7 +322,7 @@ const capRead = ({ run }: Driven) => ({ calls: run.trace?.calls.map(traced), obs
 
 /* ported: python sdk.driver.script.test.ts:173 (and the 0 case: no cap) */
 describe.skipIf(!DOTNET)("ClientConfig.MaxResponseBytes caps an answer; 0 is none", SLOW, () => {
-	it("10 on 64 bytes is ApiConnectionException, observed null; 0 decodes the 64 bytes", async () => {
+	it("10 on 64 bytes is DecodeException, observed null; 0 decodes the 64 bytes", async () => {
 		const [ten, none] = await Promise.all([cap(10), cap(0)])
 		expect({ none: capRead(none), ten: capRead(ten) }, ten.run.stderr + none.run.stderr).toEqual({
 			none: { calls: [{ error: undefined, result: undefined }], observed: [OK_DATA] },

@@ -5,8 +5,9 @@ using System.Text.Json.Nodes;
 namespace Honey.Driver;
 
 /// <summary>
-/// The binding core (Fb10): one call sent by its plan, nothing generated. The method is found from the client
-/// through each of the plan's <c>accessors</c> by <c>GetProperty</c>, then by <c>GetMethod(plan.method)</c>. Each
+/// The binding core (Fb10): one call sent by its plan, nothing generated. The method is found from the client (its
+/// <c>Safe</c> mirror in the safe style, bit 21 i5) through each of the plan's <c>accessors</c> by
+/// <c>GetProperty</c>, then by <c>GetMethod(plan.method)</c>. Each
 /// parameter binds by its name: a path param from the call's <c>params</c>, a JSON, form or text body from its JSON
 /// value, a query param from <c>search</c> and a header param from the call's headers, each value deserialized
 /// through the SDK context's metadata for the parameter's declared type (a string into a string parameter as it
@@ -28,7 +29,8 @@ internal static class Invoke
     public static async Task<Outcome> CallAsync(Sdk sdk, object client, Envelope envelope, Call call, CallScript? entry, bool scripted)
     {
         var plan = envelope.Plans[call.Operation];
-        var target = plan.Accessors.Aggregate(client, (at, name) => Sdk.Get(at, name)
+        var root = envelope.Safe ? Sdk.Get(client, "Safe") ?? throw new DriverException("the client's Safe is null") : client;
+        var target = plan.Accessors.Aggregate(root, (at, name) => Sdk.Get(at, name)
             ?? throw new DriverException($"{at.GetType().Name}.{name} is null"));
         var method = target.GetType().GetMethod(plan.Method)
             ?? throw new DriverException($"{target.GetType().Name} has no method {plan.Method}");
@@ -47,9 +49,11 @@ internal static class Invoke
         Cancel(cancel, entry?.Cancel is { } wait ? Scripts.CancelOf(wait) : null);
         if (plan.Stream is not null)
         {
+            /* a safe SSE call answers a Result of its stream; a connection is the very method on both clients */
+            var settles = envelope.Safe && plan.Stream == "sse" ? raw : null;
             var streamCall = new StreamCall(sdk, plan, call, entry, lens);
             return await Streams.ObserveAsync(streamCall, async () => await ResultAsync(target, method, args)
-                ?? throw new DriverException($"{plan.Method} opened nothing"));
+                ?? throw new DriverException($"{plan.Method} opened nothing"), settles);
         }
         object? result;
         try
@@ -58,9 +62,11 @@ internal static class Invoke
         }
         catch (Exception e) when (e is not DriverException)
         {
-            return Observe.Thrown(sdk, e, lens, raw);
+            return envelope.Safe ? Observe.ThrownSafe(sdk, e, lens) : Observe.Thrown(sdk, e, lens, raw);
         }
-        return Observe.Returned(sdk, new Answer(method.ReturnType, result, raw), plan, lens);
+        return envelope.Safe
+            ? Observe.Safe(sdk, result, raw, plan, lens)
+            : Observe.Returned(sdk, new Answer(method.ReturnType, result, raw), plan, lens);
     }
 
     /// <summary>

@@ -8,7 +8,7 @@ namespace Honey.Driver;
 
 /// <summary>
 /// What a scripted run prints beside the observed (protocol.ts <c>Trace&lt;CsError&gt;</c>): each call's time, its
-/// error read through the exception's members and a safe-mode <c>SdkResult</c>'s summary; every hook run with what
+/// error read through the exception's members and a safe call's <c>Result</c> summary; every hook run with what
 /// its context held; every <c>OnLog</c> entry; and the <c>OnAuthExpired</c> calls. Every member is read by
 /// reflection: the driver holds no reference to any SDK.
 /// </summary>
@@ -235,18 +235,25 @@ internal static class Traces
         ["path"] = (string?)Sdk.Get(field, "Path"),
     };
 
-    /// <summary>A safe-mode <c>SdkResult</c>: whether it holds data, whether it is a 2xx, whether its response carries its status, and its status.</summary>
-    public static JsonObject ResultOf(object result)
+    /// <summary>
+    /// A safe call's <c>Result</c>: whether <c>TryGetValue</c> gives a value, whether it is Ok, whether its response
+    /// carries its answer's status (its error status's own, or a 2xx for an Ok or a decode), and that status.
+    /// </summary>
+    public static JsonObject ResultOf(Sdk sdk, object result)
     {
-        var status = Convert.ToInt32(Sdk.Get(result, "Status"));
-        var data = result.GetType().IsGenericType && Sdk.Get(result, "Data") is not null;
-        return new JsonObject
+        var ok = (bool)Sdk.Get(result, "IsOk")!;
+        var status = Convert.ToInt32(Sdk.Get(Sdk.Get(result, "Response")!, "Status"));
+        var data = false;
+        if (result.GetType().IsGenericType)
         {
-            ["data"] = data,
-            ["ok"] = (bool)Sdk.Get(result, "IsSuccess")!,
-            ["response"] = Convert.ToInt32(Sdk.Get(Sdk.Get(result, "Response")!, "Status")) == status,
-            ["status"] = status,
-        };
+            var args = new object?[] { null };
+            data = (bool)result.GetType().GetMethod("TryGetValue")!.Invoke(result, args)! && args[0] is not null;
+        }
+        var error = ok ? null : Sdk.Get(result, "Error");
+        var carried = error is not null && sdk.Is(error, "ApiStatusException")
+            ? Convert.ToInt32(Sdk.Get(error, "Status")) == status
+            : status is >= 200 and < 300;
+        return new JsonObject { ["data"] = data, ["ok"] = ok, ["response"] = carried, ["status"] = status };
     }
 
     /// <summary>A context's URL as sent: a <c>Uri</c>'s escaped form, or the string as it is.</summary>

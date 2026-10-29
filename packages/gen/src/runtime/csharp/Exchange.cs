@@ -9,9 +9,10 @@ using System.Threading.Tasks;
 
 namespace Honey.Runtime;
 
-internal sealed record Answered(int Status, Dictionary<string, string> Headers, byte[] Body, Uri Url);
+internal sealed record Answered(int Status, Dictionary<string, string> Headers, byte[] Body, Uri Url, bool Over);
 
-internal sealed class Exchange(Transport client, Operation op, Call call, bool stream = false, bool refreshes = true)
+/* a realtime `dial`'s answer past the cap is no answer: its reconnect policy sees a drop */
+internal sealed class Exchange(Transport client, Operation op, Call call, bool stream = false, bool refreshes = true, bool dial = false)
 {
     private const int ReadBuffer = 81_920;
     private const long DefaultMaxResponseBytes = 100L << 20;
@@ -30,7 +31,7 @@ internal sealed class Exchange(Transport client, Operation op, Call call, bool s
     private int _redirects;
     private HttpResponseMessage? _live;
 
-    public async Task<(RawResponse Raw, ApiStatusException? Error)> RunAsync(CancellationToken cancellationToken) =>
+    public async Task<(RawResponse Raw, SdkException? Error)> RunAsync(CancellationToken cancellationToken) =>
         Done(await BoundedAsync(cancellationToken).ConfigureAwait(false));
 
     public async Task<HttpResponseMessage> OpenAsync(CancellationToken cancellationToken)
@@ -129,7 +130,7 @@ internal sealed class Exchange(Transport client, Operation op, Call call, bool s
             }
             var status = (int)response.StatusCode;
             var headers = Wire.HeadersOf(response);
-            byte[] body = [];
+            byte[]? body = [];
             if (stream && status is >= 200 and < 300)
             {
                 _live = response;
@@ -138,12 +139,12 @@ internal sealed class Exchange(Transport client, Operation op, Call call, bool s
             {
                 using (response)
                 {
-                    body = await ReadAsync(response, token).ConfigureAwait(false);
+                    body = await BodyAsync(response, token).ConfigureAwait(false) ?? (dial ? throw Over() : null);
                 }
             }
-            var answer = new ResponseContext(status, headers, body, shared);
+            var answer = new ResponseContext(status, headers, body ?? [], shared);
             await Hooks.RunAsync(client.Config.OnResponse, answer, token).ConfigureAwait(false);
-            return new Answered(answer.Status, new Dictionary<string, string>(answer.Headers, StringComparer.OrdinalIgnoreCase), answer.Body, hop.Url);
+            return new Answered(answer.Status, new Dictionary<string, string>(answer.Headers, StringComparer.OrdinalIgnoreCase), answer.Body, hop.Url, body is null);
         }
     }
 
@@ -198,9 +199,16 @@ internal sealed class Exchange(Transport client, Operation op, Call call, bool s
         return headers;
     }
 
-    public async Task<byte[]> ReadAsync(HttpResponseMessage response, CancellationToken token)
+    public async Task<byte[]> ReadAsync(HttpResponseMessage response, CancellationToken token) =>
+        await BodyAsync(response, token).ConfigureAwait(false) ?? throw Over();
+
+    private ApiConnectionException Over() => new($"the answer exceeds {Max} bytes");
+
+    private long Max => stream ? StreamErrorBytes : client.Config.MaxResponseBytes ?? DefaultMaxResponseBytes;
+
+    /* null past the cap */
+    private async Task<byte[]?> BodyAsync(HttpResponseMessage response, CancellationToken token)
     {
-        var max = stream ? StreamErrorBytes : client.Config.MaxResponseBytes ?? DefaultMaxResponseBytes;
         var source = await response.Content.ReadAsStreamAsync(token).ConfigureAwait(false);
         await using var _ = source.ConfigureAwait(false);
         using var body = new MemoryStream();
@@ -209,22 +217,23 @@ internal sealed class Exchange(Transport client, Operation op, Call call, bool s
         while ((read = await source.ReadAsync(buffer, token).ConfigureAwait(false)) > 0)
         {
             body.Write(buffer, 0, read);
-            if (max > 0 && body.Length > max)
+            if (Max > 0 && body.Length > Max)
             {
-                throw new ApiConnectionException($"the answer exceeds {max} bytes");
+                return null;
             }
         }
         return body.ToArray();
     }
 
-    private (RawResponse Raw, ApiStatusException? Error) Done(Answered answer)
+    private (RawResponse Raw, SdkException? Error) Done(Answered answer)
     {
         _log.Received(answer.Status);
-        ApiStatusException? error = null;
+        SdkException? error = null;
         if (answer.Status is >= 200 and < 300)
         {
             var values = op.PathParams.Zip(call.Path).ToDictionary(pair => pair.First, pair => pair.Second);
             client.Stale.Settle(_meta, op.Invalidates ?? [], values);
+            error = answer.Over ? new DecodeException($"the answer exceeds {Max} bytes") : null;
         }
         else
         {

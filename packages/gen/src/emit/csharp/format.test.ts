@@ -19,14 +19,13 @@ import { type CSharpRuntimeFeatures, runtimeFiles } from "./transport.ts"
 /** Whether .NET is here: a missing SDK fails where it is required and skips these legs elsewhere (csharp-env). */
 const DOTNET = withDotnet()
 
-/** Every document fixture of the registry: each SDK the gates hold, in both throw modes, the streams among them
- * (contract 50 §4.1). */
+/** Every document fixture of the registry: each SDK the gates hold, its `client.Safe` mirror in it (bit 21 i5), the
+ * streams among them (contract 50 §4.1). */
 const GATED = [
 	"errors",
 	"fixtures",
-	"fixtures-safe",
 	"http",
-	"http-safe",
+	"lenient",
 	"realtime",
 	"relative",
 	"sse",

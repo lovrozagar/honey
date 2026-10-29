@@ -4,11 +4,13 @@
  * call plan. A method takes its path params as `string` in path order, then a required body, the required query
  * and header params, an optional body, the optional ones, `idempotencyKey` on an idempotent op, `headersInto` where
  * the op declares response headers (Fc7), a stream's own fields, `options` and `cancellationToken` (C#4). Its body
- * by kind is sdk-body.ts's, its answer sdk-answer.ts's, `SdkResult` in safe mode (C#2), a stream's its `CsStream`'s
- * in either mode (contract 50 §2): a stream takes no idempotency key, an SSE one asks for `text/event-stream`, and a
- * declared param a stream field carries gets no parameter. Its body is one call into the transport, the signature on
- * one line and the call on the next (Fb8). A param named like one of the method's own locals or its stream's fields
- * is `…2`, a keyword `@`-escaped (H52).
+ * by kind is sdk-body.ts's, its answer sdk-answer.ts's, a stream's its `CsStream`'s (contract 50 §2): a stream takes
+ * no idempotency key, an SSE one asks for `text/event-stream`, and a declared param a stream field carries gets no
+ * parameter. Its body is one call into the transport, the signature on one line and the call on the next (Fb8). Its
+ * `client.Safe` twin (C#2, bit 21 i5) restates the signature and answers `Task<Result<T>>` (`Task<Result>` for no
+ * body) through `Transport.Safe` and the very method, its options given a response box; a connection's twin is the
+ * very method. A param named like one of the method's own locals or its stream's fields is `…2`, a keyword
+ * `@`-escaped (H52); the twin's lambda takes `_o`, which no param is (a `_` leads a name only before a digit).
  */
 import type { IRParam } from "../../ir/model.ts"
 import type { SdkOp, SdkStream } from "../../ir/sdk-model.ts"
@@ -30,16 +32,20 @@ import { sseStream } from "./sse.ts"
 import { type CsTypeContext, csTypeOf } from "./types.ts"
 import { wsStream } from "./ws.ts"
 
-/** What every method of one SDK shares: the type context and the error mode. */
-export type MethodEnv = { readonly at: CsTypeContext; readonly throwOnError: boolean }
+/** What every method of one SDK shares: the type context. */
+export type MethodEnv = { readonly at: CsTypeContext }
 
 /** How a rendered method spells a type the context lists: its runtime type, and its `<Context>.Default.<Name>`. */
 export type Spelling = { readonly runtime: (type: string) => string; readonly info: (type: string) => string }
 
-/** One operation's method, once its names are claimed: its field, its lines, the types it needs listed, its plan. */
+/**
+ * One operation's method, once its names are claimed: its field, its lines, its `client.Safe` twin's (in the twin
+ * class, whose `_n` is the normal instance), the types it needs listed, its plan.
+ */
 export type CsMethod = {
 	readonly field: string
 	readonly lines: (spell: Spelling) => string[]
+	readonly twin: (spell: Spelling) => string[]
 	readonly types: readonly string[]
 	readonly plan: Omit<CSharpCallPlan, "accessors">
 }
@@ -77,7 +83,6 @@ type Parts = {
 	readonly keyed: boolean
 	/** the `<Op>Headers` holder; null when the op declares no response header */
 	readonly headers: CsHeadersPlan | null
-	readonly throwOnError: boolean
 }
 
 /** An identifier's metadata name: what reflection and named arguments see, `@` dropped. */
@@ -110,23 +115,35 @@ function paramsOf(op: SdkOp, scope: NameScope, at: CsTypeContext, stream: CsStre
 		})
 }
 
-/** The parameter list, in C#4's order, the response-header holder after the idempotency key, then a stream's fields. */
-function signature({ body, headers, keyed, op, params, path, stream }: Parts, spell: Spelling): string[] {
+/** A parameter: its declaration, then its name. */
+const one = (decl: string, ident: string) => ({ decl: `${decl} ${ident}`, ident })
+
+/** An optional parameter, defaulting to `fallback`. */
+const optional = (decl: string, ident: string, fallback = "null") => ({ decl: `${decl} ${ident} = ${fallback}`, ident })
+
+/**
+ * The parameters, each its declaration and its name, in C#4's order, the response-header holder after the
+ * idempotency key, then a stream's fields.
+ */
+function parameters({ body, headers, keyed, op, params, path, stream }: Parts, spell: Spelling) {
 	const required = op.body?.required === true
 	const type = body.type
 	return [
-		...path.map(({ ident }) => `string ${ident}`),
-		...(type !== null && required ? [`${signatureType(type, spell)} body`] : []),
-		...params.filter((p) => p.param.required === true).map((p) => `${signatureType(p.type, spell)} ${p.ident}`),
-		...(type !== null && !required ? [`${unset(signatureType(type, spell))} body = null`] : []),
-		...params.filter((p) => p.param.required !== true).map((p) => `${signatureType(p.type, spell)} ${p.ident} = null`),
-		...(keyed ? ["string? idempotencyKey = null"] : []),
-		...(headers === null ? [] : [`${headers.type}? headersInto = null`]),
-		...(stream?.fields ?? []).map((field) => `${field.type} ${field.ident} = null`),
-		"RequestOptions? options = null",
-		"CancellationToken cancellationToken = default",
+		...path.map(({ ident }) => one("string", ident)),
+		...(type !== null && required ? [one(signatureType(type, spell), "body")] : []),
+		...params.filter((p) => p.param.required === true).map((p) => one(signatureType(p.type, spell), p.ident)),
+		...(type !== null && !required ? [optional(unset(signatureType(type, spell)), "body")] : []),
+		...params.filter((p) => p.param.required !== true).map((p) => optional(signatureType(p.type, spell), p.ident)),
+		...(keyed ? [optional("string?", "idempotencyKey")] : []),
+		...(headers === null ? [] : [optional(`${headers.type}?`, "headersInto")]),
+		...(stream?.fields ?? []).map((field) => optional(field.type, field.ident)),
+		optional("RequestOptions?", "options"),
+		optional("CancellationToken", "cancellationToken", "default"),
 	]
 }
+
+/** The parameter list as the signature spells it. */
+const signature = (parts: Parts, spell: Spelling) => parameters(parts, spell).map(({ decl }) => decl)
 
 /**
  * The `Call` the method builds: path values, query and header args, the body, the idempotency key, the options,
@@ -149,10 +166,7 @@ function call({ body, headers, keyed, params, path }: Parts, spell: Spelling): s
 	].join(", ")
 }
 
-/**
- * The method's lines: its docs, its signature, the one call into the transport (a stream's arguments after the
- * `Call`). A stream throws its error statuses in either mode, so its docs name them in either.
- */
+/** The method's lines: its docs (its error statuses' exceptions), its signature, the one call into the transport (a stream's arguments after the `Call`). */
 function methodLines(parts: Parts, spell: Spelling): string[] {
 	const { answer, stream } = parts
 	const [returns, run] = answer.render(spell)
@@ -162,15 +176,43 @@ function methodLines(parts: Parts, spell: Spelling): string[] {
 		"cancellationToken",
 	]
 	return [
-		...methodDoc(parts.op, parts.throwOnError || stream !== null, stream?.returns),
+		...methodDoc(parts.op, true, stream?.returns),
 		`    public ${returns} ${parts.name}(${signature(parts, spell).join(", ")}) =>`,
 		`        _t.${run}(${parts.field}, new(${call(parts, spell)}), ${args.join(", ")});`,
 	]
 }
 
+/* an SSE twin's <returns>: the open stream is its Ok, an error status opening it its Err */
+const SAFE_STREAM =
+	"Ok with the open stream, or Err with the opening answer's error status. No timeout bounds it after that, and a drop or an event that does not decode is the stream's own exception; the token, leaving await foreach or DisposeAsync ends it."
+
+/**
+ * The `client.Safe` twin's lines: the signature restated, answering `Task<Result<T>>` (`Task<Result>` for no body)
+ * through `Transport.Safe` and the normal method `_n.<name>`, its options given a response box (`_o`); a
+ * connection's twin is the very method, its docs and answer the normal one's (a refusal throws, as there).
+ */
+function twinLines(parts: Parts, spell: Spelling): string[] {
+	const [returns] = parts.answer.render(spell)
+	const sig = `${signature(parts, spell).join(", ")})`
+	const idents = parameters(parts, spell).map(({ ident }) => ident)
+	if (parts.op.stream === "ws" || parts.op.stream === "realtime")
+		return [
+			...methodDoc(parts.op, true, parts.stream?.returns),
+			`    public ${returns} ${parts.name}(${sig} =>`,
+			`        _n.${parts.name}(${idents.join(", ")});`,
+		]
+	const safe = returns === "Task" ? "Task<Result>" : `Task<Result<${returns.slice("Task<".length, -1)}>>`
+	const sent = idents.map((ident) => (ident === "options" ? "_o" : ident))
+	return [
+		...methodDoc(parts.op, false, parts.op.stream === "sse" ? SAFE_STREAM : undefined),
+		`    public ${safe} ${parts.name}(${sig} =>`,
+		`        Transport.Safe(options, _o => _n.${parts.name}(${sent.join(", ")}));`,
+	]
+}
+
 /** The plan the reflection driver walks: every name as reflection sees it (Fb10). */
 function planOf(parts: Parts): Omit<CSharpCallPlan, "accessors"> {
-	const { body, headers, keyed, name, op, params, path, throwOnError } = parts
+	const { body, headers, keyed, name, op, params, path } = parts
 	const by = (where: Param["where"]) =>
 		Object.fromEntries(params.filter((p) => p.where === where).map(({ ident, param }) => [param.name, bare(ident)]))
 	const required = [
@@ -190,7 +232,6 @@ function planOf(parts: Parts): Omit<CSharpCallPlan, "accessors"> {
 		response: op.success.kind,
 		responseHeaders: headers,
 		stream: op.stream,
-		throws: throwOnError,
 	}
 }
 
@@ -222,23 +263,12 @@ export function csMethod(op: SdkOp, name: string, field: string, env: MethodEnv)
 	const answer = stream === null ? csAnswer(op, env) : stream.answer(op, env)
 	const headers = csResponseHeaders(op, env)?.plan ?? null
 	const keyed = op.idempotent && stream === null
-	const parts: Parts = {
-		answer,
-		body,
-		field,
-		headers,
-		keyed,
-		name,
-		op,
-		params,
-		path,
-		stream,
-		throwOnError: env.throwOnError,
-	}
+	const parts: Parts = { answer, body, field, headers, keyed, name, op, params, path, stream }
 	return {
 		field: operationField(parts),
 		lines: (spell) => methodLines(parts, spell),
 		plan: planOf(parts),
+		twin: (spell) => twinLines(parts, spell),
 		types: [...params.map(({ type }) => type), ...body.types, ...(answer.type === null ? [] : [answer.type])],
 	}
 }

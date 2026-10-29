@@ -98,7 +98,7 @@ const UNAUTHORIZED: Observed = {
 /** An `ApiStatusException` subclass the method threw, as the trace records it (`Errors.cs:44-45`'s text). */
 const statusError = (type: string, status: number, key: [string, string], message: string): CsError => ({
 	canceled: false,
-	chain: [type, "ApiStatusException", "HoneyException"],
+	chain: [type, "ApiStatusException", "SdkException", "HoneyException"],
 	display: `HoneySdk.${type}: HTTP ${status}: ${message}`,
 	inner: null,
 	key: key[0],

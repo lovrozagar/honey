@@ -375,20 +375,25 @@ describe("the v1 Python SDK within the budget (bit 14, G13)", () => {
 })
 
 /*
- * G13 (bit 15): C#'s own per-operation ceiling, not sdkCli's 234 nor Go's 94 (137 since bit 21 i3), Rust's 96 (95 since bit 21 i4) or Python's 71 (90 since bit 21 i2). Measured over
- * the five e2e apps' 72 operations in both throwOnError modes (144 surfaces, `v1CSharpSdkSurfaces` over the emitted
- * Client.cs): max 56 (surface, PutInAllByResourceId, safe mode), median 27, min 19. The emitter writes no formatter
- * pass, so the measured text is the shipped text. 56 + 20% headroom = 68. Each language holds its own ceiling, set
- * from its own measurement. An operation over it is fixed in the schema, never by raising the ceiling; revisit only
- * for a genuinely large, legitimate operation.
+ * G13 (bit 15): C#'s own per-operation ceiling, not sdkCli's 234 nor Go's 94 (137 since bit 21 i3), Rust's 96 (95 since bit 21 i4) or Python's 71 (90 since bit 21 i2). Each
+ * language holds its own ceiling, set from its own measurement. An operation over it is fixed in the schema, never by
+ * raising the ceiling; revisit only for a genuinely large, legitimate operation. The emitter writes no formatter pass,
+ * so the measured text is the shipped text. Bit 15 measured one signature per throwOnError mode (144 surfaces): max
+ * 56 (surface, PutInAllByResourceId, safe mode), 56 + 20% = 68. Bit 21 i5 (R-i5): an operation's surface is both
+ * styles, its signature and its `client.Safe` twin's (`v1CSharpSdkSurfaces`), measured over the five e2e apps' 71
+ * operations: max 107 (surface/HoneySdkClient.PutInAllByResourceIdAsync: the normal signature 53, the twin 54), median
+ * 54, min 40, sum 4,149; at 570d7cd the 142 one-mode surfaces summed 4,261 (max 56, median 28). C# has no associated
+ * type, so Rust's one style-generic signature (56 at most) is CS0704, and Go's delegate field (86) loses a spec param's
+ * name (CS1746 on a named argument): the restated twin is the cheapest form that keeps the normal call's arguments.
+ * 107 + 20% = 129.
  */
-const CSHARP_SDK_CEILING = ceilingOf([56], 0.2)
+const CSHARP_SDK_CEILING = ceilingOf([107], 0.2)
 
 const CS_CLIENT = `namespace Acme;
 
 public sealed class HoneySdkClient
 {
-    public Task<SdkResult<A>> GetAAsync(string id, RequestOptions? options = null, CancellationToken cancellationToken = default) => Call(id, options);
+    public Task<A> GetAAsync(string id, RequestOptions? options = null, CancellationToken cancellationToken = default) => Call(id, options);
     public Task<B> ListAsync(RequestOptions? options = null, CancellationToken cancellationToken = default)
     {
         return Call(options);
@@ -399,17 +404,36 @@ public sealed partial class InputResource
 {
     public Task<C> SearchAsync(double limit, RequestOptions? options = null, CancellationToken cancellationToken = default) => Call(limit, options);
 }
+
+/// <summary><see cref="HoneySdkClient"/>'s safe mirror: each method answers a <c>Result</c>.</summary>
+public sealed class SafeHoneySdkClient
+{
+    public Task<Result<A>> GetAAsync(string id, RequestOptions? options = null, CancellationToken cancellationToken = default) => Safe(id, options);
+    public Task<Result<B>> ListAsync(RequestOptions? options = null, CancellationToken cancellationToken = default) => Safe(options);
+}
+
+/// <summary><see cref="InputResource"/>'s safe mirror: each method answers a <c>Result</c>.</summary>
+public sealed class SafeInputResource
+{
+    public Task<Result<C>> SearchAsync(double limit, RequestOptions? options = null, CancellationToken cancellationToken = default) => Safe(limit, options);
+}
 `
 
+/** A C# signature's client.Safe twin: the same parameters, a Result of its answer. */
+const twin = (normal: string) => normal.replace(/^public Task<(\w+)>/, "public Task<Result<$1>>")
+
 describe("the v1 C# SDK within the budget (bit 15, G13)", () => {
-	it("reads each class's operation signature with its body stripped, keyed Class.method, the resource classes too", () => {
+	it("reads each operation's signature and its client.Safe twin's, bodies stripped, keyed Class.method, the resource classes too", () => {
+		const get =
+			"public Task<A> GetAAsync(string id, RequestOptions? options = null, CancellationToken cancellationToken = default)"
+		const list =
+			"public Task<B> ListAsync(RequestOptions? options = null, CancellationToken cancellationToken = default)"
+		const search =
+			"public Task<C> SearchAsync(double limit, RequestOptions? options = null, CancellationToken cancellationToken = default)"
 		expect(Object.fromEntries(v1CSharpSdkSurfaces(CS_CLIENT))).toEqual({
-			"HoneySdkClient.GetAAsync":
-				"public Task<SdkResult<A>> GetAAsync(string id, RequestOptions? options = null, CancellationToken cancellationToken = default)",
-			"HoneySdkClient.ListAsync":
-				"public Task<B> ListAsync(RequestOptions? options = null, CancellationToken cancellationToken = default)",
-			"InputResource.SearchAsync":
-				"public Task<C> SearchAsync(double limit, RequestOptions? options = null, CancellationToken cancellationToken = default)",
+			"HoneySdkClient.GetAAsync": `${get}\n${twin(get)}`,
+			"HoneySdkClient.ListAsync": `${list}\n${twin(list)}`,
+			"InputResource.SearchAsync": `${search}\n${twin(search)}`,
 		})
 	})
 
@@ -421,22 +445,27 @@ describe("the v1 C# SDK within the budget (bit 15, G13)", () => {
 		expect(() => v1CSharpSdkSurfaces(wrapped)).toThrow("HoneySdkClient.ListAsync spans lines")
 	})
 
-	it(`keeps every e2e app's C# operations within ${CSHARP_SDK_CEILING} tokens, in both throwOnError modes`, () => {
+	it("refuses an operation its client.Safe mirror drops, so a missing twin never measures short", () => {
+		const dropped = CS_CLIENT.replace(/^ {4}public Task<Result<C>> SearchAsync.*\n/m, "")
+		expect(() => v1CSharpSdkSurfaces(dropped)).toThrow("InputResource.SearchAsync has no client.Safe twin")
+	})
+
+	it(`keeps every e2e app's C# operations within ${CSHARP_SDK_CEILING} tokens, each its two styles' signatures`, () => {
 		const over: string[] = []
+		let surfaces = 0
 		for (const app of APPS) {
 			const spec = appSpec(app)
-			for (const throwOnError of [true, false]) {
-				const surfaces = v1CSharpSdkSurfaces(generateCSharpSdk(spec, { throwOnError }).files["Client.cs"] ?? "")
-				/* completeness: a surface the reader misses can never pass by going unmeasured */
-				const plans = Object.keys(csharpCallPlans(spec, { throwOnError })).length
-				if (surfaces.size !== plans) over.push(`${app}: ${surfaces.size} of ${plans} measured`)
-				for (const [key, text] of surfaces) {
-					const tokens = countTokens(text)
-					if (tokens > CSHARP_SDK_CEILING) over.push(`${app}/${key}${throwOnError ? "" : " (safe)"}: ${tokens}`)
-				}
+			const measured = v1CSharpSdkSurfaces(generateCSharpSdk(spec).files["Client.cs"] ?? "")
+			/* completeness: a surface the reader misses can never pass by going unmeasured */
+			const plans = Object.keys(csharpCallPlans(spec)).length
+			if (measured.size !== plans) over.push(`${app}: ${measured.size} of ${plans} measured`)
+			surfaces += measured.size
+			for (const [key, text] of measured) {
+				const tokens = countTokens(text)
+				if (tokens > CSHARP_SDK_CEILING) over.push(`${app}/${key}: ${tokens}`)
 			}
 		}
-		expect(over).toEqual([])
+		expect({ ceiling: CSHARP_SDK_CEILING, over, surfaces }).toEqual({ ceiling: 129, over: [], surfaces: 71 })
 	})
 })
 
@@ -622,8 +651,16 @@ describe("the Python runtime within its byte budget (bit 14, G14)", () => {
  * and a dead try/catch cut.
  * Bit 19 k1, +90 B of doc only, to 133,680 B: Ws.cs +126 (the dial runs no OnRequest or OnResponse hook and no
  * OnAuthExpired refresh), then -36 rewording TypedWebSocket's summary to keep Ws.cs within 300 lines.
+ * Bit 21 i5, +1,198 B to 134,878 B: the normal client always throws and `client.Safe` answers a Result (R-i2..R-i4),
+ * an over-cap 2xx a DecodeException. Cut first: SdkResult and SdkResult<T> (1,273 B) and the five `…ResultAsync`
+ * twins (Transport.cs); a scan for a non-public member named once found none dead (Json's HandleNull is an override,
+ * Realtime's ProvenTransport public). Result.cs +1,013 (Result: IsOk, Error throwing on an Ok, Response, Match;
+ * Result<T>: Value throwing on an Err, TryGetValue, Match), Errors.cs +350 (SdkException, the answers' base:
+ * ApiStatusException and DecodeException), Exchange.cs +501 (a body past the cap read as an answer, a 2xx's
+ * DecodeException; a realtime dial's still no answer), Transport.cs -678 (the five twins cut, Transport.Safe's two
+ * overloads, the twins' one path), Adapters.cs +12 (the dial flag).
  */
-const CSHARP_RUNTIME_BYTES = 133_680
+const CSHARP_RUNTIME_BYTES = 134_878
 
 describe("the C# runtime within its byte budget (bit 15, G14)", () => {
 	it(

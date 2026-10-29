@@ -2,7 +2,7 @@
  * Per-call overrides through the one `RequestOptions? options` parameter (contract 47 §5.10, Python's
  * `overrides.test.ts` analog): `Headers` over `ClientConfig.Headers` for that call alone, `Timeout` in place of the
  * client's (zero: none), `BaseUrl` to another origin, and the `Raw` box, filled with the answer as it arrived on
- * success and on error. Driven in both error modes on `http` and `http-safe` on C#'s one async client; the raw
+ * success and on error. Driven in both styles on `http`, C#'s one async client and its `client.Safe`; the raw
  * box's `Url` after a redirect is a consumer program. Python's mypy `headers=` leg has no C# analog:
  * `RequestOptions` is a type, so a method has no transport parameter to misspell.
  */
@@ -23,26 +23,27 @@ const ITEM: Call = { operation: "items.get", params: { id: "i1" }, route: { meth
 const OK: Reply = { json: { ok: true }, status: 200 }
 const OK_DATA = { data: { ok: true }, kind: "data", status: 200 }
 
-type Key = "http" | "http-safe"
+/** The style a run calls through: the client, or its `client.Safe` mirror (bit 21 i5). */
+type Key = "normal" | "safe"
 
-/* both error modes: a per-call override applies whatever the method returns */
+/* both styles: a per-call override applies whatever the method returns */
 const MODES = [
-	["throw", "http"],
-	["safe", "http-safe"],
+	["throw", "normal"],
+	["safe", "safe"],
 ] as const
 
-/** The registry SDK `key` with the driver aimed at it, which must build. */
-function driven(key: Key): DrivenCSharpSdk {
-	const sdk = drivenCSharpSdk(key)
+/** The `http` SDK with the driver aimed at it, which must build. */
+function driven(): DrivenCSharpSdk {
+	const sdk = drivenCSharpSdk("http")
 	expect(sdk.built, sdk.diagnostics.join("\n")).toBe(true)
 	return sdk
 }
 
-/** `calls` run by `key`'s driver under `setup` against a server answering `replies`, with the hops. */
+/** `calls` run in `key`'s style under `setup` against a server answering `replies`, with the hops. */
 async function drive(key: Key, replies: readonly Reply[], calls: readonly Call[], setup: Setup = {}) {
-	const sdk = driven(key)
+	const sdk = driven()
 	return served(replies, async (server) => {
-		const run = await sdk.runCalls({ calls, setup }, { alt: server.alt, url: server.url })
+		const run = await sdk.runCalls({ calls, setup }, { alt: server.alt, url: server.url }, undefined, key === "safe")
 		return { hops: [...server.hops], run }
 	})
 }
@@ -159,19 +160,19 @@ describe.skipIf(!DOTNET)(
 )
 
 /**
- * The `raw` consumer (safe mode): `hop.get` through a same-origin 302 to `/echo` with a raw box, then `echo.get`
- * answered 404 with another; each box read beside the `SdkResult<T>` it came with, its `Url` as text.
+ * The `raw` consumer (`client.Safe`): `hop.get` through a same-origin 302 to `/echo` with a raw box, then `echo.get`
+ * answered 404 with another; each box read beside the `Result<T>` it came with, its `Url` as text.
  */
 const RAW = `Section("raw");
 using var c = Client();
 var raw = new RawResponse();
-var r = await c.Hop.GetAsync(new RequestOptions { Raw = raw });
+var r = await c.Safe.Hop.GetAsync(new RequestOptions { Raw = raw });
 var body = System.Text.Encoding.UTF8.GetString(raw.Body);
-Note($"{raw.Status} {raw.Url} {body} {raw.Headers["content-type"]} {ReferenceEquals(r.Response, raw)} {r.Data?.Ok}");
+Note($"{raw.Status} {raw.Url} {body} {raw.Headers["content-type"]} {ReferenceEquals(r.Response, raw)} {r.Value.Ok}");
 var gone = new RawResponse();
-var e = await c.Echo.GetAsync(new RequestOptions { Raw = gone });
+var e = await c.Safe.Echo.GetAsync(new RequestOptions { Raw = gone });
 var lost = System.Text.Encoding.UTF8.GetString(gone.Body);
-Note($"{gone.Status} {gone.Url} {lost} {ReferenceEquals(e.Response, gone)} {e.Error?.GetType().Name} {e.Data is null}");`
+Note($"{gone.Status} {gone.Url} {lost} {ReferenceEquals(e.Response, gone)} {e.Error.GetType().Name} {!e.IsOk}");`
 
 /** RAW's replies: the 302, the answer it lands on, and the 404. */
 const RAW_REPLIES: readonly Reply[] = [
@@ -182,9 +183,9 @@ const RAW_REPLIES: readonly Reply[] = [
 
 describe.skipIf(!DOTNET)("RawResponse: the answer's status, headers, body and the URL it came from", SLOW, () => {
 	/* ported from python/overrides.test.ts:194 */
-	it("is the last hop's after a redirect, the same box the SdkResult holds; an error status fills it too", async () => {
+	it("is the last hop's after a redirect, the same box the Result holds; an error status fills it too", async () => {
 		const { hops, run, url } = await served(RAW_REPLIES, async (server) => {
-			const ran = await consume("http-safe", "raw", { base: server.url, body: RAW })
+			const ran = await consume("http", "raw", { base: server.url, body: RAW })
 			return { hops: server.hops.map((h) => `${h.origin} ${h.method} ${h.url}`), run: ran, url: server.url }
 		})
 		expect({ ...seen(run, "raw"), hops }, run.stderr).toEqual({

@@ -180,11 +180,12 @@ describe.skipIf(!DOTNET)("redirects: a cross-origin hop is followed only under F
 	it("throws a refused cross-origin 307 as UnexpectedStatusException 307", async () => {
 		const { hops, run } = await drive([AWAY, OK], [HOP], { script: {} })
 		const error = run.trace?.calls[0]?.error
+		const chain = ["UnexpectedStatusException", "ApiStatusException", "SdkException", "HoneyException"]
 		expect(
 			{ error: [error?.type, error?.chain, error?.status], hops: hops.length, observed: run.observed },
 			run.stderr,
 		).toEqual({
-			error: ["UnexpectedStatusException", ["UnexpectedStatusException", "ApiStatusException", "HoneyException"], 307],
+			error: ["UnexpectedStatusException", chain, 307],
 			hops: 1,
 			observed: [refusedAs(307)],
 		})

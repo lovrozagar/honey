@@ -253,20 +253,22 @@ describe("the generate report (bit 18 phase d)", () => {
 
 /* bit 21 i1 (ts), i2 (python), i3 (go) and i4 (rust): each target's file the SDK always writes, and its spelling of the mirror */
 const WRITTEN = {
+	csharp: "/Client.cs",
 	go: "/client.go",
 	python: "/src/honey_sdk/client.py",
 	rust: "/src/client.rs",
 	ts: ".types.gen.ts",
 } as const
 const SPELLED = {
+	csharp: ["Safe", "Safe_"],
 	go: ["Safe", "Safe_"],
 	python: ["safe", "safe_"],
 	rust: ["safe", "safe_"],
 	ts: ["safe", "safe_"],
 } as const
 
-describe("the generate report: the safe mirror (bit 21 i1, i2, i3, i4)", () => {
-	it.each(["ts", "python", "go", "rust"] as const)(
+describe("the generate report: the safe mirror (bit 21 i1, i2, i3, i4, i5)", () => {
+	it.each(["ts", "python", "go", "rust", "csharp"] as const)(
 		"names on stderr a %s root group renamed off the safe mirror, and still writes the SDK",
 		{ timeout: SPAWN_TIMEOUT },
 		async (target) => {

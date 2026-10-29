@@ -213,6 +213,48 @@ async fn listing(client: &Client) -> String {
 }
 ```
 
+## The C# SDK's `throwOnError` is gone; its safe mode is `client.Safe`, answering a `Result`
+
+The C# generator has no `throwOnError` option (`--csharp-throw-on-error` is an unknown option now): delete it. Every
+method answers `Task<T>` and throws an error status, as the default did; the safe mode is `client.Safe`, the same
+resources and methods answering `Task<Result<T>>` (`Task<Result>` for no body):
+
+- `SdkResult` and `SdkResult<T>` are gone, and with them `IsSuccess`, `Status` and `Data`. `IsSuccess` is `IsOk`,
+  `Data` is `Value` (it throws `InvalidOperationException` on an Err: read it after `IsOk`, or use `TryGetValue` or
+  `Match`), and `Status` is `Response.Status`. `Error` is an `SdkException`, never null: it throws on an Ok. Naming
+  `SdkResult`, or reading `IsSuccess`, `Status` or `Data` on what a call answers, fails `dotnet build`.
+- An undecodable 2xx threw `DecodeException` in safe mode; on `client.Safe` it is the `Result`'s Err, its `Error` the
+  `DecodeException`. `ApiStatusException` and `DecodeException` now derive from `SdkException` (itself a
+  `HoneyException`), so a `catch (HoneyException)` still catches them.
+- A 2xx past `MaxResponseBytes` threw `ApiConnectionException` ("the answer exceeds N bytes"); it is a
+  `DecodeException` with that text on the client, and the Err on `client.Safe`. An error status past the cap is its
+  `ApiStatusException`, its body empty. A realtime transport's answer past the cap stays `ApiConnectionException`.
+- An event stream ignored the mode; on `client.Safe` it answers once it opens (`Value` is the `EventStream<T>`), an
+  error status at the opening its Err. A WebSocket or realtime method is the very method.
+- A root resource named `Safe` is emitted as `Safe_` (`Safe` is the mirror), and the generation names it on stderr. A
+  component named like a new runtime type (`Result`, `SdkException`) is emitted as `<Name>Model`, as every runtime- or
+  BCL-named one is, and the generation names each such rename on stderr.
+
+```text v0
+SdkResult<User> r = await client.Users.GetAsync("u1"); // generated with throwOnError false
+if (!r.IsSuccess) Console.WriteLine($"answered {r.Status} {r.Error?.Message}");
+```
+
+```csharp
+    public static async Task<string> Listing(HoneySdkClient client, string id)
+    {
+        var result = await client.Safe.GetApiAsync(id); // no answer (never sent, refused, timed out, canceled) still throws
+        return result.Match(
+            found => $"answered {result.Response.Status}: {found}",
+            error => error switch
+            {
+                DecodeException unreadable => $"answered {result.Response.Status}, unreadable: {unreadable.Message}",
+                ApiStatusException failed => $"answered {failed.Status}: {failed.Key}",
+                _ => error.Message,
+            });
+    }
+```
+
 ## The TS SDK's realtime `token?` and `onAuthExpired?` are gone
 
 Neither was ever read. A connection's `headers` may be a function read on every dial, and the client's

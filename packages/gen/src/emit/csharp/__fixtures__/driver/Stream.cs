@@ -27,9 +27,9 @@ internal static class Streams
     private const string Ungraded = "the call ended in an error the grid has no outcome for: ";
 
     /// <summary><paramref name="at"/>'s stream opened by <paramref name="open"/>, then read by its kind, under the watchdog.</summary>
-    public static async Task<Outcome> ObserveAsync(StreamCall at, Func<Task<object>> open)
+    public static async Task<Outcome> ObserveAsync(StreamCall at, Func<Task<object>> open, object? settles = null)
     {
-        var work = OpenedAsync(at, open);
+        var work = OpenedAsync(at, open, settles);
         try
         {
             return await work.WaitAsync(StallAfter);
@@ -40,7 +40,11 @@ internal static class Streams
         }
     }
 
-    private static async Task<Outcome> OpenedAsync(StreamCall at, Func<Task<object>> open)
+    /// <summary>
+    /// The stream <paramref name="open"/> opens, read; a safe SSE call (<paramref name="settles"/> its raw response)
+    /// answers a Result: its Ok's stream is read, its Err observed as a call's (Observe.Settle).
+    /// </summary>
+    private static async Task<Outcome> OpenedAsync(StreamCall at, Func<Task<object>> open, object? settles)
     {
         object stream;
         try
@@ -49,7 +53,16 @@ internal static class Streams
         }
         catch (Exception e) when (e is not DriverException)
         {
-            return Observe.Thrown(at.Sdk, e, at.Lens);
+            return settles is null ? Observe.Thrown(at.Sdk, e, at.Lens) : Observe.ThrownSafe(at.Sdk, e, at.Lens);
+        }
+        if (settles is not null)
+        {
+            var settled = Observe.Settle(at.Sdk, stream, settles, at.Lens);
+            if (settled.Err is { } err)
+            {
+                return err;
+            }
+            stream = settled.Value ?? throw new DriverException($"{at.Plan.Method}'s Ok holds no stream");
         }
         return at.Plan.Stream switch
         {

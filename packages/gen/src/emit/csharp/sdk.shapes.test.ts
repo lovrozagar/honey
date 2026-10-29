@@ -1,12 +1,12 @@
 /**
- * The C# method shapes beyond the writers' legs (contract 45 §4.4): a nullable JSON answer is `Task<T?>` in throw
- * mode and an `SdkResult` of its runtime type in safe mode, each through the transport method that lets null
- * through; a JSON answer without a schema is any JSON value; a text answer in safe mode is `SdkResult<string>`; an
+ * The C# method shapes beyond the writers' legs (contract 45 §4.4): a nullable JSON answer is `Task<T?>` through the
+ * transport method that lets null through, and its `client.Safe` twin a `Result<T?>` of the very type; a JSON answer
+ * without a schema is any JSON value; a text answer's twin is `Result<string>`; an
  * optional body sits after the required params and before the optional ones; header params follow the code-unit
  * order of their names; and a client of an API without a title is the API's client.
  */
 import { describe, expect, it } from "vitest"
-import { csharpCallPlans, type CSharpSdkOptions, generateCSharpSdk } from "./sdk.ts"
+import { csharpCallPlans, generateCSharpSdk } from "./sdk.ts"
 
 type Json = Record<string, unknown>
 
@@ -47,12 +47,15 @@ const SHAPES: Json = {
 	servers: [{ url: "https://api.shapes.test" }],
 }
 
-/** SHAPES' Client.cs lines under `options`. */
-const lines = (options?: CSharpSdkOptions) => (generateCSharpSdk(SHAPES, options).files["Client.cs"] ?? "").split("\n")
+/** SHAPES' Client.cs lines. */
+const lines = () => (generateCSharpSdk(SHAPES).files["Client.cs"] ?? "").split("\n")
 
 const OPTIONS = "RequestOptions? options = null, CancellationToken cancellationToken = default"
 const NONE = "new([], [], [], null, null, options)"
 const CONTEXT = "HoneySdkJsonContext.Default"
+
+/** A no-argument twin's body: the normal method `method` through Transport.Safe. */
+const twin = (method: string) => `        Transport.Safe(options, _o => _n.${method}(_o, cancellationToken));`
 
 describe("generateCSharpSdk: answers", () => {
 	it("answers a nullable JSON schema as Task<T?> through NullableAsync, and any schema-less JSON as JsonElement", () => {
@@ -68,15 +71,15 @@ describe("generateCSharpSdk: answers", () => {
 		)
 	})
 
-	it("answers a nullable JSON schema as an SdkResult of its runtime type in safe mode, and text as SdkResult<string>", () => {
-		expect(lines({ throwOnError: false })).toEqual(
+	/* bit 21 i5: the twin wraps the normal answer's very type, so a nullable one stays nullable in its Result */
+	it("answers each client.Safe twin a Result of the normal answer's type: Result<string?>, Result<long?>, Result<string>", () => {
+		expect(lines()).toEqual(
 			expect.arrayContaining([
-				`    public Task<SdkResult<string>> GetAsync(${OPTIONS}) =>`,
-				`        _t.NullableResultAsync(_get, ${NONE}, ${CONTEXT}.String, cancellationToken);`,
-				`    public Task<SdkResult<long?>> GetAsync(${OPTIONS}) =>`,
-				`        _t.NullableResultAsync(_get, ${NONE}, ${CONTEXT}.NullableInt64, cancellationToken);`,
-				`    public Task<SdkResult<string>> PingAsync(${OPTIONS}) =>`,
-				`        _t.TextResultAsync(_ping, ${NONE}, cancellationToken);`,
+				`    public Task<Result<string?>> GetAsync(${OPTIONS}) =>`,
+				twin("GetAsync"),
+				`    public Task<Result<long?>> GetAsync(${OPTIONS}) =>`,
+				`    public Task<Result<string>> PingAsync(${OPTIONS}) =>`,
+				twin("PingAsync"),
 			]),
 		)
 	})

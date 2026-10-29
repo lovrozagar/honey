@@ -1,5 +1,6 @@
-// A C# program against an SDK generated from the Kitchen example API: a client, a call and its typed error, and an
-// event stream released by `await using`. Compiled by csc against the generated SDK in the docs' tests.
+// A C# program against an SDK generated from the Kitchen example API: a client, a call and its typed error, its
+// `client.Safe` twin's Result, and an event stream released by `await using`. Compiled by csc against the generated
+// SDK in the docs' tests.
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -27,6 +28,19 @@ public static class Example
         }
     }
 
+    public static async Task<string> Listing(HoneySdkClient client, string id)
+    {
+        var result = await client.Safe.GetApiAsync(id); // no answer (never sent, refused, timed out, canceled) still throws
+        return result.Match(
+            found => $"answered {result.Response.Status}: {found}",
+            error => error switch
+            {
+                DecodeException unreadable => $"answered {result.Response.Status}, unreadable: {unreadable.Message}",
+                ApiStatusException failed => $"answered {failed.Status}: {failed.Key}",
+                _ => error.Message,
+            });
+    }
+
     public static async Task<List<string>> FirstEvents(HoneySdkClient client, int limit)
     {
         var seen = new List<string>();
@@ -44,6 +58,7 @@ public static class Example
         if (args.Length < 1) return;
         using var client = NewClient();
         Console.WriteLine(await CheckHealth(client));
+        Console.WriteLine(await Listing(client, args[0]));
         Console.WriteLine(string.Join(",", await FirstEvents(client, 2)));
     }
 }

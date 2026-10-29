@@ -1,6 +1,6 @@
 /**
- * XML doc comments (Fb4): a method's summary and its description as remarks, then in throw mode an `<exception>`
- * per declared error status, ascending, naming the class the runtime throws for it (`UnexpectedStatusException`
+ * XML doc comments (Fb4): a method's summary and its description as remarks, then (but on a `client.Safe` twin,
+ * which throws none of them) an `<exception>` per declared error status, ascending, naming the class the runtime throws for it (`UnexpectedStatusException`
  * for one without a class of its own, Fb14). Spec text goes through `csDocLines`, so XML's specials are entities
  * and a line break of any kind starts a new `///` line (Q7). A stream method ends with its `<returns>` line (contract
  * 50 §2). No `<param>` tag: a partial set is CS1573.
@@ -33,13 +33,13 @@ export function docLines(tag: string, text: string | undefined, indent = ""): st
 	return lines.map((line) => `${indent}/// ${line}`.trimEnd())
 }
 
-/** The doc lines of `op`'s method at 4 spaces: its summary, its remarks, in throw mode its exceptions, then `returns`. */
-export function methodDoc(op: SdkOp, throwOnError: boolean, returns?: string): string[] {
-	const raises = throwOnError ? op.errorStatuses : []
+/** The doc lines of `op`'s method at 4 spaces: its summary, its remarks, when it `raises` its exceptions, then `returns`. */
+export function methodDoc(op: SdkOp, raises: boolean, returns?: string): string[] {
+	const statuses = raises ? op.errorStatuses : []
 	return [
 		...docLines("summary", op.summary, "    "),
 		...docLines("remarks", op.description, "    "),
-		...raises.map(
+		...statuses.map(
 			(status) =>
 				`    /// <exception cref="${STATUS_EXCEPTIONS[status] ?? "UnexpectedStatusException"}">HTTP ${status}</exception>`,
 		),

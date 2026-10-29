@@ -51,7 +51,6 @@ const NOTES: CSharpCallPlan = {
 	response: "json",
 	responseHeaders: null,
 	stream: null,
-	throws: true,
 }
 
 /** A program over the dependency-free `cache` project: its `One.Value`, its first argument and its stdin. */

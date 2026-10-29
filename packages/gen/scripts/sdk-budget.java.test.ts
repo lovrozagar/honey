@@ -141,7 +141,7 @@ const appSpec = (app: string) =>
 	) as Record<string, unknown>
 
 /*
- * G13 (bit 16, phase f): Java's own per-operation ceiling, as C#'s bit 15 set its 68. Measured over the five e2e apps'
+ * G13 (bit 16, phase f): Java's own per-operation ceiling, as C#'s bit 15 set its 68 (129 since bit 21 i5). Measured over the five e2e apps'
  * 72 operations in both throwOnError modes (144 surfaces, `v1JavaSdkSurfaces` over the emitted files; the ids the
  * IR derives, item 0): max 60 (surface, putInAllByResourceId, safe mode: C#'s max too), median 30, min 21. A Java
  * surface is the widest overload's signature and its <Op>Params record's header, both joined from google-java-format's

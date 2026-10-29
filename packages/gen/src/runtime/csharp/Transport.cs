@@ -51,34 +51,32 @@ internal sealed partial class Transport : IDisposable
     public async Task<byte[]> BytesAsync(Operation op, Call call, CancellationToken cancellationToken) =>
         (await ThrowingAsync(op, call, cancellationToken).ConfigureAwait(false)).Body;
 
-    public async Task<SdkResult<T>> ResultAsync<T>(Operation op, Call call, JsonTypeInfo<T> answer, CancellationToken cancellationToken)
+    /* a client.Safe twin's one path: the normal method `call` sent with a response box, an answer its Err */
+    public static async Task<Result<T>> Safe<T>(RequestOptions? options, Func<RequestOptions, Task<T>> call)
     {
-        var (raw, error) = await ExchangeAsync(op, call, cancellationToken).ConfigureAwait(false);
-        return error is null ? new(Decode(op, raw, answer) ?? throw Null(op), null, raw) : new(default, error, raw);
+        var raw = options?.Raw ?? new RawResponse();
+        try
+        {
+            return new(await call((options ?? new()) with { Raw = raw }).ConfigureAwait(false), null, raw);
+        }
+        catch (SdkException e)
+        {
+            return new(default!, e, raw);
+        }
     }
 
-    public async Task<SdkResult<T>> NullableResultAsync<T>(Operation op, Call call, JsonTypeInfo<T> answer, CancellationToken cancellationToken)
+    public static async Task<Result> Safe(RequestOptions? options, Func<RequestOptions, Task> call)
     {
-        var (raw, error) = await ExchangeAsync(op, call, cancellationToken).ConfigureAwait(false);
-        return error is null ? new(Decode(op, raw, answer), null, raw) : new(default, error, raw);
-    }
-
-    public async Task<SdkResult> ResultAsync(Operation op, Call call, CancellationToken cancellationToken)
-    {
-        var (raw, error) = await ExchangeAsync(op, call, cancellationToken).ConfigureAwait(false);
-        return new(error, raw);
-    }
-
-    public async Task<SdkResult<string>> TextResultAsync(Operation op, Call call, CancellationToken cancellationToken)
-    {
-        var (raw, error) = await ExchangeAsync(op, call, cancellationToken).ConfigureAwait(false);
-        return new(error is null ? Encoding.UTF8.GetString(raw.Body) : null, error, raw);
-    }
-
-    public async Task<SdkResult<byte[]>> BytesResultAsync(Operation op, Call call, CancellationToken cancellationToken)
-    {
-        var (raw, error) = await ExchangeAsync(op, call, cancellationToken).ConfigureAwait(false);
-        return new(error is null ? raw.Body : null, error, raw);
+        var raw = options?.Raw ?? new RawResponse();
+        try
+        {
+            await call((options ?? new()) with { Raw = raw }).ConfigureAwait(false);
+            return new(null, raw);
+        }
+        catch (SdkException e)
+        {
+            return new(e, raw);
+        }
     }
 
     private static T? Decode<T>(Operation op, RawResponse raw, JsonTypeInfo<T> answer)
@@ -101,7 +99,7 @@ internal sealed partial class Transport : IDisposable
         return error is null ? raw : throw error;
     }
 
-    private async Task<(RawResponse Raw, ApiStatusException? Error)> ExchangeAsync(Operation op, Call call, CancellationToken cancellationToken)
+    private async Task<(RawResponse Raw, SdkException? Error)> ExchangeAsync(Operation op, Call call, CancellationToken cancellationToken)
     {
         var (raw, error) = await new Exchange(this, op, call).RunAsync(cancellationToken).ConfigureAwait(false);
         if (error is null)

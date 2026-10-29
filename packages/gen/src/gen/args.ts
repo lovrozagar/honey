@@ -15,7 +15,6 @@ const TARGETS = {
 		clientName: "string",
 		packageId: "string",
 		rootNamespace: "string",
-		throwOnError: "boolean",
 		version: "string",
 	},
 	go: { modulePath: "string" },

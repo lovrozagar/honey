@@ -1,8 +1,8 @@
 /**
  * The C# SDK's signatures and return types, held by csc (contract 45 §7.5): a consumer program compiles against
  * a registry SDK's dll, and each test pins csc's exact errors, each as `<the statement> → <CS code>: <message>`.
- * A required query param has no default and an optional one is typed (C#4); throw mode answers `T` and safe mode
- * `SdkResult<T>` (C#2); the namespaces are read-only properties, every method is async (R9), a no-content op is a
+ * A required query param has no default and an optional one is typed (C#4); a method answers `T` and its
+ * `client.Safe` twin `Result<T>` (C#2; bit 21 i5); the namespaces are read-only properties, every method is async (R9), a no-content op is a
  * `Task`; and the names C# would collide on (the method's own locals, keywords, the client's members, runtime and
  * BCL type names) compile under the names H52 gives them, and the shadowing query params reach the wire as spelled.
  */
@@ -21,7 +21,6 @@ const GATE = 120_000
 /** Each fixture's namespace and client as its options name them (§6.1): `surface` renamed, the merged ones default. */
 const CLIENTS = {
 	fixtures: ["HoneySdk", "HoneySdkClient"],
-	"fixtures-safe": ["HoneySdk", "HoneySdkClient"],
 	surface: ["Acme", "AcmeClient"],
 } as const satisfies Partial<Record<FixtureKey, readonly [string, string]>>
 
@@ -64,22 +63,25 @@ describe.skipIf(!DOTNET)("query params: a required one has no default, an option
 	)
 })
 
-/** A crud op's statement as each mode types it (fixtures-safe has no NOTES op, so the C#2 leg runs on crud). */
+/** A crud op's statement as each style types it (the C#2 leg runs on crud). */
 type Typed = { readonly get: string; readonly list: string; readonly remove: string }
 
-/* the merged crud ops: a JSON answer, a list and no content, each bound to throw mode's type */
-const THROWN: Typed = {
-	get: 'CrudUser user = await c.Crud.Users.GetAsync("1");',
-	list: "IReadOnlyList<CrudUser> users = await c.Crud.Users.ListAsync();",
-	remove: 'await c.Crud.Users.DeleteAsync("1");',
-}
+/* the merged crud ops on `on` (the client or its mirror): a JSON answer, a list and no content, bound to the normal types */
+const thrownOn = (on: string): Typed => ({
+	get: `CrudUser user = await ${on}.Crud.Users.GetAsync("1");`,
+	list: `IReadOnlyList<CrudUser> users = await ${on}.Crud.Users.ListAsync();`,
+	remove: `await ${on}.Crud.Users.DeleteAsync("1");`,
+})
 
-/* the same ops bound to safe mode's */
-const SAFE: Typed = {
-	get: 'SdkResult<CrudUser> user = await c.Crud.Users.GetAsync("1");',
-	list: "SdkResult<IReadOnlyList<CrudUser>> users = await c.Crud.Users.ListAsync();",
-	remove: 'SdkResult gone = await c.Crud.Users.DeleteAsync("1");',
-}
+/* the same ops bound to the mirror's types */
+const safeOn = (on: string): Typed => ({
+	get: `Result<CrudUser> user = await ${on}.Crud.Users.GetAsync("1");`,
+	list: `Result<IReadOnlyList<CrudUser>> users = await ${on}.Crud.Users.ListAsync();`,
+	remove: `Result gone = await ${on}.Crud.Users.DeleteAsync("1");`,
+})
+
+const THROWN = thrownOn("c")
+const SAFE = safeOn("c.Safe")
 
 /** The program's statements for `ops`. */
 const typed = (ops: Typed) => ["using var c = Client();", ops.get, ops.list, ops.remove]
@@ -91,26 +93,28 @@ const converts = (statement: string, from: string, to: string) =>
 const USER = "HoneySdk.CrudUser"
 const LIST = "System.Collections.Generic.IReadOnlyList<HoneySdk.CrudUser>"
 
-describe.skipIf(!DOTNET)("throwOnError: the success type, or SdkResult<T> (C#2)", () => {
+describe.skipIf(!DOTNET)("the success type, or its client.Safe twin's Result<T> (C#2, bit 21 i5)", () => {
 	it(
-		"answers T, IReadOnlyList<T> and Task in throw mode, and SdkResult<T>, SdkResult<IReadOnlyList<T>> and SdkResult in safe mode",
+		"answers T, IReadOnlyList<T> and Task on the client, and Result<T>, Result<IReadOnlyList<T>> and Result on client.Safe",
 		() => {
+			const misread = thrownOn("c.Safe")
+			const misbound = safeOn("c")
 			expect({
-				safe: { safe: findings("fixtures-safe", typed(SAFE)), thrown: findings("fixtures-safe", typed(THROWN)) },
-				thrown: { safe: findings("fixtures", typed(SAFE)), thrown: findings("fixtures", typed(THROWN)) },
+				safe: { safe: findings("fixtures", typed(SAFE)), thrown: findings("fixtures", typed(misread)) },
+				thrown: { safe: findings("fixtures", typed(misbound)), thrown: findings("fixtures", typed(THROWN)) },
 			}).toEqual({
 				safe: {
 					safe: [],
 					thrown: [
-						converts(THROWN.get, `HoneySdk.SdkResult<${USER}>`, USER),
-						converts(THROWN.list, `HoneySdk.SdkResult<${LIST}>`, LIST),
+						converts(misread.get, `HoneySdk.Result<${USER}>`, USER),
+						converts(misread.list, `HoneySdk.Result<${LIST}>`, LIST),
 					],
 				},
 				thrown: {
 					safe: [
-						converts(SAFE.get, USER, `HoneySdk.SdkResult<${USER}>`),
-						converts(SAFE.list, LIST, `HoneySdk.SdkResult<${LIST}>`),
-						converts(SAFE.remove, "void", "HoneySdk.SdkResult"),
+						converts(misbound.get, USER, `HoneySdk.Result<${USER}>`),
+						converts(misbound.list, LIST, `HoneySdk.Result<${LIST}>`),
+						converts(misbound.remove, "void", "HoneySdk.Result"),
 					],
 					thrown: [],
 				},

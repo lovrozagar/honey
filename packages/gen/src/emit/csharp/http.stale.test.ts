@@ -7,7 +7,8 @@
  * `users.create`/`users.delete` stale `GET /users` and `GET /users/{id}`, and `pages.touch` `/a`, `/b`, `/c`, on
  * C#'s one async client. The tracker is internal, so two consumer programs reach it through the public surface, a
  * request hook reading `RequestContext.IsStale`: a colon-pattern target on `fixtures` (invalidation.json's
- * `GET /users/:id`), and a lookup's cost against the entry count on `http-safe`, whose 404 reads keep their keys.
+ * `GET /users/:id`), and a lookup's cost against the entry count on `http`, whose 404 reads through `client.Safe` keep
+ * their keys.
  */
 import { describe, expect, it } from "vitest"
 import type { Call } from "../../../tests/integration/conformance/matrix.ts"
@@ -253,7 +254,7 @@ foreach (var size in new[] { 16, 16_384 })
         for (var i = 0; i < 2000; i++)
         {
             sent = System.Diagnostics.Stopwatch.GetTimestamp();
-            await c.Users.GetAsync($"{i * 7919 % size}");
+            await c.Safe.Users.GetAsync($"{i * 7919 % size}");
         }
         fastest = Math.Min(fastest, spent / 2000);
     }
@@ -299,7 +300,7 @@ describe.skipIf(!DOTNET)("stale tracking through the public surface (consumer pr
 	 * cost hides that (honey-a8's redesign), and a ratio needs no machine's absolute speed */
 	it("looks a selector up without scanning every stale entry: 16,384 entries cost the work before the request hook under 4× what 16 do", async () => {
 		const run = await served(BUDGET_REPLIES, (server) =>
-			consume("http-safe", "stale-budget", { base: server.url, body: BUDGET }),
+			consume("http", "stale-budget", { base: server.url, body: BUDGET }),
 		)
 		const budget = run.out?.budget ?? []
 		const ratio = Number(/^ratio (\S+)$/.exec(budget.at(-1) ?? "")?.[1])

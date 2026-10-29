@@ -464,7 +464,7 @@ Note(await Read(rc)); Note(await Read(rc));`
 	})
 })
 
-/** The realtime `<returns>` line (contract 50 §2): one per realtime method. */
+/** The realtime `<returns>` line (contract 50 §2): one per realtime method, and one on its `client.Safe` twin, the very method. */
 const RETURNS =
 	"    /// <returns>The connection over WebSocket, else SSE, else long-poll: it reconnects after a drop and resumes after the last message it delivered; the token, CloseAsync or DisposeAsync ends it.</returns>"
 const OPTS = "TransportOptions.Of(lastEventId, reconnectToken, protocols, maxReconnectAttempts, reconnectDelay)"
@@ -495,6 +495,6 @@ describe("the emitted realtime surface: the stream fields reserved, a clashing d
 		const lines = (generateCSharpSdk(FIXTURES.realtime.document()).files["Client.cs"] ?? "").split("\n")
 		const query = csharpCallPlans(FIXTURES.realtime.document())["clash.feed"]?.query
 		const [missing, returns] = [EMITTED.filter((line) => !lines.includes(line)), lines.filter((l) => l === RETURNS)]
-		expect({ missing, query, returns: returns.length }).toEqual({ missing: [], query: CLAIMS, returns: 3 })
+		expect({ missing, query, returns: returns.length }).toEqual({ missing: [], query: CLAIMS, returns: 6 })
 	})
 })

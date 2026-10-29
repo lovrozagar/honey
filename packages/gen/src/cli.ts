@@ -77,8 +77,11 @@ function filesOf(
 			for (const notice of sdk.notices) report(`honey-codegen: ${notice}\n`)
 			return sdk.files
 		}
-		case "csharp":
-			return generateCSharpSdk(document, options).files
+		case "csharp": {
+			const sdk = generateCSharpSdk(document, options)
+			for (const notice of sdk.notices) report(`honey-codegen: ${notice}\n`)
+			return sdk.files
+		}
 		case "java":
 			return generateJavaSdk(document, options).files
 		case "cli":
