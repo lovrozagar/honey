@@ -4,9 +4,13 @@
  * gates; `capture-token-budget.ts` keeps v0's capture.
  */
 import { execFileSync } from "node:child_process"
-import { statSync } from "node:fs"
-import { join } from "node:path"
+import { readFileSync, statSync } from "node:fs"
+import { join, resolve } from "node:path"
 import { compareCodeUnits } from "../src/emit/shared/lang.ts"
+import { countTokens } from "./capture-token-budget.ts"
+
+/** The repository root, from this file. */
+const BUDGET_REPO = /* @__PURE__ */ resolve(import.meta.dirname, "../../..")
 
 /**
  * Each operation's member line in a v1 emitted `${stem}.types.gen.ts`, what a reader of the SDK takes in to call it
@@ -196,6 +200,62 @@ export function v1JavaSdkSurfaces(
 	return out
 }
 
+/** The e2e apps every language's G13 measurement reads, in order. */
+export const BUDGET_APPS = ["compose", "defaults", "gateway", "kitchen", "surface"] as const
+
+/** An e2e app's emitted OpenAPI document, the input every language's emitter is measured over. */
+export const budgetSpec = (app: string): Record<string, unknown> =>
+	JSON.parse(
+		readFileSync(join(BUDGET_REPO, `packages/core/tests/e2e/apps/${app}/src/_gen/openapi.gen.json`), "utf8"),
+	) as Record<string, unknown>
+
+/** One language's measurement: each `<app>/<key>`'s tokens, and each app whose reader read fewer surfaces than planned. */
+export type Measured = { readonly missed: readonly string[]; readonly tokens: ReadonlyMap<string, number> }
+
+const MEASURED = new Map<string, Measured>()
+
+/**
+ * One language's surfaces over every e2e app, measured once and kept (bit 21 i7e): its ceiling leg and its max leg
+ * read the same measurement, so neither pays the generation twice. `read` hands back the app's surfaces and, where
+ * the emitter plans its calls, the number planned, since a surface the reader misses can never pass by going
+ * unmeasured. TS plans none: its member lines are the emitted type's own.
+ */
+export function measuredSurfaces(
+	language: string,
+	read: (app: string) => { readonly plans?: number; readonly surfaces: ReadonlyMap<string, string> },
+): Measured {
+	const kept = MEASURED.get(language)
+	if (kept !== undefined) return kept
+	const missed: string[] = []
+	const tokens = new Map<string, number>()
+	for (const app of BUDGET_APPS) {
+		const { plans, surfaces } = read(app)
+		if (plans !== undefined && surfaces.size !== plans) missed.push(`${app}: ${surfaces.size} of ${plans} measured`)
+		for (const [key, text] of surfaces) tokens.set(`${app}/${key}`, countTokens(text))
+	}
+	const out: Measured = { missed, tokens }
+	MEASURED.set(language, out)
+	return out
+}
+
+/** What a ceiling leg reports: every app measured short, then every surface over `ceiling`, each with its tokens. */
+export const overCeiling = (measured: Measured, ceiling: number): string[] => [
+	...measured.missed,
+	...[...measured.tokens].filter(([, tokens]) => tokens > ceiling).map(([key, tokens]) => `${key}: ${tokens}`),
+]
+
+/** The largest surface measured and where: the one number its language's ceiling is `ceilingOf`. */
+export function peakSurface(measured: Measured): { readonly at: string; readonly tokens: number } {
+	let at = ""
+	let tokens = -1
+	for (const [key, count] of measured.tokens)
+		if (count > tokens) {
+			at = key
+			tokens = count
+		}
+	return { at, tokens }
+}
+
 /**
  * The entries directly in `dir`, as git sees them, in code-unit order: tracked or untracked, never ignored. An ignored
  * entry (a session hook's `.tmp` receipt) ships nowhere and is no compile input; an untracked one is a file nobody
@@ -213,6 +273,10 @@ export function listedEntries(dir: string): string[] {
 /**
  * A vendored runtime directory's bloat measure (G14): its `ext` files in code-unit order and their bytes on disk
  * as shipped (00-rules:160), never string length, and every other file it holds, in code-unit order.
+ *
+ * Since bit 21 i7e every lock is the exact bytes, never a ceiling with headroom: a cut moves the lock down as a
+ * raise moves it up, and `sdk-budget.ledger.test.ts` holds each lock to the figure its ledger comment reaches, so
+ * neither moves silently.
  */
 export function runtimeBytes(dir: string, ext: string): { bytes: number; names: string[]; others: string[] } {
 	const all = listedEntries(dir)

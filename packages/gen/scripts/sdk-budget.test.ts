@@ -12,6 +12,11 @@ import { RUNTIME_MODULES } from "../src/emit/ts/http.ts"
 import { generateSdk } from "../src/emit/ts/sdk.ts"
 import { ceilingOf, countTokens, oversizedOperations } from "./capture-token-budget.ts"
 import {
+	BUDGET_APPS,
+	budgetSpec,
+	measuredSurfaces,
+	overCeiling,
+	peakSurface,
 	runtimeBytes,
 	v1CSharpSdkSurfaces,
 	v1GoSdkSurfaces,
@@ -22,14 +27,47 @@ import {
 import { SPAWN_TIMEOUT } from "../src/gen/__fixtures__/spawn-timeout.ts"
 
 const REPO = resolve(import.meta.dirname, "../../..")
-const APPS = ["compose", "defaults", "gateway", "kitchen", "surface"]
-/** An e2e app's emitted OpenAPI document. */
-const appSpec = (app: string) =>
-	JSON.parse(
-		readFileSync(join(REPO, `packages/core/tests/e2e/apps/${app}/src/_gen/openapi.gen.json`), "utf8"),
-	) as Record<string, unknown>
+const APPS = BUDGET_APPS
+const appSpec = budgetSpec
 /** A vendored runtime's directory. */
 const runtimeDir = (language: string) => join(REPO, `packages/gen/src/runtime/${language}`)
+/** The headroom every G13 ceiling leaves over its measured max. */
+const HEADROOM = 0.2
+
+/* each language's reader, by app: what `measuredSurfaces` measures once for its ceiling leg and its max leg alike */
+const readTs = (app: string) => {
+	const { files, stem } = generateSdk(appSpec(app), { name: "SDK" })
+	return { surfaces: v1SdkSurfaces(files[`${stem}.types.gen.ts`] ?? "") }
+}
+const readGo = (app: string) => {
+	const spec = appSpec(app)
+	const options = { modulePath: "example.com/budget" }
+	return {
+		plans: Object.keys(goCallPlans(spec, options)).length,
+		surfaces: v1GoSdkSurfaces(generateGoSdk(spec, options).files["client.go"] ?? ""),
+	}
+}
+const readRust = (app: string) => {
+	const spec = appSpec(app)
+	return {
+		plans: Object.keys(rustCallPlans(spec)).length,
+		surfaces: v1RustSdkSurfaces(generateRustSdk(spec).files["src/client.rs"] ?? ""),
+	}
+}
+const readPython = (app: string) => {
+	const spec = appSpec(app)
+	return {
+		plans: Object.keys(pythonCallPlans(spec)).length,
+		surfaces: v1PythonSdkSurfaces(generatePythonSdk(spec).files["src/honey_sdk/client.py"] ?? ""),
+	}
+}
+const readCSharp = (app: string) => {
+	const spec = appSpec(app)
+	return {
+		plans: Object.keys(csharpCallPlans(spec)).length,
+		surfaces: v1CSharpSdkSurfaces(generateCSharpSdk(spec).files["Client.cs"] ?? ""),
+	}
+}
 
 describe("the v1 SDK within the budget (bit 11)", () => {
 	it("reads each operation's member line, a call, a stream or a connection, a repeated name numbered", () => {
@@ -67,21 +105,27 @@ describe("the v1 SDK within the budget (bit 11)", () => {
  * 425f0a4 the two overload lines measured max 162, sum 5,258. 81 + 20% headroom = 98. An operation over it is fixed
  * in the schema, never by raising the ceiling.
  */
-const TS_SDK_CEILING = ceilingOf([81], 0.2)
+const TS_SDK_CEILING = ceilingOf([81], HEADROOM)
 
 describe("the TS SDK within its own budget (bit 21 i1, G13)", () => {
 	it(`keeps every e2e app's TS operations within ${TS_SDK_CEILING} tokens, each measured once for both styles`, () => {
-		const over: string[] = []
-		let surfaces = 0
-		for (const app of APPS) {
-			const { files, stem } = generateSdk(appSpec(app), { name: "SDK" })
-			for (const [name, text] of v1SdkSurfaces(files[`${stem}.types.gen.ts`] ?? "")) {
-				surfaces++
-				const tokens = countTokens(text)
-				if (tokens > TS_SDK_CEILING) over.push(`${app}/${name}: ${tokens}`)
-			}
-		}
-		expect({ ceiling: TS_SDK_CEILING, over, surfaces }).toEqual({ ceiling: 98, over: [], surfaces: 71 })
+		const measured = measuredSurfaces("ts", readTs)
+		expect({
+			ceiling: TS_SDK_CEILING,
+			over: overCeiling(measured, TS_SDK_CEILING),
+			surfaces: measured.tokens.size,
+		}).toEqual({ ceiling: 98, over: [], surfaces: 71 })
+	})
+
+	/* the ceiling's own input, so a surface that shrinks brings the ceiling down instead of leaving stale headroom */
+	it("measures its largest surface where its ceiling comes from", () => {
+		const { at, tokens } = peakSurface(measuredSurfaces("ts", readTs))
+		expect({ at, ceiling: TS_SDK_CEILING, derived: ceilingOf([tokens], HEADROOM), tokens }).toEqual({
+			at: "kitchen/postApiV1Organizations",
+			ceiling: 98,
+			derived: 98,
+			tokens: 81,
+		})
 	})
 })
 
@@ -97,7 +141,7 @@ describe("the TS SDK within its own budget (bit 21 i1, G13)", () => {
  * operation over it is fixed in the schema, never by raising the ceiling; revisit only for a genuinely large,
  * legitimate operation.
  */
-const GO_SDK_CEILING = ceilingOf([114], 0.2)
+const GO_SDK_CEILING = ceilingOf([114], HEADROOM)
 
 const GO_CLIENT = `package sdk
 
@@ -163,22 +207,22 @@ describe("the v1 Go SDK within the budget (bit 12, G13)", () => {
 	})
 
 	it(`keeps every e2e app's Go operations within ${GO_SDK_CEILING} tokens, each measured once for both styles`, () => {
-		const over: string[] = []
-		let surfaces = 0
-		for (const app of APPS) {
-			const spec = appSpec(app)
-			const options = { modulePath: "example.com/budget" }
-			const measured = v1GoSdkSurfaces(generateGoSdk(spec, options).files["client.go"] ?? "")
-			/* completeness: a surface the regex misses can never pass by going unmeasured */
-			const plans = Object.keys(goCallPlans(spec, options)).length
-			if (measured.size !== plans) over.push(`${app}: ${measured.size} of ${plans} measured`)
-			for (const [key, text] of measured) {
-				surfaces++
-				const tokens = countTokens(text)
-				if (tokens > GO_SDK_CEILING) over.push(`${app}/${key}: ${tokens}`)
-			}
-		}
-		expect({ ceiling: GO_SDK_CEILING, over, surfaces }).toEqual({ ceiling: 137, over: [], surfaces: 71 })
+		const measured = measuredSurfaces("go", readGo)
+		expect({
+			ceiling: GO_SDK_CEILING,
+			over: overCeiling(measured, GO_SDK_CEILING),
+			surfaces: measured.tokens.size,
+		}).toEqual({ ceiling: 137, over: [], surfaces: 71 })
+	})
+
+	it("measures its largest surface where its ceiling comes from", () => {
+		const { at, tokens } = peakSurface(measuredSurfaces("go", readGo))
+		expect({ at, ceiling: GO_SDK_CEILING, derived: ceilingOf([tokens], HEADROOM), tokens }).toEqual({
+			at: "surface/Client.GetInParamsMembersByOrgIdAndMemberId",
+			ceiling: 137,
+			derived: 137,
+			tokens: 114,
+		})
 	})
 })
 
@@ -193,7 +237,7 @@ describe("the v1 Go SDK within the budget (bit 12, G13)", () => {
  * An operation over it is fixed in the schema, never by raising the ceiling; revisit only for a genuinely large,
  * legitimate operation.
  */
-const RUST_SDK_CEILING = ceilingOf([79], 0.2)
+const RUST_SDK_CEILING = ceilingOf([79], HEADROOM)
 
 const RUST_CLIENT = `// @generated by honey. DO NOT EDIT.
 //! The client, its resources and their operations.
@@ -267,21 +311,22 @@ describe("the v1 Rust SDK within the budget (bit 13, G13)", () => {
 	})
 
 	it(`keeps every e2e app's Rust operations within ${RUST_SDK_CEILING} tokens, the one signature both styles call`, () => {
-		const over: string[] = []
-		let surfaces = 0
-		for (const app of APPS) {
-			const spec = appSpec(app)
-			const measured = v1RustSdkSurfaces(generateRustSdk(spec).files["src/client.rs"] ?? "")
-			/* completeness: a surface the regex misses can never pass by going unmeasured */
-			const plans = Object.keys(rustCallPlans(spec)).length
-			if (measured.size !== plans) over.push(`${app}: ${measured.size} of ${plans} measured`)
-			for (const [key, text] of measured) {
-				const tokens = countTokens(text)
-				if (tokens > RUST_SDK_CEILING) over.push(`${app}/${key}: ${tokens}`)
-			}
-			surfaces += measured.size
-		}
-		expect({ ceiling: RUST_SDK_CEILING, over, surfaces }).toEqual({ ceiling: 95, over: [], surfaces: 71 })
+		const measured = measuredSurfaces("rust", readRust)
+		expect({
+			ceiling: RUST_SDK_CEILING,
+			over: overCeiling(measured, RUST_SDK_CEILING),
+			surfaces: measured.tokens.size,
+		}).toEqual({ ceiling: 95, over: [], surfaces: 71 })
+	})
+
+	it("measures its largest surface where its ceiling comes from", () => {
+		const { at, tokens } = peakSurface(measuredSurfaces("rust", readRust))
+		expect({ at, ceiling: RUST_SDK_CEILING, derived: ceilingOf([tokens], HEADROOM), tokens }).toEqual({
+			at: "surface/Client.put_in_all_by_resource_id",
+			ceiling: 95,
+			derived: 95,
+			tokens: 79,
+		})
 	})
 })
 
@@ -295,7 +340,7 @@ describe("the v1 Rust SDK within the budget (bit 13, G13)", () => {
  * 75 + 20% headroom = 90. Each language holds its own ceiling, set from its own measurement. An operation over it is
  * fixed in the schema, never by raising the ceiling; revisit only for a genuinely large, legitimate operation.
  */
-const PYTHON_SDK_CEILING = ceilingOf([75], 0.2)
+const PYTHON_SDK_CEILING = ceilingOf([75], HEADROOM)
 
 const PY_CLIENT = `class UsersResource:
     def get(self, id: str, *, options: RequestOptions | None = None) -> User:
@@ -358,19 +403,22 @@ describe("the v1 Python SDK within the budget (bit 14, G13)", () => {
 	})
 
 	it(`keeps every e2e app's Python operations within ${PYTHON_SDK_CEILING} tokens, both styles together`, () => {
-		const over: string[] = []
-		for (const app of APPS) {
-			const spec = appSpec(app)
-			const surfaces = v1PythonSdkSurfaces(generatePythonSdk(spec).files["src/honey_sdk/client.py"] ?? "")
-			/* completeness: a surface the regex misses can never pass by going unmeasured */
-			const plans = Object.keys(pythonCallPlans(spec)).length
-			if (surfaces.size !== plans) over.push(`${app}: ${surfaces.size} of ${plans} measured`)
-			for (const [key, text] of surfaces) {
-				const tokens = countTokens(text)
-				if (tokens > PYTHON_SDK_CEILING) over.push(`${app}/${key}: ${tokens}`)
-			}
-		}
-		expect({ ceiling: PYTHON_SDK_CEILING, over }).toEqual({ ceiling: 90, over: [] })
+		const measured = measuredSurfaces("python", readPython)
+		expect({
+			ceiling: PYTHON_SDK_CEILING,
+			over: overCeiling(measured, PYTHON_SDK_CEILING),
+			surfaces: measured.tokens.size,
+		}).toEqual({ ceiling: 90, over: [], surfaces: 71 })
+	})
+
+	it("measures its largest surface where its ceiling comes from", () => {
+		const { at, tokens } = peakSurface(measuredSurfaces("python", readPython))
+		expect({ at, ceiling: PYTHON_SDK_CEILING, derived: ceilingOf([tokens], HEADROOM), tokens }).toEqual({
+			at: "surface/AsyncSDK.put_in_all_by_resource_id",
+			ceiling: 90,
+			derived: 90,
+			tokens: 75,
+		})
 	})
 })
 
@@ -387,7 +435,7 @@ describe("the v1 Python SDK within the budget (bit 14, G13)", () => {
  * name (CS1746 on a named argument): the restated twin is the cheapest form that keeps the normal call's arguments.
  * 107 + 20% = 129.
  */
-const CSHARP_SDK_CEILING = ceilingOf([107], 0.2)
+const CSHARP_SDK_CEILING = ceilingOf([107], HEADROOM)
 
 const CS_CLIENT = `namespace Acme;
 
@@ -451,21 +499,22 @@ describe("the v1 C# SDK within the budget (bit 15, G13)", () => {
 	})
 
 	it(`keeps every e2e app's C# operations within ${CSHARP_SDK_CEILING} tokens, each its two styles' signatures`, () => {
-		const over: string[] = []
-		let surfaces = 0
-		for (const app of APPS) {
-			const spec = appSpec(app)
-			const measured = v1CSharpSdkSurfaces(generateCSharpSdk(spec).files["Client.cs"] ?? "")
-			/* completeness: a surface the reader misses can never pass by going unmeasured */
-			const plans = Object.keys(csharpCallPlans(spec)).length
-			if (measured.size !== plans) over.push(`${app}: ${measured.size} of ${plans} measured`)
-			surfaces += measured.size
-			for (const [key, text] of measured) {
-				const tokens = countTokens(text)
-				if (tokens > CSHARP_SDK_CEILING) over.push(`${app}/${key}: ${tokens}`)
-			}
-		}
-		expect({ ceiling: CSHARP_SDK_CEILING, over, surfaces }).toEqual({ ceiling: 129, over: [], surfaces: 71 })
+		const measured = measuredSurfaces("csharp", readCSharp)
+		expect({
+			ceiling: CSHARP_SDK_CEILING,
+			over: overCeiling(measured, CSHARP_SDK_CEILING),
+			surfaces: measured.tokens.size,
+		}).toEqual({ ceiling: 129, over: [], surfaces: 71 })
+	})
+
+	it("measures its largest surface where its ceiling comes from", () => {
+		const { at, tokens } = peakSurface(measuredSurfaces("csharp", readCSharp))
+		expect({ at, ceiling: CSHARP_SDK_CEILING, derived: ceilingOf([tokens], HEADROOM), tokens }).toEqual({
+			at: "surface/HoneySdkClient.PutInAllByResourceIdAsync",
+			ceiling: 129,
+			derived: 129,
+			tokens: 107,
+		})
 	})
 })
 
@@ -528,17 +577,13 @@ describe("runtimeBytes", () => {
 const GO_RUNTIME_BYTES = 99_240
 
 describe("the Go runtime within its byte budget (bit 12, G14)", () => {
-	it(
-		`ships every runtime file it holds, all of them within ${GO_RUNTIME_BYTES} bytes`,
-		{ timeout: SPAWN_TIMEOUT },
-		() => {
-			const { bytes, names } = runtimeBytes(runtimeDir("go"), ".go")
-			expect({ names, over: Math.max(0, bytes - GO_RUNTIME_BYTES) }).toEqual({
-				names: runtimeFileNames({ realtime: true, ws: true }),
-				over: 0,
-			})
-		},
-	)
+	it(`ships every runtime file it holds, their bytes exactly ${GO_RUNTIME_BYTES}`, { timeout: SPAWN_TIMEOUT }, () => {
+		const { bytes, names } = runtimeBytes(runtimeDir("go"), ".go")
+		expect({ bytes, names }).toEqual({
+			bytes: GO_RUNTIME_BYTES,
+			names: runtimeFileNames({ realtime: true, ws: true }),
+		})
+	})
 })
 
 /*
@@ -564,14 +609,14 @@ const RUST_RUNTIME_BYTES = 137_986
 
 describe("the Rust runtime within its byte budget (bit 13, G14)", () => {
 	it(
-		`ships every runtime file it holds, all of them within ${RUST_RUNTIME_BYTES} bytes, the lock template aside`,
+		`ships every runtime file it holds, their bytes exactly ${RUST_RUNTIME_BYTES}, the lock template aside`,
 		{ timeout: SPAWN_TIMEOUT },
 		() => {
 			const { bytes, names, others } = runtimeBytes(runtimeDir("rust"), ".rs")
-			expect({ names, others, over: Math.max(0, bytes - RUST_RUNTIME_BYTES) }).toEqual({
+			expect({ bytes, names, others }).toEqual({
+				bytes: RUST_RUNTIME_BYTES,
 				names: rustRuntimeFileNames({ realtime: true, ws: true }),
 				others: ["Cargo.lock"],
-				over: 0,
 			})
 		},
 	)
@@ -614,14 +659,14 @@ const PYTHON_RUNTIME_BYTES = 90_982
 
 describe("the Python runtime within its byte budget (bit 14, G14)", () => {
 	it(
-		`ships every runtime file it holds, all of them within ${PYTHON_RUNTIME_BYTES} bytes, nothing else beside them`,
+		`ships every runtime file it holds, their bytes exactly ${PYTHON_RUNTIME_BYTES}, nothing else beside them`,
 		{ timeout: SPAWN_TIMEOUT },
 		() => {
 			const { bytes, names, others } = runtimeBytes(runtimeDir("python"), ".py")
-			expect({ names, others, over: Math.max(0, bytes - PYTHON_RUNTIME_BYTES) }).toEqual({
+			expect({ bytes, names, others }).toEqual({
+				bytes: PYTHON_RUNTIME_BYTES,
 				names: pythonRuntimeFileNames({ realtime: true, ws: true }),
 				others: [],
-				over: 0,
 			})
 		},
 	)
@@ -675,15 +720,15 @@ const CSHARP_RUNTIME_BYTES = 134_903
 
 describe("the C# runtime within its byte budget (bit 15, G14)", () => {
 	it(
-		`ships every runtime file it holds, all of them within ${CSHARP_RUNTIME_BYTES} bytes, nothing else beside them`,
+		`ships every runtime file it holds, their bytes exactly ${CSHARP_RUNTIME_BYTES}, nothing else beside them`,
 		{ timeout: SPAWN_TIMEOUT },
 		async () => {
 			const { runtimeFileNames: csharpRuntimeFileNames } = await import("../src/emit/csharp/transport.ts")
 			const { bytes, names, others } = runtimeBytes(runtimeDir("csharp"), ".cs")
-			expect({ names, others, over: Math.max(0, bytes - CSHARP_RUNTIME_BYTES) }).toEqual({
+			expect({ bytes, names, others }).toEqual({
+				bytes: CSHARP_RUNTIME_BYTES,
 				names: csharpRuntimeFileNames({ realtime: true, ws: true }),
 				others: [],
-				over: 0,
 			})
 		},
 	)
@@ -754,14 +799,14 @@ const TS_RUNTIME_BYTES = 122_273
 
 describe("the TS runtime within its byte budget (bit 11, G14)", () => {
 	it(
-		`ships every runtime file it holds, all of them within ${TS_RUNTIME_BYTES} bytes, nothing else beside them`,
+		`ships every runtime file it holds, their bytes exactly ${TS_RUNTIME_BYTES}, nothing else beside them`,
 		{ timeout: SPAWN_TIMEOUT },
 		() => {
 			const { bytes, names, others } = runtimeBytes(runtimeDir("ts"), ".ts")
-			expect({ names, others, over: Math.max(0, bytes - TS_RUNTIME_BYTES) }).toEqual({
+			expect({ bytes, names, others }).toEqual({
+				bytes: TS_RUNTIME_BYTES,
 				names: RUNTIME_MODULES.map((name) => `${name}.ts`).sort(),
 				others: [],
-				over: 0,
 			})
 		},
 	)

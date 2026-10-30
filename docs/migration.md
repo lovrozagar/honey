@@ -4,6 +4,9 @@ Each deliberate break from v0 0.7.x, with what you wrote before and what you wri
 is shown as it was; an "after" block is v1 and is compiled by the docs' tests. The SDK examples call a client
 generated from a small example API (`Kitchen`); yours is named after your document.
 
+The SDK sections cover the four SDKs 0.7.3 shipped: TypeScript, Python, Go and Rust. The C# and Java SDKs are new in 1.0,
+so they migrate nothing; their client is documented in [the generated clients page](client.md).
+
 ## Code generation moved to `@lovrozagar/honey-codegen`
 
 The `@lovrozagar/honey/codegen` export is gone. Its SDK, CLI and MCP generators are the `honey-codegen generate` bin
@@ -79,7 +82,7 @@ if (!result.ok) {
 
 ## The Python SDK's `throwOnError` is gone; its safe mode is `client.safe`, answering `Ok` or `Err`
 
-The Python generator has no `throwOnError` option (`--python-throw-on-error` is an unknown option now): delete it.
+The Python generator has no `throwOnError` option: delete it.
 Every client raises, as the default did; the safe mode is `client.safe` on `SDK` and `AsyncSDK`, which holds the same
 calls:
 
@@ -87,9 +90,8 @@ calls:
   with `match r` (`case Ok(data): …` / `case Err(error): …`) or `isinstance(r, Err)`, and `r.status` with
   `r.response.status`. Reading `.data` or `.error` off a normal call, or naming `SDKResult`, fails `mypy --strict`.
 - `Err.error` is the error the normal call raises: an `APIStatusError` by status, or a `DecodeError`. An undecodable
-  2xx raised `DecodeError` in safe mode before; it is an `Err` now, with its response.
-- A 2xx past `max_response_bytes` was `APIConnectionError` (no answer); it is a `DecodeError` in both styles, raised
-  or the `Err`. An error status past the cap raises its status error, its body empty.
+  2xx decoded to `None` before, silently, whichever mode; it raises a `DecodeError` now, and is the `Err` on
+  `client.safe`.
 - An event stream's safe call answers once it opens: `Ok`'s data is the `EventStream`, an error status at the opening
   the `Err`. A WebSocket or realtime operation is the same connection on `client.safe`.
 - A root resource named `safe` is reached as `safe_`, and the generation names it on stderr.
@@ -115,7 +117,7 @@ async def health(client: AsyncSDK) -> str:
 
 ## The Go SDK's `throwOnError` is gone; its safe mode is `client.Safe()`, answering a `Result`
 
-The Go generator has no `throwOnError` option (`--go-throw-on-error` is an unknown option now): delete it. Every
+The Go generator has no `throwOnError` option: delete it. Every
 method returns its answer or an error, as the default did; the safe mode is `client.Safe()`, which holds the same
 resources, each method a field of its name you call the same way:
 
@@ -133,6 +135,10 @@ resources, each method a field of its name you call the same way:
   `honey: http do: unexpected EOF` a call's dropped body gives (`errors.Is(err, io.ErrUnexpectedEOF)` still true).
 - An event stream's safe twin opens the stream on the call: an error status at the opening is the `Err`, and `Data`
   ranges the opened stream once. A WebSocket or realtime method is the same one on `client.Safe()`.
+- A realtime connection's `Send` over SSE or long-poll returned `sse transport is receive-only` (only the WebSocket
+  transport sent); both POST on the open connection now, a string as text and any other value as JSON. The POST is
+  answered as a call is, so a 2xx past `MaxResponseBytes` is a `*sdk.DecodeError`; a dial's answer past the cap is
+  still no answer.
 - A root resource or method named `safe` is emitted as `Safe_` (`Safe` is the mirror), and the generation names it on
   stderr.
 
@@ -165,33 +171,35 @@ func listing(ctx context.Context, client *sdk.Client) string {
 
 ## The Rust SDK's `throwOnError` is gone; its safe mode is `client.safe()`, answering an `Answer`
 
-The Rust generator has no `throwOnError` option (`--rust-throw-on-error` is an unknown option now): delete it. Every
+The Rust generator has no `throwOnError` option: delete it. Every
 method resolves `Result<T, Error>`, as the default did; the safe mode is `client.safe()`, the same client whose calls
 resolve `Result<Answer<T>, Error>`:
 
-- `SdkResult` is gone, and with it `data: Option<T>`, `error: Option<ApiError>`, `status` and `is_ok()`. Match the
-  `Answer`: `Answer::Ok { data, response }`, or `Answer::Err { error, response }` with `error` a `SafeError::Api` or
-  `SafeError::Decode`. `r.status` is `response.status`. Naming `sdk::SdkResult`, or reading `.error`, `.status` or
-  `.is_ok()` on what a call resolves, fails `cargo check`.
-- An undecodable 2xx was the call's `Err(Error::Decode(..))` in safe mode; on `client.safe()` it is
-  `Answer::Err { error: SafeError::Decode(..), response }`. `Error::Decode` now holds a `DecodeError` (its `Display`
-  the text it held, `decode: …` unchanged on the `Error`), not a `String`: match `Error::Decode(e)` and read
-  `e.to_string()`.
-- A 2xx past `max_response_bytes` was `Error::Transport` ("the answer exceeds N bytes"); it is `Error::Decode` on the
-  client and `SafeError::Decode` on `client.safe()`. An error status past the cap is its `Error::Api`, its body empty.
-  A realtime transport's answer past the cap stays `Error::Transport`.
+- `SdkResult` is gone, and with it `data: Option<T>`, `error: Option<E>` (`E` defaulting to `Error`), `status` and
+  `ok()`. Match the `Answer`: `Answer::Ok { data, response }`, or `Answer::Err { error, response }` with `error` a
+  `SafeError::Api` or `SafeError::Decode`. `r.status` is `response.status`. Naming `sdk::SdkResult`, or reading
+  `.error`, `.status` or `.ok()` on what a call resolves, fails `cargo check`.
+- An undecodable body was `Error::Json`, the serde error through `From`. It is `Error::Decode(DecodeError)` now on
+  the client, and `Answer::Err { error: SafeError::Decode(..), response }` on `client.safe()`: match
+  `Error::Decode(e)` and read `e.to_string()`.
+- A body past `max_response_bytes` was `Error::Other("response body exceeds N bytes")`; a 2xx past it is
+  `Error::Decode` now on the client and `SafeError::Decode` on `client.safe()`. An error status past the cap is its
+  `Error::Api`, its body empty.
+- `RealtimeError` is gone: a realtime connection's `send`/`send_text` answers `Result<(), Error>`, and the send is a
+  POST answered as a call is, so its 2xx past the cap is `Error::Decode`. A dial's answer past the cap is still
+  `Error::Transport`, no answer.
 - An event stream ignored the mode; on `client.safe()` it resolves `Answer::Ok` with the `EventStream`, an error
   status at the opening its `Answer::Err`. A WebSocket or realtime method is the same `Call` on both clients.
 - `Client`, every `<Path>Resource` and `Call` take the style: `Client<S = Throw>`, `<Path>Resource<'a, S = Throw>`,
   `Call<T, S = Throw, H = ()>`. Code naming `Call<T, H>` with typed headers names `Call<T, Throw, H>` now.
 - A root resource or method named `safe` is emitted as `safe_` (`safe()` is the mirror), and the generation names it
-  on stderr. A component named `S` (the style parameter) or like a new runtime type (`Answer`, `SafeError`,
-  `DecodeError`, `Style`, `Safe`, `Throw`) is emitted as `<Name>Model`, as every runtime- or prelude-named one is, and
-  the generation names each such rename on stderr.
+  on stderr. A component of your document named `S` (the style parameter) or like one of the new runtime types
+  (`Answer`, `SafeError`, `DecodeError`, `Style`, `Safe`, `Throw`) is emitted as `<Name>Model`, as every runtime- or
+  prelude-named one already was, and the generation names each such rename on stderr.
 
 ```text v0
 let r = client.users().get("u1", &Default::default()).await?; // generated with throwOnError false
-if !r.is_ok() {
+if !r.ok() {
     println!("answered {} {:?}", r.status, r.error);
 }
 ```
@@ -211,91 +219,6 @@ async fn listing(client: &Client) -> String {
         Err(no_answer) => format!("no answer: {no_answer}"), // never sent, refused, timed out or canceled
     }
 }
-```
-
-## The C# SDK's `throwOnError` is gone; its safe mode is `client.Safe`, answering a `Result`
-
-The C# generator has no `throwOnError` option (`--csharp-throw-on-error` is an unknown option now): delete it. Every
-method answers `Task<T>` and throws an error status, as the default did; the safe mode is `client.Safe`, the same
-resources and methods answering `Task<Result<T>>` (`Task<Result>` for no body):
-
-- `SdkResult` and `SdkResult<T>` are gone, and with them `IsSuccess`, `Status` and `Data`. `IsSuccess` is `IsOk`,
-  `Data` is `Value` (it throws `InvalidOperationException` on an Err: read it after `IsOk`, or use `TryGetValue` or
-  `Match`), and `Status` is `Response.Status`. `Error` is an `SdkException`, never null: it throws on an Ok. Naming
-  `SdkResult`, or reading `IsSuccess`, `Status` or `Data` on what a call answers, fails `dotnet build`.
-- An undecodable 2xx threw `DecodeException` in safe mode; on `client.Safe` it is the `Result`'s Err, its `Error` the
-  `DecodeException`. `ApiStatusException` and `DecodeException` now derive from `SdkException` (itself a
-  `HoneyException`), so a `catch (HoneyException)` still catches them.
-- A 2xx past `MaxResponseBytes` threw `ApiConnectionException` ("the answer exceeds N bytes"); it is a
-  `DecodeException` with that text on the client, and the Err on `client.Safe`. An error status past the cap is its
-  `ApiStatusException`, its body empty. A realtime transport's answer past the cap stays `ApiConnectionException`.
-- An event stream ignored the mode; on `client.Safe` it answers once it opens (`Value` is the `EventStream<T>`), an
-  error status at the opening its Err. A WebSocket or realtime method is the very method.
-- A root resource named `Safe` is emitted as `Safe_` (`Safe` is the mirror), and the generation names it on stderr. A
-  component named like a new runtime type (`Result`, `SdkException`) is emitted as `<Name>Model`, as every runtime- or
-  BCL-named one is, and the generation names each such rename on stderr.
-
-```text v0
-SdkResult<User> r = await client.Users.GetAsync("u1"); // generated with throwOnError false
-if (!r.IsSuccess) Console.WriteLine($"answered {r.Status} {r.Error?.Message}");
-```
-
-```csharp
-    public static async Task<string> Listing(HoneySdkClient client, string id)
-    {
-        var result = await client.Safe.GetApiAsync(id); // no answer (never sent, refused, timed out, canceled) still throws
-        return result.Match(
-            found => $"answered {result.Response.Status}: {found}",
-            error => error switch
-            {
-                DecodeException unreadable => $"answered {result.Response.Status}, unreadable: {unreadable.Message}",
-                ApiStatusException failed => $"answered {failed.Status}: {failed.Key}",
-                _ => error.Message,
-            });
-    }
-```
-
-## The Java SDK's `throwOnError` is gone; its safe mode is `client.safe()`, answering a `Result`
-
-The Java generator has no `throwOnError` option (`--java-throw-on-error` is an unknown option now, and with it the
-generator's last boolean option): delete it. Every method answers `T` and throws an error status, as the default did;
-the safe mode is `client.safe()`, the same resources and methods (each overload) answering `Result<T>`
-(`Result<Void>` for no body):
-
-- A normal method no longer answers a `Result`: `Result<User> r = client.users().get(params)` fails `javac`
-  (`incompatible types`). Call `client.safe().users().get(params)`.
-- `Result.status()` is gone: read `response().status()`. `Result.Err`'s `error` is an `SdkException`, no longer an
-  `ApiException`: assigning it to an `ApiException` fails `javac`; narrow it with `instanceof`. `Result` gains
-  `isOk()`, `fold(onOk, onErr)` and `orElseThrow()`; `Ok` and `Err` keep only their own fields.
-- An undecodable 2xx threw `DecodeException` in safe mode; on `client.safe()` it is the `Result.Err`, its `error` the
-  `DecodeException`. `ApiException` and `DecodeException` now extend `SdkException` (itself a `HoneyException`), so a
-  `catch (HoneyException e)` still catches them.
-- A 2xx past `maxResponseBytes` threw `ApiConnectionException` ("the answer exceeds N bytes"); it is a
-  `DecodeException` with that text on the client, and the Err on `client.safe()`. An error status past the cap is its
-  `ApiException`, its body empty. A realtime transport's answer past the cap stays `ApiConnectionException`.
-- An event stream ignored the mode; on `client.safe()` it answers once it opens (the Ok's data is the
-  `EventStream<T>`), an error status at the opening its Err. A WebSocket or realtime method is the very method.
-- A root resource or operation named `safe` is emitted as `safe_` (`safe()` is the mirror), and the generation names
-  it on stderr. A component named like a new runtime type (`Result`, `SdkException`) is emitted as `<Name>Model`, as
-  every runtime- or JDK-named one is, and the generation names each such rename on stderr.
-
-```text v0
-Result<User> r = client.users().get(params); // generated with throwOnError false
-if (r instanceof Result.Err<User> err) System.out.println("answered " + r.status() + " " + err.error().getMessage());
-```
-
-```java
-  static String listing(KitchenClient client) {
-    // no answer (never sent, refused, timed out, canceled) still throws
-    Result<ListApiResponse200> result = client.safe().getApi(GetApiParams.builder().build());
-    int status = result.response().status();
-    return result.fold(
-        found -> "answered " + status + ": " + found,
-        error ->
-            error instanceof ApiException failed
-                ? "answered " + status + ": " + failed.key()
-                : "answered " + status + ", unreadable: " + error.getMessage());
-  }
 ```
 
 ## The TS SDK's realtime `token?` and `onAuthExpired?` are gone

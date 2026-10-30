@@ -91,6 +91,7 @@ const SLOW = { timeout: 120_000 }
  * shape, failureOf's own two fields), mount.ts -55 (the dead `throwOnError: false`, field and value, cut). Bit 21 in all: +37,443 B over its start, 31,165 -> 68,608.
  */
 const MCP_PORTABLE_BYTES = 58592
+/* the node part's own tail of that history: bit 21 g, +38 B to 10,016 B, and untouched since. */
 const MCP_NODE_BYTES = 10016
 
 const RUNTIME_DIR = resolve(import.meta.dirname, "../src/runtime/mcp")
@@ -101,21 +102,19 @@ const bytesOf = (modules: readonly string[]) =>
 
 describe("the MCP runtime within its byte budget (bit 18, the G14 analog)", () => {
 	it(
-		`ships every runtime file it holds, the portable within ${MCP_PORTABLE_BYTES} bytes and the node within ${MCP_NODE_BYTES}, nothing else beside them`,
+		`ships every runtime file it holds, the portable exactly ${MCP_PORTABLE_BYTES} bytes and the node ${MCP_NODE_BYTES}, nothing else beside them`,
 		{ timeout: SPAWN_TIMEOUT },
 		() => {
 			const { bytes, names, others } = runtimeBytes(RUNTIME_DIR, ".ts")
 			expect({
 				names,
 				others,
-				over: [bytesOf(MCP_PORTABLE) - MCP_PORTABLE_BYTES, bytesOf(MCP_NODE) - MCP_NODE_BYTES].map((by) =>
-					Math.max(0, by),
-				),
+				parts: [bytesOf(MCP_PORTABLE), bytesOf(MCP_NODE)],
 				whole: bytes === bytesOf(MCP_RUNTIME),
 			}).toEqual({
 				names: MCP_RUNTIME.map((name) => `${name}.ts`).sort(),
 				others: [],
-				over: [0, 0],
+				parts: [MCP_PORTABLE_BYTES, MCP_NODE_BYTES],
 				whole: true,
 			})
 		},

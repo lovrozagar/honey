@@ -2,12 +2,19 @@
  * The Java SDK's budgets (bit 16): the vendored runtime's bytes on disk (the G14 analog), measured, every file named,
  * split from `sdk-budget.test.ts` at its 500-line cap; and the per-operation token ceiling (the G13 analog, phase f).
  */
-import { readFileSync } from "node:fs"
-import { join, resolve } from "node:path"
+import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 import { generateJavaSdk, javaCallPlans, runtimeFiles } from "../src/emit/java/sdk.ts"
-import { ceilingOf, countTokens } from "./capture-token-budget.ts"
-import { runtimeBytes, v1JavaSdkSurfaces } from "./sdk-budget.ts"
+import { ceilingOf } from "./capture-token-budget.ts"
+import {
+	BUDGET_APPS,
+	budgetSpec,
+	measuredSurfaces,
+	overCeiling,
+	peakSurface,
+	runtimeBytes,
+	v1JavaSdkSurfaces,
+} from "./sdk-budget.ts"
 import { SPAWN_TIMEOUT } from "../src/gen/__fixtures__/spawn-timeout.ts"
 
 /*
@@ -130,28 +137,32 @@ const JAVA_RUNTIME_BYTES = 154694
 
 describe("the Java runtime within its byte budget (bit 16, the G14 analog)", () => {
 	it(
-		`ships every runtime file it holds, all of them within ${JAVA_RUNTIME_BYTES} bytes, nothing else beside them`,
+		`ships every runtime file it holds, their bytes exactly ${JAVA_RUNTIME_BYTES}, nothing else beside them`,
 		{ timeout: SPAWN_TIMEOUT },
 		() => {
 			const { bytes, names, others } = runtimeBytes(resolve(import.meta.dirname, "../src/runtime/java"), ".java")
-			expect({ names, others, over: Math.max(0, bytes - JAVA_RUNTIME_BYTES) }).toEqual({
+			expect({ bytes, names, others }).toEqual({
+				bytes: JAVA_RUNTIME_BYTES,
 				names: Object.keys(runtimeFiles("x"))
 					.map((name) => `${name}.java`)
 					.sort(),
 				others: [],
-				over: 0,
 			})
 		},
 	)
 })
 
-const REPO = resolve(import.meta.dirname, "../../..")
-const APPS = ["compose", "defaults", "gateway", "kitchen", "surface"]
-/** An e2e app's emitted OpenAPI document. */
-const appSpec = (app: string) =>
-	JSON.parse(
-		readFileSync(join(REPO, `packages/core/tests/e2e/apps/${app}/src/_gen/openapi.gen.json`), "utf8"),
-	) as Record<string, unknown>
+const APPS = BUDGET_APPS
+const appSpec = budgetSpec
+/** The headroom every G13 ceiling leaves over its measured max. */
+const HEADROOM = 0.2
+
+/* what `measuredSurfaces` reads once for Java's ceiling leg and its max leg alike */
+const readJava = (app: string) => {
+	const spec = appSpec(app)
+	const plans = javaCallPlans(spec)
+	return { plans: Object.keys(plans).length, surfaces: v1JavaSdkSurfaces(generateJavaSdk(spec).files, plans) }
+}
 
 /*
  * G13 (bit 16, phase f): Java's own per-operation ceiling, as C#'s bit 15 set its 68 (129 since bit 21 i5). A Java
@@ -166,7 +177,7 @@ const appSpec = (app: string) =>
  * the normal call's shorter overloads; the twin on every overload (built) keeps each. 94 + 20% = 113. An operation
  * over it is fixed in the schema, never by raising the ceiling.
  */
-const JAVA_SDK_CEILING = ceilingOf([94], 0.2)
+const JAVA_SDK_CEILING = ceilingOf([94], HEADROOM)
 
 /** One operation's emitted files: a resource whose signature GJF wrapped, its safe mirror's twin, and its Params record. */
 const WRAPPED = {
@@ -231,20 +242,22 @@ describe("the v1 Java SDK within the budget (bit 16, G13)", () => {
 
 	/* new: phase f item 1; bit 21 i6: each surface its two styles' */
 	it(`keeps every e2e app's Java operations within ${JAVA_SDK_CEILING} tokens, each its two styles' signatures`, () => {
-		const over: string[] = []
-		let surfaces = 0
-		for (const app of APPS) {
-			const spec = appSpec(app)
-			const plans = javaCallPlans(spec)
-			const measured = v1JavaSdkSurfaces(generateJavaSdk(spec).files, plans)
-			if (measured.size !== Object.keys(plans).length)
-				over.push(`${app}: ${measured.size} of ${Object.keys(plans).length} measured`)
-			surfaces += measured.size
-			for (const [key, text] of measured) {
-				const tokens = countTokens(text)
-				if (tokens > JAVA_SDK_CEILING) over.push(`${app}/${key}: ${tokens}`)
-			}
-		}
-		expect({ ceiling: JAVA_SDK_CEILING, over, surfaces }).toEqual({ ceiling: JAVA_SDK_CEILING, over: [], surfaces: 71 })
+		const measured = measuredSurfaces("java", readJava)
+		expect({
+			ceiling: JAVA_SDK_CEILING,
+			over: overCeiling(measured, JAVA_SDK_CEILING),
+			surfaces: measured.tokens.size,
+		}).toEqual({ ceiling: 113, over: [], surfaces: 71 })
+	})
+
+	/* the ceiling's own input, so a surface that shrinks brings the ceiling down instead of leaving stale headroom */
+	it("measures its largest surface where its ceiling comes from", () => {
+		const { at, tokens } = peakSurface(measuredSurfaces("java", readJava))
+		expect({ at, ceiling: JAVA_SDK_CEILING, derived: ceilingOf([tokens], HEADROOM), tokens }).toEqual({
+			at: "surface/getInParamsMembersByOrgIdAndMemberId",
+			ceiling: 113,
+			derived: 113,
+			tokens: 94,
+		})
 	})
 })

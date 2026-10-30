@@ -89,14 +89,14 @@ const CLI_RUNTIME_BYTES = 55555
 
 describe("the CLI runtime within its byte budget (bit 17, the G14 analog)", () => {
 	it(
-		`ships every runtime file it holds, all of them within ${CLI_RUNTIME_BYTES} bytes, nothing else beside them`,
+		`ships every runtime file it holds, their bytes exactly ${CLI_RUNTIME_BYTES}, nothing else beside them`,
 		{ timeout: SPAWN_TIMEOUT },
 		() => {
 			const { bytes, names, others } = runtimeBytes(resolve(import.meta.dirname, "../src/runtime/cli"), ".go")
-			expect({ names, others, over: Math.max(0, bytes - CLI_RUNTIME_BYTES) }).toEqual({
+			expect({ bytes, names, others }).toEqual({
+				bytes: CLI_RUNTIME_BYTES,
 				names: [...CLI_RUNTIME].sort(),
 				others: [],
-				over: 0,
 			})
 		},
 	)

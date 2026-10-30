@@ -27,6 +27,15 @@ TypeScript, Python, Go, Rust, C# and Java: all six SDKs.
   dropped connection (`APIConnectionError`), a timeout, a cancel, and a stream that drops after it opened. An event
   stream's safe call resolves once it opens, its error status at the opening the `Err`; a WebSocket or realtime
   operation is the same connection on `client.safe`.
+- **A realtime send is an answer**, not a dial: it POSTs on the open connection, so what comes back reads as a call's
+  does — an error status its typed error, a 2xx past the response cap a `DecodeError`, in all six SDKs. The dial
+  itself is no answer: a refusal, or a dial's answer past the cap, ends the open the way f2 does.
+- **A name of yours that collides with the mirror, or with a runtime type, is renamed and reported.** A root resource
+  or operation named `safe` is emitted as `safe_` (`Safe_` where the language capitalizes), since `safe` is the mirror
+  itself; a component named like one of the runtime types the safe mirror adds (`Result`, `Answer`, `SafeError`,
+  `DecodeError`, `SdkException`, and in Rust the style names `Style`, `Safe`, `Throw` and the parameter `S`) is
+  emitted as `<Name>Model`, as every runtime- or standard-library-named component already was. The generation names
+  each such rename on stderr, so a rename is never silent.
 
 ```ts sdk
 import { DecodeError, Kitchen } from "./kitchen"
