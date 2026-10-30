@@ -22,7 +22,9 @@
 				"stacked-json": {
 					"baseline": 1.605,
 					"catches": "+27%",
-					"ceiling": 2.046
+					"ceiling": 2.046,
+					"reportOnly": true,
+					"reason": "report-only from bit 21 bref until the per-CPU re-derive: the bench ratio follows the runner's CPU model (it cancels speed, not microarchitecture). EPYC 7763 runners read high: 40984407519 (cancel-release 6.71, stacked-json 2.04) and 40989902937 (cancel-release 7.27 over its 7.183 ceiling, REGRESSED with bench and core unchanged since cde0788), against EPYC 9V45 40986257883 (5.33, 1.52) and 9V74 40987915586 (5.66, 1.76). cde0788's six records caught the 7763 level thinly; judged again once re-derived from a set holding each CPU model at least twice."
 				}
 			}
 		},
@@ -114,7 +116,9 @@
 				"cancel-release": {
 					"baseline": 6.0,
 					"catches": "+20%",
-					"ceiling": 7.183
+					"ceiling": 7.183,
+					"reportOnly": true,
+					"reason": "report-only from bit 21 bref until the per-CPU re-derive: the bench ratio follows the runner's CPU model (it cancels speed, not microarchitecture). EPYC 7763 runners read high: 40984407519 (cancel-release 6.71, stacked-json 2.04) and 40989902937 (cancel-release 7.27 over its 7.183 ceiling, REGRESSED with bench and core unchanged since cde0788), against EPYC 9V45 40986257883 (5.33, 1.52) and 9V74 40987915586 (5.66, 1.76). cde0788's six records caught the 7763 level thinly; judged again once re-derived from a set holding each CPU model at least twice."
 				},
 				"generate-10k": {
 					"baseline": 1.26,
