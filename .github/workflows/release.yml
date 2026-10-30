@@ -52,6 +52,9 @@ jobs:
           if [ "$GITHUB_REF_TYPE" != tag ]; then echo "the release runs on a v* tag, not $GITHUB_REF_NAME"; exit 1; fi
           got="$(node -p 'const p = require("./package.json"); p.name + "@" + p.version')"
           if [ "$got" != "$PACKAGE@${GITHUB_REF_NAME#v}" ]; then echo "$got is not the tag's $PACKAGE@${GITHUB_REF_NAME#v}"; exit 1; fi
+      # the tag's notes: a version nobody wrote an entry for never reaches npm
+      - name: Check the CHANGELOG entry for the tag
+        run: bun "$GITHUB_WORKSPACE/scripts/changelog.ts" "${GITHUB_REF_NAME#v}"
       - run: bun install --frozen-lockfile
       # scripts/pack.ts, as the packaging tests pack: catalog: and workspace: resolved to versions, then npm pack
       - name: Pack @lovrozagar/honey
