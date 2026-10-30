@@ -2,7 +2,7 @@
  * The e2e build tier's time gate (bit 21 cfb), two checks per cell:
  *
  * - The regression gate is a RATIO: the cell's build time over a honey-free reference build (reference/), the same
- *   `vite build` on the same runtime and target, timed in the same run-build.ts process on the same runner. CI's
+ *   `vite build` on the same runtime and target, timed around the cell's own builds (build-window.ts). CI's
  *   runners come in classes about 1.6x apart (CI runs 40582174256 and 40754723329: the same commit built surface in
  *   2.7 s on one, 4.6 s on another), so an absolute ceiling either reds on a slow runner or passes a regression on a
  *   fast one; the ratio cancels the runner. The reference is honey-free, not a sibling app: honey generate is ~90% of
@@ -31,14 +31,7 @@ import type { RuntimeId } from "./builds.ts"
 export const HANG_GUARD_MS: Record<RuntimeId, number> = { bun: 8_000, node: 13_000 }
 
 /**
- * Reference builds timed per runtime and target in a run-build.ts process, after one untimed warm-up (a cold first
- * build is ~1.36x a warm one here): the median of 5. The reference spreads 1.03-1.08 max/median here; the median
- * of 5 holds the ratio against up to two outlying reference samples for ~0.5 s a target on a slow runner.
- */
-export const REFERENCE_SAMPLES = 5
-
-/**
- * App builds per cell, judged on their median: one build is one sample against the reference's median of 5, so one
+ * App builds per cell, judged on their median: one build is one sample against a median of references, so one
  * slow build read as a regression. CI run 40877110861's build (bun) job built defaults×cloudflare once in 2,949 ms
  * (ratio 21.21, over its 20.98 ceiling) where compose×cloudflare and gateway×cloudflare, which track it within a few %,
  * took 2,472 and 2,501, and its own ×bun and ×node cells read 17.55 and 16.39. Three builds pass one such spike and
@@ -75,11 +68,12 @@ export type BuildMode = "judge" | "local" | "record"
 
 /**
  * Why a run off GitHub Actions only reports its ratios: the ceilings are CI's, recorded on Actions runners, and a
- * machine's ratio is not CI's (this one's honey-free reference builds in ~80 ms against CI's 160-230 ms, and its Node
- * cells read 27-31 against CI's ~23.7).
+ * machine's ratio is not CI's: the honey-free reference is JS work and the builds are not only that, so a machine
+ * shifts the two unequally (this one's references take ~1.3 s on Node and ~1.7 s on Bun, its cells reading 1.0-1.9 on
+ * Node and 0.2-1.0 on Bun, bit 21 bref).
  */
 export const LOCAL_REASON =
-	"ratio report-only off GitHub Actions: ceilings recorded on CI runners; a local reference builds in ~80 ms against CI's 160-230 ms"
+	"ratio report-only off GitHub Actions: ceilings recorded on CI runners, and a machine's ratio is not a CI runner's"
 
 /**
  * The run's mode, from explicit signals only: `record` when BUILD_MODE=record (a calibration dispatch), `judge` on a
@@ -162,9 +156,12 @@ export function ratioLine(
 	return `RATIO build ${key.replace(" ", "@")} ${cell} ${ratio} ms=${Math.round(ms)} ref=${Math.round(referenceMs)} builds=${each}`
 }
 
-/** A reference's samples as one parseable line: `REFERENCE build <runtime>@<version> <target> <median> <samples>`. */
-export function referenceLine(key: string, target: string, samples: readonly number[]): string {
-	return `REFERENCE build ${key.replace(" ", "@")} ${target} ${Math.round(median(samples))} ${samples.map((ms) => Math.round(ms)).join(",")}`
+/**
+ * The references timed around one cell's builds (build-window.ts) as one parseable line, their median the cell's
+ * RATIO line's ref=: `REFERENCE build <runtime>@<version> <cell> <median> <ms>,<ms>,<ms>,<ms>`.
+ */
+export function referenceLine(key: string, cell: string, samples: readonly number[]): string {
+	return `REFERENCE build ${key.replace(" ", "@")} ${cell} ${Math.round(median(samples))} ${samples.map((ms) => Math.round(ms)).join(",")}`
 }
 
 /** One RATIO line parsed back: what the derive reads from a CI job's log. */

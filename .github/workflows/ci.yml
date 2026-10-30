@@ -595,6 +595,10 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
       - run: bun install --frozen-lockfile
+      # the runner's CPU model, to tell a per-runner bench level (a ratio cancels speed, not microarchitecture) from a
+      # per-process one (bit 21: adapter's levels move together per job, and a job is one runner and one process)
+      - name: cpu
+        run: grep -m1 "model name" /proc/cpuinfo
       # Each bench: v1's cost as a ratio to a raw twin doing the same work, judged against its ceiling in
       # blueprint/baselines/bench.json (the worst of six CI runs on these pins, plus 10%): that margin is the
       # noise budget, so a red is never retried away. A red with v1 unchanged is answered by a re-record
@@ -628,7 +632,10 @@ jobs:
   build:
     name: build (${{ matrix.runtime }})
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # bit 21 bref: each cell times its own 4 references (15,000 units of JS work, ~1.3-1.8 s each). The worst build
+    # job of the last 5 CI runs took 5.9 min with its run-build span at most 5.4; that span projects to 10.1 min
+    # (CI's own reference ms x the new/old reference ratio measured locally), so ~10.6 min x 1.5 = 15.9, rounded up.
+    timeout-minutes: 16
     strategy:
       fail-fast: false
       matrix:
@@ -644,6 +651,9 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
       - run: bun install --frozen-lockfile
       - run: bun run generate
+      # the runner's CPU model, so the build ratios' runner classes can be told by CPU as well as by surface ms (H1)
+      - name: cpu
+        run: grep -m1 "model name" /proc/cpuinfo
       # --check-generated: the checkout is clean here, so a build that rewrites a
       # committed generated file means it is stale or codegen is not deterministic.
       # each cell's time over a honey-free reference build's, judged against blueprint/baselines/build.json; a

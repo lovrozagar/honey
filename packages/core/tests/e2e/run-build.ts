@@ -3,9 +3,10 @@
  * Build tier. Every e2e app is built for every deploy target it declares, on the
  * runtime you pick. A target passes when the build exits 0, emits the artifacts its
  * spec names, stays under its size budget and its runtime's hang guard, and the median of
- * its BUILD_SAMPLES builds over the honey-free reference build's is within its recorded
- * ceiling (build-gate.ts says how, and why a ratio and a median). Every built cell prints a
- * `RATIO build` line, each build's ms after builds=; BUILD_MODE=record prints
+ * its BUILD_SAMPLES builds over the median of the honey-free reference builds timed around
+ * them (build-window.ts) is within its recorded ceiling (build-gate.ts says how, and why a
+ * ratio and a median). Every built cell prints a `REFERENCE build` line, its references'
+ * ms, and a `RATIO build` line, each build's ms after builds=; BUILD_MODE=record prints
  * them without judging, for CI to record the ceilings from.
  *
  *   bun run packages/core/tests/e2e/run-build.ts
@@ -44,10 +45,10 @@ import {
 	ratioLine,
 	readBaseline,
 	recordedCells,
-	REFERENCE_SAMPLES,
 	referenceLine,
 	runtimeKey,
 } from "./build-gate.ts"
+import { type CellMeter, cellMeter } from "./build-window.ts"
 
 function arg(flag: string): string | undefined {
 	const i = process.argv.indexOf(flag)
@@ -174,50 +175,45 @@ async function keyOf(runtime: RuntimeId): Promise<string> {
 	return runtimeKey(runtime, versions.get(runtime) as string)
 }
 
-/*
- * The honey-free reference's median ms per runtime and target, built where that target's first cell builds, so both
- * see the same runner: one untimed warm-up, then REFERENCE_SAMPLES timed builds.
- */
-const references = new Map<string, number>()
-async function referenceMs(runtime: RuntimeId, target: TargetId): Promise<number> {
-	const id = `${runtime} ${target}`
-	const known = references.get(id)
+/* each runtime's meter, so a runtime's first cell of a target warms that target's reference on that runtime */
+const meters = new Map<RuntimeId, CellMeter>()
+function meterOf(runtime: RuntimeId): CellMeter {
+	const known = meters.get(runtime)
 	if (known !== undefined) return known
 	const command = viteBuildCommand(REFERENCE_BUILD.config, runtime)
-	const samples: number[] = []
-	for (let sample = 0; sample <= REFERENCE_SAMPLES; sample++) {
-		const built = await timedBuild(command, REFERENCE_BUILD.cwd, target)
+	const meter = cellMeter(async (target) => {
+		const built = await timedBuild(command, REFERENCE_BUILD.cwd, target as TargetId)
 		if (built.code !== 0) {
 			process.stdout.write(built.output)
 			throw new Error(`the reference build for ${target} on ${runtime} exited ${built.code}`)
 		}
-		if (sample > 0) samples.push(built.ms)
-	}
-	console.log(referenceLine(await keyOf(runtime), target, samples))
-	references.set(id, median(samples))
-	return median(samples)
+		return built.ms
+	})
+	meters.set(runtime, meter)
+	return meter
 }
 
 async function runBuild(spec: BuildSpec, runtime: RuntimeId): Promise<Result> {
 	const name = `${spec.id} on ${runtime}`
 	const cwd = buildCwd(spec)
-	const reference = await referenceMs(runtime, spec.target)
-
 	const dirtyBefore = checkGenerated ? await dirtyTrackedFiles(cwd) : []
 
-	/* BUILD_SAMPLES builds from a clean output each, judged on their median; the artifacts checked are the last's */
-	const builds: number[] = []
-	for (let sample = 0; sample < BUILD_SAMPLES; sample++) {
+	/*
+	 * BUILD_SAMPLES builds from a clean output each, judged on their median over the median of the references timed
+	 * around them (build-window.ts); the artifacts checked are the last build's
+	 */
+	const measured = await meterOf(runtime)(spec.target, async () => {
 		for (const dir of spec.outDirs) {
 			rmSync(join(cwd, dir), { force: true, recursive: true })
 		}
-		const built = await timedBuild(buildCommand(spec, runtime), cwd, spec.target)
-		if (built.code !== 0) {
-			process.stdout.write(built.output)
-			return { detail: `build exited ${built.code}`, ms: built.ms, name, status: "fail" }
-		}
-		builds.push(built.ms)
+		return timedBuild(buildCommand(spec, runtime), cwd, spec.target)
+	})
+	if ("failed" in measured) {
+		process.stdout.write(measured.failed.output)
+		return { detail: `build exited ${measured.failed.code}`, ms: measured.failed.ms, name, status: "fail" }
 	}
+	const { builds, references } = measured
+	const reference = median(references)
 	const ms = median(builds)
 
 	const missing = spec.expect.filter((rel) => !existsSync(join(cwd, rel)))
@@ -227,6 +223,7 @@ async function runBuild(spec: BuildSpec, runtime: RuntimeId): Promise<Result> {
 
 	const kb = gzipKb(join(cwd, entryArtifact(spec)))
 	const key = await keyOf(runtime)
+	console.log(referenceLine(key, spec.id, references))
 	const verdict = judgeBuild({
 		builds,
 		ceiling: baseline?.builds[key]?.[spec.id],
