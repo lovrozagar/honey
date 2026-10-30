@@ -6,7 +6,9 @@
  * its BUILD_SAMPLES builds over the median of the honey-free reference builds timed around
  * them (build-window.ts) is within its recorded ceiling (build-gate.ts says how, and why a
  * ratio and a median). Every built cell prints a `REFERENCE build` line, its references'
- * ms, and a `RATIO build` line, each build's ms after builds=; BUILD_MODE=record prints
+ * ms, a `REFERENCE0 build` line, the bare reference's timed beside them (bit 21 bref
+ * diagnostic, its median the RATIO line's ref0=), and a `RATIO build` line, each build's
+ * ms after builds=; BUILD_MODE=record prints
  * them without judging, for CI to record the ceilings from.
  *
  *   bun run packages/core/tests/e2e/run-build.ts
@@ -180,15 +182,18 @@ const meters = new Map<RuntimeId, CellMeter>()
 function meterOf(runtime: RuntimeId): CellMeter {
 	const known = meters.get(runtime)
 	if (known !== undefined) return known
-	const command = viteBuildCommand(REFERENCE_BUILD.config, runtime)
-	const meter = cellMeter(async (target) => {
-		const built = await timedBuild(command, REFERENCE_BUILD.cwd, target as TargetId)
-		if (built.code !== 0) {
-			process.stdout.write(built.output)
-			throw new Error(`the reference build for ${target} on ${runtime} exited ${built.code}`)
+	const timed = (config: string) => {
+		const command = viteBuildCommand(config, runtime)
+		return async (target: string) => {
+			const built = await timedBuild(command, REFERENCE_BUILD.cwd, target as TargetId)
+			if (built.code !== 0) {
+				process.stdout.write(built.output)
+				throw new Error(`the reference build (${config}) for ${target} on ${runtime} exited ${built.code}`)
+			}
+			return built.ms
 		}
-		return built.ms
-	})
+	}
+	const meter = cellMeter(timed(REFERENCE_BUILD.config), timed(REFERENCE_BUILD.bare))
 	meters.set(runtime, meter)
 	return meter
 }
@@ -212,7 +217,7 @@ async function runBuild(spec: BuildSpec, runtime: RuntimeId): Promise<Result> {
 		process.stdout.write(measured.failed.output)
 		return { detail: `build exited ${measured.failed.code}`, ms: measured.failed.ms, name, status: "fail" }
 	}
-	const { builds, references } = measured
+	const { bare, builds, references } = measured
 	const reference = median(references)
 	const ms = median(builds)
 
@@ -223,7 +228,8 @@ async function runBuild(spec: BuildSpec, runtime: RuntimeId): Promise<Result> {
 
 	const kb = gzipKb(join(cwd, entryArtifact(spec)))
 	const key = await keyOf(runtime)
-	console.log(referenceLine(key, spec.id, references))
+	console.log(referenceLine("REFERENCE", key, spec.id, references))
+	console.log(referenceLine("REFERENCE0", key, spec.id, bare))
 	const verdict = judgeBuild({
 		builds,
 		ceiling: baseline?.builds[key]?.[spec.id],
@@ -231,7 +237,7 @@ async function runBuild(spec: BuildSpec, runtime: RuntimeId): Promise<Result> {
 		referenceMs: reference,
 		runtime,
 	})
-	console.log(ratioLine(key, spec.id, verdict.ratio, builds, reference))
+	console.log(ratioLine(key, spec.id, verdict.ratio, builds, { bare: median(bare), worked: reference }))
 	if (verdict.failures.length > 0) {
 		return { detail: verdict.failures.join("; "), gzipKb: kb, ms, name, status: "fail" }
 	}

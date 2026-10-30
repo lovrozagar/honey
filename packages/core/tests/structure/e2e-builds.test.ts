@@ -154,8 +154,8 @@ describe("the e2e build gate's record lines", () => {
 
 	it("parses its RATIO lines back out of a CI log, the job and timestamp columns before them", () => {
 		const log = [
-			`e2e (cf-workers prod)\tRun bun run test:e2e:cf:prod\t2026-10-28T19:30:45.9Z ${gate.ratioLine(KEY, CELL, 15.04, [5_512.4, 5_498, 5_620], 366.6)}`,
-			gate.referenceLine(KEY, CELL, [366.6, 360, 371, 368]),
+			`e2e (cf-workers prod)\tRun bun run test:e2e:cf:prod\t2026-10-28T19:30:45.9Z ${gate.ratioLine(KEY, CELL, 15.04, [5_512.4, 5_498, 5_620], { bare: 81.4, worked: 366.6 })}`,
+			gate.referenceLine("REFERENCE", KEY, CELL, [366.6, 360, 371, 368]),
 			"RATIO build bun@1.3 defaults×cloudflare 17.84 ms=2480 ref=139" /* a k=1 record run's line, before builds= */,
 			"RATIO hotpath body 1.2",
 		].join("\n")
@@ -167,11 +167,11 @@ describe("the e2e build gate's record lines", () => {
 				.map((line) => line.replace(/^.*Z /, "")),
 		]).toEqual([
 			[
-				{ builds: [5_512, 5_498, 5_620], cell: CELL, key: KEY, ms: 5_512, ratio: 15.04, referenceMs: 367 },
+				{ bareMs: 81, builds: [5_512, 5_498, 5_620], cell: CELL, key: KEY, ms: 5_512, ratio: 15.04, referenceMs: 367 },
 				{ cell: "defaults×cloudflare", key: KEY, ms: 2_480, ratio: 17.84, referenceMs: 139 },
 			],
 			[
-				"RATIO build bun@1.3 surface×cloudflare 15.04 ms=5512 ref=367 builds=5512,5498,5620",
+				"RATIO build bun@1.3 surface×cloudflare 15.04 ms=5512 ref=367 ref0=81 builds=5512,5498,5620",
 				"REFERENCE build bun@1.3 surface×cloudflare 367 367,360,371,368",
 			],
 		])

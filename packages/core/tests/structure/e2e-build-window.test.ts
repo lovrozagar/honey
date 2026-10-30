@@ -31,9 +31,11 @@ const JITTER = [1, 1.008, 0.994, 1.004, 0.997]
 
 /**
  * A fake runner on a clock: every build takes its nominal ms x the runner's speed at the moment it starts x the
- * jitter, and moves the clock on by that. `referenceSpeed` scales the reference build alone.
+ * jitter, and moves the clock on by that. `referenceSpeed` scales the reference build alone; the bare reference (no
+ * JS work, timed beside it) takes `bareMs`, a tenth of the worked one's unless given.
  */
 function fakeRunner(runner: {
+	bareMs?: number
 	referenceMs: number
 	referenceSpeed?: (now: number) => number
 	speed?: (now: number) => number
@@ -47,6 +49,10 @@ function fakeRunner(runner: {
 		return took
 	}
 	return {
+		bare: async () => {
+			order.push("0")
+			return take(runner.bareMs ?? runner.referenceMs / 10, runner.referenceSpeed?.(now) ?? 1)
+		},
 		build: (ms: number) => async () => {
 			order.push("B")
 			return { code: 0, ms: take(ms, 1), output: "" }
@@ -61,7 +67,7 @@ function fakeRunner(runner: {
 
 /** One job's cells built in turn on `runner`, each judged on Actions against CEILINGS: the cells that fail. */
 async function redCells(runner: ReturnType<typeof fakeRunner>, target: string, ms: Record<string, number>) {
-	const meter = cellMeter(runner.reference)
+	const meter = cellMeter(runner.reference, runner.bare)
 	const red: string[] = []
 	for (const app of APPS) {
 		const cell = `${app}×${target}`
@@ -107,13 +113,13 @@ const REFERENCE_SPREAD: Record<number, Spread> = {
 }
 
 describe("the e2e build gate's reference window", () => {
-	it("times a cell as ref, build, ref, build, ref, build, ref, after one untimed reference warm-up a target", async () => {
+	it("times a cell as ref, build, ref, build, ref, build, ref, each ref a bare-then-worked pair, after one untimed pair a target", async () => {
 		const runner = fakeRunner({ referenceMs: 100 })
-		const meter = cellMeter(runner.reference)
+		const meter = cellMeter(runner.reference, runner.bare)
 		await meter("node", runner.build(1_000))
 		await meter("node", runner.build(1_000))
-		/* the first cell: warm-up, then RBRBRBR; the second: RBRBRBR */
-		expect(runner.order.join("")).toBe("RRBRBRBRRBRBRBR")
+		/* the first cell: the warm-up pair, then 0R B 0R B 0R B 0R; the second: 0R B 0R B 0R B 0R */
+		expect(runner.order.join("")).toBe("0R0RB0RB0RB0R0RB0RB0RB0R")
 	})
 
 	it("passes a runner slowing 14% partway through the job (CI 40965667478, surface×cloudflare red at 31.87)", async () => {

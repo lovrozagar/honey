@@ -153,5 +153,12 @@ export function buildCommand(spec: BuildSpec, runtime: RuntimeId): string[] {
 	return viteBuildCommand(spec.config, runtime)
 }
 
-/** The build gate's honey-free reference (reference/vite.config.ts): where it builds and the config it builds with. */
-export const REFERENCE_BUILD = { config: "vite.config.ts", cwd: join(e2eRoot, "reference") } as const
+/**
+ * The build gate's honey-free reference (reference/vite.config.ts): where it builds and the config it builds with, and
+ * the bare one timed beside it (reference/vite.config.bare.ts, no JS work; bit 21 bref diagnostic).
+ */
+export const REFERENCE_BUILD = {
+	bare: "vite.config.bare.ts",
+	config: "vite.config.ts",
+	cwd: join(e2eRoot, "reference"),
+} as const

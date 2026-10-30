@@ -141,32 +141,42 @@ export function judgeBuild(input: {
 }
 
 /**
- * One cell's ratio as one parseable line, its builds' median as ms and each build after builds= (for diagnosis):
- * `RATIO build <runtime>@<version> <cell> <ratio> ms=<median> ref=<ms> builds=<ms>,<ms>,<ms>`.
+ * One cell's ratio as one parseable line, its builds' median as ms, the worked and the bare reference's medians, and
+ * each build after builds= (for diagnosis):
+ * `RATIO build <runtime>@<version> <cell> <ratio> ms=<median> ref=<ms> ref0=<ms> builds=<ms>,<ms>,<ms>`.
  */
 export function ratioLine(
 	key: string,
 	cell: string,
 	ratio: number,
 	builds: readonly number[],
-	referenceMs: number,
+	references: { bare: number; worked: number },
 ): string {
 	const each = builds.map((ms) => Math.round(ms)).join(",")
 	const ms = median(builds)
-	return `RATIO build ${key.replace(" ", "@")} ${cell} ${ratio} ms=${Math.round(ms)} ref=${Math.round(referenceMs)} builds=${each}`
+	return `RATIO build ${key.replace(" ", "@")} ${cell} ${ratio} ms=${Math.round(ms)} ref=${Math.round(references.worked)} ref0=${Math.round(references.bare)} builds=${each}`
 }
 
 /**
- * The references timed around one cell's builds (build-window.ts) as one parseable line, their median the cell's
- * RATIO line's ref=: `REFERENCE build <runtime>@<version> <cell> <median> <ms>,<ms>,<ms>,<ms>`.
+ * The references timed around one cell's builds (build-window.ts) as one parseable line each, their median the cell's
+ * RATIO line's ref= (REFERENCE, the worked one) or ref0= (REFERENCE0, the bare one):
+ * `REFERENCE build <runtime>@<version> <cell> <median> <ms>,<ms>,<ms>,<ms>`.
  */
-export function referenceLine(key: string, cell: string, samples: readonly number[]): string {
-	return `REFERENCE build ${key.replace(" ", "@")} ${cell} ${Math.round(median(samples))} ${samples.map((ms) => Math.round(ms)).join(",")}`
+export function referenceLine(
+	label: "REFERENCE" | "REFERENCE0",
+	key: string,
+	cell: string,
+	samples: readonly number[],
+): string {
+	return `${label} build ${key.replace(" ", "@")} ${cell} ${Math.round(median(samples))} ${samples.map((ms) => Math.round(ms)).join(",")}`
 }
 
-/** One RATIO line parsed back: what the derive reads from a CI job's log. */
-/** One RATIO line parsed back; `builds` only on a line from a median-of-BUILD_SAMPLES run (none before). */
+/**
+ * One RATIO line parsed back, what the derive reads from a CI job's log: `builds` only on a line from a
+ * median-of-BUILD_SAMPLES run, `bareMs` only on one that timed the bare reference beside the worked one (ref0=).
+ */
 export type RatioRecord = {
+	bareMs?: number
 	builds?: number[]
 	cell: string
 	key: string
@@ -175,7 +185,7 @@ export type RatioRecord = {
 	referenceMs: number
 }
 
-const RATIO_RE = /^RATIO build (\S+)@(\S+) (\S+) ([\d.]+) ms=(\d+) ref=(\d+)(?: builds=([\d,]+))?$/
+const RATIO_RE = /^RATIO build (\S+)@(\S+) (\S+) ([\d.]+) ms=(\d+) ref=(\d+)(?: ref0=(\d+))?(?: builds=([\d,]+))?$/
 
 /** Every RATIO line in a log (any prefix before `RATIO`, as a CI log's job and timestamp columns). */
 export function parseRatios(log: string): RatioRecord[] {
@@ -185,14 +195,16 @@ export function parseRatios(log: string): RatioRecord[] {
 		const match = at === -1 ? null : RATIO_RE.exec(line.slice(at).trim())
 		if (match === null) continue
 		const [, runtime, version, cell, ratio, ms, ref] = match as unknown as string[]
-		const builds: string | undefined = match[7]
-		const record = {
+		const bare: string | undefined = match[7]
+		const builds: string | undefined = match[8]
+		const record: RatioRecord = {
 			cell,
 			key: `${runtime} ${version}`,
 			ms: Number(ms),
 			ratio: Number(ratio),
 			referenceMs: Number(ref),
 		}
+		if (bare !== undefined) record.bareMs = Number(bare)
 		out.push(builds === undefined ? record : { builds: builds.split(",").map(Number), ...record })
 	}
 	return out
