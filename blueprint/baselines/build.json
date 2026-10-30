@@ -1,5 +1,277 @@
 {
-	"builds": {},
-	"note": "REPORT-ONLY from 5f2942e for the interleaved-reference re-record. Two judge-mode reds on unchanged built code in the k=3 bench record dispatches at 5f2942e: 40965667478 build (node) surface×cloudflare 31.87 over 30.6 (all three app builds high, 7446/7333/7569 ms against ~6500, the reference normal at 234 ms), and 40969532154 mcp×bun 16.54 over 16.35 (app builds normal, the reference caught fast at 148–163 ms against 164–247). Cause: each target's honey-free reference was measured once at the job's start (median of 5) and reused as the denominator of every cell for ~5 minutes, so a mid-job runner slowdown lifts the numerator alone and a fast reference lifts every ratio of its target; numerator and denominator are not measured in the same window (the class the bench k-pass fixed). Every ceiling is removed, so run-build judges every cell through the judge's no-ceiling path (unbaselined: printed, never failing); the hang guard (bun 8 s, node 13 s) still judges every build. The structure leg 'are recorded from CI for every cell before bit 21 closes' refuses this file at COMPLETE >= 21, so the re-record is owed before bit 21 closes. Superseded ceilings: 42 cells from 6 k=3 record runs (40889301648, 40891096140, 40893983504, 40908742095, 40911060071, 40913885826). Re-record: the interleaved reference (ref, build, ref, build, ref, build, ref per cell; median(builds) / median(refs) from one window), then dispatch ci.yml with build_mode=record over 6+ runs and derive with derive-build-ceilings.ts.",
-	"runs": []
+	"builds": {
+		"bun 1.3": {
+			"compose×bun": {
+				"baseline": 1.12,
+				"byClass": {},
+				"catches": "+20%",
+				"ceiling": 1.345
+			},
+			"compose×cloudflare": {
+				"baseline": 1.16,
+				"byClass": {},
+				"catches": "+22%",
+				"ceiling": 1.411
+			},
+			"compose×node": {
+				"baseline": 1.15,
+				"byClass": {},
+				"catches": "+30%",
+				"ceiling": 1.492
+			},
+			"defaults×bun": {
+				"baseline": 1.065,
+				"byClass": {},
+				"catches": "+22%",
+				"ceiling": 1.304
+			},
+			"defaults×cloudflare": {
+				"baseline": 1.11,
+				"byClass": {},
+				"catches": "+24%",
+				"ceiling": 1.377
+			},
+			"defaults×node": {
+				"baseline": 1.1,
+				"byClass": {},
+				"catches": "+29%",
+				"ceiling": 1.417
+			},
+			"gateway×bun": {
+				"baseline": 1.105,
+				"byClass": {},
+				"catches": "+23%",
+				"ceiling": 1.354
+			},
+			"gateway×cloudflare": {
+				"baseline": 1.135,
+				"byClass": {},
+				"catches": "+22%",
+				"ceiling": 1.387
+			},
+			"gateway×node": {
+				"baseline": 1.14,
+				"byClass": {},
+				"catches": "+29%",
+				"ceiling": 1.467
+			},
+			"kitchen×bun": {
+				"baseline": 1.12,
+				"byClass": {},
+				"catches": "+21%",
+				"ceiling": 1.36
+			},
+			"kitchen×cloudflare": {
+				"baseline": 1.16,
+				"byClass": {},
+				"catches": "+20%",
+				"ceiling": 1.396
+			},
+			"kitchen×node": {
+				"baseline": 1.16,
+				"byClass": {},
+				"catches": "+30%",
+				"ceiling": 1.51
+			},
+			"mcp×bun": {
+				"baseline": 0.22,
+				"byClass": {},
+				"catches": "+15%",
+				"ceiling": 0.253
+			},
+			"mcp×cloudflare": {
+				"baseline": 0.23,
+				"byClass": {},
+				"catches": "+15%",
+				"ceiling": 0.264
+			},
+			"mcp×node": {
+				"baseline": 0.22,
+				"byClass": {},
+				"catches": "+19%",
+				"ceiling": 0.262
+			},
+			"surface×bun": {
+				"baseline": 1.215,
+				"byClass": {},
+				"catches": "+19%",
+				"ceiling": 1.446
+			},
+			"surface×cloudflare": {
+				"baseline": 1.245,
+				"byClass": {},
+				"catches": "+22%",
+				"ceiling": 1.519
+			},
+			"surface×node": {
+				"baseline": 1.255,
+				"byClass": {},
+				"catches": "+28%",
+				"ceiling": 1.605
+			}
+		},
+		"node 22": {
+			"compose×bun": {
+				"baseline": 1.79,
+				"byClass": {},
+				"catches": "+29%",
+				"ceiling": 2.309
+			},
+			"compose×cloudflare": {
+				"baseline": 1.795,
+				"byClass": {},
+				"catches": "+32%",
+				"ceiling": 2.361
+			},
+			"compose×node": {
+				"baseline": 1.82,
+				"byClass": {},
+				"catches": "+27%",
+				"ceiling": 2.319
+			},
+			"defaults×bun": {
+				"baseline": 1.79,
+				"byClass": {},
+				"catches": "+31%",
+				"ceiling": 2.339
+			},
+			"defaults×cloudflare": {
+				"baseline": 1.795,
+				"byClass": {},
+				"catches": "+32%",
+				"ceiling": 2.362
+			},
+			"defaults×node": {
+				"baseline": 1.775,
+				"byClass": {},
+				"catches": "+33%",
+				"ceiling": 2.352
+			},
+			"gateway×bun": {
+				"baseline": 1.82,
+				"byClass": {},
+				"catches": "+31%",
+				"ceiling": 2.388
+			},
+			"gateway×cloudflare": {
+				"baseline": 1.815,
+				"byClass": {},
+				"catches": "+35%",
+				"ceiling": 2.442
+			},
+			"gateway×node": {
+				"baseline": 1.82,
+				"byClass": {},
+				"catches": "+31%",
+				"ceiling": 2.377
+			},
+			"kitchen×bun": {
+				"baseline": 1.865,
+				"byClass": {},
+				"catches": "+37%",
+				"ceiling": 2.556
+			},
+			"kitchen×cloudflare": {
+				"baseline": 1.9,
+				"byClass": {},
+				"catches": "+40%",
+				"ceiling": 2.657
+			},
+			"kitchen×node": {
+				"baseline": 1.87,
+				"byClass": {},
+				"catches": "+33%",
+				"ceiling": 2.491
+			},
+			"mcp×bun": {
+				"baseline": 0.99,
+				"byClass": {},
+				"catches": "+46%",
+				"ceiling": 1.447
+			},
+			"mcp×cloudflare": {
+				"baseline": 1.005,
+				"byClass": {},
+				"catches": "+42%",
+				"ceiling": 1.427
+			},
+			"mcp×node": {
+				"baseline": 1.005,
+				"byClass": {},
+				"catches": "+35%",
+				"ceiling": 1.353
+			},
+			"surface×bun": {
+				"baseline": 1.91,
+				"byClass": {},
+				"catches": "+41%",
+				"ceiling": 2.7
+			},
+			"surface×cloudflare": {
+				"baseline": 1.905,
+				"byClass": {},
+				"catches": "+40%",
+				"ceiling": 2.659
+			},
+			"surface×node": {
+				"baseline": 1.93,
+				"byClass": {},
+				"catches": "+32%",
+				"ceiling": 2.541
+			}
+		},
+		"node 26": {
+			"compose×node": {
+				"baseline": 1.91,
+				"byClass": {},
+				"catches": "+43%",
+				"ceiling": 2.74
+			},
+			"defaults×node": {
+				"baseline": 1.865,
+				"byClass": {},
+				"catches": "+43%",
+				"ceiling": 2.67
+			},
+			"gateway×node": {
+				"baseline": 1.895,
+				"byClass": {},
+				"catches": "+42%",
+				"ceiling": 2.684
+			},
+			"kitchen×node": {
+				"baseline": 1.945,
+				"byClass": {},
+				"catches": "+39%",
+				"ceiling": 2.696
+			},
+			"mcp×node": {
+				"baseline": 1.095,
+				"byClass": {},
+				"catches": "+47%",
+				"ceiling": 1.611
+			},
+			"surface×node": {
+				"baseline": 2.0,
+				"byClass": {},
+				"catches": "+51%",
+				"ceiling": 3.011
+			}
+		}
+	},
+	"note": "Per runtime key and e2e build cell: the cell's app builds' median over the median of the honey-free reference builds timed around them in the same window (R B R B R B R; bit 21 bref, run-build.ts and build-window.ts; the reference is the honey-free vite build plus REFERENCE_WORK=15,000 units of JS work), from the RATIO build lines of the build and prod e2e jobs of 12 CI runs at ea93db8 dispatched with build_mode=record and bench_mode=record (40992951769, 40994266318, 40995964448, 40997576594, 40998707953, 41000213648, 41001335972, 41002952919, 41004626960, 41005693193, 41006989530, 41008619241). Ceiling rule (bit 21, both baselines): per cell, fit log(ratio) (mean m, sample sd s), sigma_upper = s * sqrt((n-1)/chi2_0.10,n-1) (one-sided 90% upper bound on sigma), z = Phi^-1(1 - 0.02/G) with G = 42 cells, ceiling = max(worst x 1.10, exp(m + z*sigma_upper)); baseline the median; catches = ceiling / baseline. The summed fitted per-run false-red probability is 1.91% (budget 2%); a leave-one-out backtest (ceilings re-fitted per fold) reds 0 of 12 runs. Reference choice (H1): each record also timed a bare reference (no JS work) beside the worked one; over the 12 runs both kept the ratio's runner-class shift within 10% (by CPU family and by speed half, median per job: worked -7.4% to +8.8%, bare +2.9% to +5.9%), and the worked one's in-window ratio spread is lower (2.7-3.2% against 4.0%), so the worked one is judged and the bare diagnostic is removed. A ratio cancels runner speed, not CPU microarchitecture, so ceilings span the CPU models GitHub hands out (EPYC 7763, 9V45, 9V74, Xeon 8573C, 6973P-C seen); a same-runner A/B gate (head vs a pinned base commit) replaces these ceilings next. Supersedes the report-only file from 5f2942e (two reds on unchanged code from a reference measured once per target, 40965667478 and 40969532154). No retry: a red with honey unchanged is answered by a re-record under this rule, never a rerun.",
+	"runs": [
+		"40992951769",
+		"40994266318",
+		"40995964448",
+		"40997576594",
+		"40998707953",
+		"41000213648",
+		"41001335972",
+		"41002952919",
+		"41004626960",
+		"41005693193",
+		"41006989530",
+		"41008619241"
+	]
 }
