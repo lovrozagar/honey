@@ -61,7 +61,11 @@
 				"bench/src/finalize.ts",
 				"bench/src/adapter.ts",
 				"bench/src/streaming.ts",
-				"bench/src/websockets.ts"
+				"bench/src/websockets.ts",
+				"bench/src/side.ts",
+				"bench/src/side.test.ts",
+				"bench/src/perf-base.ts",
+				"bench/src/perf-base.test.ts"
 			],
 			"plugins": ["typescript", "unicorn", "oxc", "vitest"],
 			"rules": {

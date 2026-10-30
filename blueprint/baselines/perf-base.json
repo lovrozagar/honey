@@ -1,0 +1,6 @@
+{
+	"sha": "43a446226ed120eddb2722b24613d92823fd6cf7",
+	"recorded": "2026-10-31",
+	"note": "the first base: the 1.0 release-notes tip (43a4462, docs(blueprint): rows for the changelog check), the last commit before bit 22 opens. No v1.0.0 tag exists yet; when it is cut, the next move pins the tag's commit and names it here.",
+	"history": []
+}
