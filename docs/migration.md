@@ -4,8 +4,8 @@ Each deliberate break from v0 0.7.x, with what you wrote before and what you wri
 is shown as it was; an "after" block is v1 and is compiled by the docs' tests. The SDK examples call a client
 generated from a small example API (`Kitchen`); yours is named after your document.
 
-The SDK sections cover the four SDKs 0.7.3 shipped: TypeScript, Python, Go and Rust. The C# and Java SDKs are new in 1.0,
-so they migrate nothing; their client is documented in [the generated clients page](client.md).
+The SDK sections cover the four SDKs 0.7.3 shipped: TypeScript, Python, Go and Rust. The C# and Java SDKs are new
+in 1.0, so they migrate nothing; their client is documented in [the generated clients page](client.md).
 
 ## Code generation moved to `@lovrozagar/honey-codegen`
 
