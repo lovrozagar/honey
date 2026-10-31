@@ -7,7 +7,7 @@
  */
 import { describe, expectTypeOf, it } from "vitest"
 import type { InferMeta } from "../../src/routing/app-types.ts"
-import type { ChainSupplied, MetaNeedsTwoCalls } from "../../src/routing/meta-types.ts"
+import type { ChainSupplied } from "../../src/routing/meta-types.ts"
 import { honey } from "../../src/routing/app.ts"
 
 type AppMeta = { tenant?: "organization" | "project"; worker: "extract" }
@@ -78,23 +78,47 @@ describe("a key no chain value sets", () => {
 	})
 })
 
-describe("declaring the type and defaulting in one call", () => {
-	it("answers no handle, so the next call names the two that replace it", () => {
-		const oneCall = honey<{}>().meta<AppMeta>({ worker: "extract" })
-		expectTypeOf(oneCall).toEqualTypeOf<MetaNeedsTwoCalls>()
-		// @ts-expect-error not a handle: app.meta<AppMeta>() declares, a second app.meta({ … }) defaults
-		oneCall.get("/tables")
-	})
-})
+describe("declaring the type and setting defaults in one call", () => {
+	/* 0.7.3's shape, and the one the README teaches. One call cannot know WHICH keys it set — TypeScript fills a
+	   second type parameter from its default rather than inferring it when the first is given explicitly — so it
+	   records every key as set: a route may omit any of them, and the two-call form stays the precise one. */
+	const app = honey<{}>().meta<AppMeta>({ worker: "extract" })
 
-describe("a handle that set chain values", () => {
-	it("takes a metaSpec over its declared keys, the chain-meta marker not among them", () => {
-		const app = honey<{}>().meta<AppMeta>().meta({ worker: "extract" })
-		app.metaSpec({
-			meta: { tenant: { key: "x-tenant", map: (value) => value }, worker: false },
-			strict: "error",
-		})
+	it("lets a route omit any declared key", () => {
+		app
+			.get("/tables")
+			.meta({ summary: "List tables" })
+			.handler((ctx) => {
+				expectTypeOf(ctx.meta.worker).toEqualTypeOf<"extract">()
+				return ctx.res.text("ok", "ok")
+			})
+	})
+
+	it("refuses a key nothing declares", () => {
+		expectTypeOf<ChainSupplied<InferMeta<typeof app>>>().not.toHaveProperty("nope")
+		app
+			.get("/tables")
+			// @ts-expect-error `nope` is in neither AppMeta nor the OpenAPI keys
+			.meta({ nope: 1 })
+			.handler((ctx) => ctx.res.text("ok", "ok"))
+	})
+
+	it("refuses a declared key's wrong value, and an OpenAPI key's", () => {
 		expectTypeOf<ChainSupplied<InferMeta<typeof app>>>().toExtend<{ tenant?: "organization" | "project" }>()
+		app
+			.get("/tables")
+			// @ts-expect-error `tenant` is "organization" | "project"
+			.meta({ tenant: "nope" })
+			.handler((ctx) => ctx.res.text("ok", "ok"))
+		app
+			.get("/orgs")
+			// @ts-expect-error `summary` is a string
+			.meta({ summary: 1 })
+			.handler((ctx) => ctx.res.text("ok", "ok"))
+	})
+
+	it("keeps the handle a handle: the routes it registers are its own", () => {
+		expectTypeOf(app.get("/one").handler((ctx) => ctx.res.text("ok", "ok"))).not.toBeNever()
 	})
 })
 

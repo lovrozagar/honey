@@ -509,15 +509,23 @@ import { honey } from "@lovrozagar/honey/plugin"
 export const plugin = honey({ app: "src/app.ts" })
 ```
 
-## A declared meta type and its defaults take two calls
+## A route need not repeat a meta default, and two calls say which keys were set
 
-`app.meta<AppMeta>({ worker: "shop" })` is refused: one call gives TypeScript no inference site for the values, so
-the handle could not record which keys it had set and every route had to repeat each required one. Declare the
-type, then set the defaults — a route may then leave out what the chain set, while a key nothing set stays as
-declared.
+A route under a handle that set a meta default had to pass that key again. It does not now — but which keys a
+handle can prove it set depends on how you wrote the call:
+
+- `meta<AppMeta>({ worker: "shop" })`, 0.7.3's one call, constrains route meta and sets defaults together. It
+  records **every** declared key as set, so a route may omit any of them. One call cannot know which keys it set:
+  TypeScript has no partial type-argument inference, so with the type given explicitly it fills the values'
+  parameter from its default instead of inferring it from the argument.
+- `meta<AppMeta>().meta({ worker: "shop" })` — declare, then default — is the precise form, and the one to reach
+  for: the values are inferred there, so a key nothing set **stays required** on every route.
+
+Both refuse a key nothing declares and a declared key's wrong value.
 
 ```ts v0
 const app = honey().meta<AppMeta>({ worker: "shop" })
+app.get("/items").meta({ summary: "List items", worker: "shop" }).handler(handler)
 ```
 
 ```ts
@@ -525,13 +533,14 @@ import { honey } from "@lovrozagar/honey"
 
 type AppMeta = { tenant?: "organization" | "project"; worker: "shop" }
 
+/* declare, then default: `tenant` is still required on a route nothing set it for */
 const app = honey()
 	.meta<AppMeta>()
 	.meta({ worker: "shop" as const })
 app
 	.get("/items")
 	.meta({ summary: "List items" })
-	.handler((ctx) => ctx.res.text("ok", "ok"))
+	.handler((ctx) => ctx.res.text("ok", ctx.meta.worker))
 ```
 
 ## The generated `RouteCtx` is the route's ctx; its meta is what the app declares

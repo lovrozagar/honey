@@ -40,20 +40,19 @@ describe("the base: the meta type the app declares (bit 22 a)", () => {
 	)
 
 	it(
-		"names what an export that is no app lacks, and the two calls when it is the one-call meta form",
+		"reads the one-call meta form's declared type, and names what an export that is no app lacks",
 		() => {
 			const oneCall = project.write(
 				"meta/one-call.ts",
 				lines(
 					'import { honey } from "@lovrozagar/honey"',
-					'type AppMeta = { worker: "extract" }',
+					'type AppMeta = { tenant?: "organization" | "project"; worker: "extract" }',
 					'export const app = honey<{}>().meta<AppMeta>({ worker: "extract" })',
+					'app.get("/tables").handler((c) => c.res.text("ok", "ok"))',
 				),
 			)
 			const notAnApp = project.write("meta/not-an-app.ts", lines("export const app = { get: 1 }"))
-			expect(() => extract(oneCall)).toThrow(
-				"app.meta<AppMeta>({ … }) answers no handle, declare the type and set its defaults in two calls",
-			)
+			expect(extract(oneCall).types.meta).toBe('{ tenant?: "organization" | "project"; worker: "extract" }')
 			expect(() => extract(notAnApp)).toThrow('Export "app" is not a honey app: it carries no $ctx, $env, $taps')
 		},
 		SLOW,

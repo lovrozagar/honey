@@ -3,7 +3,7 @@ import type { HoneyContext, REQUEST } from "../context/context.ts"
 import type { Honey } from "./app.ts"
 import type { RouteSelectorOf } from "./codegen-types.ts"
 import type { ApplyOutput } from "./output-types.ts"
-import type { DeclaredMeta, InitAccMeta, RouteMeta } from "./meta-types.ts"
+import type { DeclaredMeta, InitAccMeta, RouteMeta, WithChainMeta } from "./meta-types.ts"
 import type { TapMethod } from "./tap.ts"
 import type { StatusKey } from "../response/status.ts"
 import type { InferOutput, StandardSchemaLike } from "../validation/standard-schema.ts"
@@ -28,6 +28,13 @@ export type OpenApiMeta = {
 }
 
 export type DefaultMeta = OpenApiMeta
+
+/**
+ * The handle's meta after the one-call `meta<T>(values)`: every declared key counts as set, since one call
+ * cannot know which it set (TypeScript has no partial type-argument inference). The two-call form records the
+ * values it was given, so a key nothing set stays required there.
+ */
+export type AllChainMeta<TMeta> = WithChainMeta<TMeta, Partial<DefaultMeta> & Partial<TMeta>>
 
 /**
  * The route meta a consumer declares: the OpenAPI keys and its own. 0.7.3's public alias, kept because a consumer
@@ -148,7 +155,6 @@ export type {
 	ChainSupplied,
 	DeclaredMeta,
 	InitAccMeta,
-	MetaNeedsTwoCalls,
 	RouteMeta,
 	SkipRouteRecord,
 	WithChainMeta,

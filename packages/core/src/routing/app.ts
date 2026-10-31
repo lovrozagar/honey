@@ -5,7 +5,7 @@
  */
 import { type ExecutionCtx, type HoneyContext, isReservedCtxKey } from "../context/context.ts"
 import type { MaybePromise, MiddlewareFn, RuntimeMiddleware } from "../middleware/middleware.ts"
-import type { DeclaredMeta, DefaultMeta, MetaNeedsTwoCalls, ScopedMwEntry, WithChainMeta } from "./app-types.ts"
+import type { AllChainMeta, DeclaredMeta, DefaultMeta, ScopedMwEntry, WithChainMeta } from "./app-types.ts"
 import { dispatch } from "./dispatch.ts"
 import { joinPatterns } from "./pattern.ts"
 import {
@@ -123,16 +123,16 @@ export class Honey<
 		TScopedMw
 	>
 	/**
-	 * Declaring the meta type and setting defaults in one call (`meta<AppMeta>({ … })`) is refused, and the error
-	 * names the two calls that replace it (bit 22 a). A call that gives the type explicitly leaves no inference site
-	 * for the values: TypeScript fills the second type parameter from its default, so the handle would record "every
-	 * declared key defaulted" and a route could then omit a key nothing supplies, or pass one nothing declares.
-	 * `TNewMeta` defaults to `never`, so a call that leaves the type out resolves to the next overload instead.
+	 * Typed chain meta in one call (`meta<AppMeta>({ … })`): every declared key counts as set, so a route may omit
+	 * any of them. One call cannot know which it set (no partial type-argument inference), so `meta<AppMeta>()`
+	 * then `meta({ … })` is the precise form. `TNewMeta` defaults to `never`: a bare call takes the next overload.
 	 */
 	meta<
 		TNewMeta extends Record<string, unknown> = never,
 		TValues extends Partial<DefaultMeta> & Partial<TNewMeta> = Partial<DefaultMeta> & Partial<TNewMeta>,
-	>(values: TValues): MetaNeedsTwoCalls
+	>(
+		values: TValues,
+	): Honey<TEnv, TCtx, TRoutes, AllChainMeta<TNewMeta>, TErrorFactory, TDefaultErrors, TBasePath, TTaps, TScopedMw>
 	/** Chain meta, merged into every route registered through the new handle; its values reach the routes' types (`internal: true`). */
 	meta<
 		const TValues extends Partial<DefaultMeta> &

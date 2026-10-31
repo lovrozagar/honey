@@ -13,15 +13,6 @@ declare const CHAIN_META: unique symbol
 export type WithChainMeta<TMeta, TValues> = InitAccMeta<TMeta> & { readonly [CHAIN_META]?: TValues }
 
 /**
- * What `app.meta<AppMeta>({ … })` answers: not a handle. One call cannot record which keys it set, because giving
- * the meta type explicitly leaves TypeScript no inference site for the values — so the type names the two calls
- * that replace it, and the next chained call reports it (bit 22 a).
- */
-export type MetaNeedsTwoCalls = {
-	readonly declareThenDefault: "app.meta<AppMeta>() declares the meta type; a second app.meta({ … }) sets its defaults"
-}
-
-/**
  * What a route under this handle must still pass to `.meta()`: the handle's meta with the keys chain
  * `.meta(values)` already supplied turned optional. A key no chain value sets stays as declared, so a required one
  * is still required (bit 22 a) — the chain's defaults are a default, not a licence to drop the declaration.

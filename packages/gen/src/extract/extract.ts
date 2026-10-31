@@ -43,9 +43,6 @@ const APP_MEMBERS = ["$ctx", "$env", "$taps"]
 /* the declared meta, read when the app carries it: an app from an older honey has no $meta and still extracts */
 const META_MEMBER = "$meta"
 
-/* what `app.meta<AppMeta>({ … })` answers instead of a handle: its one property names the two calls to write */
-const NOT_A_HANDLE = "declareThenDefault"
-
 type PackageInfo = { dir: string; json: Record<string, unknown> }
 type Packages = Map<string, PackageInfo | null>
 
@@ -189,11 +186,7 @@ export function extractTypes(options: ExtractOptions): ExtractedTypes | null {
 	})
 	if (members.includes(undefined)) {
 		const missing = APP_MEMBERS.filter((_, index) => members[index] === undefined)
-		const hint =
-			appType.getProperty(NOT_A_HANDLE) === undefined
-				? `: it carries no ${missing.join(", ")}`
-				: ": app.meta<AppMeta>({ … }) answers no handle, declare the type and set its defaults in two calls"
-		throw new Error(`Export "${exportName}" is not a honey app${hint}`)
+		throw new Error(`Export "${exportName}" is not a honey app: it carries no ${missing.join(", ")}`)
 	}
 	const [ctx, env, tapsType] = members as ts.Type[]
 	const metaSym = appType.getProperty(META_MEMBER)
