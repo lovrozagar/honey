@@ -63,7 +63,7 @@
     },
     "packages/core": {
       "name": "@lovrozagar/honey",
-      "version": "1.0.0",
+      "version": "1.0.0-rc.1",
       "bin": {
         "honey": "bin/honey.js",
       },
@@ -93,7 +93,7 @@
         "zod": "catalog:",
       },
       "peerDependencies": {
-        "@lovrozagar/honey-clients": ">=1.0.0",
+        "@lovrozagar/honey-clients": ">=1.0.0-0",
         "ws": ">=8.21.0",
       },
       "optionalPeers": [
@@ -236,7 +236,7 @@
     },
     "packages/gen": {
       "name": "@lovrozagar/honey-clients",
-      "version": "1.0.0",
+      "version": "1.0.0-rc.1",
       "bin": {
         "honey-clients": "bin/honey-clients.js",
       },

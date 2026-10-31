@@ -8,7 +8,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterAll, describe, expect, it } from "vitest"
-import { headingOf, missingEntry } from "../../../../scripts/changelog.ts"
+import { headingOf, missingEntry, notesFor, prerelease } from "../../../../scripts/changelog.ts"
 import { jobsRunning, ROOT, stepsRunning, upstream, workflow } from "./fixture/workflows.ts"
 import { SPAWN_TIMEOUT } from "../fixture/spawn-timeout.ts"
 
@@ -19,11 +19,15 @@ const versionOf = (dir: string) =>
 	(JSON.parse(readFileSync(join(ROOT, dir, "package.json"), "utf8")) as { version: string }).version
 
 const ENTRY = "## 1.2.3\n\n### Added\n\n- A thing you can use.\n"
+const DATED = ENTRY.replace("## 1.2.3", "## 1.2.3 - 2026-10-31")
 
 describe("an entry read from a CHANGELOG", () => {
-	it("takes the entry undated while it is unreleased, and dated once it ships", () => {
-		expect(missingEntry(ENTRY, "1.2.3")).toBeNull()
-		expect(missingEntry(ENTRY.replace("## 1.2.3", "## 1.2.3 - 2026-10-31"), "1.2.3")).toBeNull()
+	it("takes a dated entry for a release, and an undated one only for a candidate", () => {
+		expect(missingEntry(DATED, "1.2.3")).toBeNull()
+		expect(missingEntry(ENTRY, "1.2.3-rc.1")).toBeNull()
+		expect(missingEntry(ENTRY, "1.2.3")).toBe(
+			'CHANGELOG.md\'s "## 1.2.3" entry is undated: a release dates its entry, a candidate does not',
+		)
 		/* the file's one dated form, nothing else after the version: the date's shape, not its validity */
 		expect(headingOf("1.2.3").test("## 1.2.3 (soon)")).toBe(false)
 		expect(headingOf("1.2.3").test("## 1.2.3 - soon")).toBe(false)
@@ -53,6 +57,35 @@ describe("an entry read from a CHANGELOG", () => {
 	})
 })
 
+describe("a candidate reads its release's notes", () => {
+	it("maps a prerelease to the release it is a candidate for, and says which is which", () => {
+		expect(["1.0.0-rc.1", "1.0.0-rc.12", "2.3.4-beta.0", "1.0.0"].map(notesFor)).toEqual([
+			"1.0.0",
+			"1.0.0",
+			"2.3.4",
+			"1.0.0",
+		])
+		expect(["1.0.0-rc.1", "1.0.0"].map(prerelease)).toEqual([true, false])
+	})
+
+	it("needs the release's entry, not one of its own", () => {
+		expect(missingEntry(ENTRY, "1.2.3-rc.1")).toBeNull()
+		/* a `## 1.2.3-rc.1` heading is not what a candidate reads: the release's entry serves it, undated */
+		expect(missingEntry("## 1.2.3-rc.1\n\n### Added\n\n- A thing.\n", "1.2.3-rc.1")).toBe(
+			'CHANGELOG.md has no "## 1.2.3" entry',
+		)
+		expect(missingEntry("## 1.2.4\n\n### Added\n\n- A thing.\n", "1.2.3-rc.1")).toBe(
+			'CHANGELOG.md has no "## 1.2.3" entry',
+		)
+	})
+
+	it("holds a candidate to the same sections and bullets as a release", () => {
+		expect(missingEntry("## 1.2.3\n\nSoon.\n", "1.2.3-rc.1")).toBe(
+			'CHANGELOG.md\'s "## 1.2.3" entry has no section (### Breaking, ### Added, …)',
+		)
+	})
+})
+
 describe("this repository's CHANGELOG", () => {
 	const changelog = readFileSync(join(ROOT, "CHANGELOG.md"), "utf8")
 
@@ -62,9 +95,9 @@ describe("this repository's CHANGELOG", () => {
 		expect(missingEntry(changelog, versions[0] as string)).toBeNull()
 	})
 
-	it("opens on the newest entry, under the file's one title", () => {
+	it("opens on the entry the shipped version reads, which a candidate shares with its release", () => {
 		const headings = changelog.split("\n").filter((line) => line.startsWith("## "))
-		expect(headings[0]).toBe(`## ${versionOf("packages/core")}`)
+		expect(headings[0]).toBe(`## ${notesFor(versionOf("packages/core"))}`)
 	})
 })
 
@@ -100,8 +133,24 @@ describe("release.yml's CHANGELOG step, run", () => {
 		return { out: `${ran.stdout}${ran.stderr}`, status: ran.status }
 	}
 
-	it("passes on a CHANGELOG holding the tag's entry", { timeout: SPAWN_TIMEOUT }, () => {
-		expect(run(ENTRY, "v1.2.3")).toEqual({ out: "", status: 0 })
+	it("passes on a CHANGELOG holding the tag's dated entry", { timeout: SPAWN_TIMEOUT }, () => {
+		expect(run(DATED, "v1.2.3")).toEqual({ out: "", status: 0 })
+	})
+
+	it("passes a candidate on the release's undated entry", { timeout: SPAWN_TIMEOUT }, () => {
+		expect(run(ENTRY, "v1.2.3-rc.1")).toEqual({ out: "", status: 0 })
+	})
+
+	it("refuses a candidate whose release has no entry, naming the release", { timeout: SPAWN_TIMEOUT }, () => {
+		const absent = run(ENTRY, "v9.9.9-rc.1")
+		expect(absent.status).toBe(1)
+		expect(absent.out).toContain('CHANGELOG.md has no "## 9.9.9" entry')
+	})
+
+	it("refuses a release whose entry is still undated", { timeout: SPAWN_TIMEOUT }, () => {
+		const undated = run(ENTRY, "v1.2.3")
+		expect(undated.status).toBe(1)
+		expect(undated.out).toContain("entry is undated: a release dates its entry")
 	})
 
 	it("refuses a tag whose entry nobody wrote, naming the version", { timeout: SPAWN_TIMEOUT }, () => {

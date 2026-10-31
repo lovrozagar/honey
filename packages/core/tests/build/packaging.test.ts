@@ -115,11 +115,19 @@ describe.sequential("the tarballs, installed (bit 19 i)", () => {
 						?.map((spec) => `${name} ${spec}`) ?? [],
 			)
 			const [core] = published
+			/*
+			 * `workspace:*` resolves to the sibling's own version, so this reads that version rather than a literal:
+			 * a literal reds on every bump, which it did at 1.0.0-rc.1 while proving nothing about the resolution.
+			 * What matters is that nothing `workspace:` or `catalog:` survived, and that the sibling's spec is the
+			 * version the repository actually carries.
+			 */
+			const sibling = (JSON.parse(readFileSync(join(REPO, "packages/gen/package.json"), "utf8")) as { version: string })
+				.version
 			expect([
 				unresolved,
 				core?.devDependencies["@lovrozagar/honey-clients"],
 				core?.devDependencies.typescript,
-			]).toEqual([[], "1.0.0", "7.0.2"])
+			]).toEqual([[], sibling, "7.0.2"])
 		},
 	)
 

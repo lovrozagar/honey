@@ -662,5 +662,5 @@ bun resolved "@lovrozagar/honey" to src/index.ts
 ```
 
 ```sh
-bun add @lovrozagar/honey @lovrozagar/honey-clients
+bun add @lovrozagar/honey@next @lovrozagar/honey-clients@next
 ```

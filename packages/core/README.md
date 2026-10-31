@@ -7,8 +7,11 @@ command-line client and an MCP server.
 
 ## Install
 
+1.0 is out as a release candidate, published under npm's `next` tag, so an install without a tag still gives
+0.7.3. Add `@next` until the final release:
+
 ```sh
-npm install @lovrozagar/honey
+npm install @lovrozagar/honey@next
 ```
 
 `bun add` and `pnpm add` work too. Node 22.12 or later, Bun 1.3 or later, or Cloudflare Workers.

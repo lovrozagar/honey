@@ -11,8 +11,11 @@ languages, a command-line client and an MCP server.
 
 ## Start
 
+1.0 is out as a release candidate, published under npm's `next` tag, so an install without a tag still gives
+0.7.3. Add `@next` until the final release:
+
 ```sh
-npm install @lovrozagar/honey
+npm install @lovrozagar/honey@next
 npx honey init
 ```
 
@@ -80,8 +83,18 @@ tier. How the packages are built and what they ship: [packaging](packages/core/d
 ## Releases
 
 Both packages share a version. Set it in `packages/core/package.json` and `packages/gen/package.json`, then push a
-`vX.Y.Z` tag. The release workflow packs both tarballs, checks each version against the tag, runs CI on the tagged
-commit, then publishes both to npm with provenance and creates the GitHub release.
+`vX.Y.Z` tag. The release workflow packs both tarballs, checks each version against the tag and that CHANGELOG.md
+carries that release's entry, runs CI on the tagged commit, then publishes both to npm with provenance and creates
+the GitHub release.
+
+Two rules the workflow enforces rather than trusts:
+
+- **A release candidate is `vX.Y.Z-rc.N`** and publishes under npm's `next` tag, so `latest` keeps pointing at the
+  last final release; its GitHub release is marked a prerelease. A candidate reads the release's own CHANGELOG entry,
+  so `1.0.0-rc.1` needs `## 1.0.0` and no heading of its own.
+- **A final release dates its entry.** Change `## X.Y.Z` to `## X.Y.Z - YYYY-MM-DD` in the same commit that sets the
+  final version; the pack job refuses a final tag whose entry is still undated, which is what keeps the date from
+  being an afterthought.
 
 ## License
 

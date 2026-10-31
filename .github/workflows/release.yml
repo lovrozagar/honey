@@ -101,16 +101,22 @@ jobs:
           TARBALL: lovrozagar-honey
         run: |
           v="${GITHUB_REF_NAME#v}"
+          # a prerelease never takes `latest`: it publishes under `next`, so `npm install <pkg>` keeps giving the last
+          # final release until a final tag is cut. A version already on npm is skipped, as a re-run on the tag needs.
+          case "$v" in *-*) tag=next ;; *) tag=latest ;; esac
           if npm view "$PACKAGE@$v" version >/dev/null 2>&1; then echo "$PACKAGE@$v is already on npm"; exit 0; fi
-          npm publish "$RUNNER_TEMP/tarballs/$TARBALL-$v.tgz" --provenance --access public
+          npm publish "$RUNNER_TEMP/tarballs/$TARBALL-$v.tgz" --provenance --access public --tag "$tag"
       - name: Publish @lovrozagar/honey-clients
         env:
           PACKAGE: "@lovrozagar/honey-clients"
           TARBALL: lovrozagar-honey-clients
         run: |
           v="${GITHUB_REF_NAME#v}"
+          # a prerelease never takes `latest`: it publishes under `next`, so `npm install <pkg>` keeps giving the last
+          # final release until a final tag is cut. A version already on npm is skipped, as a re-run on the tag needs.
+          case "$v" in *-*) tag=next ;; *) tag=latest ;; esac
           if npm view "$PACKAGE@$v" version >/dev/null 2>&1; then echo "$PACKAGE@$v is already on npm"; exit 0; fi
-          npm publish "$RUNNER_TEMP/tarballs/$TARBALL-$v.tgz" --provenance --access public
+          npm publish "$RUNNER_TEMP/tarballs/$TARBALL-$v.tgz" --provenance --access public --tag "$tag"
 
   # the one job that writes: the tag's GitHub release, once both packages are on npm
   github-release:
@@ -125,8 +131,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # a prerelease tag (v1.0.0-rc.1) is marked one on GitHub too, so the releases page agrees with npm's tag
+          pre=()
+          case "$GITHUB_REF_NAME" in *-*) pre=(--prerelease) ;; esac
           if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "the release $GITHUB_REF_NAME already exists"
           else
-            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes --title "${GITHUB_REF_NAME#v}"
+            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes --title "${GITHUB_REF_NAME#v}" "${pre[@]}"
           fi
