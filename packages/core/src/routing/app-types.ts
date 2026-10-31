@@ -29,6 +29,13 @@ export type OpenApiMeta = {
 
 export type DefaultMeta = OpenApiMeta
 
+/**
+ * The route meta a consumer declares: the OpenAPI keys and its own. 0.7.3's public alias, kept because a consumer
+ * names it wherever it declares route meta (`app.meta<HoneyMeta<RouteMeta>>()`), and `invalidate` — v0's third
+ * member — is an OpenAPI key now.
+ */
+export type HoneyMeta<T = {}> = OpenApiMeta & T
+
 /** A middleware scoped by path at the type level: what it adds to routes under `path`. */
 export type ScopedMwEntry = { readonly adds: unknown; readonly path: string }
 

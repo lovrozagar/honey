@@ -37,6 +37,7 @@ export type {
 	ComputeErrorsByStatus,
 	DefaultMeta,
 	HoneyCtx,
+	HoneyMeta,
 	InferBasePath,
 	InferCtx,
 	InferEnv,

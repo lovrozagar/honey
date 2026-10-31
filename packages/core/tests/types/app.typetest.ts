@@ -10,6 +10,7 @@ import type { HoneyContext } from "../../src/context/context.ts"
 import { defineErrors } from "../../src/errors/errors.ts"
 import { createMiddleware, type MiddlewareFn } from "../../src/middleware/middleware.ts"
 import { honey } from "../../src/routing/app.ts"
+import type { HoneyMeta, OpenApiMeta } from "../../src/routing/app-types.ts"
 import type {
 	InferBasePath,
 	InferCtx,
@@ -32,6 +33,22 @@ type Query = (sql: string) => unknown[]
 type DbCtx = { db: { query: Query } }
 type AuthCtx = { orgId: string; userId: string }
 type AppMeta = { auth?: "public" | "required"; tags?: string }
+
+describe("HoneyMeta", () => {
+	/* 0.7.3's public alias for "the OpenAPI keys and mine" (bit 22 a): a consumer declares its route meta with it */
+	it("is the OpenAPI meta keys intersected with the consumer's own", () => {
+		expectTypeOf<HoneyMeta<{ worker: "extract" }>>().toExtend<{ summary?: string; worker: "extract" }>()
+		expectTypeOf<HoneyMeta>().toEqualTypeOf<OpenApiMeta>()
+		const app = honey<{}>().meta<HoneyMeta<{ worker: "extract" }>>().meta({ worker: "extract" })
+		app
+			.get("/tables")
+			.meta({ summary: "List tables" })
+			.handler((ctx) => {
+				expectTypeOf(ctx.meta.worker).toEqualTypeOf<"extract">()
+				return ctx.res.text("ok", "ok")
+			})
+	})
+})
 
 const withDb: MiddlewareFn<{}, DbCtx> = (_ctx, next) => next({ db: { query: () => [] } })
 const withAuth: MiddlewareFn<DbCtx & { req: Request }, AuthCtx> = (_ctx, next) =>
