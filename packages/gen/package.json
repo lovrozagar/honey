@@ -1,6 +1,6 @@
 {
 	"name": "@lovrozagar/honey-clients",
-	"version": "1.0.0-rc.1",
+	"version": "1.0.0-rc.2",
 	"description": "Generates SDKs (TypeScript, Go, Rust, Python, C#, Java), a CLI and an MCP server from any OpenAPI 3.x document.",
 	"license": "MIT",
 	"author": "lovrozagar",
