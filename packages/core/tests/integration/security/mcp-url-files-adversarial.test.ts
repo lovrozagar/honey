@@ -103,7 +103,14 @@ const local = (request: Request) => {
 }
 
 const HOSTS = ["files.test", "files.test:8443", "*.cdn.test"]
-const fetchFile = urlFiles({ fetch: local, hosts: HOSTS, maxBytes: CAP, timeoutMs: 100 })
+/*
+ * Two fetchers, because `timeoutMs` is the SUT's own deadline, not a test's patience. Every leg but the timeout one
+ * fetches a file that is already in memory and expects it through, so a deadline tight enough to prove the timeout
+ * also fires on a loaded machine: at 100 ms the happy-path leg red in core's whole run (bit 22) and passed alone.
+ * So the deadline a leg needs is the deadline that leg gets, and only `impatient` is tight.
+ */
+const fetchFile = urlFiles({ fetch: local, hosts: HOSTS, maxBytes: CAP, timeoutMs: 10_000 })
+const impatient = urlFiles({ fetch: local, hosts: HOSTS, maxBytes: CAP, timeoutMs: 100 })
 
 /** What the fetch makes of `url`: the file's type, name and text, or its refusal. */
 async function got(url: string, fetcher = fetchFile): Promise<string> {
@@ -251,7 +258,7 @@ describe("urlFiles: the size streamed, the time, the answer's own type and name 
 
 	it("refuses a body still coming past timeoutMs, headers and body together", async () => {
 		const started = performance.now()
-		const refused = await got("https://files.test/slow")
+		const refused = await got("https://files.test/slow", impatient)
 		expect([refused, performance.now() - started < 2000]).toEqual(["took longer than 100 ms", true])
 	})
 
