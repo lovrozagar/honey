@@ -40,14 +40,24 @@ export function readPerfBase(text: string): PerfBase {
 	return { history: raw.history ?? [], note: raw.note, recorded: raw.recorded, sha: raw.sha }
 }
 
-/** What a base's repository says about it: the three facts `unusable` judges. */
-export type Placed = { ancestor: boolean; behind: number; lockfile: boolean }
+/**
+ * What a base's repository says about it. `known` and `shallow` come first because they are about the clone, not the
+ * base: a clone that does not hold the commit cannot answer the other three, and the first run of this guard in CI
+ * blamed the base ("not an ancestor") when the cause was a depth-1 checkout. A guard whose message misdirects costs
+ * a CI cycle, so the clone is reported before the base is judged.
+ */
+export type Placed = { ancestor: boolean; behind: number; known: boolean; lockfile: boolean; shallow: boolean }
 
 /**
  * Why the base at `sha` cannot be used, or null when it can: every reason, in one message, so one read names them
  * all rather than one per run.
  */
-export function unusable(sha: string, { ancestor, behind, lockfile }: Placed): string | null {
+export function unusable(sha: string, { ancestor, behind, known, lockfile, shallow }: Placed): string | null {
+	const short = sha.slice(0, 7)
+	if (!known)
+		return shallow
+			? `perf-base.json: this clone is shallow and does not hold ${short}: the job needs fetch-depth: 0`
+			: `perf-base.json: ${short} is not a commit in this clone`
 	const why = [
 		...(ancestor ? [] : [`${sha.slice(0, 7)} is not an ancestor of origin/main`]),
 		...(lockfile ? [] : [`${sha.slice(0, 7)} carries no bun.lock`]),
@@ -79,30 +89,29 @@ export const GIT_TIMEOUT_MS = 60_000
 export function placedAt(root: string, sha: string): Placed {
 	const git = (...args: readonly string[]) =>
 		execFileSync("git", args, { cwd: root, encoding: "utf8", timeout: GIT_TIMEOUT_MS }).trim()
-	const ancestor = (() => {
+	const reads = (...args: readonly string[]) => {
 		try {
-			git("merge-base", "--is-ancestor", sha, "origin/main")
+			git(...args)
 			return true
 		} catch {
-			/* a non-ancestor, or an unknown sha: either way it is not a base */
+			/* git itself says no: an unknown object, or a question this clone cannot answer */
 			return false
 		}
-	})()
-	const lockfile = (() => {
-		try {
-			return git("cat-file", "-e", `${sha}:bun.lock`) === ""
-		} catch {
-			/* no such path at that commit */
-			return false
-		}
-	})()
-	const behind = (() => {
-		try {
-			return Number(git("rev-list", "--count", `${sha}..origin/main`))
-		} catch {
-			/* a sha git cannot count from is as far behind as it gets: unusable, never a thrown read */
-			return Number.POSITIVE_INFINITY
-		}
-	})()
-	return { ancestor, behind, lockfile }
+	}
+	const shallow = git("rev-parse", "--is-shallow-repository") === "true"
+	const known = reads("cat-file", "-e", `${sha}^{commit}`)
+	const ancestor = known && reads("merge-base", "--is-ancestor", sha, "origin/main")
+	const lockfile = known && reads("cat-file", "-e", `${sha}:bun.lock`)
+	/* a commit the clone does not hold is as far behind as it gets; asking git would only print a fatal to no one */
+	const behind = !known
+		? Number.POSITIVE_INFINITY
+		: (() => {
+				try {
+					return Number(git("rev-list", "--count", `${sha}..origin/main`))
+				} catch {
+					/* known but uncountable (no origin/main in this clone): unusable, never a thrown read */
+					return Number.POSITIVE_INFINITY
+				}
+			})()
+	return { ancestor, behind, known, lockfile, shallow }
 }

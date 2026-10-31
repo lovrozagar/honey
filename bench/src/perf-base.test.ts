@@ -10,7 +10,7 @@ import { DRIFT_BOUND, type Move, moveRefused, placedAt, readPerfBase, STALE_AFTE
 
 const ROOT = resolve(import.meta.dirname, "../..")
 const FILE = join(ROOT, "blueprint/baselines/perf-base.json")
-const PINNED = { ancestor: true, behind: 1, lockfile: true }
+const PINNED = { ancestor: true, behind: 1, known: true, lockfile: true, shallow: false }
 const SHA = "43a4462c0ffee43a4462c0ffee43a4462c0ffee0"
 
 describe("perf-base.json, read", () => {
@@ -53,7 +53,7 @@ describe("whether a base can be used", () => {
 	})
 
 	it("names every reason at once, so one read is the whole answer", () => {
-		expect(unusable(SHA, { ancestor: false, behind: 9_000, lockfile: false })).toBe(
+		expect(unusable(SHA, { ancestor: false, behind: 9_000, known: true, lockfile: false, shallow: false })).toBe(
 			"perf-base.json: 43a4462 is not an ancestor of origin/main; 43a4462 carries no bun.lock; 43a4462 is 9000 commits behind origin/main, past 400",
 		)
 	})
@@ -87,14 +87,41 @@ describe("the base this repository pins", () => {
 		expect({ reason: unusable(sha, placed), ...placed }).toEqual({
 			ancestor: true,
 			behind: placed.behind,
+			known: true,
 			lockfile: true,
 			reason: null,
+			shallow: false,
 		})
 		expect(placed.behind).toBeLessThanOrEqual(STALE_AFTER)
 	})
 
-	it("reads a commit that is no ancestor as unusable, so the live leg is not vacuous", () => {
-		const placed = placedAt(ROOT, "0000000000000000000000000000000000000000")
-		expect(placed).toEqual({ ancestor: false, behind: Number.POSITIVE_INFINITY, lockfile: false })
+	it("reads a commit this clone does not hold as unusable, so the live leg is not vacuous", () => {
+		const absent = "0000000000000000000000000000000000000000"
+		const placed = placedAt(ROOT, absent)
+		expect(placed).toEqual({
+			ancestor: false,
+			behind: Number.POSITIVE_INFINITY,
+			known: false,
+			lockfile: false,
+			shallow: false,
+		})
+		expect(unusable(absent, placed)).toBe("perf-base.json: 0000000 is not a commit in this clone")
+	})
+
+	/*
+	 * The clone, before the base. CI's first run of this guard red as "43a4462 is not an ancestor of origin/main" on a
+	 * depth-1 checkout that simply did not hold the commit (run 41145247987, the `test` job). The cause is the job's
+	 * fetch depth, so the message names it; perf-base-history.test.ts holds every job that reads this to full history.
+	 */
+	it("blames the clone, not the base, when the commit is missing from a shallow one", () => {
+		expect(
+			unusable(SHA, {
+				ancestor: false,
+				behind: Number.POSITIVE_INFINITY,
+				known: false,
+				lockfile: false,
+				shallow: true,
+			}),
+		).toBe("perf-base.json: this clone is shallow and does not hold 43a4462: the job needs fetch-depth: 0")
 	})
 })

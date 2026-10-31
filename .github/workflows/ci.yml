@@ -92,7 +92,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
+      # full history: test:bench reads blueprint/baselines/perf-base.json's pinned commit out of git (is it an
+      # ancestor of origin/main, does it carry bun.lock, how far behind is it), and a depth-1 checkout does not hold
+      # it. tests/build/perf-base-history.test.ts holds every job that runs those readers to this.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
       # the integration suites run server fixtures as `node x.ts`: they need Node's type stripping,
       # which the runner image's default Node may not have
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
