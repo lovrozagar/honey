@@ -98,7 +98,8 @@ export type HoneyMetaSpec<TMeta = unknown> = [TMeta] extends [never]
 	: TMeta extends Record<string, unknown>
 		? Sections<
 				{ readonly [K in Extract<keyof TMeta, keyof OpenApiMeta>]?: MetaSpecEntry<Defined<TMeta[K]>> } & {
-					readonly [K in Exclude<keyof TMeta, keyof OpenApiMeta>]-?: MetaSpecEntry<Defined<TMeta[K]>>
+					/* a symbol key is honey's own marker (the chain-meta phantom), never a key a spec describes */
+					readonly [K in Exclude<keyof TMeta, keyof OpenApiMeta | symbol>]-?: MetaSpecEntry<Defined<TMeta[K]>>
 				}
 			>
 		: MetaSpecConfig

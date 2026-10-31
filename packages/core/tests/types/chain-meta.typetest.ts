@@ -87,6 +87,17 @@ describe("declaring the type and defaulting in one call", () => {
 	})
 })
 
+describe("a handle that set chain values", () => {
+	it("takes a metaSpec over its declared keys, the chain-meta marker not among them", () => {
+		const app = honey<{}>().meta<AppMeta>().meta({ worker: "extract" })
+		app.metaSpec({
+			meta: { tenant: { key: "x-tenant", map: (value) => value }, worker: false },
+			strict: "error",
+		})
+		expectTypeOf<ChainSupplied<InferMeta<typeof app>>>().toExtend<{ tenant?: "organization" | "project" }>()
+	})
+})
+
 describe("a meta type inferred from the chain's values", () => {
 	it("lets a route omit them and still refuses an unknown key", () => {
 		const app = honey<{}>().meta({ tenant: "project" as const, worker: "extract" as const })
