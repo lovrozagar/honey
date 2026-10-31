@@ -400,31 +400,58 @@ expectType<Equal<RouteSelectorOf, "GET /v1/users" | "POST /v1/users">>()`
 	})
 })
 
-describe("route meta", () => {
-	/* the meta of each route as the tree carries it: chain, middleware and route meta resolved (O1) */
-	const META_APP = honeyDoc([
-		route("GET", "/health", { meta: { summary: "Health check" } }),
-		route("GET", "/orgs", {
-			input: { search: object({ limit: NUMBER }) },
-			meta: {
-				auth: "required",
-				operationId: "listOrgs",
-				rateLimit: "strict",
-				summary: "List orgs",
-				tags: ["Organization"],
-			},
-		}),
-		route("POST", "/orgs", {
-			input: { json: object({ name: STRING }) },
-			meta: { auth: "required", deprecated: true, security: [{ bearerAuth: [] }], summary: "Create org" },
-		}),
-	])
+/* the meta of each route as the tree carries it: chain, middleware and route meta resolved (O1) */
+const META_APP = honeyDoc([
+	route("GET", "/health", { meta: { summary: "Health check" } }),
+	route("GET", "/orgs", {
+		input: { search: object({ limit: NUMBER }) },
+		meta: {
+			auth: "required",
+			operationId: "listOrgs",
+			rateLimit: "strict",
+			summary: "List orgs",
+			tags: ["Organization"],
+		},
+	}),
+	route("POST", "/orgs", {
+		input: { json: object({ name: STRING }) },
+		meta: { auth: "required", deprecated: true, security: [{ bearerAuth: [] }], summary: "Create org" },
+	}),
+])
 
+describe("route meta", () => {
 	// v0: 1bd65834a7
 	it("types each route's full meta, custom keys and OpenAPI keys alike, as literals", () => {
 		const consumer = `expectType<Equal<RouteMeta<"/health", "get">, { summary: "Health check" }>>()
 expectType<Equal<RouteMeta<"/orgs", "get">, { auth: "required"; operationId: "listOrgs"; rateLimit: "strict"; summary: "List orgs"; tags: ["Organization"] }>>()
 expectType<Equal<RouteMeta<"/orgs", "post">, { auth: "required"; deprecated: true; security: [{ bearerAuth: [] }]; summary: "Create org" }>>()`
+		expect(check(META_APP, consumer).diagnostics).toEqual([])
+	})
+})
+
+describe("the ctx's meta (bit 22 a)", () => {
+	/* bit 22 a: the ctx's meta is the app's declared type, so a handler's own ctx is assignable to a function
+	   typed with the generated ctx; the literal values stay the sibling meta field */
+	it("types the ctx's meta from the extracted declared type, the literals left in meta", () => {
+		const declared = '{ readonly auth?: "public" | "required"; readonly rateLimit?: "default" | "strict" }'
+		const types = extracted({ env: "{}", meta: declared })
+		/* `live` is the handler's own meta: the declared keys at their declared types, the OpenAPI keys widened */
+		const consumer = `declare const live: ${declared} & { readonly operationId?: string; readonly tags?: string[] }
+declare const generated: RouteCtx<"/orgs", "get">["meta"]
+const intoGenerated: RouteCtx<"/orgs", "get">["meta"] = live
+expectType<Equal<(typeof generated)["auth"], "public" | "required" | undefined>>()
+expectType<Equal<RouteMeta<"/orgs", "get">, { auth: "required"; operationId: "listOrgs"; rateLimit: "strict"; summary: "List orgs"; tags: ["Organization"] }>>()
+void intoGenerated`
+		expect(check(META_APP, consumer, types).diagnostics).toEqual([])
+	})
+
+	it("falls back to the tree's literal meta in the ctx when nothing was extracted", () => {
+		const consumer = `declare const widened: { summary: string }
+const literal: RouteCtx<"/health", "get">["meta"] = { summary: "Health check" }
+// @ts-expect-error the fallback is the tree's literal, which a widened string does not satisfy
+const notLiteral: RouteCtx<"/health", "get">["meta"] = widened
+void literal
+void notLiteral`
 		expect(check(META_APP, consumer).diagnostics).toEqual([])
 	})
 

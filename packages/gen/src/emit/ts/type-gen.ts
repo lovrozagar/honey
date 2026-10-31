@@ -31,7 +31,18 @@ export type GenerateTypesOptions = {
 }
 
 /* the names the file declares, which a component schema never takes */
-const RESERVED = ["HoneyContext", "HoneyError", "Omit", "Readonly", "Record", "Routes", "RouteSelector", "TapMap"]
+const RESERVED = [
+	"HoneyContext",
+	"HoneyError",
+	"Omit",
+	"OpenApiMeta",
+	"Partial",
+	"Readonly",
+	"Record",
+	"Routes",
+	"RouteSelector",
+	"TapMap",
+]
 
 /* the v1 error-factory signature of a key without a schema (core errors.ts ErrorFactoryOpts) */
 const STANDARD_FACTORY =
@@ -150,6 +161,17 @@ function errorsOf(op: IROperation, ctx: Ctx): { factories: Field[]; fields: Fiel
 	}
 }
 
+/**
+ * The ctx's `meta`: what the app declares, with the OpenAPI keys a route may add (bit 22 a), so a handler may pass
+ * its own ctx to a function typed with the generated ctx. The tree's literals are narrower than the handler's type
+ * — a route's `operationId` is `string` there, not its value — and would reject it; they stay the sibling field.
+ * Without an extracted declaration (no ts-morph, or an app that declares no meta) the literals are all there is.
+ */
+function ctxMeta(extracted: ExtractedTypes | null | undefined, literal: string): string {
+	const declared = extracted?.meta ?? null
+	return declared === null ? literal : `Partial<OpenApiMeta> & ${declared}`
+}
+
 /** One `Routes[pattern][method]` entry. */
 function routeEntry(id: string, op: IROperation, options: GenerateTypesOptions, ctx: Ctx): string {
 	const pattern = id.slice(id.indexOf(" ") + 1)
@@ -159,7 +181,9 @@ function routeEntry(id: string, op: IROperation, options: GenerateTypesOptions, 
 	const params = paramsOf(pattern)
 	const { factories, fields } = errorsOf(op, ctx)
 	const mt = options.tree.routes[id]?.mt
-	const meta = mt && Object.keys(mt).length > 0 ? literalType(mt) : "{}"
+	/* the values the tree carries, as literals: what a consumer reads a route's configuration from */
+	const literal = mt && Object.keys(mt).length > 0 ? literalType(mt) : "{}"
+	const meta = ctxMeta(extracted, literal)
 	const output = outputOf(op, ctx)
 	const own: Field[] = []
 	if (input !== "{}") own.push(["readonly input", input])
@@ -175,7 +199,7 @@ function routeEntry(id: string, op: IROperation, options: GenerateTypesOptions, 
 		["ctx", `WithOutput<${parts.join(" & ")}, ${output === "{}" ? "never" : output}>`],
 		...fields,
 		["input", input],
-		["meta", meta],
+		["meta", literal],
 		["output", output],
 	]
 	return entry.map(([key, type]) => `\t\t\t${key}: ${type}`).join("\n")
@@ -223,7 +247,15 @@ export function generateTypes(options: GenerateTypesOptions): string {
 	const ctx: Ctx = { names, resolve: (schema) => irToTs(schema, names) }
 	const hasErrors = [...routes.values()].some((op) => Object.keys(op.extensions.errors ?? {}).length > 0)
 	const selectors = [...routes.keys()].sort(compareCodeUnits)
-	const out = [`import type { HoneyContext, WithOutput${hasErrors ? ", HoneyError" : ""} } from "@lovrozagar/honey"`]
+	/* OpenApiMeta only when a declared meta is emitted: the ctx's meta is that type and the keys a route may add */
+	const declaredMeta = options.extracted?.meta ?? null
+	const imports = [
+		"HoneyContext",
+		"WithOutput",
+		...(hasErrors ? ["HoneyError"] : []),
+		...(declaredMeta === null ? [] : ["OpenApiMeta"]),
+	]
+	const out = [`import type { ${imports.join(", ")} } from "@lovrozagar/honey"`]
 	out.push(...baseCtx(options.extracted, name))
 	if (selectors.length > 0) {
 		out.push(`export type RouteSelector = ${selectors.map(tsString).join(" | ")}`)

@@ -77,6 +77,7 @@ expectType<Equal<RouteInput<"/note", "post">, {}>>()`
 		const extracted = {
 			env: "{}",
 			inputs: {},
+			meta: null,
 			middleware: [{ name: "user", optional: true, type: "string" }],
 			routes: {},
 			taps: null,

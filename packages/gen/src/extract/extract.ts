@@ -29,6 +29,8 @@ export type ExtractedTypes = {
 	middleware: ExtractedProp[]
 	/** per route id, `ctx.input` as the handler gets it (the parsed type, O3); a route without input has none */
 	inputs: Record<string, string>
+	/** the meta type the app declares (`meta<AppMeta>()`), or null when it declares none (bit 22 a) */
+	meta: string | null
 	/** per route id, what the route's middleware added beyond `middleware`; a route that added nothing has none */
 	routes: Record<string, ExtractedProp[]>
 	/** the declared tap payloads, or null when none are */
@@ -36,7 +38,7 @@ export type ExtractedTypes = {
 }
 
 /* the type-only members every honey app carries */
-const APP_MEMBERS = ["$ctx", "$env", "$taps"]
+const APP_MEMBERS = ["$ctx", "$env", "$meta", "$taps"]
 
 type PackageInfo = { dir: string; json: Record<string, unknown> }
 type Packages = Map<string, PackageInfo | null>
@@ -180,13 +182,16 @@ export function extractTypes(options: ExtractOptions): ExtractedTypes | null {
 		return sym === undefined ? undefined : checker.getTypeOfSymbol(sym)
 	})
 	if (members.includes(undefined)) throw new Error(`Export "${exportName}" is not a honey app`)
-	const [ctx, env, tapsType] = members as ts.Type[]
+	const [ctx, env, metaType, tapsType] = members as ts.Type[]
 	const owner = frameworkClass(ctx as ts.Type, compiler)
 	const middleware = addedProps(ctx as ts.Type, owner, ser)
 	const base = new Set(middleware.map((p) => p.name))
 	const found = registrations(entry)
 	const routes = routeAdditions(found, ser, { base, owner, report, routeId })
 	const taps = ser.serialize(tapsType as ts.Type)
+	/* what `meta<AppMeta>()` declared, written out: the ctx's meta is this and the OpenAPI keys, never the tree's
+	   literal values, so a handler may pass its own ctx to a function typed with the generated ctx (bit 22 a) */
+	const meta = ser.shape(metaType as ts.Type)
 
 	const cache: Packages = new Map()
 	const text = (t: string) => resolvable(t, options.outputDir, cache)
@@ -194,6 +199,7 @@ export function extractTypes(options: ExtractOptions): ExtractedTypes | null {
 	return {
 		env: text(ser.serialize(env as ts.Type)),
 		inputs: routeInputs(found, (type) => text(ser.shape(type)), routeId),
+		meta: meta === "{}" ? null : text(meta),
 		middleware: props(middleware),
 		routes: Object.fromEntries(Object.entries(routes).map(([id, list]) => [id, props(list)])),
 		taps: taps === "{}" ? null : text(taps),

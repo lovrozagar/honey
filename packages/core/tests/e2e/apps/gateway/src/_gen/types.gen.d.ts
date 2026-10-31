@@ -1,4 +1,4 @@
-import type { HoneyContext, WithOutput } from "@lovrozagar/honey"
+import type { HoneyContext, WithOutput, OpenApiMeta } from "@lovrozagar/honey"
 
 export type BaseCtx = HoneyContext<unknown>
 
@@ -15,7 +15,7 @@ type ListArticlesResponse200 = { articles: { id: string; title: string }[]; coun
 export type Routes = {
 	"/articles": {
 		get: {
-			ctx: WithOutput<BaseCtx & { readonly input: { search: { cursor?: string } }; readonly meta: Readonly<{ tenant: "project_id"; permissions: ["articles.read"]; summary: "List articles"; worker: "origin" }>; readonly routePattern: "/articles" }, { "application/json": { ok: ListArticlesResponse200 } }>
+			ctx: WithOutput<BaseCtx & { readonly input: { search: { cursor?: string } }; readonly meta: Readonly<Partial<OpenApiMeta> & { permissions?: string[]; tenant?: string; worker?: "edge" | "origin" }>; readonly routePattern: "/articles" }, { "application/json": { ok: ListArticlesResponse200 } }>
 			errors: never
 			input: { search: { cursor?: string } }
 			meta: { tenant: "project_id"; permissions: ["articles.read"]; summary: "List articles"; worker: "origin" }
@@ -24,7 +24,7 @@ export type Routes = {
 	}
 	"/articles/meta": {
 		get: {
-			ctx: WithOutput<BaseCtx & { readonly meta: Readonly<{ tenant: "project_id" }>; readonly routePattern: "/articles/meta" }, never>
+			ctx: WithOutput<BaseCtx & { readonly meta: Readonly<Partial<OpenApiMeta> & { permissions?: string[]; tenant?: string; worker?: "edge" | "origin" }>; readonly routePattern: "/articles/meta" }, never>
 			errors: never
 			input: {}
 			meta: { tenant: "project_id" }
@@ -33,7 +33,7 @@ export type Routes = {
 	}
 	"/nl/c/:delivery/:url": {
 		get: {
-			ctx: WithOutput<BaseCtx & { readonly params: { delivery: string; url: string }; readonly meta: Readonly<{}>; readonly routePattern: "/nl/c/:delivery/:url" }, never>
+			ctx: WithOutput<BaseCtx & { readonly params: { delivery: string; url: string }; readonly meta: Readonly<Partial<OpenApiMeta> & { permissions?: string[]; tenant?: string; worker?: "edge" | "origin" }>; readonly routePattern: "/nl/c/:delivery/:url" }, never>
 			errors: never
 			input: {}
 			meta: {}
@@ -42,7 +42,7 @@ export type Routes = {
 	}
 	"/ping": {
 		get: {
-			ctx: WithOutput<BaseCtx & { readonly meta: Readonly<{}>; readonly routePattern: "/ping" }, never>
+			ctx: WithOutput<BaseCtx & { readonly meta: Readonly<Partial<OpenApiMeta> & { permissions?: string[]; tenant?: string; worker?: "edge" | "origin" }>; readonly routePattern: "/ping" }, never>
 			errors: never
 			input: {}
 			meta: {}
@@ -51,7 +51,7 @@ export type Routes = {
 	}
 	"/users": {
 		get: {
-			ctx: WithOutput<BaseCtx & { readonly meta: Readonly<{ worker: "origin" }>; readonly routePattern: "/users" }, never>
+			ctx: WithOutput<BaseCtx & { readonly meta: Readonly<Partial<OpenApiMeta> & { permissions?: string[]; tenant?: string; worker?: "edge" | "origin" }>; readonly routePattern: "/users" }, never>
 			errors: never
 			input: {}
 			meta: { worker: "origin" }
@@ -60,7 +60,7 @@ export type Routes = {
 	}
 	"/users/:id": {
 		get: {
-			ctx: WithOutput<BaseCtx & { readonly params: { id: string }; readonly meta: Readonly<{ worker: "origin" }>; readonly routePattern: "/users/:id" }, never>
+			ctx: WithOutput<BaseCtx & { readonly params: { id: string }; readonly meta: Readonly<Partial<OpenApiMeta> & { permissions?: string[]; tenant?: string; worker?: "edge" | "origin" }>; readonly routePattern: "/users/:id" }, never>
 			errors: never
 			input: {}
 			meta: { worker: "origin" }
@@ -69,7 +69,7 @@ export type Routes = {
 	}
 	"/v1/openapi/spec": {
 		get: {
-			ctx: WithOutput<BaseCtx & { readonly meta: Readonly<{}>; readonly routePattern: "/v1/openapi/spec" }, never>
+			ctx: WithOutput<BaseCtx & { readonly meta: Readonly<Partial<OpenApiMeta> & { permissions?: string[]; tenant?: string; worker?: "edge" | "origin" }>; readonly routePattern: "/v1/openapi/spec" }, never>
 			errors: never
 			input: {}
 			meta: {}

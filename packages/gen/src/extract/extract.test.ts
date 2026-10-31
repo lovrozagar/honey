@@ -193,6 +193,34 @@ describe("the base: the app's own additions and its taps", () => {
 	)
 })
 
+describe("the base: the meta type the app declares (bit 22 a)", () => {
+	it(
+		"writes the declared meta out, and leaves it null when the app declares none",
+		() => {
+			const declared = project.write(
+				"meta/declared.ts",
+				lines(
+					'import { honey } from "@lovrozagar/honey"',
+					'type AppMeta = { tenant?: "organization" | "project"; worker: "extract" }',
+					'export const app = honey<{}>().meta<AppMeta>().meta({ worker: "extract" })',
+					'app.get("/tables").handler((c) => c.res.text("ok", "ok"))',
+				),
+			)
+			const none = project.write(
+				"meta/none.ts",
+				lines(
+					'import { honey } from "@lovrozagar/honey"',
+					"export const app = honey<{}>()",
+					'app.get("/tables").handler((c) => c.res.text("ok", "ok"))',
+				),
+			)
+			expect(extract(declared).types.meta).toBe('{ tenant?: "organization" | "project"; worker: "extract" }')
+			expect(extract(none).types.meta).toBeNull()
+		},
+		SLOW,
+	)
+})
+
 describe("routes: keyed by the caller's route id", () => {
 	it(
 		"keys each route by the caller's route id; a route nothing added to has no entry",
@@ -223,7 +251,14 @@ describe("routes: keyed by the caller's route id", () => {
 			expect(Object.keys(routes).sort()).toEqual(["GET /admin", "GET /user"])
 			expect(shown(routes["GET /user"])).toEqual(["auth: { sub: string }"])
 			expect(shown(routes["GET /admin"])).toEqual(["auth: { sub: string }", "admin: { level: number }"])
-			expect(extract(bare).types).toEqual({ env: "{ DB: string }", inputs: {}, middleware: [], routes: {}, taps: null })
+			expect(extract(bare).types).toEqual({
+				env: "{ DB: string }",
+				inputs: {},
+				meta: null,
+				middleware: [],
+				routes: {},
+				taps: null,
+			})
 		},
 		SLOW,
 	)

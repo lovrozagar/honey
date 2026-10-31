@@ -52,7 +52,7 @@ const A2 = ["methods"]
 const A3 = [T5]
 const M0 = {"operationId":"input.createJson","tags":A1} as unknown as MetaShape
 const M1 = {"operationId":"input.createForm","tags":A1} as unknown as MetaShape
-const M2 = {"operationId":"input.search","tags":A1} as unknown as MetaShape
+const M2 = {"auth":"required","operationId":"input.search","tags":A1} as unknown as MetaShape
 const M3 = {"operationId":"input.none","tags":A1} as unknown as MetaShape
 const M4 = {"operationId":"resources.list","tags":A2} as unknown as MetaShape
 const M5 = {"operationId":"resources.create","tags":A2} as unknown as MetaShape
@@ -102,6 +102,7 @@ export const routes: RouteTree["routes"] = S<RouteTree["routes"][string]>({
 })
 
 export type MetaShape = {
+	auth?: "required"
 	operationId: "input.createJson" | "input.createForm" | "input.search" | "input.none" | "resources.list" | "resources.create" | "resources.update" | "resources.patch" | "resources.delete" | "ws.echo" | "ws.joinRoom" | "ws.reconnect" | "ws.chat"
 	tags: ["input"] | ["methods"] | ["websocket"]
 } & Record<string, unknown>

@@ -4,6 +4,7 @@ import { createMiddleware, defineErrors, honey } from "@lovrozagar/honey"
 import { readableStream } from "@lovrozagar/honey/input"
 import { serveManifest, serveOpenApi } from "@lovrozagar/honey/openapi"
 import { ws } from "@lovrozagar/honey/ws"
+import { SearchService } from "./service.ts"
 import * as z from "zod"
 
 type Env = { API_KEY: string; DATABASE_URL: string }
@@ -61,7 +62,7 @@ export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
 		.handler((ctx) => ctx.res.json("ok", { token: `t-${ctx.input.form.username}` }))
 
 		.get("/in/search")
-		.meta({ operationId: "input.search", tags: ["input"] })
+		.meta({ auth: "required", operationId: "input.search", tags: ["input"] })
 		.input({
 			search: z.object({
 				limit: z.coerce.number(),
@@ -70,7 +71,8 @@ export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
 			}),
 		})
 		.output({ "application/json": { ok: z.object({ results: z.string().array() }) } })
-		.handler((ctx) => ctx.res.json("ok", { results: [] }))
+		/* the service takes the generated per-route ctx: see src/service.ts */
+		.handler((ctx) => ctx.res.json("ok", { results: [String(SearchService.run(ctx).page)] }))
 
 		.get("/in/headers")
 		.input({ headers: z.object({ "x-api-key": z.string(), "x-request-id": z.string() }) })

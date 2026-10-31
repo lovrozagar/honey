@@ -161,6 +161,8 @@ export type ExtractedSpec = {
 	readonly env?: string
 	/** route id → its parsed `ctx.input` type text (O3) */
 	readonly inputs?: Record<string, string>
+	/** the meta type the app declares, written out; null when it declares none */
+	readonly meta?: string | null
 	/** name → type text; a `?` suffix on the name marks it optional */
 	readonly middleware?: Record<string, string>
 	/** route id → what that route's middleware added, as `middleware` */
@@ -176,6 +178,7 @@ export function extracted(spec: ExtractedSpec = {}): ExtractedTypes {
 	return {
 		env: spec.env ?? "Record<string, unknown>",
 		inputs: spec.inputs ?? {},
+		meta: spec.meta ?? null,
 		middleware: props(spec.middleware),
 		routes: Object.fromEntries(Object.entries(spec.routes ?? {}).map(([id, added]) => [id, props(added)])),
 		taps: spec.taps ?? null,
