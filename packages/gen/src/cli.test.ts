@@ -71,6 +71,28 @@ const filesUnder = (dir: string) =>
 		.map((entry) => join(entry.parentPath, entry.name).slice(dir.length + 1))
 		.sort()
 
+describe("generated: a run with no options bag (bit 22 a)", () => {
+	it(
+		"takes the generator's own defaults for a target whose options are left out",
+		async () => {
+			const document = {
+				info: { title: "Shop", version: "1" },
+				openapi: "3.1.0",
+				paths: { "/ping": { get: { responses: { "200": { description: "ok" } } } } },
+			}
+			const files = await generated({ targets: ["ts"] }, document, { env: {}, report: () => undefined })
+			expect(Object.keys(files.ts ?? {}).sort()).toEqual([
+				"sdk.client.gen.ts",
+				"sdk.index.gen.ts",
+				"sdk.map.gen.ts",
+				"sdk.runtime.gen.ts",
+				"sdk.types.gen.ts",
+			])
+		},
+		SPAWN_TIMEOUT,
+	)
+})
+
 describe("generate's usage (phase h)", () => {
 	it(
 		"refuses no command and an unknown one, and names what a regeneration deletes",

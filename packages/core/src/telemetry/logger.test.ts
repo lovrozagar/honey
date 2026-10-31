@@ -162,6 +162,32 @@ describe("the default sink and the test floor (bit 22 a)", () => {
 		write.mockRestore()
 		expect({ lines, stdoutLines }).toEqual({ lines: 1, stdoutLines: 0 })
 	})
+})
+
+describe("the runtime mark the sink follows (bit 22 a)", () => {
+	it.each(["workerd", "workerd/1.20250101"])("takes %j for Workers too, as detectRuntime does", (userAgent) => {
+		const log = vi.spyOn(console, "log").mockImplementation(() => {})
+		const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true)
+		vi.stubGlobal("navigator", { userAgent })
+		const logger = createLogger({ format: "json", level: "info" })
+		vi.unstubAllGlobals()
+		logger.info("to the console")
+		const counts = { lines: log.mock.calls.length, stdoutLines: write.mock.calls.length }
+		log.mockRestore()
+		write.mockRestore()
+		expect(counts).toEqual({ lines: 1, stdoutLines: 0 })
+	})
+
+	it("reads a runtime with no navigator as not Workers, and writes to its stdout", () => {
+		const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true)
+		vi.stubGlobal("navigator", undefined)
+		const logger = createLogger({ format: "json", level: "info" })
+		vi.unstubAllGlobals()
+		logger.info("to stdout")
+		const lines = write.mock.calls.length
+		write.mockRestore()
+		expect(lines).toBe(1)
+	})
 
 	/* an error line is the one thing a test must never swallow: NODE_ENV=test is set by the runner, not the author */
 	it("under NODE_ENV=test writes an error and drops an info line", () => {

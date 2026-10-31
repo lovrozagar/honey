@@ -52,4 +52,14 @@ describe("the crate's [package] metadata", () => {
 			},
 		})
 	})
+	it.each([
+		[
+			["acme", "api"],
+			["acme", "api"],
+		],
+		[[], undefined],
+		["", undefined],
+	])("takes the keywords %j as %j", (keywords, written) => {
+		expect(pkg({ keywords }).keywords).toEqual(written)
+	})
 })
