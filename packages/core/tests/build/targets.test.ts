@@ -40,6 +40,12 @@ function bindable(port: number): Promise<boolean> {
 }
 
 beforeAll(async () => {
+	/*
+	 * A leftover out directory is state, not just files: `--persist-to <outDir>/state` keeps a Durable Object's
+	 * storage, so a run whose afterAll never got to run (a killed verify) hands its counter to the next one. Clearing
+	 * it here is the half of the fix that keeps the start clean; `counted` is the half that does not depend on it.
+	 */
+	rmSync(OUT_ROOT, { force: true, recursive: true })
 	const floor = ephemeralFloor()
 	const taken = new Set<number>()
 	for (const target of Object.keys(PORTS) as BuildTarget[]) {
@@ -107,15 +113,22 @@ async function healthy(base: string, child: { logs: () => string }, timeoutMs: n
 	throw new Error(`no healthy server at ${base}: ${last}\n${child.logs()}`)
 }
 
-/** Poll `/count` until the Worker's object answers its first count, `1`. */
-async function counted(base: string, child: { logs: () => string }, timeoutMs: number): Promise<void> {
+/**
+ * Poll `/count` until the Worker's object answers a count, and return the one it answered. Deliberately not `1`:
+ * `/count` increments, so the first count a leg sees is only 1 when the storage started empty and no earlier poll
+ * reached the server. Neither holds — persisted state can survive a killed run, and a poll this function aborts
+ * client-side at 1 s can still have counted on the server. The leg asserts what follows is this count plus one and
+ * plus two, which is what proves the object serves and persists, whatever came before.
+ */
+async function counted(base: string, child: { logs: () => string }, timeoutMs: number): Promise<number> {
 	const deadline = Date.now() + timeoutMs
 	let last = ""
 	while (Date.now() < deadline) {
 		try {
 			const res = await fetch(`${base}/count`, { signal: AbortSignal.timeout(1_000) })
-			last = `${res.status} ${await res.text()}`
-			if (last === "200 1") return
+			const text = await res.text()
+			last = `${res.status} ${text}`
+			if (res.status === 200 && /^\d+$/.test(text)) return Number(text)
 		} catch (err) {
 			last = err instanceof Error ? err.message : String(err)
 		}
@@ -194,10 +207,10 @@ describe.sequential("the build plugin's bundles, served (bit 19 h2)", () => {
 			const persist = ["--persist-to", resolve(outDir, "state")]
 			const child = start(WRANGLER, [...args, ...persist], { cwd: outDir })
 			const base = `http://127.0.0.1:${port}`
-			await counted(base, child, 25_000)
+			const first = await counted(base, child, 25_000)
 			expect([await (await fetch(`${base}/count`)).text(), await (await fetch(`${base}/count`)).text()]).toEqual([
-				"2",
-				"3",
+				String(first + 1),
+				String(first + 2),
 			])
 		},
 		SPAWN_TIMEOUT,
