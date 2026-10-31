@@ -65,7 +65,8 @@
 				"bench/src/side.ts",
 				"bench/src/side.test.ts",
 				"bench/src/perf-base.ts",
-				"bench/src/perf-base.test.ts"
+				"bench/src/perf-base.test.ts",
+				"bench/src/bombardier.test.ts"
 			],
 			"plugins": ["typescript", "unicorn", "oxc", "vitest"],
 			"rules": {

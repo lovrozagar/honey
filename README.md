@@ -1,68 +1,57 @@
 # Honey
 
-A typed web framework for the Fetch API, and the code generator that turns an app into clients. One app runs on Node,
-Bun and Cloudflare Workers; its routes generate an OpenAPI 3.1 document, a route manifest, and typed SDKs in six
-languages, a command-line client and an MCP server.
+A typed web framework for the Fetch API whose routes are the source of its clients. You write a route once, with its
+input and output schemas; honey serves it on Node, Bun or Cloudflare Workers, and `honey-clients` turns the same
+routes into an OpenAPI 3.1 document, typed SDKs for six languages, a command-line client and an MCP server.
 
-| Package                                               | What it is                                                                                                                                   |
-| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`@lovrozagar/honey`](packages/core/README.md)        | The framework: routing, typed input and output, middleware, streaming, WebSockets and realtime, OpenAPI, the `honey` CLI and the Vite plugin |
-| [`@lovrozagar/honey-clients`](packages/gen/README.md) | `honey-clients generate`: SDKs (TypeScript, Go, Rust, Python, C#, Java), a Go CLI and an MCP server from a document or a honey app           |
+Nothing is inferred at runtime: the schemas you declare are what the handler receives, what the document says, and
+what every generated client's types promise.
 
-## Start
+This is the repository. **The guides are the two packages' own pages**, which is also what npm shows:
 
-1.0 is out as a release candidate, published under npm's `next` tag, so an install without a tag still gives
-0.7.3. Add `@next` until the final release:
+- [Packages](#packages)
+- [Install](#install)
+- [Documentation](#documentation)
+- [Develop](#develop)
+- [Releases](#releases)
+- [License](#license)
+
+## Packages
+
+| Package                                               | What it is                                                                                                                                                  |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`@lovrozagar/honey`](packages/core/README.md)        | The framework: routing, typed input and output, middleware, streaming, WebSockets and realtime, OpenAPI, the MCP mount, the `honey` CLI and the Vite plugin |
+| [`@lovrozagar/honey-clients`](packages/gen/README.md) | `honey-clients generate`: SDKs (TypeScript, Go, Rust, Python, C#, Java), a Go CLI and an MCP server from a document or a honey app                          |
+
+Each package's README is its complete guide: every export and every area, with examples the tests compile.
+
+## Install
+
+1.0 is out as a release candidate, published under npm's `next` tag, so an install without a tag still gives 0.7.3.
+Add `@next` until the final release.
+
+The framework, in the app:
 
 ```sh
 npm install @lovrozagar/honey@next
 npx honey init
 ```
 
-`honey init` writes `src/app.ts`, `src/server.ts` and a Vite config. The app it writes:
-
-```ts
-import { honey } from "@lovrozagar/honey"
-import { serveOpenApi } from "@lovrozagar/honey/openapi"
-
-export const app = serveOpenApi(
-	honey()
-		.get("/health")
-		.handler((ctx) => ctx.res.text("ok", "ok")),
-	{ docs: "scalar", title: "Honey", version: "0.0.1" },
-)
-```
-
-The server, `serve(app)` from `@lovrozagar/honey/serve`:
-
-```ts
-import { honey } from "@lovrozagar/honey"
-import { serve } from "@lovrozagar/honey/serve"
-
-const app = honey()
-app.get("/health").handler((ctx) => ctx.res.text("ok", "ok"))
-
-await serve(app, { port: Number(process.env.PORT ?? 3000) })
-```
+The generator, as a dev dependency:
 
 ```sh
-curl http://127.0.0.1:3000/health
-# ok
-# the API reference: open http://127.0.0.1:3000/docs
-```
-
-Then generate a client for it:
-
-```sh
+npm install --save-dev @lovrozagar/honey-clients@next
 npx honey-clients generate --app src/app.ts --target ts --out generated
 ```
 
 ## Documentation
 
-[docs/](docs/README.md) covers each part of honey with an example its tests compile: routing, input and output,
-middleware, streaming, WebSockets and realtime, the OpenAPI document, testing, code generation and the per-language
-recipes, the generated CLI and MCP server, [every package export](docs/packages.md), and each capability new in 1.0.
-Upgrading from 0.7: [the migration guide](docs/migration.md).
+- [`@lovrozagar/honey`](packages/core/README.md) — the framework, end to end
+- [`@lovrozagar/honey-clients`](packages/gen/README.md) — the generator, every target and flag
+- [All the docs](docs/README.md) — a page per area, each example compiled by the tests
+- [Migrating from 0.7](docs/migration.md)
+- [Package exports](docs/packages.md) — every subpath either package exports
+- [Packaging](packages/core/docs/packaging.md) — how a tarball is built and what it ships
 
 ## Develop
 
@@ -78,7 +67,7 @@ bun run verify
 `bun run verify` runs every gate in order and stops at the first failure: formatting, lint, type-checks, the tests,
 the generated outputs, the consumer type-checks and tests, and the end-to-end matrix. CI runs the same gates on every
 push, plus each SDK language's toolchain tests, the per-runtime end-to-end cells, the build tier and the packaging
-tier. How the packages are built and what they ship: [packaging](packages/core/docs/packaging.md).
+tier.
 
 ## Releases
 

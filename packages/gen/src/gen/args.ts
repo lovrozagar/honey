@@ -42,7 +42,7 @@ export function usage(): string {
   --app <module>    a honey app module instead: its export (#name, else app, else default) is the app, and its
                     openApi export, if any, the document's options (core's generateOpenApi); the module
                     exports the app and serves nothing: one that calls serve() as it loads is outside --app
-  --target <name>   ts, go, rust, python, csharp, java or cli; repeat for more than one
+  --target <name>   ${Object.keys(TARGETS).join(", ")}; repeat for more than one
   --out <dir>       each target's files go under <dir>/<target>
   --watch           generate again on each change of the spec or the app module
   -h, --help        this text

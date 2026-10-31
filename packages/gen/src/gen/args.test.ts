@@ -4,7 +4,7 @@
  * values come inline or next, and a target's options keep their generator's names.
  */
 import { describe, expect, it } from "vitest"
-import { parseGenerate, UsageError } from "./args.ts"
+import { parseGenerate, usage, UsageError } from "./args.ts"
 
 /** What parseGenerate makes of `argv`: "accepted", or the usage error's message. */
 function refused(argv: string[]): string {
@@ -102,4 +102,18 @@ describe("generate's removed options", () => {
 			)
 		},
 	)
+})
+
+/*
+ * The usage text is what a reader finds first, so it names the targets `--target` actually takes: it listed seven of
+ * the eight (mcp was missing) until it was derived from the table itself (bit 22).
+ */
+describe("generate's usage text", () => {
+	it("names every target --target accepts, and refuses none of them", () => {
+		const listed = /^  --target <name>   (.*); repeat/m.exec(usage())?.[1]?.split(", ") ?? []
+		const accepted = listed.filter(
+			(target) => refused(["--spec", "s.json", "--out", "o", "--target", target]) === "accepted",
+		)
+		expect([listed.length, accepted]).toEqual([8, listed])
+	})
 })

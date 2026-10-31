@@ -5,7 +5,10 @@ DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$DIR/.."
 # honey resolves to its source in this checkout (honey-source), in every bun or node process started here
 export BUN_OPTIONS="--conditions=honey-source" NODE_OPTIONS="--conditions=honey-source"
-BOMBARDIER="${BOMBARDIER:-/tmp/bombardier}"
+# bombardier: $BOMBARDIER when set, else whatever is on PATH. There is no fallback path: a default under /tmp
+# dies on every reboot, and the next person rediscovers it. A binary that cannot run is no binary either — a
+# mise shim with no version set is executable and still fails — so the check runs it rather than stat it.
+BOMBARDIER="${BOMBARDIER:-$(command -v bombardier || true)}"
 DURATION="${BENCH_DURATION:-10s}"
 CONNECTIONS="${BENCH_CONNECTIONS:-100}"
 MODE="${BENCH_MODE:-prod}"
@@ -34,9 +37,9 @@ if [ -z "$MATRIX" ]; then
 	MATRIX="both"
 fi
 
-if [ ! -x "$BOMBARDIER" ]; then
-	echo "bombardier not found at $BOMBARDIER"
-	echo "Install: curl -fsSL -o /tmp/bombardier https://github.com/codesenberg/bombardier/releases/download/v1.2.6/bombardier-linux-amd64 && chmod +x /tmp/bombardier"
+if [ -z "$BOMBARDIER" ] || ! "$BOMBARDIER" --version >/dev/null 2>&1; then
+	echo "bombardier does not run: set BOMBARDIER to its path, or put one on PATH (tried \"${BOMBARDIER:-none}\")" >&2
+	echo "Install: https://github.com/codesenberg/bombardier/releases" >&2
 	exit 1
 fi
 
