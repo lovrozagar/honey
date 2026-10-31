@@ -169,7 +169,9 @@ function errorsOf(op: IROperation, ctx: Ctx): { factories: Field[]; fields: Fiel
  */
 function ctxMeta(extracted: ExtractedTypes | null | undefined, literal: string): string {
 	const declared = extracted?.meta ?? null
-	return declared === null ? literal : `Partial<OpenApiMeta> & ${declared}`
+	/* the OpenAPI keys the declared meta does not redefine: a consumer that types `security` its own way holds
+	   that type in the handler, and intersecting honey's would conflict with it */
+	return declared === null ? literal : `Partial<Omit<OpenApiMeta, keyof ${declared}>> & ${declared}`
 }
 
 /** One `Routes[pattern][method]` entry. */
