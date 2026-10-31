@@ -1,6 +1,6 @@
 # Releasing a generated CLI
 
-`honey-codegen generate --target cli --repo <owner>/<repo>` writes a Go module ready to release from its own
+`honey-clients generate --target cli --repo <owner>/<repo>` writes a Go module ready to release from its own
 repository. Besides the commands, it holds a goreleaser config, a GitHub Actions release workflow, and `install.sh` and
 `install.ps1`. It ships no README: you write one for your users, and this page is what it should say.
 

@@ -1,7 +1,7 @@
 /**
  * `mcp(app, path, handler, options?)` (bit 21 e, H24.3): the app's own tools over MCP's Streamable HTTP, served at
  * `path` by the handler the plugin generates (`_gen/mcp.gen.ts`'s `mcpHandler`), typed against its shape alone, so
- * core imports nothing of honey-codegen. POST, GET and DELETE are plain routes on the handle (its basePath and every
+ * core imports nothing of honey-clients. POST, GET and DELETE are plain routes on the handle (its basePath and every
  * middleware apply; the handler answers GET and DELETE 405), internal and served, so they stay out of the documents
  * and out of the tool set. Each call dispatches in-process through `app.fetch` with the request's env and execution
  * context, every middleware and the operation's own auth running again; only the credential headers the tools'

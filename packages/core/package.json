@@ -274,7 +274,7 @@
 		"jiti": "2.7.0"
 	},
 	"devDependencies": {
-		"@lovrozagar/honey-codegen": "workspace:*",
+		"@lovrozagar/honey-clients": "workspace:*",
 		"@opentelemetry/api": "1.9.1",
 		"@opentelemetry/core": "2.11.0",
 		"@opentelemetry/sdk-trace-base": "2.11.0",
@@ -296,11 +296,11 @@
 		"zod": "catalog:"
 	},
 	"peerDependencies": {
-		"@lovrozagar/honey-codegen": ">=1.0.0",
+		"@lovrozagar/honey-clients": ">=1.0.0",
 		"ws": ">=8.21.0"
 	},
 	"peerDependenciesMeta": {
-		"@lovrozagar/honey-codegen": {
+		"@lovrozagar/honey-clients": {
 			"optional": true
 		},
 		"ws": {

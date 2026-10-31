@@ -1,6 +1,6 @@
 # Code generation
 
-`honey-codegen generate` writes clients from an OpenAPI document (`--spec`) or straight from an app module
+`honey-clients generate` writes clients from an OpenAPI document (`--spec`) or straight from an app module
 (`--app`): SDKs in TypeScript, Go, Rust, Python, C# and Java, a command-line client and an MCP server. Each target
 vendors its small runtime, so a generated SDK has no honey dependency. The output is formatted and deterministic, so
 regenerating an unchanged spec changes nothing.
@@ -8,8 +8,8 @@ regenerating an unchanged spec changes nothing.
 ## Example
 
 ```sh
-honey-codegen generate --spec openapi.json --target go --out ./clients/go
-honey-codegen generate --app src/app.ts --target python --out ./clients/python
+honey-clients generate --spec openapi.json --target go --out ./clients/go
+honey-clients generate --app src/app.ts --target python --out ./clients/python
 ```
 
 ## Reference

@@ -8,7 +8,7 @@ each language's client in a compiled example.
 ## Example
 
 ```sh
-honey-codegen generate --spec openapi.json --target ts --out sdk
+honey-clients generate --spec openapi.json --target ts --out sdk
 ```
 
 ## Errors and the safe mirror

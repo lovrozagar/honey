@@ -35,7 +35,7 @@ export type Generate = {
 
 /** The usage text, the options listed by target. */
 export function usage(): string {
-	return `usage: honey-codegen generate (--spec <openapi.json> | --app <module>[#export]) --target <name>... --out <dir>
+	return `usage: honey-clients generate (--spec <openapi.json> | --app <module>[#export]) --target <name>... --out <dir>
        [--watch] [options]
 
   --spec <file>     the OpenAPI document (JSON) to generate from

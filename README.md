@@ -7,7 +7,7 @@ languages, a command-line client and an MCP server.
 | Package                                               | What it is                                                                                                                                   |
 | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | [`@lovrozagar/honey`](packages/core/README.md)        | The framework: routing, typed input and output, middleware, streaming, WebSockets and realtime, OpenAPI, the `honey` CLI and the Vite plugin |
-| [`@lovrozagar/honey-codegen`](packages/gen/README.md) | `honey-codegen generate`: SDKs (TypeScript, Go, Rust, Python, C#, Java), a Go CLI and an MCP server from a document or a honey app           |
+| [`@lovrozagar/honey-clients`](packages/gen/README.md) | `honey-clients generate`: SDKs (TypeScript, Go, Rust, Python, C#, Java), a Go CLI and an MCP server from a document or a honey app           |
 
 ## Start
 
@@ -51,7 +51,7 @@ curl http://127.0.0.1:3000/health
 Then generate a client for it:
 
 ```sh
-npx honey-codegen generate --app src/app.ts --target ts --out generated
+npx honey-clients generate --app src/app.ts --target ts --out generated
 ```
 
 ## Documentation
@@ -64,7 +64,7 @@ Upgrading from 0.7: [the migration guide](docs/migration.md).
 ## Develop
 
 The repository is a Bun workspace: `packages/core` is `@lovrozagar/honey`, `packages/gen` is
-`@lovrozagar/honey-codegen`, `packages/core/tests/e2e` holds the end-to-end apps and runtimes, `bench/` the
+`@lovrozagar/honey-clients`, `packages/core/tests/e2e` holds the end-to-end apps and runtimes, `bench/` the
 benchmarks, `docs/` the documentation and `blueprint/` the design records.
 
 ```sh

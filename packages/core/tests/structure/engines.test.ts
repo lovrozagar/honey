@@ -33,7 +33,7 @@ function oldest(versions: readonly number[][]): string {
 }
 
 describe("each published package's Node floor", () => {
-	it("is the oldest Node CI runs, for honey and honey-codegen alike", () => {
+	it("is the oldest Node CI runs, for honey and honey-clients alike", () => {
 		const floor = `>=${oldest(pinnedNodes())}`
 		const declared = ["packages/core", "packages/gen"].map(
 			(dir) =>

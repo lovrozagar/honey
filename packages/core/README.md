@@ -2,7 +2,7 @@
 
 A typed web framework for the Fetch API. One app runs on Node, Bun and Cloudflare Workers, and its routes generate
 an OpenAPI 3.1 document, a route manifest and, through
-[`@lovrozagar/honey-codegen`](https://www.npmjs.com/package/@lovrozagar/honey-codegen), typed SDKs in six languages, a
+[`@lovrozagar/honey-clients`](https://www.npmjs.com/package/@lovrozagar/honey-clients), typed SDKs in six languages, a
 command-line client and an MCP server.
 
 ## Install

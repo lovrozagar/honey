@@ -1,7 +1,7 @@
 /**
  * honey()'s config (bit 19 h2): the route tree on by default and every other artifact off, `true` as each default
  * path, the OpenAPI outputs as a list, the `.yaml`/`.yml` output rule (Q7), the SDK and CLI keys refused as
- * honey-codegen's (Q1), and the outputs a watcher ignores.
+ * honey-clients's (Q1), and the outputs a watcher ignores.
  */
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
@@ -81,10 +81,10 @@ describe("resolveHoneyConfig (bit 19 h2), continued (2)", () => {
 		])
 	})
 
-	it("refuses the SDK and CLI keys, which are honey-codegen's (Q1)", () => {
+	it("refuses the SDK and CLI keys, which are honey-clients's (Q1)", () => {
 		for (const key of ["sdk", "cli"])
 			expect(() => resolveHoneyConfig({ codegen: { [key]: true } } as HoneyVitePluginConfig)).toThrow(
-				`codegen.${key}: the SDKs, the CLI and MCP are honey-codegen's: honey-codegen generate --app`,
+				`codegen.${key}: the SDKs, the CLI and MCP are honey-clients's: honey-clients generate --app`,
 			)
 	})
 })

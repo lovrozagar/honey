@@ -65,7 +65,7 @@ describe("honey generate argument parsing", () => {
 		])
 	})
 
-	it("reads -h and --help as help; the SDK and CLI flags are honey-codegen's (Q1)", () => {
+	it("reads -h and --help as help; the SDK and CLI flags are honey-clients's (Q1)", () => {
 		expect([
 			parseGenerateArgs(["-h"]).help,
 			parseGenerateArgs(["--help"]).help,

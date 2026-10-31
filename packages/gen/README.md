@@ -1,4 +1,4 @@
-# @lovrozagar/honey-codegen
+# @lovrozagar/honey-clients
 
 Generates SDKs (TypeScript, Go, Rust, Python, C#, Java), a Go command-line client and an MCP server from an OpenAPI
 3.x document, or straight from a [`@lovrozagar/honey`](https://www.npmjs.com/package/@lovrozagar/honey) app.
@@ -6,7 +6,7 @@ Generates SDKs (TypeScript, Go, Rust, Python, C#, Java), a Go command-line clien
 ## Install
 
 ```sh
-npm install --save-dev @lovrozagar/honey-codegen
+npm install --save-dev @lovrozagar/honey-clients
 ```
 
 Node 22.12 or later, or Bun 1.3 or later.
@@ -16,22 +16,22 @@ Node 22.12 or later, or Bun 1.3 or later.
 From a document:
 
 ```sh
-npx honey-codegen generate --spec openapi.json --target ts --target python --out generated
+npx honey-clients generate --spec openapi.json --target ts --target python --out generated
 ```
 
 From a honey app module, with no document written first:
 
 ```sh
-npx honey-codegen generate --app src/app.ts --target ts --target go --go-module-path github.com/acme/shop/sdk \
+npx honey-clients generate --app src/app.ts --target ts --target go --go-module-path github.com/acme/shop/sdk \
   --out generated
 ```
 
 The targets are `ts`, `go`, `rust`, `python`, `csharp`, `java`, `cli` and `mcp`.
 
-## honey-codegen generate
+## honey-clients generate
 
 ```sh
-honey-codegen generate --spec openapi.json --target ts --target cli --out generated \
+honey-clients generate --spec openapi.json --target ts --target cli --out generated \
   --cli-binary-name shop --cli-module-path github.com/acme/shop --cli-repo acme/shop
 ```
 
@@ -46,13 +46,13 @@ honey-codegen generate --spec openapi.json --target ts --target cli --out genera
 - `--target <name>`: `ts`, `go`, `rust`, `python`, `csharp`, `java`, `cli` or `mcp`; repeat it for more than one. Each
   target's files go under `<out>/<target>`.
 - `--<target>-<option>`: a target's options are its generator's, passed through as given (`--go-module-path`,
-  `--rust-crate-name`, `--cli-binary-name`). Each takes a value. `honey-codegen --help` lists them all.
+  `--rust-crate-name`, `--cli-binary-name`). Each takes a value. `honey-clients --help` lists them all.
 - `--watch`: generate again on each change of the spec (or the `--app` module), each run in a fresh process.
 
 The `go` and `cli` targets format every Go file they write with gofmt, so they need Go installed. gofmt is found by
 `$GOFMT`, then `$GOROOT/bin/gofmt`, then `gofmt` on `PATH`, then beside the `go` on `PATH`. Without one they refuse.
 
-The `ts` target formats every file it writes with oxfmt, an optional peer: install `oxfmt` beside honey-codegen. Without
+The `ts` target formats every file it writes with oxfmt, an optional peer: install `oxfmt` beside honey-clients. Without
 it the files go out as emitted, valid TypeScript that is not formatted.
 
 **Stale files are deleted, edited ones kept.** Each `<out>/<target>` keeps `.honey-generated.json`: every file the run

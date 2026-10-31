@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// The honey-codegen bin (bit 17 phase h). A repository checkout (marked by tsconfig.json, which is not published)
+// The honey-clients bin (bit 17 phase h). A repository checkout (marked by tsconfig.json, which is not published)
 // runs the TypeScript source, natively on Bun (under the honey-source condition) and through jiti on Node, so a stale
 // dist/ never runs; an installed package runs the compiled JavaScript on any runtime (the tarball ships dist/, not src/).
 import { spawn } from "node:child_process"
@@ -33,7 +33,7 @@ function handOff(bun, env) {
 		stdio: "inherit",
 	})
 	child.on("error", (error) => {
-		console.error(`honey-codegen: could not start ${bun}: ${error.message}`)
+		console.error(`honey-clients: could not start ${bun}: ${error.message}`)
 		process.exit(1)
 	})
 	child.on("exit", (code, signal) => {
@@ -72,7 +72,7 @@ async function entry() {
 		return await import("../dist/cli.js")
 	} catch (error) {
 		if (error?.code === "ERR_MODULE_NOT_FOUND" && String(error.url).endsWith("/dist/cli.js")) {
-			console.error("honey-codegen: dist/ is missing from this install. Reinstall it, or run it with Bun.")
+			console.error("honey-clients: dist/ is missing from this install. Reinstall it, or run it with Bun.")
 			process.exit(1)
 		}
 		throw error
@@ -82,7 +82,7 @@ async function entry() {
 const bun = invokingBun()
 if (bun) handOff(bun, sourceEnv)
 else if (unconditioned && handOffDepth >= 1) {
-	console.error("honey-codegen: Bun hand-off loop: --conditions=honey-source not visible after re-exec")
+	console.error("honey-clients: Bun hand-off loop: --conditions=honey-source not visible after re-exec")
 	process.exit(1)
 } else if (unconditioned) handOff(process.execPath, sourceEnv)
 else {

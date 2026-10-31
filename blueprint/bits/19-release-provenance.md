@@ -4,9 +4,9 @@ Closes: F2 (provenance scope) · packaging
 Oracle kept green: `test:packaging` (real tarball + strict consumer typecheck), `test:build` (no optional dep leaks into a worker bundle), `unit/build/*`.
 
 ## Scope
-Publish both packages and the generated SDKs correctly. Split v0 `plugin.ts` 864 / `build/index.ts` into `core/build/`. Under H9 nothing new is published as a runtime package, so provenance is scoped to the two packages that ship: `@lovrozagar/honey` and `@lovrozagar/honey-codegen` (npm provenance). Generated SDKs carry vendored runtime; their publication is the API author's pipeline, documented.
+Publish both packages and the generated SDKs correctly. Split v0 `plugin.ts` 864 / `build/index.ts` into `core/build/`. Under H9 nothing new is published as a runtime package, so provenance is scoped to the two packages that ship: `@lovrozagar/honey` and `@lovrozagar/honey-clients` (npm provenance). Generated SDKs carry vendored runtime; their publication is the API author's pipeline, documented.
 
-**core/build is a build-time consumer of `honey-codegen` (H18.5).** `build/plugin.ts` calls `generateTypes` and `generateRouteTree*` (homed at `gen/emit/ts/{type-gen,route-tree}.ts`), so it imports `@lovrozagar/honey-codegen` on the build path. This does not violate H1's lean *runtime* core — it is a `devDependency`/build-time import, never shipped to a serving request — but it is stated here so the dependency is explicit. (Alternative considered: move the build plugin to `honey-codegen`; rejected because `honey()` apps call `honey/plugin` by convention.)
+**core/build is a build-time consumer of `honey-clients` (H18.5).** `build/plugin.ts` calls `generateTypes` and `generateRouteTree*` (homed at `gen/emit/ts/{type-gen,route-tree}.ts`), so it imports `@lovrozagar/honey-clients` on the build path. This does not violate H1's lean *runtime* core — it is a `devDependency`/build-time import, never shipped to a serving request — but it is stated here so the dependency is explicit. (Alternative considered: move the build plugin to `honey-clients`; rejected because `honey()` apps call `honey/plugin` by convention.)
 
 **Cutover + real `prod` e2e (H14/H21).** The atomic workspace swap lands here (`_v0` leaves `workspaces`, `packages/core` joins as `@lovrozagar/honey`), and this bit owns the consumer e2e passing identically against v1. v0's `--mode prod` was a no-op grep swap (verified bit 00; `prod ≡ dev`, `cf` always local); v1 makes it real: `prod` builds each app and drives the full Playwright suite against the **served built bundle** (request-time parity of the shipped artifact — beyond `test:build`'s import smoke), and `cf prod` deploys a worker (CF creds, CI). Re-record `blueprint/baselines/e2e-expected.json` against v1, move the 5 `cf-prod` cells to CI, and add the ≥1 genuine `@prod-only` assertion that makes `prod` distinct from `dev`.
 
@@ -164,7 +164,7 @@ A caller-supplied adapter that swallows interrupts isn't bounded until it return
 - size/token: the vendored runtime glue template per language (`gen/runtime/<lang>/*`) has a byte budget, and emitted SDK types must share components across operations (no per-op re-inlining) — both bound shipped SDK size and the agent-token surface (gated with H6). A bloated template or un-deduped types fails the gate.
 
 **Bit 17 carry-ins (the CLI close).**
-- `honey-codegen generate --app`: generate from an app module, not only a JSON `--spec`. Needs core's public document entry and a no-bind codegen flag first; `src/ir/load.ts` and regression V072-2 moved here with it (files.tsv rows at 19).
+- `honey-clients generate --app`: generate from an app module, not only a JSON `--spec`. Needs core's public document entry and a no-bind codegen flag first; `src/ir/load.ts` and regression V072-2 moved here with it (files.tsv rows at 19).
 - Stale generated-file cleanup: `generate` writes over and deletes nothing today (stated in `--help` and the README). Decide whether it tracks and removes files a regeneration no longer emits.
 - CLI release signing and attestation: the emitted goreleaser config and release workflow (least-privilege) ship unsigned; decide on cosign/SLSA attestation of the archives and checksums, and whether the install scripts verify them.
 - Security sweep, help text: the CLI strips control characters from spec text through `helpText` (title, summaries, descriptions, the skill) and escapes DEL and C1 in its JSON output, and refuses binary bytes to a terminal (F2, pinned at bit 17 i on a built binary). Sweep every SDK's emitted doc comments and help for the same control-character and DEL/C1 handling.
@@ -206,10 +206,10 @@ Fixes between phases, each red-first: c341545 (the e2e harness's own package sco
 - The TS sweep of bit 17's findings needed no change; queued realtime frames survive a reconnect.
 - Rust binary deltas: +96,656 B at b1, −977,584 B at d2.
 - MCP Streamable HTTP is deferred past 1.0, with its security corpus (Origin check, localhost bind, auth surface) named for when it lands. **Superseded by H24 (bit 21).**
-- Q5: `mergeSpecs`/`scopeSpec` are removed. A scoped SDK is a per-output `codegen.openApi` document with `filterRoutes`, then `honey-codegen generate --spec` (26 v0 cases retired at k2).
+- Q5: `mergeSpecs`/`scopeSpec` are removed. A scoped SDK is a per-output `codegen.openApi` document with `filterRoutes`, then `honey-clients generate --spec` (26 v0 cases retired at k2).
 
 **Open at close:**
 - j3 (cf prod) waits for the repository's Cloudflare secrets; prepared as 52d1283 (cf-prod on main pushes only, never in a release's tag call).
-- The first `@lovrozagar/honey-codegen` publish and both packages' npm trusted-publisher entries are the owner's.
+- The first `@lovrozagar/honey-clients` publish and both packages' npm trusted-publisher entries are the owner's.
 - An unreproduced Bun 1.3.11 generation failure ("First argument must be an Error object"); a failed generation now prints its stack, so a recurrence names its frame.
 - ci.yml's setup-node v7.1.0 and checkout v7.0.1 bumps, as their own commit.

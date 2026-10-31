@@ -1,5 +1,5 @@
 /**
- * The two CLIs' argument rules held alike (bit 19 h1): core's `honey` (src/build/cli-args.ts) and honey-codegen's
+ * The two CLIs' argument rules held alike (bit 19 h1): core's `honey` (src/build/cli-args.ts) and honey-clients's
  * generate (gen src/gen/args.ts) each parse their own flags, since core needs no codegen to run `honey init` and gen
  * never imports core (H2); this table runs one rule through both, a value flag standing as `<V>` and a boolean as
  * `--watch`. Test-only, gen is imported by path, as codegen-tables.test.ts does.
@@ -41,7 +41,7 @@ function both(argv: string[]) {
 	}
 }
 
-describe("honey and honey-codegen read their arguments by the same rules (bit 19 h1)", () => {
+describe("honey and honey-clients read their arguments by the same rules (bit 19 h1)", () => {
 	it.each([
 		["a value after the flag", ["--<V>", "a.ts"]],
 		["a value inline, an = inside it kept", ["--<V>=a=b.ts"]],

@@ -19,7 +19,7 @@ Nothing in `packages/` has been moved or rewritten by this directory. `_v0/` doe
 | package | dir | job |
 | --- | --- | --- |
 | `@lovrozagar/honey` | `packages/core` | the server framework you write your API in; it emits the OpenAPI document and the IR |
-| `@lovrozagar/honey-codegen` | `packages/gen` | takes an `openapi.json` (any 3.x, not just honey's) and generates SDKs (TS/Go/Rust/Python/C#/Java), the CLI, and the MCP server |
+| `@lovrozagar/honey-clients` | `packages/gen` | takes an `openapi.json` (any 3.x, not just honey's) and generates SDKs (TS/Go/Rust/Python/C#/Java), the CLI, and the MCP server |
 
 The IR is the seam: core emits OpenAPI + IR; codegen consumes the IR and never reaches into core internals.
 

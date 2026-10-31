@@ -2,7 +2,7 @@
 
 Closes: C2 (raw response + per-call overrides) · A1/A2 (binary + typed headers)
 Oracle kept green: `tests/integration/ts-harness`, the client behavior spec (ported from v0 `unit/client/*`).
-Formatter post-pass: oxfmt (the repo's formatter and an optional peer of honey-codegen; valid-but-unformatted fallback when absent). Runtime: vendored, depends on `fetch` (H9).
+Formatter post-pass: oxfmt (the repo's formatter and an optional peer of honey-clients; valid-but-unformatted fallback when absent). Runtime: vendored, depends on `fetch` (H9).
 
 ## Scope
 The TS SDK emitter and its vendored runtime (split v0 `client/http.ts` 737, `client/sdk.ts` 351 into `gen/emit/ts/`). Reads only the IR.

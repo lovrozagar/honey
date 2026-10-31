@@ -10,12 +10,12 @@ Every public export of both packages, tagged **KEEP** (re-homed and split, behav
 | `./accepts` | KEEP | |
 | `./body-limit` | KEEP | |
 | `./build` | MODIFY [H15] | Deno build target removed |
-| `./cli` | MOVE→gen [H3] | the generate CLI becomes `@lovrozagar/honey-codegen`'s; **removed from core** |
-| `./client` | MOVE→gen [H3] | the TS SDK client; **removed from core** (→ `honey-codegen` TS emitter + runtime) |
-| `./client/sdk` | MOVE→gen [H3] | **removed from core** (→ `honey-codegen` TS emitter) |
-| `./codegen` | MOVE→gen [H3] | **removed from core** (→ `honey-codegen` `.` entry) |
-| `./codegen-go-cli` | MOVE→gen [H3] | **removed from core** (→ `honey-codegen` CLI emitter) |
-| `./codegen/extract` | MOVE→gen [H3] | **removed from core** (→ `honey-codegen` `extract/`) |
+| `./cli` | MOVE→gen [H3] | the generate CLI becomes `@lovrozagar/honey-clients`'s; **removed from core** |
+| `./client` | MOVE→gen [H3] | the TS SDK client; **removed from core** (→ `honey-clients` TS emitter + runtime) |
+| `./client/sdk` | MOVE→gen [H3] | **removed from core** (→ `honey-clients` TS emitter) |
+| `./codegen` | MOVE→gen [H3] | **removed from core** (→ `honey-clients` `.` entry) |
+| `./codegen-go-cli` | MOVE→gen [H3] | **removed from core** (→ `honey-clients` CLI emitter) |
+| `./codegen/extract` | MOVE→gen [H3] | **removed from core** (→ `honey-clients` `extract/`) |
 | `./cookie`, `./cookie-sign` | KEEP | |
 | `./cors` | MODIFY [F1] | credential-reflection hardening kept under the adversarial gate |
 | `./crypto` | KEEP | |
@@ -59,12 +59,12 @@ Every public export of both packages, tagged **KEEP** (re-homed and split, behav
 | `./range` | A3 | range helper for binary/stream bodies |
 | response media types + headers | A1/A2 | surfaced through `./input`/`.output()` and the `.` response types, not a new entry |
 
-## `@lovrozagar/honey-codegen` — entry points (ADD; moved from core per H3 + new)
+## `@lovrozagar/honey-clients` — entry points (ADD; moved from core per H3 + new)
 
 | export | source | note |
 | --- | --- | --- |
 | `.` (generate from an `openapi.json` → artifacts) | new entry over moved `codegen*.ts` + IR | runnable against any OpenAPI 3.x, not only honey's |
-| `./cli` | moved from core `./cli` | the `honey-codegen` generate CLI |
+| `./cli` | moved from core `./cli` | the `honey-clients` generate CLI |
 | TS SDK emitter | moved `client/`, `client/sdk`, `ts-type-emitter` | MODIFY [C2] uniform raw-response/overrides |
 | Go SDK emitter | moved `client-go/`, `codegen-go`, `go-type-emitter` | MODIFY [C2] + formatter post-pass (gofmt mandatory); C1 auto-pagination CUT (H20) |
 | Rust SDK emitter | moved `client-rust/`, `codegen-rust`, `rust-type-emitter` | MODIFY [C2] + rustfmt (mandatory); C1 CUT (H20); sync (blocking) client CUT (H20-style) |

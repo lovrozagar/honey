@@ -114,7 +114,7 @@ describe("the exports page", () => {
 				.map((subpath) => (subpath === "." ? name : `${name}/${subpath.slice(2)}`))
 		const all = [
 			...subpaths("packages/core", "@lovrozagar/honey"),
-			...subpaths("packages/gen", "@lovrozagar/honey-codegen"),
+			...subpaths("packages/gen", "@lovrozagar/honey-clients"),
 		]
 		expect(all.filter((name) => !page.includes(`\`${name}\``))).toEqual([])
 	})

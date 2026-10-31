@@ -2,7 +2,7 @@
  * The `honey()` plugin's config (bit 19 h2): what it takes, resolved with its defaults (the route tree on, every
  * other artifact off), and every path a generation writes, which a watcher must never take for an edit. An OpenAPI
  * output path ending `.yaml` or `.yml` is that YAML file alone; any other is JSON there plus its `.yaml` sibling
- * (Q7: core's openapi/yaml.ts writes it). The SDKs, the CLI and the MCP server package are honey-codegen's (Q1), so
+ * (Q7: core's openapi/yaml.ts writes it). The SDKs, the CLI and the MCP server package are honey-clients's (Q1), so
  * their keys are refused. Bit 21 e: `mcp` writes the handler an app mounts (`_gen/mcp.gen.ts`, its runtime and SDK in
  * the companion directory named by its stem, `_gen/mcp/`), H24.3.
  */
@@ -90,7 +90,7 @@ const TYPES = "src/_gen/types.gen.d.ts"
 const MCP = "src/_gen/mcp.gen.ts"
 
 /**
- * The files honey-codegen's generateMcpHandler writes in the companion directory: its portable runtime and the API's
+ * The files honey-clients's generateMcpHandler writes in the companion directory: its portable runtime and the API's
  * TS SDK (plugin.test holds a generation to exactly these).
  */
 export const MCP_COMPANIONS = [
@@ -118,12 +118,12 @@ function pathOf(value: boolean | string | undefined, fallback: string, on: boole
 	return value === true || (value === undefined && on) ? fallback : false
 }
 
-/** `raw` with its defaults; a key honey-codegen owns is an error naming where it went. */
+/** `raw` with its defaults; a key honey-clients owns is an error naming where it went. */
 export function resolveHoneyConfig(raw: HoneyVitePluginConfig): ResolvedHoneyConfig {
 	const c = raw.codegen ?? {}
 	for (const key of ["sdk", "cli"])
 		if (Object.hasOwn(c, key))
-			throw new Error(`codegen.${key}: the SDKs, the CLI and MCP are honey-codegen's: honey-codegen generate --app`)
+			throw new Error(`codegen.${key}: the SDKs, the CLI and MCP are honey-clients's: honey-clients generate --app`)
 	const types = typeof c.types === "object" ? c.types : { path: pathOf(c.types, TYPES, false) || undefined }
 	const outputs = c.openApi === undefined ? [] : Array.isArray(c.openApi) ? c.openApi : [c.openApi]
 	return {

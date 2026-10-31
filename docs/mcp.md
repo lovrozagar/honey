@@ -1,6 +1,6 @@
 # The generated MCP server
 
-`honey-codegen generate --target mcp` writes a Model Context Protocol server: one tool per operation, its
+`honey-clients generate --target mcp` writes a Model Context Protocol server: one tool per operation, its
 input schema from the operation's parameters and body, and structured output for agents. Read-only operations are
 annotated as such. The server takes its base URL, extra headers (`$<PREFIX>_HEADERS`) and its redirect policy
 (`$<PREFIX>_REDIRECT`) from the environment. A multipart operation is a tool too: each part is an argument, a file
@@ -10,7 +10,7 @@ with `--http` (see [Over HTTP](#over-http)).
 ## Example
 
 ```sh
-honey-codegen generate --spec openapi.json --target mcp --out ./mcp
+honey-clients generate --spec openapi.json --target mcp --out ./mcp
 ```
 
 ## Reference
@@ -44,7 +44,7 @@ The standalone server runs over stdio, started by the client. Generate it, then 
 `dist/server.js`:
 
 ```sh
-honey-codegen generate --spec openapi.json --target mcp --out ./mcp
+honey-clients generate --spec openapi.json --target mcp --out ./mcp
 ```
 
 The server's name is the document's title, lower case and hyphenated (`Anyrow` gives `anyrow`, its bin

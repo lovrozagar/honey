@@ -1,29 +1,29 @@
 /**
  * One generation (bit 19 h2): the app's artifacts made inside its module graph (artifacts.ts, loaded through the
  * loader that imports the app, from the app's own @lovrozagar/honey) and each written only when it changed, through
- * honey-codegen's write.ts (Q1).
- * honey-codegen is an optional peer, imported on demand (Q2), so a missing one is a named error only when a
+ * honey-clients's write.ts (Q1).
+ * honey-clients is an optional peer, imported on demand (Q2), so a missing one is a named error only when a
  * generation runs.
  */
 import { existsSync, readFileSync } from "node:fs"
 import { dirname, join, relative, resolve } from "node:path"
 import type * as Artifacts from "./artifacts.ts"
-import { ARTIFACTS, type Codegen, type Report } from "./artifacts.ts"
+import { ARTIFACTS, type Clients, type Report } from "./artifacts.ts"
 import type { ResolvedHoneyConfig } from "./config.ts"
 import { createModuleLoader, type ModuleLoader } from "./loaders.ts"
 
 export type { Report } from "./artifacts.ts"
 
-const CODEGEN = "@lovrozagar/honey-codegen"
+const CLIENTS = "@lovrozagar/honey-clients"
 const CORE = "@lovrozagar/honey"
 
-/** honey-codegen, or a named error when it is not installed. */
-export async function loadCodegen(load = () => import("@lovrozagar/honey-codegen")): Promise<Codegen> {
+/** honey-clients, or a named error when it is not installed. */
+export async function loadClients(load = () => import("@lovrozagar/honey-clients")): Promise<Clients> {
 	try {
 		return await load()
 	} catch (error) {
-		if ((error as { code?: string }).code !== "ERR_MODULE_NOT_FOUND" || !String(error).includes(CODEGEN)) throw error
-		throw new Error(`honey: generating the app's artifacts needs ${CODEGEN}: add it to your devDependencies`, {
+		if ((error as { code?: string }).code !== "ERR_MODULE_NOT_FOUND" || !String(error).includes(CLIENTS)) throw error
+		throw new Error(`honey: generating the app's artifacts needs ${CLIENTS}: add it to your devDependencies`, {
 			cause: error,
 		})
 	}
@@ -67,7 +67,7 @@ export async function generateAndWrite(
 ): Promise<string[]> {
 	const { manifest, mcp, openApi, tree, types } = config.codegen
 	if (tree === false && manifest === false && openApi.length === 0 && types === false && mcp === false) return []
-	const codegen = await loadCodegen()
+	const codegen = await loadClients()
 	const report = options.report ?? ((message) => void process.stderr.write(`honey: ${message}\n`))
 	const run = { codegen, report, root }
 	let graph = await inAppGraph(root, options.load)

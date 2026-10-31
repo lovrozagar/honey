@@ -2,7 +2,7 @@
  * One generation (bit 19 h2): the route tree, the manifest, each OpenAPI document as JSON and YAML (or YAML alone at
  * a `.yaml`/`.yml` path, Q7) and the types, each rewritten only when it changed. The app module is evaluated once, in
  * the module graph of the core that reads it; a gateway's merge entry is loaded and its app never is; a stale tree is
- * replaced, never read, and an app that loads its own fails naming the fix; honey-codegen, an optional peer (Q2), is
+ * replaced, never read, and an app that loads its own fails naming the fix; honey-clients, an optional peer (Q2), is
  * a named error only once a generation runs.
  */
 import { execFileSync } from "node:child_process"
@@ -24,7 +24,7 @@ import { generateRouteTree } from "../../../gen/src/emit/ts/route-tree.ts"
 import { honey } from "../routing/app.ts"
 import { appSource, type Project, project } from "./__fixtures__/project.ts"
 import { type HoneyVitePluginConfig, MCP_COMPANIONS, resolveHoneyConfig } from "./config.ts"
-import { artifactsFor, generateAndWrite, loadCodegen } from "./generate.ts"
+import { artifactsFor, generateAndWrite, loadClients } from "./generate.ts"
 
 const SLOW = 60_000
 /* an internal route whose own middleware adds to ctx: extracted, never documented, so the types report it */
@@ -292,13 +292,13 @@ describe("a stale route tree (bit 19 h2, V072-3 under Q3)", () => {
 	)
 })
 
-describe("honey-codegen, an optional peer (bit 19 h2, Q2)", () => {
+describe("honey-clients, an optional peer (bit 19 h2, Q2)", () => {
 	it("passes any failure but its own absence through", async () => {
 		const broken = Object.assign(new Error("boom"), { code: "ERR_MODULE_NOT_FOUND" })
-		await expect(loadCodegen(() => Promise.reject(broken))).rejects.toBe(broken)
+		await expect(loadClients(() => Promise.reject(broken))).rejects.toBe(broken)
 	})
 
-	/** A copy of core's source in a project with only jiti and zod installed: honey-codegen cannot resolve. */
+	/** A copy of core's source in a project with only jiti and zod installed: honey-clients cannot resolve. */
 	function withoutCodegen(): string {
 		const dir = mkdtempSync(join(process.env.TMPDIR ?? tmpdir(), "honey-no-codegen-"))
 		projects.push({ dir, done: () => rmSync(dir, { force: true, recursive: true }), write: () => {} })
@@ -325,7 +325,7 @@ describe("honey-codegen, an optional peer (bit 19 h2, Q2)", () => {
 			const expected = {
 				generation: {
 					error:
-						"honey: generating the app's artifacts needs @lovrozagar/honey-codegen: add it to your devDependencies",
+						"honey: generating the app's artifacts needs @lovrozagar/honey-clients: add it to your devDependencies",
 				},
 				off: { ok: null },
 				openApi: { ok: ["code", "moduleType"] },
@@ -377,12 +377,12 @@ describe("a generation's reports (bit 19 h2)", () => {
 		SLOW,
 	)
 
-	it("names honey-codegen when it is not installed", async () => {
-		const absent = Object.assign(new Error("Cannot find package '@lovrozagar/honey-codegen'"), {
+	it("names honey-clients when it is not installed", async () => {
+		const absent = Object.assign(new Error("Cannot find package '@lovrozagar/honey-clients'"), {
 			code: "ERR_MODULE_NOT_FOUND",
 		})
-		await expect(loadCodegen(() => Promise.reject(absent))).rejects.toThrow(
-			"honey: generating the app's artifacts needs @lovrozagar/honey-codegen: add it to your devDependencies",
+		await expect(loadClients(() => Promise.reject(absent))).rejects.toThrow(
+			"honey: generating the app's artifacts needs @lovrozagar/honey-clients: add it to your devDependencies",
 		)
 	})
 })

@@ -43,7 +43,7 @@ packages/core/
 
 Every `src/**` leaf has a colocated `*.test.ts`. A folder's `index.ts` is `kind=index` (re-export only) and has no sibling test. There is **no `exports/` folder**: each `package.json` subpath maps straight to its module file (e.g. `./accepts` → `src/input/accepts.ts`, `./logger` → `src/telemetry/logger.ts`, `./openapi` → `src/openapi/register.ts`), or to that folder's `index.ts` (`kind=index`) when a subpath publishes several files. The subpath→file map lives in `package.json`, not a code folder.
 
-## `packages/gen` — `@lovrozagar/honey-codegen`
+## `packages/gen` — `@lovrozagar/honey-clients`
 
 ```
 packages/gen/
@@ -61,7 +61,7 @@ packages/gen/
       mcp/           MCP server (moved client-mcp/, codegen-mcp) — structured output + annotations (D1)
     extract/        type-extractor split: extract, walk, serialize, chain (ts-morph compiler API — H12; optional peer)
     runtime/        vendored runtime templates per language (H9)
-    cli.ts          the honey-codegen generate CLI; gen/process.ts + gen/write.ts orchestrate
+    cli.ts          the honey-clients generate CLI; gen/process.ts + gen/write.ts orchestrate
   tests/
     integration/    harness per language (ts/go/rust/python/csharp/java/mcp/cli), polyglot compile/runtime/conformance
     fixtures/       adversarial specs, schema-naming corpora

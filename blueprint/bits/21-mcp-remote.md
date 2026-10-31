@@ -95,4 +95,4 @@ Closed at i7g; the closing CI run is this stack's push. Each phase landed red-fi
 - **i7 gates:** the bench judged on k=3 interleaved passes (ca5f1d5); the e2e time gate's reference timed inside each cell's window (aca6be0); both baselines under one 2% false-red rule (5e1487c).
 - **i7d/e** 4ac4ba3: migration.md judged against v0.7.3, the docs name guard, every budget lock its exact bytes with a guarded ledger.
 
-**Open at close:** the 1.0 release notes (CHANGELOG.md, before the tag); the same-runner A/B perf gate (the next bit); the owner's: the first `@lovrozagar/honey-codegen` npm publish, the R5 Anyrow note, the docs site deploy.
+**Open at close:** the 1.0 release notes (CHANGELOG.md, before the tag); the same-runner A/B perf gate (the next bit); the owner's: the first `@lovrozagar/honey-clients` npm publish, the R5 Anyrow note, the docs site deploy.

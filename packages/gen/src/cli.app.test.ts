@@ -1,5 +1,5 @@
 /**
- * `honey-codegen generate --app` (bit 19 h2, Q1): the SDKs, the CLI and MCP generated from a honey app module, its
+ * `honey-clients generate --app` (bit 19 h2, Q1): the SDKs, the CLI and MCP generated from a honey app module, its
  * document made by the app's own core with the module's `openApi` export as its options (security schemes, the
  * invalidate check). `--spec` and `--app` name the document, so both at once is a usage error, never one silently
  * winning. Under `bun run` the bin hands the load to Bun, whose loaders the app may need, and a run ends once it has
@@ -28,7 +28,7 @@ import { MARK_KEY, markOf, reap } from "./gen/__fixtures__/survivors.ts"
 import { appProject } from "./ir/__fixtures__/app-project.ts"
 import { SPAWN_TIMEOUT } from "./gen/__fixtures__/spawn-timeout.ts"
 
-const BIN = resolve(import.meta.dirname, "../bin/honey-codegen.js")
+const BIN = resolve(import.meta.dirname, "../bin/honey-clients.js")
 const REPO = resolve(import.meta.dirname, "../../..")
 const PINNED_BUN = withPinnedBun()
 const MARK = markOf()
@@ -126,7 +126,7 @@ describe("generate --app (bit 19 h2)", () => {
 			"src/app.ts": `${HONEY}export const app = honey().get("/health").meta({ operationId: "health.get" }).handler((c) => c.res.text("ok", "ok"))\n`,
 		})
 		const result = await run(["generate", "--app", "src/app.ts", "--target", "ts", "--out", "out"], dir)
-		expect([result.status, result.err, result.out.startsWith("honey-codegen: generated")]).toEqual([0, "", true])
+		expect([result.status, result.err, result.out.startsWith("honey-clients: generated")]).toEqual([0, "", true])
 		expect(textUnder(join(dir, "out/ts"))).toContain('"/health"')
 	})
 
@@ -144,9 +144,9 @@ describe("generate --app (bit 19 h2)", () => {
 			])
 				firstLines.push(await run(argv, dir).then(({ err, status }) => [status, err.split("\n")[0]]))
 			expect(firstLines).toEqual([
-				[1, "honey-codegen: --spec and --app each name the document: give one"],
-				[1, "honey-codegen: --app requires a value"],
-				[1, "honey-codegen: unknown option --manifset"],
+				[1, "honey-clients: --spec and --app each name the document: give one"],
+				[1, "honey-clients: --app requires a value"],
+				[1, "honey-clients: unknown option --manifset"],
 			])
 			expect(readdirSync(dir).sort()).toEqual(["node_modules", "src", "stale.json"])
 		},
@@ -254,7 +254,7 @@ describe.skipIf(!PINNED_BUN)(`generate --app on Bun ${pinnedBunVersion()}, by Bu
 		const run = onBun(dir)
 		expect([run.status, run.stderr, readFileSync(join(dir, "evaluations.log"), "utf8")]).toEqual([
 			1,
-			"honey-codegen: boom at load\n",
+			"honey-clients: boom at load\n",
 			"x",
 		])
 	}, 90_000)
@@ -316,7 +316,7 @@ describe.skipIf(!PINNED_BUN)(`the bin's honey-source hand-off on Bun ${pinnedBun
 	it("refuses a second hand-off when its child does not see the condition, after exactly two starts", () => {
 		expect(counted("", true)).toEqual([
 			1,
-			"honey-codegen: Bun hand-off loop: --conditions=honey-source not visible after re-exec\n",
+			"honey-clients: Bun hand-off loop: --conditions=honey-source not visible after re-exec\n",
 			2,
 		])
 	}, 90_000)
@@ -347,7 +347,7 @@ describe("generate --app --watch (bit 19 h2)", () => {
 		writeFileSync(join(dir, "src/app.ts"), route("/second"))
 		expect(await holds("/second")).toBe(true)
 		stop.abort()
-		expect([await watching, stdout]).toEqual([0, `honey-codegen: watching ${join(dir, "src/app.ts")}\n`])
+		expect([await watching, stdout]).toEqual([0, `honey-clients: watching ${join(dir, "src/app.ts")}\n`])
 	}, 90_000)
 })
 

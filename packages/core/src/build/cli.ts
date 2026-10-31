@@ -2,7 +2,7 @@
  * The `honey` CLI (bit 19 h2): `honey generate [--watch]` writes the app's artifacts as the plugin does, from the
  * `honey()` config in the Vite config (else `--app` alone), and `honey init` scaffolds a project. A generation runs
  * once and the bin then exits, whatever the app left running; `--watch` runs each generation in a fresh child, after
- * the one before it, on each edit next to the app. The SDKs, the CLI and MCP are honey-codegen's (Q1).
+ * the one before it, on each edit next to the app. The SDKs, the CLI and MCP are honey-clients's (Q1).
  */
 import { existsSync, statSync, watch } from "node:fs"
 import { dirname, resolve } from "node:path"

@@ -1,6 +1,6 @@
 name: Release
 
-# A v* tag publishes the two packages that ship, @lovrozagar/honey and @lovrozagar/honey-codegen, to npm with
+# A v* tag publishes the two packages that ship, @lovrozagar/honey and @lovrozagar/honey-clients, to npm with
 # provenance, once ci.yml (its harness and conformance gate included) passes on the tagged commit. A failed release
 # re-runs on its tag: `gh workflow run release.yml --ref vX.Y.Z`; a version already on npm is skipped.
 on:
@@ -44,10 +44,10 @@ jobs:
           if [ "$GITHUB_REF_TYPE" != tag ]; then echo "the release runs on a v* tag, not $GITHUB_REF_NAME"; exit 1; fi
           got="$(node -p 'const p = require("./package.json"); p.name + "@" + p.version')"
           if [ "$got" != "$PACKAGE@${GITHUB_REF_NAME#v}" ]; then echo "$got is not the tag's $PACKAGE@${GITHUB_REF_NAME#v}"; exit 1; fi
-      - name: Check @lovrozagar/honey-codegen against the tag
+      - name: Check @lovrozagar/honey-clients against the tag
         working-directory: packages/gen
         env:
-          PACKAGE: "@lovrozagar/honey-codegen"
+          PACKAGE: "@lovrozagar/honey-clients"
         run: |
           if [ "$GITHUB_REF_TYPE" != tag ]; then echo "the release runs on a v* tag, not $GITHUB_REF_NAME"; exit 1; fi
           got="$(node -p 'const p = require("./package.json"); p.name + "@" + p.version')"
@@ -60,7 +60,7 @@ jobs:
       - name: Pack @lovrozagar/honey
         working-directory: packages/core
         run: bun ../../scripts/pack.ts "$RUNNER_TEMP/tarballs" .
-      - name: Pack @lovrozagar/honey-codegen
+      - name: Pack @lovrozagar/honey-clients
         working-directory: packages/gen
         run: bun ../../scripts/pack.ts "$RUNNER_TEMP/tarballs" .
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -103,10 +103,10 @@ jobs:
           v="${GITHUB_REF_NAME#v}"
           if npm view "$PACKAGE@$v" version >/dev/null 2>&1; then echo "$PACKAGE@$v is already on npm"; exit 0; fi
           npm publish "$RUNNER_TEMP/tarballs/$TARBALL-$v.tgz" --provenance --access public
-      - name: Publish @lovrozagar/honey-codegen
+      - name: Publish @lovrozagar/honey-clients
         env:
-          PACKAGE: "@lovrozagar/honey-codegen"
-          TARBALL: lovrozagar-honey-codegen
+          PACKAGE: "@lovrozagar/honey-clients"
+          TARBALL: lovrozagar-honey-clients
         run: |
           v="${GITHUB_REF_NAME#v}"
           if npm view "$PACKAGE@$v" version >/dev/null 2>&1; then echo "$PACKAGE@$v is already on npm"; exit 0; fi

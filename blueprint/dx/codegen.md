@@ -1,4 +1,4 @@
-# dx — codegen (`@lovrozagar/honey-codegen`)
+# dx — codegen (`@lovrozagar/honey-clients`)
 
 Runs against any `openapi.json` (3.x), not only honey's. Emits SDKs, the CLI, and the MCP server. Runtime glue is vendored into each output (H9); emission uses strings + the shared sanitizer + a formatter post-pass (H12).
 

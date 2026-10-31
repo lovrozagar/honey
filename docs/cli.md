@@ -1,6 +1,6 @@
 # The generated CLI
 
-`honey-codegen generate --target cli` writes a Go command-line client: one command per operation, grouped
+`honey-clients generate --target cli` writes a Go command-line client: one command per operation, grouped
 by its dotted `operationId`, with `--help`, `commands` and `schema` describing every call and an embedded `SKILL.md`
 for agents. It reads its base URL and credentials from flags, the environment or a config file, and it ships with a
 release workflow and install scripts; see the CLI release page.
@@ -8,7 +8,7 @@ release workflow and install scripts; see the CLI release page.
 ## Example
 
 ```sh
-honey-codegen generate --spec openapi.json --target cli --out ./cli --repo acme/shop-cli
+honey-clients generate --spec openapi.json --target cli --out ./cli --repo acme/shop-cli
 ```
 
 ## Reference

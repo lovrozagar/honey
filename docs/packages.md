@@ -57,14 +57,14 @@ generator.
 | `@lovrozagar/honey/plugin`          | `honey()`, the Vite plugin that generates the app's artifacts                                                                           |
 | `@lovrozagar/honey/build`           | `createBuildPlugin`, a production bundle for a deploy target                                                                            |
 
-## @lovrozagar/honey-codegen
+## @lovrozagar/honey-clients
 
 | Export                          | What it holds                                        |
 | ------------------------------- | ---------------------------------------------------- |
-| `@lovrozagar/honey-codegen`     | `generateRouteTree`, `generateTypes`, `extractTypes` |
-| `@lovrozagar/honey-codegen/cli` | the `honey-codegen` command's `main`                 |
+| `@lovrozagar/honey-clients`     | `generateRouteTree`, `generateTypes`, `extractTypes` |
+| `@lovrozagar/honey-clients/cli` | the `honey-clients` command's `main`                 |
 
-The SDK, CLI and MCP generators run through `honey-codegen generate` ([code generation](codegen.md)).
+The SDK, CLI and MCP generators run through `honey-clients generate` ([code generation](codegen.md)).
 
 ## Utilities
 

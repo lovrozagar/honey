@@ -17,7 +17,7 @@ Add to the file list when designing: `gen/emit/cli/{release,install}.ts` (+test 
 
 ## Files (from files.tsv — `gen/emit/cli`)
 - `gen/emit/cli/{commands,flags,output,discovery,completion,skills,indicator,binary}.ts` (+test each) + index.
-- As shipped (the close's mapping): the emitter is `module.ts` (the Go module, tidy-exact go.mod/go.sum, the embedded Go SDK under `internal/sdk`), `layout.ts` (the cmd package), `commands.ts`, `flags.ts`, `discovery.ts`, `skills.ts`, `release.ts` and `install.ts`; output, binary, completion, the indicator and the streams live in the vendored Go runtime `gen/runtime/cli/*.go` and are tested by `output.test.ts`, `binary.test.ts`, `completion.test.ts`, `indicator.test.ts`, `stream.test.ts` and `socket.test.ts`. Phase h adds the `honey-codegen generate` bin (`gen/bin/honey-codegen.js`, `src/cli.ts`, `src/gen/{args,process}.ts`).
+- As shipped (the close's mapping): the emitter is `module.ts` (the Go module, tidy-exact go.mod/go.sum, the embedded Go SDK under `internal/sdk`), `layout.ts` (the cmd package), `commands.ts`, `flags.ts`, `discovery.ts`, `skills.ts`, `release.ts` and `install.ts`; output, binary, completion, the indicator and the streams live in the vendored Go runtime `gen/runtime/cli/*.go` and are tested by `output.test.ts`, `binary.test.ts`, `completion.test.ts`, `indicator.test.ts`, `stream.test.ts` and `socket.test.ts`. Phase h adds the `honey-clients generate` bin (`gen/bin/honey-clients.js`, `src/cli.ts`, `src/gen/{args,process}.ts`).
 
 ## Tests (named, written first)
 - `gen/emit/cli/commands.test.ts` — one command per operation, consistent verbs from the resource tree.
@@ -42,6 +42,6 @@ Add to the file list when designing: `gen/emit/cli/{release,install}.ts` (+test 
 - binary: the stripped kitchen binary (CGO_ENABLED=0, -trimpath, -s -w, linux/amd64) at `ceilingOf(9,932,960 B, 0.02)` = 10,131,620 B.
 
 ## Moved to bit 19
-- `honey-codegen generate --app` (core's public document entry and a no-bind codegen flag are needed first), `src/ir/load.ts` and regression V072-2: h shipped `--spec` (JSON) only.
+- `honey-clients generate --app` (core's public document entry and a no-bind codegen flag are needed first), `src/ir/load.ts` and regression V072-2: h shipped `--spec` (JSON) only.
 - Stale generated-file cleanup: `generate` writes over and deletes nothing (documented in `--help` and the README).
 - CLI release signing and attestation (the release workflow is least-privilege and unsigned).

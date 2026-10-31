@@ -1,5 +1,5 @@
 /**
- * The honey-codegen bin's Bun handoff (bit 17 phase h): started by Node under `bun run` (a bun user agent, npm_execpath
+ * The honey-clients bin's Bun handoff (bit 17 phase h): started by Node under `bun run` (a bun user agent, npm_execpath
  * a bun binary), it hands its arguments to that Bun once, marked so the child never hands off again; HONEY_NO_BUN_HANDOFF
  * keeps it from handing off at all; the child's exit code is its own, and a signal it gets reaches the child and ends
  * it by that signal; anything else (another user agent, an npm_execpath that is not a bun) runs on Node, no loop. A fake
@@ -16,7 +16,7 @@ import { MARK_KEY, marked, markOf, reap } from "../../src/gen/__fixtures__/survi
 import { SPAWN_TIMEOUT } from "../../src/gen/__fixtures__/spawn-timeout.ts"
 
 const MARK = markOf()
-const BIN = resolve(import.meta.dirname, "../../bin/honey-codegen.js")
+const BIN = resolve(import.meta.dirname, "../../bin/honey-clients.js")
 /* the preload that signals the process as spawn returns: the window between a bin's spawn and its next statement */
 const SIGNAL_ON_SPAWN = resolve(import.meta.dirname, "signal-on-spawn.ts")
 
@@ -41,7 +41,7 @@ function fakeBun(then: string): { bun: string; log: string; pid: string } {
 }
 
 /** Whether a run printed the CLI's own usage. */
-const usage = (stdout: string) => stdout.startsWith("usage: honey-codegen generate")
+const usage = (stdout: string) => stdout.startsWith("usage: honey-clients generate")
 
 /** The bin run by Node with `args`, as `bun run` would start it, over `env`. */
 const underBunRun = (args: readonly string[], bun: string, env: NodeJS.ProcessEnv = {}) =>
@@ -65,7 +65,7 @@ describe.skipIf(PINNED_BUN === undefined)(`the bin under the pinned Bun ${PINNED
 			const ran = underBunRun(["--help"], fake.bun)
 			expect([
 				ran.status,
-				ran.stdout.startsWith("usage: honey-codegen generate"),
+				ran.stdout.startsWith("usage: honey-clients generate"),
 				readFileSync(fake.log, "utf8"),
 			]).toEqual([0, true, `1 ${BIN} --help\n`])
 		},

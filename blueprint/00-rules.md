@@ -1,6 +1,6 @@
 # 00 — Construction rules
 
-Both packages (`@lovrozagar/honey` = `packages/core`, `@lovrozagar/honey-codegen` = `packages/gen`) obey these rules. Where a rule differs by package it says so.
+Both packages (`@lovrozagar/honey` = `packages/core`, `@lovrozagar/honey-clients` = `packages/gen`) obey these rules. Where a rule differs by package it says so.
 
 ## What "done" means for a file
 
@@ -92,7 +92,7 @@ A file that would pass a limit by growing is split in the blueprint first: new r
 | `src/adapters/workers/` | portable core, plus Workers runtime | `node:*`, `Bun` |
 | `packages/gen/src/` | Node (it is a build-time tool) | runtime coupling to a served request |
 
-Runtime detection (`detect-runtime`) returns a pure value; adapters branch on it. A portable-core file never imports an adapter. `ts-morph` is imported only by the type-extraction entry of `honey-codegen`, and `ws` only by the Node WebSocket adapter — both optional peers (see Dependencies).
+Runtime detection (`detect-runtime`) returns a pure value; adapters branch on it. A portable-core file never imports an adapter. `ts-morph` is imported only by the type-extraction entry of `honey-clients`, and `ws` only by the Node WebSocket adapter — both optional peers (see Dependencies).
 
 ## Dependencies
 
@@ -102,9 +102,9 @@ Runtime detection (`detect-runtime`) returns a pure value; adapters branch on it
 | --- | --- | --- | --- | --- | --- |
 | `jiti` | runtime dep | core | 2.7.0 | — | config/plugin loading |
 | `ws` | optional peer | **core** | the exact tested version | `>=` that version | the Node WebSocket adapter only |
-| `ts-morph` | optional peer | **gen** (not core) | the exact tested version | `>=` that version | `honey-codegen` type-extraction entry only — `honey/boundaries` keeps it out of core |
-| `oxfmt` | optional peer | **gen** | the exact tested version | `>=` that version | `honey-codegen`'s CLI only, imported lazily for the TS post-pass (Q12); absent, TS goes out as emitted |
-| `@lovrozagar/honey-codegen` | optional peer | **core** | `workspace:*` | `>=` the release | `src/build/` only, through `import()` or a type-only import (Q2) |
+| `ts-morph` | optional peer | **gen** (not core) | the exact tested version | `>=` that version | `honey-clients` type-extraction entry only — `honey/boundaries` keeps it out of core |
+| `oxfmt` | optional peer | **gen** | the exact tested version | `>=` that version | `honey-clients`'s CLI only, imported lazily for the TS post-pass (Q12); absent, TS goes out as emitted |
+| `@lovrozagar/honey-clients` | optional peer | **core** | `workspace:*` | `>=` the release | `src/build/` only, through `import()` or a type-only import (Q2) |
 
 (Exact dev versions are filled from the repo's lockfile at bit 00; the shape — exact dev + `>=` peer — is the pin.) `@lovrozagar/honey` declares `"sideEffects": false` for tree-shakeability (H19.3) — the whole runtime is side-effect-free, including `trust` (plain core code, no self-registration).
 
@@ -129,7 +129,7 @@ A module-scope `let`, mutable map, or cache is forbidden unless the line carries
 
 ## The formatter post-pass
 
-honey-codegen emits target source by structured string assembly guarded by the `codegen-lang` sanitizer (no AST for emission — see `01-decisions.md`). Every emitter runs its language's canonical formatter as a post-pass before the output is considered done: gofmt, rustfmt, ruff (or black), `dotnet format`, google-java-format, oxfmt for TS. The pass is mandatory in publish CI so every shipped SDK is formatter-clean; pure-JS generation (a worker with no toolchain) emits valid-but-unformatted code as a documented fallback. Type **extraction** is the exception that uses a real AST (the TypeScript compiler API via ts-morph) because resolving types needs the checker.
+honey-clients emits target source by structured string assembly guarded by the `codegen-lang` sanitizer (no AST for emission — see `01-decisions.md`). Every emitter runs its language's canonical formatter as a post-pass before the output is considered done: gofmt, rustfmt, ruff (or black), `dotnet format`, google-java-format, oxfmt for TS. The pass is mandatory in publish CI so every shipped SDK is formatter-clean; pure-JS generation (a worker with no toolchain) emits valid-but-unformatted code as a documented fallback. Type **extraction** is the exception that uses a real AST (the TypeScript compiler API via ts-morph) because resolving types needs the checker.
 
 ## Gates that exist from the first source file
 

@@ -1,6 +1,6 @@
 /**
  * What an app's bundle carries from the installed package (bit 19 i, ported from v0's runtime-bundle.test.ts): the
- * real core tarball, installed beside honey-codegen and every optional peer (ws, oxfmt, ts-morph; jiti is core's own
+ * real core tarball, installed beside honey-clients and every optional peer (ws, oxfmt, ts-morph; jiti is core's own
  * dependency), so a leak would be bundled rather than fail to resolve. A bundle of `honey()` leaves out the tooling
  * and every optional feature until its subpath is imported; a Worker built by the build plugin carries none of the
  * build-time packages; and a core-only install loads the plugin, failing by name only when it is asked to generate.
@@ -33,7 +33,7 @@ const OPTIONAL_FEATURES: Readonly<Record<string, string>> = {
  * package is inlined without one); under a Worker's conditions ws resolves to its browser stub, which throws
  */
 const BUILD_TIME: Readonly<Record<string, RegExp>> = {
-	"@lovrozagar/honey-codegen": /honey-codegen/,
+	"@lovrozagar/honey-clients": /honey-clients/,
 	jiti: /\bjiti\b|createJiti/,
 	oxfmt: /oxfmt/,
 	"ts-morph": /ts-morph/,
@@ -44,7 +44,7 @@ beforeAll(() => {
 	tarballs = pack(files.out)
 	full = consumer(
 		join(files.out, "full"),
-		{ "@lovrozagar/honey": `file:${tarballs.core}`, "@lovrozagar/honey-codegen": `file:${tarballs.gen}` },
+		{ "@lovrozagar/honey": `file:${tarballs.core}`, "@lovrozagar/honey-clients": `file:${tarballs.gen}` },
 		["ws", "oxfmt", "ts-morph"],
 	)
 }, 180_000)
@@ -204,7 +204,7 @@ describe("the runtime bundle of an installed core (bit 19 i)", () => {
 		60_000,
 	)
 
-	it("a Worker built by the build plugin carries none of ts-morph, ws, oxfmt, jiti or honey-codegen", async () => {
+	it("a Worker built by the build plugin carries none of ts-morph, ws, oxfmt, jiti or honey-clients", async () => {
 		write(full, {
 			"src/worker-app.ts": [
 				'import { honey } from "@lovrozagar/honey"',
@@ -247,7 +247,7 @@ describe("the runtime bundle of an installed core (bit 19 i)", () => {
 		expect([leaked, bundled.includes("realtime limits.")]).toEqual([[], true])
 	}, 90_000)
 
-	it("a core-only install loads the plugin, and only a generation names the missing honey-codegen", () => {
+	it("a core-only install loads the plugin, and only a generation names the missing honey-clients", () => {
 		const dir = consumer(join(files.out, "core-only"), { "@lovrozagar/honey": `file:${tarballs.core}` })
 		write(dir, {
 			"plugin.mjs": [
@@ -261,7 +261,7 @@ describe("the runtime bundle of an installed core (bit 19 i)", () => {
 		const loaded = run("node", ["plugin.mjs"], dir)
 		const generated = run("node", ["node_modules/.bin/honey", "generate", "--app", "src/app.ts", "--tree"], dir)
 		expect(
-			[loaded.out.trim(), generated.code, generated.out.includes("needs @lovrozagar/honey-codegen")],
+			[loaded.out.trim(), generated.code, generated.out.includes("needs @lovrozagar/honey-clients")],
 			generated.out,
 		).toEqual(["honey", 1, true])
 	}, 60_000)

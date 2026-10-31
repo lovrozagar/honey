@@ -7,9 +7,9 @@ generated from a small example API (`Kitchen`); yours is named after your docume
 The SDK sections cover the four SDKs 0.7.3 shipped: TypeScript, Python, Go and Rust. The C# and Java SDKs are new
 in 1.0, so they migrate nothing; their client is documented in [the generated clients page](client.md).
 
-## Code generation moved to `@lovrozagar/honey-codegen`
+## Code generation moved to `@lovrozagar/honey-clients`
 
-The `@lovrozagar/honey/codegen` export is gone. Its SDK, CLI and MCP generators are the `honey-codegen generate` bin
+The `@lovrozagar/honey/codegen` export is gone. Its SDK, CLI and MCP generators are the `honey-clients generate` bin
 and its module API. Only v0's document-level `mergeSpecs` and `scopeSpec` are removed: several honey services still
 combine through `mergeTree` over their route trees, and one merged tree still emits several documents, each with its
 own `securitySchemes` and `filterRoutes`. Merging a third-party document is planned after 1.0.
@@ -19,12 +19,12 @@ import { generateSdk, mergeSpecs } from "@lovrozagar/honey/codegen"
 ```
 
 ```sh
-honey-codegen generate --spec openapi.json --target ts --out ./sdk
+honey-clients generate --spec openapi.json --target ts --out ./sdk
 ```
 
 ## `--app` takes a module that exports the app
 
-`honey-codegen generate --app` and `honey generate --app` import a module that exports the app and binds nothing.
+`honey-clients generate --app` and `honey generate --app` import a module that exports the app and binds nothing.
 v0's no-bind flag has no counterpart, because v1 never serves on import.
 
 ```ts v0
@@ -496,7 +496,7 @@ const client = new Kitchen({ baseURL: "https://api.example.com", fetch: (input, 
 ## The plugin's `codegen.sdk` and `codegen.cli` are removed
 
 The plugin writes the app's own artifacts (the route tree, the manifest, the OpenAPI JSON and YAML, the types), and
-`honey-codegen generate --app <module>` writes the SDKs, the CLI and MCP. Passing either key is an error naming that
+`honey-clients generate --app <module>` writes the SDKs, the CLI and MCP. Passing either key is an error naming that
 command.
 
 ```ts v0
@@ -653,7 +653,7 @@ await server.close()
 
 ## Installed packages run their compiled `dist/`
 
-An installed `@lovrozagar/honey` and `@lovrozagar/honey-codegen` run their compiled `dist/` on every runtime, Bun
+An installed `@lovrozagar/honey` and `@lovrozagar/honey-clients` run their compiled `dist/` on every runtime, Bun
 included; v0's `bun` export condition to the TypeScript source is gone. Nothing to change in your code; a tool that
 read honey's source from `node_modules` reads `dist/` now.
 
@@ -662,5 +662,5 @@ bun resolved "@lovrozagar/honey" to src/index.ts
 ```
 
 ```sh
-bun add @lovrozagar/honey @lovrozagar/honey-codegen
+bun add @lovrozagar/honey @lovrozagar/honey-clients
 ```

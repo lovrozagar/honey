@@ -1,5 +1,5 @@
 /**
- * What ships (bit 19 i): the real tarballs of `@lovrozagar/honey` and `@lovrozagar/honey-codegen`, packed by npm and
+ * What ships (bit 19 i): the real tarballs of `@lovrozagar/honey` and `@lovrozagar/honey-clients`, packed by npm and
  * installed into a consumer outside the repo. The install carries every export's files, type-checks against every
  * core subpath under maximal strictness, runs both bins from dist/, and generates an app's artifacts through the
  * tarball's own `build/artifacts` (generate.ts `artifactsFor`). A bin picks dist/ in an install and the source in a
@@ -92,7 +92,7 @@ beforeAll(() => {
 	tarballs = pack(files.out)
 	app = consumer(
 		join(files.out, "app"),
-		{ "@lovrozagar/honey": `file:${tarballs.core}`, "@lovrozagar/honey-codegen": `file:${tarballs.gen}` },
+		{ "@lovrozagar/honey": `file:${tarballs.core}`, "@lovrozagar/honey-clients": `file:${tarballs.gen}` },
 		["zod", "@types/node", "vite"],
 	)
 	write(app, { "src/app.ts": APP, "src/selectors.ts": SELECTORS })
@@ -117,7 +117,7 @@ describe.sequential("the tarballs, installed (bit 19 i)", () => {
 			const [core] = published
 			expect([
 				unresolved,
-				core?.devDependencies["@lovrozagar/honey-codegen"],
+				core?.devDependencies["@lovrozagar/honey-clients"],
 				core?.devDependencies.typescript,
 			]).toEqual([[], "1.0.0", "7.0.2"])
 		},
@@ -125,7 +125,7 @@ describe.sequential("the tarballs, installed (bit 19 i)", () => {
 
 	it("carry bin/, dist/, the README and the license but no source, and every export's files", () => {
 		const missing: string[] = []
-		for (const pkg of ["@lovrozagar/honey", "@lovrozagar/honey-codegen"]) {
+		for (const pkg of ["@lovrozagar/honey", "@lovrozagar/honey-clients"]) {
 			const root = join(app, "node_modules", pkg)
 			for (const [subpath, target] of Object.entries(manifest(pkg).exports)) {
 				/* every condition an install resolves; honey-source is the checkout's */
@@ -138,7 +138,7 @@ describe.sequential("the tarballs, installed (bit 19 i)", () => {
 			["LICENSE", "README.md", "bin", "dist", "package.json"],
 			[],
 		])
-		expect(readdirSync(join(app, "node_modules/@lovrozagar/honey-codegen")).sort()).toEqual([
+		expect(readdirSync(join(app, "node_modules/@lovrozagar/honey-clients")).sort()).toEqual([
 			"LICENSE",
 			"README.md",
 			"bin",
@@ -202,17 +202,17 @@ describe.sequential("the tarballs, installed (bit 19 i)", () => {
 		60_000,
 	)
 
-	it("type-checks against every core subpath with honey-codegen, an optional peer, not installed", () => {
+	it("type-checks against every core subpath with honey-clients, an optional peer, not installed", () => {
 		const dir = consumer(join(files.out, "core-only"), { "@lovrozagar/honey": `file:${tarballs.core}` }, [
 			"@types/node",
 		])
 		expect(strictCheck(dir, "Bundler", "ESNext")).toEqual([48, 0, ""])
 	}, 60_000)
 
-	it("honey-codegen in the install generates a TypeScript SDK from the app, its runtime files read from dist/", () => {
+	it("honey-clients in the install generates a TypeScript SDK from the app, its runtime files read from dist/", () => {
 		const generated = run(
 			"node",
-			["node_modules/.bin/honey-codegen", "generate", "--app", "src/app.ts", "--target", "ts", "--out", "sdk"],
+			["node_modules/.bin/honey-clients", "generate", "--app", "src/app.ts", "--target", "ts", "--out", "sdk"],
 			app,
 		)
 		expect([generated.code, existsSync(join(app, "sdk/ts/.honey-generated.json"))], generated.out).toEqual([0, true])
@@ -220,14 +220,14 @@ describe.sequential("the tarballs, installed (bit 19 i)", () => {
 
 	/* gen's installed --app loader on Bun is Bun's own import: jiti there evaluated a module that threw a second time,
 	 * through its Babel, whose stack hook then breaks follow-redirects' captureStackTrace in Vite's chunk (bit 20) */
-	it("honey-codegen on Bun in the install, a cold jiti cache, reads an app importing vite, a throwing one once", () => {
+	it("honey-clients on Bun in the install, a cold jiti cache, reads an app importing vite, a throwing one once", () => {
 		const cold = join(files.out, "codegen-cold-tmp")
 		mkdirSync(cold)
 		const log = join(app, "evaluations.log")
 		const generate = (module: string) =>
 			run(
 				"bun",
-				["node_modules/.bin/honey-codegen", "generate", "--app", module, "--target", "ts", "--out", "sdk-bun"],
+				["node_modules/.bin/honey-clients", "generate", "--app", module, "--target", "ts", "--out", "sdk-bun"],
 				app,
 				{ HONEY_NO_BUN_HANDOFF: "1", TMPDIR: cold },
 			)
@@ -248,7 +248,7 @@ describe.sequential("the tarballs, installed (bit 19 i)", () => {
 					readFileSync(log, "utf8"),
 				],
 				read.out,
-			).toEqual([0, true, 1, "honey-codegen: boom at load", "x"])
+			).toEqual([0, true, 1, "honey-clients: boom at load", "x"])
 		} finally {
 			for (const file of ["src/throws.ts", "src/vite-app.ts", "evaluations.log", "sdk-bun"])
 				rmSync(join(app, file), { force: true, recursive: true })
@@ -265,7 +265,7 @@ function binLayout(bin: string, entry: string, checkout: boolean): string {
 	write(dir, {
 		[`bin/${bin}.js`]: readFileSync(join(pkg, `bin/${bin}.js`), "utf8"),
 		[`dist/${entry}.js`]: main("dist"),
-		"node_modules/@lovrozagar/honey-codegen/package.json": '{ "exports": { "./package.json": "./package.json" } }\n',
+		"node_modules/@lovrozagar/honey-clients/package.json": '{ "exports": { "./package.json": "./package.json" } }\n',
 		"package.json": '{ "type": "module" }\n',
 		[`src/${entry}.ts`]: main("source").replace("main()", "main(): number"),
 		...(checkout ? { "tsconfig.json": "{}\n" } : {}),
@@ -283,7 +283,7 @@ function runBin(runtime: string, dir: string, bin: string): string {
 describe("each shipped bin picks what it runs (bit 19 i)", () => {
 	const BINS = [
 		["honey", "build/cli"],
-		["honey-codegen", "cli"],
+		["honey-clients", "cli"],
 	] as const
 
 	// v0: 4982f5f697

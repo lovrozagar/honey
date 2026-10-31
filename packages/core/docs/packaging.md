@@ -28,7 +28,7 @@ whose runtime entry is `.ts` cannot run on plain Node at all.
 
 ## What ships
 
-`@lovrozagar/honey` and `@lovrozagar/honey-codegen` each ship `bin/`, `dist/` (compiled JavaScript and its `.d.ts`), the
+`@lovrozagar/honey` and `@lovrozagar/honey-clients` each ship `bin/`, `dist/` (compiled JavaScript and its `.d.ts`), the
 README and the license. No source. Every export names three conditions:
 
 ```json
@@ -51,7 +51,7 @@ README and the license. No source. Every export names three conditions:
   tsconfigs, `resolve.conditions` in the Vite and vitest configs, `--conditions=honey-source` for Node and Bun
   (`NODE_OPTIONS` and `BUN_OPTIONS` in the e2e runners), and `WRANGLER_BUILD_CONDITIONS` for wrangler. Development and
   tests run the source and never a stale `dist/`. A consumer never sets it.
-- **The bins** (`bin/honey.js`, `bin/honey-codegen.js`) follow the same split: in a repository checkout, marked by
+- **The bins** (`bin/honey.js`, `bin/honey-clients.js`) follow the same split: in a repository checkout, marked by
   `tsconfig.json`, which is not published, they run the source; an install runs `dist/`.
 
 ## How a tarball is made

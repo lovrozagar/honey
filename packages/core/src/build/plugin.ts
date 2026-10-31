@@ -15,7 +15,7 @@ import {
 	type ResolvedHoneyConfig,
 	resolveHoneyConfig,
 } from "./config.ts"
-import { generateAndWrite, inAppGraph, loadCodegen } from "./generate.ts"
+import { generateAndWrite, inAppGraph, loadClients } from "./generate.ts"
 import { compileGlobs, WATCH_IGNORE_RE } from "./glob.ts"
 
 export type { HoneyCodegenConfig, HoneyOpenApiOutputConfig, HoneyVitePluginConfig } from "./config.ts"
@@ -104,7 +104,7 @@ async function virtualModule(id: string, config: ResolvedHoneyConfig, root: stri
 	const kind = (Object.keys(RESOLVED) as (keyof typeof RESOLVED)[]).find((key) => RESOLVED[key] === id)
 	if (kind === undefined || (kind === "manifest" && config.codegen.manifest === false)) return undefined
 	if (kind === "openApi" && config.codegen.openApi.length === 0) return undefined
-	const code = await (await inAppGraph(root)).virtualCode(kind, config, { codegen: () => loadCodegen(), root })
+	const code = await (await inAppGraph(root)).virtualCode(kind, config, { codegen: () => loadClients(), root })
 	return kind === "routes" ? toJavaScript(code) : { code, moduleType: "js" }
 }
 

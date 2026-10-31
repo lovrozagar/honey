@@ -1,5 +1,5 @@
 /**
- * The `honey` CLI's arguments: `generate` (the app-side artifacts, Q1) and `init`. Strict, with honey-codegen's
+ * The `honey` CLI's arguments: `generate` (the app-side artifacts, Q1) and `init`. Strict, with honey-clients's
  * rules and wording (gen src/gen/args.ts; tests/integration/cli-args-parity.test.ts holds them alike): `--k v` and
  * `--k=v`; a value is never the next flag; a boolean is bare, `true` or `false`; an unknown flag or a stray argument
  * is a usage error. Not a package export.
@@ -18,7 +18,7 @@ generate options:
   --merge-tree <path>  the route tree source of a gateway
   -h, --help           this text
 
-The SDKs, the CLI and the MCP server are honey-codegen's: honey-codegen generate --app <path>.`
+The SDKs, the CLI and the MCP server are honey-clients's: honey-clients generate --app <path>.`
 
 /** A mistake in how the CLI was called: printed with the usage text. */
 export class UsageError extends Error {}

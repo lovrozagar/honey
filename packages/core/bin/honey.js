@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// The honey bin (bit 19 h2), honey-codegen's twin. A repository checkout (marked by tsconfig.json, which is not
+// The honey bin (bit 19 h2), honey-clients's twin. A repository checkout (marked by tsconfig.json, which is not
 // published) runs the TypeScript source, through jiti on Node, so a stale dist/ never runs; an installed package runs
 // the compiled JavaScript on any runtime (the tarball ships dist/, not src/).
 import { spawn } from "node:child_process"
@@ -59,7 +59,7 @@ function sourceAliases(name) {
 	)
 }
 
-// A checkout on Bun runs its source natively, under the honey-source condition: honey-codegen, and an app's honey,
+// A checkout on Bun runs its source natively, under the honey-source condition: honey-clients, and an app's honey,
 // resolve to source then, not to the unbuilt dist/. Set through BUN_OPTIONS when the caller did not, so every
 // generation child inherits it.
 const SOURCE_CONDITION = "--conditions=honey-source"
@@ -74,7 +74,7 @@ async function entry() {
 		 * throws "First argument must be an Error object" at a captureStackTrace on a non-Error (bit 20 k-fix) */
 		if (isBun) return import("../src/build/cli.ts")
 		const { createJiti } = await import("jiti")
-		const alias = sourceAliases("@lovrozagar/honey-codegen")
+		const alias = sourceAliases("@lovrozagar/honey-clients")
 		return createJiti(import.meta.url, { alias, tryNative: false }).import("../src/build/cli.ts")
 	}
 	try {

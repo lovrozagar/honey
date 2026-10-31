@@ -27,6 +27,7 @@ export const REMOVED: readonly (readonly [string, RegExp])[] = [
 	["IsSuccess", /\bIsSuccess\b/],
 	["ClientResult", /\bClientResult\b/],
 	["requestSafe", /\brequestSafe\b/],
+	["honey-codegen", /\bhoney-codegen\b/],
 ]
 
 /**
@@ -48,6 +49,9 @@ export const SHIPPED_AT_V073: Readonly<Record<string, string | null>> = {
 	TThrow: "packages/core/src/client/types.ts",
 	requestSafe: "packages/core/src/client/http.ts",
 	throwOnError: "packages/core/src/client/sdk.ts",
+	/* renamed to @lovrozagar/honey-clients before 1.0; v0.7.3 shipped no separate package at all, codegen lived
+	 * inside @lovrozagar/honey, so no page may name it — migration.md included */
+	"honey-codegen": null,
 }
 
 /** Every file under `dir`, repo-relative and sorted: pages and example programs alike. */
@@ -84,7 +88,7 @@ describe("the docs name no removed name (bit 21 i7d)", () => {
 		const page = [
 			"a client that always throws",
 			"generated with `throwOnError: true`",
-			"honey-codegen generate --python-throw-on-error",
+			"honey-clients generate --python-throw-on-error",
 			"the client's TThrow parameter",
 			"new Kitchen<true>({})",
 			"it is true that SDKResult is gone",
@@ -92,6 +96,7 @@ describe("the docs name no removed name (bit 21 i7d)", () => {
 			"reading IsSuccess",
 			"a ClientResult of its own",
 			"calling requestSafe",
+			"run honey-codegen generate",
 		].join("\n")
 		expect(removedNames("docs/x.md", page)).toEqual([
 			"docs/x.md:2 names throwOnError",
@@ -103,6 +108,7 @@ describe("the docs name no removed name (bit 21 i7d)", () => {
 			"docs/x.md:8 names IsSuccess",
 			"docs/x.md:9 names ClientResult",
 			"docs/x.md:10 names requestSafe",
+			"docs/x.md:11 names honey-codegen",
 		])
 	})
 

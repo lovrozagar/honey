@@ -1,5 +1,5 @@
 /**
- * The honey-codegen generate CLI (bit 17 phase h): a usage error is exit 1 with the usage text (and --help names what
+ * The honey-clients generate CLI (bit 17 phase h): a usage error is exit 1 with the usage text (and --help names what
  * a regeneration deletes); each target written under `<out>/<target>`, its options passed through untouched, so a
  * hostile one is refused by its own generator with that generator's message; a spec that is not JSON refused; the go
  * and cli targets' whole trees, internal/sdk included, through gofmt, found by GOFMT, GOROOT, PATH or beside the real
@@ -26,7 +26,7 @@ import { SPAWN_TIMEOUT } from "./gen/__fixtures__/spawn-timeout.ts"
 
 const GO = withGo()
 const SLOW = { timeout: 600_000 }
-const BIN = resolve(import.meta.dirname, "../bin/honey-codegen.js")
+const BIN = resolve(import.meta.dirname, "../bin/honey-clients.js")
 const PINNED_BUN = withPinnedBun()
 const MARK = markOf()
 const scratch = (name: string) => mkdtempSync(join(goCacheDir("tmp"), `codegen-${name}-`))
@@ -81,7 +81,7 @@ describe("generate's usage (phase h)", () => {
 				1,
 				`${usage()}\n`,
 				1,
-				'honey-codegen: unknown command "serve"',
+				'honey-clients: unknown command "serve"',
 			])
 			expect(usage()).toContain(
 				"A regeneration deletes a\nfile the last run wrote and this one does not, unless it was edited since",
@@ -105,7 +105,7 @@ describe("generate's regeneration (bit 19 h1)", () => {
 			const alone = specDir().out
 			await once("second", alone)
 			expect({ err: second.err, files: filesUnder(out), status: second.status }).toEqual({
-				err: `honey-codegen: ${edited} is stale but edited since it was generated, or not its to delete: kept\n`,
+				err: `honey-clients: ${edited} is stale but edited since it was generated, or not its to delete: kept\n`,
 				files: [...filesUnder(alone), edited].sort(),
 				status: 0,
 			})
@@ -150,7 +150,7 @@ describe("generate's files (phase h)", { timeout: SPAWN_TIMEOUT }, () => {
 		const ran = await run(["generate", "--spec", spec, "--target", "ts", "--ts-name", "Shop", "--out", out])
 		expect([ran.status, ran.out, filesUnder(out)]).toEqual([
 			0,
-			`honey-codegen: generated 5 files into ${out}\n`,
+			`honey-clients: generated 5 files into ${out}\n`,
 			[
 				"ts/.honey-generated.json",
 				"ts/shop.client.gen.ts",
@@ -165,7 +165,7 @@ describe("generate's files (phase h)", { timeout: SPAWN_TIMEOUT }, () => {
 	it("refuses a spec that is not JSON, nothing written", async () => {
 		const { out, spec } = specDir("openapi: 3.1.0\n")
 		const ran = await run(["generate", "--spec", spec, "--target", "ts", "--out", out])
-		expect([ran.status, ran.err.startsWith(`honey-codegen: ${spec}: not a JSON document (`), existsSync(out)]).toEqual([
+		expect([ran.status, ran.err.startsWith(`honey-clients: ${spec}: not a JSON document (`), existsSync(out)]).toEqual([
 			1,
 			true,
 			false,
@@ -244,7 +244,7 @@ describe("the generate report (bit 18 phase d)", () => {
 			const ran = await run(["generate", "--spec", spec, "--target", "mcp", "--out", out])
 			expect([ran.status, ran.err, filesUnder(out).includes("mcp/dist/server.js")]).toEqual([
 				0,
-				"honey-codegen: mcp: no tool serves chat (a WebSocket) yet: skipped\n",
+				"honey-clients: mcp: no tool serves chat (a WebSocket) yet: skipped\n",
 				true,
 			])
 		},
@@ -280,7 +280,7 @@ describe("the generate report: the safe mirror (bit 21 i1, i2, i3, i4, i5, i6)",
 			const [mirror, renamed] = SPELLED[target]
 			expect([ran.status, ran.err, filesUnder(out).some((file) => file.endsWith(WRITTEN[target]))]).toEqual([
 				0,
-				`honey-codegen: ${target}: the root group "${mirror}" is emitted as "${renamed}": "${mirror}" is the client's safe mirror\n`,
+				`honey-clients: ${target}: the root group "${mirror}" is emitted as "${renamed}": "${mirror}" is the client's safe mirror\n`,
 				true,
 			])
 		},
@@ -313,7 +313,7 @@ describe.skipIf(!GO)("the go and cli trees through gofmt (phase h)", SLOW, () =>
 		const ran = await run(["generate", "--spec", spec, "--target", "go", "--out", out], { PATH: "" })
 		expect([ran.status, ran.err, existsSync(out)]).toEqual([
 			1,
-			"honey-codegen: gofmt is required for the go and cli targets (install Go, or set GOFMT)\n",
+			"honey-clients: gofmt is required for the go and cli targets (install Go, or set GOFMT)\n",
 			false,
 		])
 	})
@@ -328,7 +328,7 @@ describe.skipIf(!PINNED_BUN)(`the bin under the pinned Bun ${pinnedBunVersion()}
 			const [wrong, help] = [bin(["generate", "--nope"], {}), bin(["--help"], {})]
 			expect([wrong.status, wrong.stderr, help.status, help.stdout]).toEqual([
 				1,
-				`honey-codegen: unknown option --nope\n\n${usage()}\n`,
+				`honey-clients: unknown option --nope\n\n${usage()}\n`,
 				0,
 				`${usage()}\n`,
 			])
@@ -346,7 +346,7 @@ describe.skipIf(!PINNED_BUN)(`the bin under the pinned Bun ${pinnedBunVersion()}
 			})
 			expect([ran.status, ran.stderr, existsSync(out)]).toEqual([
 				1,
-				`honey-codegen: Invalid binaryName: ${JSON.stringify(hostile)}\n`,
+				`honey-clients: Invalid binaryName: ${JSON.stringify(hostile)}\n`,
 				false,
 			])
 		},
@@ -392,7 +392,7 @@ describe("generate --watch (phase h)", () => {
 		const ran = await run(argv, { ...process.env, [MARK_KEY]: MARK, HONEY_CODEGEN_CHILD: "1" })
 		expect([ran.status, ran.err, existsSync(out)]).toEqual([
 			1,
-			"honey-codegen: --watch is not allowed in a generation child\n",
+			"honey-clients: --watch is not allowed in a generation child\n",
 			false,
 		])
 	})
@@ -429,8 +429,8 @@ describe("generate --watch (phase h)", () => {
 		/* a watch ends once its last run has: no child of it left */
 		expect([await watching, stdout, err, marked(MARK)]).toEqual([
 			0,
-			`honey-codegen: watching ${spec}\n`,
-			"honey-codegen: honey-codegen generate failed (exit 1)\n",
+			`honey-clients: watching ${spec}\n`,
+			"honey-clients: honey-clients generate failed (exit 1)\n",
 			[],
 		])
 	}, 60_000)

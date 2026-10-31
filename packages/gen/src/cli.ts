@@ -1,5 +1,5 @@
 /**
- * The honey-codegen generate CLI (bit 17 phase h): `honey-codegen generate --spec <openapi.json> --target <name>...
+ * The honey-clients generate CLI (bit 17 phase h): `honey-clients generate --spec <openapi.json> --target <name>...
  * --out <dir>` writes each target's generated files under `<out>/<target>`. A target's options are its generate
  * function's, spelled `--<target>-<option>` and passed through untouched: each generator validates its own. The go and
  * cli targets' whole trees go through gofmt (the post-pass), so a missing gofmt is a refusal, never unformatted Go; the
@@ -77,11 +77,11 @@ function filesOf(
 	if (target === "cli") return generateGoCli(document, options).files
 	if (target === "mcp") {
 		const server = generateMcpServer(document, options)
-		for (const op of server.skipped) report(`honey-codegen: mcp: no tool serves ${op} yet: skipped\n`)
+		for (const op of server.skipped) report(`honey-clients: mcp: no tool serves ${op} yet: skipped\n`)
 		return server.files
 	}
 	const sdk = sdkOf(target, document, options)
-	for (const notice of sdk.notices) report(`honey-codegen: ${notice}\n`)
+	for (const notice of sdk.notices) report(`honey-clients: ${notice}\n`)
 	return sdk.files
 }
 
@@ -156,11 +156,11 @@ export async function writeGenerated(
 	for (const [target, files] of Object.entries(await generated(run, document, { env, report: io.err }))) {
 		for (const rel of writeTarget(join(run.out, target), files).kept)
 			io.err(
-				`honey-codegen: ${join(target, rel)} is stale but edited since it was generated, or not its to delete: kept\n`,
+				`honey-clients: ${join(target, rel)} is stale but edited since it was generated, or not its to delete: kept\n`,
 			)
 		count += Object.keys(files).length
 	}
-	io.out(`honey-codegen: generated ${count} files into ${run.out}\n`)
+	io.out(`honey-clients: generated ${count} files into ${run.out}\n`)
 	return 0
 }
 
@@ -191,7 +191,7 @@ function watchSpec(
 	const generate = () => {
 		queue = queue.then(() =>
 			runCli(args, { cwd: options.cwd, env: options.env }).catch((error: Error) =>
-				io.err(`honey-codegen: ${error.message}\n`),
+				io.err(`honey-clients: ${error.message}\n`),
 			),
 		)
 	}
@@ -201,7 +201,7 @@ function watchSpec(
 		clearTimeout(timer)
 		timer = setTimeout(generate, 100)
 	})
-	io.out(`honey-codegen: watching ${spec}\n`)
+	io.out(`honey-clients: watching ${spec}\n`)
 	generate()
 	return new Promise((settle) =>
 		options.signal?.addEventListener(
@@ -216,7 +216,7 @@ function watchSpec(
 	)
 }
 
-/** Runs `honey-codegen <argv>`: the exit code it ends with (a watch ends only by `options.signal`). */
+/** Runs `honey-clients <argv>`: the exit code it ends with (a watch ends only by `options.signal`). */
 export async function main(argv: readonly string[], io: Io = PROCESS_IO, options: RunOptions = {}): Promise<number> {
 	try {
 		if (argv.length === 0 || argv[0] === "-h" || argv[0] === "--help" || argv.includes("--help")) {
@@ -231,10 +231,10 @@ export async function main(argv: readonly string[], io: Io = PROCESS_IO, options
 			: await generateOnce(run, io, env, cwd)
 	} catch (error) {
 		if (error instanceof UsageError) {
-			io.err(`honey-codegen: ${error.message}\n\n${usage()}\n`)
+			io.err(`honey-clients: ${error.message}\n\n${usage()}\n`)
 			return 1
 		}
-		io.err(`honey-codegen: ${(error as Error).message}\n`)
+		io.err(`honey-clients: ${(error as Error).message}\n`)
 		return 1
 	}
 }

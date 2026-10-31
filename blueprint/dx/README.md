@@ -21,6 +21,6 @@ Test names point at the v1 homes (colocated unit sibling, or a feature-named `te
 | `plugin.md` | the build-time plugin (type gen, route-tree, codegen wiring) |
 | `client.md` | generated-SDK consumer config (base url, auth, timeout, per-call overrides, raw response) |
 | `conformance.md` | the SDK conformance matrix — every feature × every target (6 SDKs + CLI + MCP) against the live reference server |
-| `codegen.md` | `honey-codegen` options (targets, output, formatter, vendored runtime) |
+| `codegen.md` | `honey-clients` options (targets, output, formatter, vendored runtime) |
 | `cli.md` | generated CLI flags and conventions |
 | `mcp.md` | MCP server emit options (tools, output schema, annotations) |

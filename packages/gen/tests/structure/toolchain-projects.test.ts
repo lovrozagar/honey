@@ -257,7 +257,7 @@ const SCRIPTS = (dir: string) =>
 function harnessRun(script: string, seen: ReadonlySet<string> = new Set()): string[] {
 	const text = SCRIPTS("../..")[script] ?? ""
 	if (seen.has(script)) return []
-	if (/--filter @lovrozagar\/honey-codegen test:harness\b/.test(text)) {
+	if (/--filter @lovrozagar\/honey-clients test:harness\b/.test(text)) {
 		const filters = [...(SCRIPTS(".")["test:harness"] ?? "").matchAll(/--project (\S+)/g)].map(([, name]) => name)
 		return filters.length > 0 ? (filters as string[]) : (harness.projects ?? []).map(({ test }) => test.name)
 	}

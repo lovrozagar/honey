@@ -1,7 +1,7 @@
 import { builtinModules } from "node:module"
 
 /* 00-rules "Environments": portable core runs on Node, Bun and Workers from one source, so a
- * runtime's builtins, globals and adapters stay in that runtime's folder. build/ and honey-codegen
+ * runtime's builtins, globals and adapters stay in that runtime's folder. build/ and honey-clients
  * are build-time Node code. */
 
 const NODE_BUILTINS = new Set(builtinModules)
@@ -31,12 +31,12 @@ const DISPATCHER = "adapters/serve.ts"
 
 const MESSAGES = {
 	adapter: "only the same runtime's adapter may import an adapter",
-	codegen: "core reaches honey-codegen from build/ only",
-	codegenStatic: "core imports honey-codegen through import() only: it is an optional peer",
+	codegen: "core reaches honey-clients from build/ only",
+	codegenStatic: "core imports honey-clients through import() only: it is an optional peer",
 	escape: "an import stays inside its package's src (no repo path outside it, no sibling package)",
-	internal: "honey-codegen reads @lovrozagar/honey through public subpaths only",
+	internal: "honey-clients reads @lovrozagar/honey through public subpaths only",
 	node: "node builtins are for the Node adapter and build-time code only",
-	tsMorph: "ts-morph is for honey-codegen's extract/ only",
+	tsMorph: "ts-morph is for honey-clients's extract/ only",
 	ws: "ws is for the Node WebSocket adapter only",
 }
 
@@ -84,7 +84,7 @@ function relativeProblem(where, spec, dynamic) {
 function packageProblem(where, spec, dynamic) {
 	if (spec === "ws" || spec.startsWith("ws/")) return where.bucket === "node" ? null : "ws"
 	if (spec === "ts-morph") return where.pkg === "gen" && where.rel.startsWith("extract/") ? null : "tsMorph"
-	if (spec.startsWith("@lovrozagar/honey-codegen")) {
+	if (spec.startsWith("@lovrozagar/honey-clients")) {
 		if (where.pkg === "gen") return null
 		return where.bucket !== "build" ? "codegen" : dynamic ? null : "codegenStatic"
 	}

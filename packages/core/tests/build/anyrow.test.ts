@@ -5,7 +5,7 @@
  * (internal: every route and scheme; contract: a filterRoutes subset reading `route.meta`, two schemes; public: the
  * API-key routes, sanitized of the internal schemes, the jwt requirements and every x- key). `honey generate` writes
  * the tree (the services' routes plus the gateway's) and the documents from the served gateway; each document's
- * operations, schemes and keys are its own; and `honey-codegen generate --spec` builds an SDK from a filtered one.
+ * operations, schemes and keys are its own; and `honey-clients generate --spec` builds an SDK from a filtered one.
  */
 import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
@@ -217,7 +217,7 @@ describe("an Anyrow-shaped gateway (bit 19 h2)", () => {
 		])
 	}, 60_000)
 
-	it("feeds a filtered document to honey-codegen generate --spec, its SDK holding only that document's operations", async () => {
+	it("feeds a filtered document to honey-clients generate --spec, its SDK holding only that document's operations", async () => {
 		const made = await seeded()
 		expect(await main(["generate"], quiet, { cwd: made.dir, env: {} })).toBe(0)
 		const args = ["generate", "--spec", "src/_gen/openapi.contract.gen.json", "--target", "ts", "--out", "sdk"]

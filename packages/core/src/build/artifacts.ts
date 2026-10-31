@@ -1,7 +1,7 @@
 /**
  * An app's artifacts as text (bit 19 h2): the route tree, the manifest, each OpenAPI document (JSON and YAML, Q7) and
  * the types; bit 21 e: the MCP handler the app mounts, from its own unsanitized document of the routes `filterRoutes`
- * keeps, honey-codegen's generateMcpHandler writing its entry and the companion directory's runtime and SDK. This module runs inside the app's module graph: generate.ts loads it through the loader that loads the
+ * keeps, honey-clients's generateMcpHandler writing its entry and the companion directory's runtime and SDK. This module runs inside the app's module graph: generate.ts loads it through the loader that loads the
  * app, and it imports the app itself, so the app and the core reading it are one instance (core's symbols are
  * per module). source.ts says which tree is written and which app is documented.
  */
@@ -29,7 +29,7 @@ import { type Documented, type Source, sourceOf } from "./source.ts"
 /** This module's path, which generate.ts loads into the app's graph. */
 export const ARTIFACTS = /* @__PURE__ */ fileURLToPath(import.meta.url)
 
-export type Codegen = typeof import("@lovrozagar/honey-codegen")
+export type Clients = typeof import("@lovrozagar/honey-clients")
 
 /** Where a generation's diagnostics go, one line each. */
 export type Report = (message: string) => void
@@ -54,7 +54,7 @@ export function documentOf(
 
 const json = (value: unknown) => `${JSON.stringify(value, null, 2)}\n`
 
-type Run = { codegen: Codegen; report: Report; root: string }
+type Run = { codegen: Clients; report: Report; root: string }
 
 /** The types file: the unfiltered document (built once, its check already reported) joined with the extracted ctx. */
 async function typesOf(
@@ -109,7 +109,7 @@ function mcpFiles(
 	app: Parameters<typeof generateOpenApi>[0],
 	mcp: ResolvedMcpOutput,
 	outputs: readonly ResolvedOpenApiOutput[],
-	{ codegen, effect }: { codegen: Codegen; effect: EffectConverter | undefined },
+	{ codegen, effect }: { codegen: Clients; effect: EffectConverter | undefined },
 ): [string, string][] {
 	const document = generateOpenApi(app, {
 		converters: { effect },
@@ -153,7 +153,7 @@ export async function artifactsOf(config: ResolvedHoneyConfig, run: Run, source:
 export async function virtualCode(
 	kind: "manifest" | "openApi" | "routes",
 	config: ResolvedHoneyConfig,
-	run: Pick<Run, "root"> & { codegen: () => Promise<Codegen> },
+	run: Pick<Run, "root"> & { codegen: () => Promise<Clients> },
 ): Promise<string> {
 	const source = await sourceOf(config, run.root)
 	if (kind === "routes") return (await run.codegen()).generateRouteTree(source.tree)

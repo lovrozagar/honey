@@ -71,7 +71,7 @@ await Bun.write(
 	join(consumer, "package.json"),
 	`${JSON.stringify(
 		{
-			dependencies: { [PKG]: `file:${coreTarball}`, "@lovrozagar/honey-codegen": `file:${genTarball}`, zod: "4.3.6" },
+			dependencies: { [PKG]: `file:${coreTarball}`, "@lovrozagar/honey-clients": `file:${genTarball}`, zod: "4.3.6" },
 			devDependencies: { typescript: "7.0.2", vite: "8.1.4" },
 			name: "strict-consumer-sandbox",
 			private: true,
