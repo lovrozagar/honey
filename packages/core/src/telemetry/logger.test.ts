@@ -112,7 +112,7 @@ describe("the default level and format: NODE_ENV, read once, fail-closed", () =>
 	it.each([
 		["production", { format: "json", level: "info" }],
 		["development", { format: "pretty", level: "debug" }],
-		["test", { format: "json", level: "silent" }],
+		["test", { format: "json", level: "error" }],
 		[undefined, { format: "json", level: "info" }],
 		["staging", { format: "json", level: "info" }],
 	])("NODE_ENV %s → %o", (env, defaults) => {
@@ -133,7 +133,7 @@ describe("the default level and format: NODE_ENV, read once, fail-closed", () =>
 		const production = createLogger({ write: () => {} })
 		vi.stubEnv("NODE_ENV", "test")
 		const test = createLogger({ write: () => {} })
-		expect([production.level, test.level]).toEqual(["info", "silent"])
+		expect([production.level, test.level]).toEqual(["info", "error"])
 	})
 
 	it("without a sink, a line goes to stdout where there is one", () => {
@@ -143,6 +143,38 @@ describe("the default level and format: NODE_ENV, read once, fail-closed", () =>
 		write.mockRestore()
 		expect(JSON.parse(line)).toMatchObject({ level: 30, msg: "to stdout" })
 		expect(line.endsWith("\n")).toBe(true)
+	})
+})
+
+describe("the default sink and the test floor (bit 22 a)", () => {
+	/* bit 22 a: nodejs_compat gives a worker a process.stdout, and Workers Logs captures the console, so the sink
+	   is the runtime's, not whatever process.stdout happens to exist */
+	it("on Workers a line goes to the console even where there is a stdout", () => {
+		const log = vi.spyOn(console, "log").mockImplementation(() => {})
+		const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true)
+		vi.stubGlobal("navigator", { userAgent: "Cloudflare-Workers" })
+		const logger = createLogger({ format: "json", level: "info" })
+		vi.unstubAllGlobals()
+		logger.info("to the console")
+		const lines = log.mock.calls.length
+		const stdoutLines = write.mock.calls.length
+		log.mockRestore()
+		write.mockRestore()
+		expect({ lines, stdoutLines }).toEqual({ lines: 1, stdoutLines: 0 })
+	})
+
+	/* an error line is the one thing a test must never swallow: NODE_ENV=test is set by the runner, not the author */
+	it("under NODE_ENV=test writes an error and drops an info line", () => {
+		vi.stubEnv("NODE_ENV", "test")
+		const lines: string[] = []
+		const logger = createLogger({ format: "json", write: (line) => lines.push(line) })
+		logger.info("dropped")
+		logger.error("kept")
+		logger.fatal("kept too")
+		expect({ level: logger.level, msgs: lines.map((line) => (JSON.parse(line) as { msg: string }).msg) }).toEqual({
+			level: "error",
+			msgs: ["kept", "kept too"],
+		})
 	})
 
 	it("where there is no stdout (Workers), a line goes to the console", () => {

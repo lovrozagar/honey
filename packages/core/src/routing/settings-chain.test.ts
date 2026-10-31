@@ -114,7 +114,8 @@ describe("the logger and requestLog settings", () => {
 			.requestLog({ skip: () => false })
 		const s = (app as unknown as { settings: ReturnType<typeof createSettings> }).settings
 		expect([fresh.logger.level, fresh.requestLog, s.logger === logger, typeof s.requestLog?.skip]).toEqual([
-			"silent",
+			/* the test NODE_ENV floors the default at error (bit 22 a) */
+			"error",
 			null,
 			true,
 			"function",

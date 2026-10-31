@@ -42,9 +42,9 @@ export type CreateLoggerOptions = {
 	base?: Record<string, unknown>
 	/** Default: `pretty` when NODE_ENV is development, else `json`. */
 	format?: LogFormat
-	/** Default: `debug` in development, `silent` in test, else `info`. */
+	/** Default: `debug` in development, `error` in test (an incident is never swallowed), else `info`. */
 	level?: LogLevel
-	/** Where a line goes. Default: stdout, or the console where there is none (Workers). */
+	/** Where a line goes. Default: the console on Workers, stdout on Node and Bun. */
 	write?: (line: string) => void
 }
 
@@ -61,14 +61,28 @@ export function nodeEnv(): string | undefined {
  */
 export function defaultsFor(env: string | undefined): { format: LogFormat; level: LogLevel } {
 	if (env === "development") return { format: "pretty", level: "debug" }
-	if (env === "test") return { format: "json", level: "silent" }
+	/* the runner sets NODE_ENV=test, not the author: a quiet test is worth having, a swallowed incident is not */
+	if (env === "test") return { format: "json", level: "error" }
 	return { format: "json", level: "info" }
 }
 
+/**
+ * Whether this runtime is Workers, by the same mark `detectRuntime` reads (never by calling it: that one throws
+ * where it cannot tell, and a logger must not throw as it is made).
+ */
+function onWorkers(): boolean {
+	const agent = (globalThis as { navigator?: { userAgent?: string } }).navigator?.userAgent ?? ""
+	return agent.startsWith("Cloudflare-Workers") || agent.startsWith("workerd")
+}
+
 function defaultSink(): Sink {
+	/* the console is where a worker's logs go, and `nodejs_compat` gives it a process.stdout that they do not:
+	   the sink follows the runtime, not whichever globals happen to exist (bit 22 a) */
+	// oxlint-disable-next-line no-console
+	if (onWorkers()) return (line) => console.log(line)
 	const stdout = (globalThis as { process?: { stdout?: { write(text: string): unknown } } }).process?.stdout
 	if (typeof stdout?.write === "function") return (line) => void stdout.write(`${line}\n`)
-	/* the default sink on a runtime without stdout (Workers): the console is where its logs go */
+	/* a runtime with neither: the console is the one sink left */
 	// oxlint-disable-next-line no-console
 	return (line) => console.log(line)
 }
