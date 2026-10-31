@@ -13,7 +13,7 @@
  *   bun run packages/core/tests/e2e/run-strict-consumer.ts
  *   bun run packages/core/tests/e2e/run-strict-consumer.ts --keep     # leave the sandbox for inspection
  */
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readdirSync, rmSync } from "node:fs"
 import { type AddressInfo, createServer } from "node:net"
 import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
@@ -65,7 +65,9 @@ if (packed.code !== 0 || !coreTarball?.endsWith(".tgz") || !genTarball?.endsWith
 /* 2. a consumer that depends on the tarball, not the workspace */
 const consumer = join(sandbox, "consumer")
 mkdirSync(join(consumer, "src"), { recursive: true })
-await Bun.write(join(consumer, "src", "app.ts"), await Bun.file(join(fixture, "src", "app.ts")).text())
+/* every file the fixture ships, so a new leg needs no change here */
+for (const name of readdirSync(join(fixture, "src")))
+	await Bun.write(join(consumer, "src", name), await Bun.file(join(fixture, "src", name)).text())
 await Bun.write(join(consumer, "tsconfig.json"), await Bun.file(join(fixture, "tsconfig.json")).text())
 await Bun.write(
 	join(consumer, "package.json"),

@@ -7,4 +7,6 @@ export { type ExtractedTypes, type ExtractOptions, extractTypes, loadTsMorph } f
 export { type GeneratedMcpHandler, generateMcpHandler } from "./emit/mcp/mounted.ts"
 export { generateRouteTree, type RouteTreeV2 } from "./emit/ts/route-tree.ts"
 export { type GenerateTypesOptions, generateTypes } from "./emit/ts/type-gen.ts"
+export { generated, type GenerateContext, type GenerateRun, type Io, writeGenerated } from "./cli.ts"
+export { type Options, type Target } from "./gen/args.ts"
 export { writeFileIfChanged } from "./gen/write.ts"

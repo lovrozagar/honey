@@ -96,6 +96,15 @@ export async function loadOxfmt(specifier = "oxfmt"): Promise<Formatter | undefi
 }
 
 /** What a generation reads beside its run: the environment, where skips are reported, the oxfmt module to load. */
+/**
+ * What one run generates: its targets, and each target's options by name (a target whose options are left out
+ * takes its generator's defaults). The CLI parses `generate` into one of these; a consumer writes one by hand.
+ */
+export type GenerateRun = {
+	readonly options?: Readonly<Partial<Record<Target, Options>>>
+	readonly targets: readonly Target[]
+}
+
 export type GenerateContext = {
 	readonly env: NodeJS.ProcessEnv
 	readonly report: (line: string) => void
@@ -105,13 +114,13 @@ export type GenerateContext = {
 
 /** Every file a run writes, by target and its path under the target's directory, Go's through gofmt, TS's through oxfmt. */
 export async function generated(
-	run: Pick<Generate, "options" | "targets">,
+	run: GenerateRun,
 	document: Record<string, unknown>,
 	{ env, oxfmt, report }: GenerateContext,
 ) {
 	const out: Partial<Record<Target, Readonly<Record<string, string>>>> = {}
 	for (const target of run.targets) {
-		let files = filesOf(target, document, run.options[target], report)
+		let files = filesOf(target, document, run.options?.[target] ?? {}, report)
 		if (target === "go" || target === "cli") {
 			const gofmt = findGofmt(env)
 			if (gofmt === undefined)
@@ -147,7 +156,7 @@ const PROCESS_IO: Io = {
 
 /** `document`'s targets generated and written under `<out>/<target>`, stale files deleted. */
 export async function writeGenerated(
-	run: Pick<Generate, "options" | "out" | "targets">,
+	run: GenerateRun & { readonly out: string },
 	document: Record<string, unknown>,
 	io: Io,
 	env: NodeJS.ProcessEnv,
