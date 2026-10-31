@@ -38,7 +38,13 @@ export type ExtractedTypes = {
 }
 
 /* the type-only members every honey app carries */
-const APP_MEMBERS = ["$ctx", "$env", "$meta", "$taps"]
+const APP_MEMBERS = ["$ctx", "$env", "$taps"]
+
+/* the declared meta, read when the app carries it: an app from an older honey has no $meta and still extracts */
+const META_MEMBER = "$meta"
+
+/* what `app.meta<AppMeta>({ … })` answers instead of a handle: its one property names the two calls to write */
+const NOT_A_HANDLE = "declareThenDefault"
 
 type PackageInfo = { dir: string; json: Record<string, unknown> }
 type Packages = Map<string, PackageInfo | null>
@@ -181,8 +187,17 @@ export function extractTypes(options: ExtractOptions): ExtractedTypes | null {
 		const sym = appType.getProperty(name)
 		return sym === undefined ? undefined : checker.getTypeOfSymbol(sym)
 	})
-	if (members.includes(undefined)) throw new Error(`Export "${exportName}" is not a honey app`)
-	const [ctx, env, metaType, tapsType] = members as ts.Type[]
+	if (members.includes(undefined)) {
+		const missing = APP_MEMBERS.filter((_, index) => members[index] === undefined)
+		const hint =
+			appType.getProperty(NOT_A_HANDLE) === undefined
+				? `: it carries no ${missing.join(", ")}`
+				: ": app.meta<AppMeta>({ … }) answers no handle, declare the type and set its defaults in two calls"
+		throw new Error(`Export "${exportName}" is not a honey app${hint}`)
+	}
+	const [ctx, env, tapsType] = members as ts.Type[]
+	const metaSym = appType.getProperty(META_MEMBER)
+	const metaType = metaSym === undefined ? undefined : checker.getTypeOfSymbol(metaSym)
 	const owner = frameworkClass(ctx as ts.Type, compiler)
 	const middleware = addedProps(ctx as ts.Type, owner, ser)
 	const base = new Set(middleware.map((p) => p.name))
@@ -191,7 +206,7 @@ export function extractTypes(options: ExtractOptions): ExtractedTypes | null {
 	const taps = ser.serialize(tapsType as ts.Type)
 	/* what `meta<AppMeta>()` declared, written out: the ctx's meta is this and the OpenAPI keys, never the tree's
 	   literal values, so a handler may pass its own ctx to a function typed with the generated ctx (bit 22 a) */
-	const meta = ser.shape(metaType as ts.Type)
+	const meta = metaType === undefined ? "{}" : ser.shape(metaType)
 
 	const cache: Packages = new Map()
 	const text = (t: string) => resolvable(t, options.outputDir, cache)
