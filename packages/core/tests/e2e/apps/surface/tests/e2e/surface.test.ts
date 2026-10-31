@@ -72,7 +72,8 @@ test.describe("input sources", () => {
 	test("GET /in/search", async ({ request }) => {
 		const res = await request.get("/in/search?limit=10&page=1")
 		expect(res.status()).toBe(200)
-		expect(await res.json()).toEqual({ results: [] })
+		/* the body is what the service typed with the generated RouteCtx read off the handler's own ctx */
+		expect(await res.json()).toEqual({ results: ["1"] })
 	})
 
 	test("GET /in/headers", async ({ request }) => {
