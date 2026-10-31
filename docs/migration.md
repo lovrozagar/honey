@@ -509,6 +509,210 @@ import { honey } from "@lovrozagar/honey/plugin"
 export const plugin = honey({ app: "src/app.ts" })
 ```
 
+## A declared meta type and its defaults take two calls
+
+`app.meta<AppMeta>({ worker: "shop" })` is refused: one call gives TypeScript no inference site for the values, so
+the handle could not record which keys it had set and every route had to repeat each required one. Declare the
+type, then set the defaults — a route may then leave out what the chain set, while a key nothing set stays as
+declared.
+
+```ts v0
+const app = honey().meta<AppMeta>({ worker: "shop" })
+```
+
+```ts
+import { honey } from "@lovrozagar/honey"
+
+type AppMeta = { tenant?: "organization" | "project"; worker: "shop" }
+
+const app = honey()
+	.meta<AppMeta>()
+	.meta({ worker: "shop" as const })
+app
+	.get("/items")
+	.meta({ summary: "List items" })
+	.handler((ctx) => ctx.res.text("ok", "ok"))
+```
+
+## The generated `RouteCtx` is the route's ctx; its meta is what the app declares
+
+`types.gen.d.ts` types each route's ctx, and a service outside the app module takes it:
+`RouteCtx<"/items", "get">`. Its `meta` is the meta type the app declares with `meta<AppMeta>()` plus the OpenAPI
+keys a route may add — not the route's configured values, which are narrower than what the handler holds (a
+route's `operationId` is `string` there, not `"items.list"`). Read a route's values from the sibling
+`RouteMeta<"/items", "get">`, which still types them as literals.
+
+`InferRouteCtx<typeof app, …>` is the same ctx read off the app type, for a module the app does **not** import; a
+service the app imports would be a cycle, and the generic then resolves to `never`.
+
+```ts v0
+import type { RouteCtx } from "./_gen/types.gen.d.ts"
+```
+
+```ts
+import { honey, type InferRouteCtx } from "@lovrozagar/honey"
+
+const routed = honey()
+	.get("/items")
+	.handler((ctx) => ctx.res.text("ok", "items"))
+
+/* a module the app does not import reads the ctx off the app type; one it imports takes RouteCtx from _gen */
+function items(ctx: InferRouteCtx<typeof routed, "/items", "get">): string {
+	return ctx.routePattern
+}
+void items
+```
+
+## `@lovrozagar/honey/logger`: `LoggerInstance` is `Logger`, and `logger()` is the `requestLog` setting
+
+The logger type is `Logger`, and the per-request line the `logger()` middleware wrote is the `requestLog`
+setting — the one place that decides whether a request is logged. `LogData` and `LoggerOptions` go with it: a
+record is `Record<string, unknown>`, and the options are `CreateLoggerOptions`. The default logger is quieter in a
+test and writes through the console on Workers, both below.
+
+| v0                                                             | v1                                                              |
+| -------------------------------------------------------------- | --------------------------------------------------------------- |
+| `import type { LoggerInstance }`                               | `import type { Logger }`                                        |
+| `app.use(logger({ instance: log }))`                           | `app.requestLog(true)`, or `.requestLog({ skip })`              |
+| `logger({ instance: log, skip: (d) => d.path === "/health" })` | `app.requestLog({ skip: (entry) => entry.path === "/health" })` |
+| `LogData`                                                      | `Record<string, unknown>`                                       |
+| `LoggerOptions`                                                | `CreateLoggerOptions`                                           |
+
+```ts v0
+import { logger, type LoggerInstance } from "@lovrozagar/honey/logger"
+app.use(logger({ instance: log }))
+```
+
+```ts
+import { honey } from "@lovrozagar/honey"
+import { createLogger, type Logger } from "@lovrozagar/honey/logger"
+
+const log: Logger = createLogger({ base: { service: "shop" } })
+const app = honey()
+app.logger(log).requestLog({ skip: (entry) => entry.path === "/health" })
+```
+
+## The default logger writes through the console on Workers, and only errors under `NODE_ENV=test`
+
+Two defaults of `createLogger()`, each deciding whether you see a line at all:
+
+- the sink follows the runtime. On Workers it is `console.log`, which is what Workers Logs captures;
+  `nodejs_compat` also gives a worker a `process.stdout`, and honey does **not** write there. On Node and Bun it
+  is `process.stdout.write`.
+- `NODE_ENV=test` — which vitest and jest set, not you — floors the level at `error`. An info line is dropped in a
+  test run and an incident is not. Pass `level` to override it, and `write` to take the lines yourself.
+
+```ts v0
+createLogger({ base: { service: "shop" } }) // always console.log, always level info
+```
+
+```ts
+import { createLogger } from "@lovrozagar/honey/logger"
+
+const lines: string[] = []
+const log = createLogger({ base: { service: "shop" }, level: "info", write: (line) => lines.push(line) })
+log.info("a line a test can read")
+```
+
+## `curlLogger({ instance })` is gone: it writes through the app's logger
+
+A `curlLogger()` wrote its lines through the `instance` it was given; it writes through the app's logger now, or
+through a `log` callback that takes each record.
+
+```ts v0
+app.use(curlLogger({ instance: log }))
+```
+
+```ts
+import { honey } from "@lovrozagar/honey"
+import { curlLogger } from "@lovrozagar/honey/curl-logger"
+
+const app = honey()
+app.use(curlLogger({ body: { maxBytes: 16_384 } }))
+```
+
+## `.errorI18n(config)` takes `errorI18n(config)`
+
+The setting carries the value `errorI18n()` answers, not a raw config, and v0's `enableI18n()` — the import that
+turned the feature on — goes with every other enabler (`enableServe`, `enableOpenApi`): a feature is the plain
+import that uses it. The setter rejects a raw config at startup, naming the fix.
+
+```ts v0
+import { enableI18n } from "@lovrozagar/honey/i18n"
+app.errorI18n({ errors: { en: errorsEn }, resolveLocale: (c) => c.search["locale"] })
+```
+
+```ts
+import { honey } from "@lovrozagar/honey"
+import { errorI18n } from "@lovrozagar/honey/i18n"
+
+const app = honey()
+app.errorI18n(
+	errorI18n({ errors: { en: { not_found: "Nothing here" } }, resolveLocale: (ctx) => ctx.search["locale"] ?? "en" }),
+)
+```
+
+## One removed name per subpath, and what it is now
+
+The rest of what 0.7.3 exported and 1.0 does not. Everything else it exported was its own internals — an
+adapter's socket wrapper, the plugin's resolved config, the tree's matcher — and no app wrote them.
+
+| v0                                                                                 | v1                                                                            |
+| ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `startHoneyServer`, `enableServe`, `HoneyServeOptions` (`@lovrozagar/honey/serve`) | `serve(app, options)`, its options inline, `ServeHandle` for what it answers  |
+| `enableOpenApi`, `spec` (`@lovrozagar/honey/openapi`)                              | `serveOpenApi(app, options)`                                                  |
+| `createProxyHandler` (`@lovrozagar/honey/proxy`)                                   | `proxy({ destination })`, a handler you pass to `.handler()`                  |
+| `RealtimeRouteOpts` (`@lovrozagar/honey/realtime`)                                 | `RealtimeLimits` and `ConnContext`                                            |
+| `ClientInfo`, `clientInfo`, `TrustProxy` (`@lovrozagar/honey/trust`)               | nothing: `ctx.ip` is the platform's peer, and a proxy header is yours to read |
+
+```ts v0
+import { startHoneyServer } from "@lovrozagar/honey/serve"
+await startHoneyServer(app, { port: 3000 })
+```
+
+```ts
+import { honey } from "@lovrozagar/honey"
+import { serve } from "@lovrozagar/honey/serve"
+
+const app = honey()
+const server = await serve(app, { port: 3000 })
+await server.close()
+```
+
+## A client over several documents: a merged tree's document replaces `mergeSpecs`
+
+A v0 consumer that generated one client from several documents (the plugin's `codegen.sdk.specs`) generates from
+the document of a merged tree instead: a gateway that merges its services with `codegen.mergeTree` emits one
+document over all of them, and `honey-clients generate --spec` takes it. Merging two documents that no tree
+relates is planned after 1.0.
+
+```ts v0
+honey({ codegen: { sdk: { name: "ShopSDK", specs: ["../a/openapi.json", "../b/openapi.json"] } } })
+```
+
+```sh
+honey-clients generate --spec src/_gen/openapi.gen.json --target ts --ts-name ShopSDK --out sdk
+```
+
+## `honey-clients` generates from its own entry too
+
+The bin writes each target under `<out>/<target>/`. A consumer that writes the files itself — a flat layout, or a
+document patched in memory — calls `generated()` from the package entry, which answers every file by target and
+path and writes nothing. `writeGenerated()` is the bin's own writer, with its stale-file handling.
+
+```ts v0
+import { generateSDK } from "@lovrozagar/honey/codegen"
+```
+
+```ts
+import { generated, type GenerateRun } from "@lovrozagar/honey-clients"
+
+const run: GenerateRun = { options: { ts: { name: "ShopSDK", stem: "shop" } }, targets: ["ts"] }
+const document = { info: { title: "Shop", version: "1.0.0" }, openapi: "3.1.0", paths: {} }
+const files = await generated(run, document, { env: {}, report: () => undefined })
+export const names = Object.keys(files.ts ?? {})
+```
+
 ## A gateway config works unchanged
 
 `app` plus `codegen.mergeTree` (a gateway over several services) is unchanged. The tree written is the services'

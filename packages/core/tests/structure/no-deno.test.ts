@@ -7,6 +7,8 @@ import { SPAWN_TIMEOUT } from "../fixture/spawn-timeout.ts"
 
 const REPO = resolve(import.meta.dirname, "../../../..")
 const SELF = "packages/core/tests/structure/no-deno.test.ts"
+/* the migration table judges every subpath 0.7.3 exported, and one of them was this adapter's (bit 22 a) */
+const TABLE = "packages/core/tests/docs/removed-exports.ts"
 
 /* History stays where it is (blueprint README): the changelog and old specs record what v0 did, and v0
  * itself is in git history at 1a968f1. The blueprint and agent tooling are not honey source, and the vendored
@@ -25,7 +27,7 @@ function repoFiles(): string[] {
 		encoding: "utf8",
 		maxBuffer: 64 * 1024 * 1024,
 	})
-	return out.split("\0").filter((f) => f !== "" && f !== SELF && !EXEMPT.some((re) => re.test(f)))
+	return out.split("\0").filter((f) => f !== "" && f !== SELF && f !== TABLE && !EXEMPT.some((re) => re.test(f)))
 }
 
 function mentionsDeno(file: string): boolean {

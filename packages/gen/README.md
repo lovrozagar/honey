@@ -105,6 +105,11 @@ One table, since a flag that is not written down is a flag nobody finds:
 | `--go-module-path`        | go     | the Go module path the SDK is imported by                          |
 | `--rust-crate-name`       | rust   | the crate's name                                                   |
 | `--rust-version`          | rust   | the crate's version                                                |
+| `--rust-description`      | rust   | what crates.io shows; `cargo publish` needs one                    |
+| `--rust-license`          | rust   | its SPDX license; `cargo publish` needs one                        |
+| `--rust-repository`       | rust   | the repository crates.io links                                     |
+| `--rust-homepage`         | rust   | the home page crates.io links                                      |
+| `--rust-keywords`         | rust   | its crates.io keywords, comma separated                            |
 | `--python-package-name`   | python | the Python package's name                                          |
 | `--python-version`        | python | the package's version                                              |
 | `--csharp-client-name`    | csharp | the client class's name                                            |
@@ -117,6 +122,7 @@ One table, since a flag that is not written down is a flag nobody finds:
 | `--java-client-name`      | java   | the client class's name                                            |
 | `--java-version`          | java   | the publication's version                                          |
 | `--cli-binary-name`       | cli    | the command's own name (`shop`)                                    |
+| `--cli-base-url`          | cli    | the base URL it calls by default; the document's server by default |
 | `--cli-module-path`       | cli    | the Go module path the CLI is built from                           |
 | `--cli-repo`              | cli    | the GitHub repository its release workflow and install scripts use |
 | `--cli-env-prefix`        | cli    | the prefix of the environment variables it reads                   |
