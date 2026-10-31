@@ -14,7 +14,16 @@ export const RUST_VERSION = "1.85"
 export const EDITION = "2024"
 
 /** The crate's name and version as Cargo.toml and the lock root carry them. */
-export type CrateIdentity = { readonly name: string; readonly version: string }
+export type CrateIdentity = {
+	readonly name: string
+	readonly version: string
+	/** what crates.io shows and `cargo publish` requires; left out when the caller names none */
+	readonly description?: string
+	readonly homepage?: string
+	readonly keywords?: readonly string[]
+	readonly license?: string
+	readonly repository?: string
+}
 
 /* the dependency the WebSocket and realtime runtime files need, and only they */
 const WEBSOCKET = "tokio-tungstenite"
@@ -51,6 +60,18 @@ export function validateCrateVersion(version: string): string {
 	return version
 }
 
+/** The `[package]` metadata lines the caller gave, in Cargo's order; a crate without them publishes nowhere. */
+function metadata(crate: CrateIdentity): string[] {
+	const lines: string[] = []
+	if (crate.description !== undefined) lines.push(`description = ${JSON.stringify(crate.description)}`)
+	if (crate.license !== undefined) lines.push(`license = ${JSON.stringify(crate.license)}`)
+	if (crate.repository !== undefined) lines.push(`repository = ${JSON.stringify(crate.repository)}`)
+	if (crate.homepage !== undefined) lines.push(`homepage = ${JSON.stringify(crate.homepage)}`)
+	if (crate.keywords !== undefined && crate.keywords.length > 0)
+		lines.push(`keywords = [${crate.keywords.map((word) => JSON.stringify(word)).join(", ")}]`)
+	return lines
+}
+
 /** Cargo.toml: the package at the floor, the library `sdk`, the dependencies (`tokio-tungstenite` only when `ws`). */
 export function cargoToml(crate: CrateIdentity, ws: boolean): string {
 	const dependencies = DEPENDENCIES.filter(([name]) => ws || name !== WEBSOCKET)
@@ -61,6 +82,8 @@ export function cargoToml(crate: CrateIdentity, ws: boolean): string {
 		`version = "${crate.version}"`,
 		`edition = "${EDITION}"`,
 		`rust-version = "${RUST_VERSION}"`,
+		/* the metadata crates.io reads: each line only when the caller gave it, so a bare crate is unchanged */
+		...metadata(crate),
 		"",
 		"[lib]",
 		'name = "sdk"',

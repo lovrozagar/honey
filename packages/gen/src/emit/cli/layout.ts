@@ -47,6 +47,8 @@ function cmdFile(module: string, body: string, doc = ""): string {
 
 /** The CLI's name, description and environment prefix, and its module. */
 export type CliApp = {
+	/** the base URL the root command is built with; none when the document declares no server */
+	readonly baseUrl?: string
 	readonly binaryName: string
 	readonly short: string
 	readonly envPrefix: string
@@ -59,7 +61,7 @@ function rootBody(app: CliApp, ir: IR, nodes: readonly CommandNode[]): string {
 		`Name: ${goString(app.binaryName)}`,
 		`Short: ${goString(helpText(app.short))}`,
 		`EnvPrefix: ${goString(app.envPrefix)}`,
-		...(ir.servers[0] === undefined ? [] : [`Server: ${goString(ir.servers[0])}`]),
+		...(app.baseUrl === undefined ? [] : [`Server: ${goString(app.baseUrl)}`]),
 		"Discovery: discovery",
 		"Skill: skill",
 	]
@@ -79,7 +81,7 @@ function rootBody(app: CliApp, ir: IR, nodes: readonly CommandNode[]): string {
 function clientBody(app: CliApp, ir: IR): string {
 	const env = `$${app.envPrefix}_BASE_URL`
 	const noServer =
-		ir.servers.length > 0
+		app.baseUrl !== undefined
 			? []
 			: [
 					'\tif s.BaseURL == "" {',

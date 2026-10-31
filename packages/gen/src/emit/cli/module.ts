@@ -30,6 +30,11 @@ export type GoCliOptions = {
 	readonly envPrefix?: string
 	/** the GitHub repository the release is published to, `owner/name`; none by default (install scripts then need a base) */
 	readonly repo?: string
+	/**
+	 * the base URL the binary calls by default, absolute; the document's first server by default. A document
+	 * served under a path (a gateway's `servers: [{ url: "/api" }]`) names no host a CLI can call, so it needs this.
+	 */
+	readonly baseUrl?: string
 }
 
 export type GeneratedGoCli = { readonly files: Readonly<Record<string, string>> }
@@ -88,6 +93,8 @@ const ENV_PREFIX = /^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*$/
 /* a GitHub repository: its owner 1 to 39 letters, digits and single inner hyphens; its name 1 to 100 of letters,
  * digits, `.`, `_` and `-`, not `.` or `..` and not ending in `.git` */
 const REPO = /^[A-Za-z0-9](?:-?[A-Za-z0-9]){0,38}\/(?!\.\.?$)(?![\s\S]*\.git$)[A-Za-z0-9._-]{1,100}$/
+/* a base URL a CLI can call: a scheme and a host, never a path alone */
+const ABSOLUTE_URL = /^https?:\/\/[^\s/]+/
 
 const refuse = (option: string, value: string): never => {
 	throw new Error(`Invalid ${option}: ${JSON.stringify(value)}`)
@@ -100,11 +107,23 @@ export const binaryNameOf = (title: string | undefined): string =>
 		.replace(/[^a-z0-9]+/g, "-")
 		.replace(/^[^a-z]+|-+$/g, "") || "api"
 
+/**
+ * The base URL the binary calls: the option, else the document's first server when that is absolute. A relative
+ * server is no base URL a CLI can call — a gateway's document says `servers: [{ url: "/api" }]` — so it is left
+ * out rather than baked in, and the generated client asks for one (`--base-url`, the env or the config) instead of
+ * calling a path (bit 22 a).
+ */
+function baseUrlOf(baseUrl: string | undefined, servers: readonly string[]): string | undefined {
+	if (baseUrl !== undefined) return baseUrl
+	const first = servers[0]
+	return first !== undefined && ABSOLUTE_URL.test(first) ? first : undefined
+}
+
 /** The options with every default filled, each refused unless it matches its grammar. */
 function resolved(
 	options: GoCliOptions,
 	title: string | undefined,
-): Required<Omit<GoCliOptions, "repo">> & Pick<GoCliOptions, "repo"> {
+): Required<Omit<GoCliOptions, "repo" | "baseUrl">> & Pick<GoCliOptions, "repo" | "baseUrl"> {
 	const binaryName = options.binaryName ?? binaryNameOf(title)
 	if (!BINARY_NAME.test(binaryName)) refuse("binaryName", binaryName)
 	const modulePath = options.modulePath ?? `example.com/${binaryName}`
@@ -112,7 +131,8 @@ function resolved(
 	const envPrefix = options.envPrefix ?? binaryName.toUpperCase().replaceAll("-", "_")
 	if (!ENV_PREFIX.test(envPrefix)) refuse("envPrefix", envPrefix)
 	if (options.repo !== undefined && !REPO.test(options.repo)) refuse("repo", options.repo)
-	return { binaryName, envPrefix, modulePath, repo: options.repo }
+	if (options.baseUrl !== undefined && !ABSOLUTE_URL.test(options.baseUrl)) refuse("baseUrl", options.baseUrl)
+	return { baseUrl: options.baseUrl, binaryName, envPrefix, modulePath, repo: options.repo }
 }
 
 /** A go.sum line's order key: its module path, then its version with each number zero-padded, as Go sorts them. */
@@ -177,12 +197,13 @@ function embeddedSdk(document: Record<string, unknown>, modulePath: string) {
 /** The CLI module for `document`, by file name. */
 export function generateGoCli(document: Record<string, unknown>, options: GoCliOptions = {}): GeneratedGoCli {
 	const ir = toIR(document as OpenApiDocument, { deriveOperationIds: true })
-	const { binaryName, envPrefix, modulePath, repo } = resolved(options, ir.info.title)
+	const { baseUrl, binaryName, envPrefix, modulePath, repo } = resolved(options, ir.info.title)
+	const server = baseUrlOf(baseUrl, ir.servers)
 	const install = { bin: binaryName, prefix: envPrefix, repo }
 	const sdk = embeddedSdk(document, modulePath)
 	const model = sdkModel(ir)
 	const nodes = commandTree(model.ops, goCallPlans(document))
-	const app = { binaryName, envPrefix, modulePath, short: ir.info.title ?? binaryName }
+	const app = { baseUrl: server, binaryName, envPrefix, modulePath, short: ir.info.title ?? binaryName }
 	return {
 		files: {
 			...moduleFiles(modulePath, sdk.websocket),

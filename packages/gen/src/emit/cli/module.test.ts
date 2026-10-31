@@ -202,6 +202,32 @@ describe("generateGoCli: its options (F2)", () => {
 		]
 		expect(root).toContain(`cli.Root(cli.App{Name: "anyrow", Short: ${goString(title)}, EnvPrefix: "ANYROW", Discovery`)
 	})
+})
+
+describe("generateGoCli: the base URL it calls (bit 22 a)", () => {
+	/* bit 22 a: a gateway's document says servers: [{ url: "/api" }], and a CLI cannot call a path */
+	it("takes baseUrl over the document's server, and leaves a relative one out", () => {
+		const served = { ...ZERO, servers: [{ url: "https://api.anyrow.ai" }] }
+		const relative = { ...ZERO, servers: [{ url: "/api" }] }
+		const appOf = (document: Json, options = {}) =>
+			/cli\.App\{[^}]*\}/.exec(generateGoCli(document, options).files["cmd/root.go"] ?? "")?.[0] ?? ""
+		expect({
+			option: appOf(served, { baseUrl: "https://edge.anyrow.ai" }).includes('Server: "https://edge.anyrow.ai"'),
+			relative: appOf(relative).includes("Server:"),
+			server: appOf(served).includes('Server: "https://api.anyrow.ai"'),
+		}).toEqual({ option: true, relative: false, server: true })
+	})
+
+	it("refuses a relative baseUrl, which would make every default call a path", () => {
+		expect(() => zero({ baseUrl: "/api" })).toThrow('Invalid baseUrl: "/api"')
+	})
+
+	it("asks for a base URL in the generated client when the document declares none it can call", () => {
+		const relative = generateGoCli({ ...ZERO, servers: [{ url: "/api" }] }, { binaryName: "anyrow" }).files
+		expect(relative["cmd/client.go"]).toContain(
+			"no base URL: set --base-url, $ANYROW_BASE_URL or base_url in the config file",
+		)
+	})
 
 	it.each([
 		["binaryName", "Anyrow"],

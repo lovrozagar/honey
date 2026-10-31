@@ -49,7 +49,14 @@ function files(server = true): Record<string, string> {
 	const ir = toIR(spec as OpenApiDocument, { deriveOperationIds: true })
 	const model = sdkModel(ir)
 	const nodes = commandTree(model.ops, goCallPlans(spec))
-	const app = { binaryName: "shop", envPrefix: "SHOP", modulePath: "example.com/shop", short: "Shop" }
+	/* generateGoCli resolves the base URL (the option, else the document's server) and the layout takes it */
+	const app = {
+		baseUrl: server ? "https://api.shop.test" : undefined,
+		binaryName: "shop",
+		envPrefix: "SHOP",
+		modulePath: "example.com/shop",
+		short: "Shop",
+	}
 	return cmdFiles(app, ir, nodes, discoveryEntries(nodes, model))
 }
 

@@ -10,13 +10,13 @@
  * option: the SDKs' `throwOnError`, the last ones, are gone (a client always throws; its safe mirror answers a Result).
  */
 const TARGETS = {
-	cli: ["binaryName", "envPrefix", "modulePath", "repo"],
+	cli: ["baseUrl", "binaryName", "envPrefix", "modulePath", "repo"],
 	csharp: ["clientName", "packageId", "rootNamespace", "version"],
 	go: ["modulePath"],
 	java: ["artifactId", "clientName", "groupId", "packageName", "version"],
 	mcp: ["envPrefix", "name"],
 	python: ["packageName", "version"],
-	rust: ["crateName", "version"],
+	rust: ["crateName", "description", "homepage", "keywords", "license", "repository", "version"],
 	ts: ["name", "stem"],
 } as const satisfies Record<string, readonly string[]>
 
