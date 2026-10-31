@@ -12,6 +12,7 @@ import type { TypedResponse } from "../response/response.ts"
 import type { Honey } from "./app.ts"
 import type {
 	ApplyScoped,
+	ChainSupplied,
 	ComputeErrorsByStatus,
 	DefaultMeta,
 	HandlerCtx,
@@ -216,7 +217,7 @@ export class RouteBuilder<B extends BuilderTypes> {
 		return this.#next({ boundaryKey: key, errorKeys: new Set([...this.#s.errorKeys, key]) })
 	}
 
-	meta<TRouteMeta extends Partial<DefaultMeta> & ([B["meta"]] extends [never] ? {} : B["meta"])>(
+	meta<TRouteMeta extends Partial<DefaultMeta> & ([B["meta"]] extends [never] ? {} : ChainSupplied<B["meta"]>)>(
 		meta: TRouteMeta,
 	): BuilderChain<Next<B, { accMeta: B["accMeta"] & TRouteMeta; used: B["used"] | "meta" }>> {
 		const merged: Record<string, unknown> = { ...this.#s.meta, ...meta }

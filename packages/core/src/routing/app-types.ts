@@ -3,6 +3,7 @@ import type { HoneyContext, REQUEST } from "../context/context.ts"
 import type { Honey } from "./app.ts"
 import type { RouteSelectorOf } from "./codegen-types.ts"
 import type { ApplyOutput } from "./output-types.ts"
+import type { DeclaredMeta, InitAccMeta, RouteMeta } from "./meta-types.ts"
 import type { TapMethod } from "./tap.ts"
 import type { StatusKey } from "../response/status.ts"
 import type { InferOutput, StandardSchemaLike } from "../validation/standard-schema.ts"
@@ -77,7 +78,7 @@ export type HandlerCtx<
 	> &
 		/* declared taps replace the context's any-key tap; without them the context stays as it is */
 		([keyof TTaps] extends [never] ? {} : TapMethod<TTaps>) & {
-			readonly meta: Readonly<Omit<TAccMeta, "openApi" | typeof CHAIN_META>>
+			readonly meta: Readonly<Omit<RouteMeta<TAccMeta>, "openApi">>
 			readonly routePattern: TPath
 		} & ([TErrorFactory] extends [never]
 			? {}
@@ -136,35 +137,15 @@ export type MergeRoute<
 	}
 }
 
-/** `TMeta` defaults to `never`, and `never & X` is `never`: accumulated meta starts at `{}`. */
-export type InitAccMeta<TMeta> = [TMeta] extends [never] ? {} : TMeta
-
-/** Chain `.meta(values)` at the type level: a phantom optional key, so routes see the values without having to repeat them. */
-declare const CHAIN_META: unique symbol
-
-/** The handle's meta after a chain `.meta(values)`. */
-export type WithChainMeta<TMeta, TValues> = InitAccMeta<TMeta> & { readonly [CHAIN_META]?: TValues }
-
-/** The meta type a handle declares (`meta<T>()`), chain values left out; `never` when none was declared. */
-export type DeclaredMeta<TMeta> = [TMeta] extends [never]
-	? never
-	: [keyof RouteMeta<TMeta>] extends [never]
-		? never
-		: RouteMeta<TMeta>
-
-/** Route meta as it is recorded: without the chain-meta key. */
-export type RouteMeta<TAccMeta> = Omit<TAccMeta, typeof CHAIN_META>
-
-type IsInternal<T> = [T] extends [{ internal: true }] ? true : false
-
-/** A route whose meta, its own or its chain's, is `{ internal: true }` is left out of `$routes`. */
-export type SkipRouteRecord<TAccMeta> = [TAccMeta] extends [never]
-	? false
-	: IsInternal<TAccMeta> extends true
-		? true
-		: TAccMeta extends { readonly [CHAIN_META]?: infer C }
-			? IsInternal<NonNullable<C>>
-			: false
+export type {
+	ChainSupplied,
+	DeclaredMeta,
+	InitAccMeta,
+	MetaNeedsTwoCalls,
+	RouteMeta,
+	SkipRouteRecord,
+	WithChainMeta,
+} from "./meta-types.ts"
 
 /** The status codes `errorsByStatus` is keyed by; another status key falls back to `number`. */
 type CodeOf = {

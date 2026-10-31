@@ -258,7 +258,7 @@ describe("chain meta and the types around it", () => {
 	// v0: a783ced1ad
 	it("InferMeta stays the meta<T>() type through chain values, use, basePath and context, per sub-chain; never without it", () => {
 		const phantom = honey<{}>().meta<AppMeta>()
-		const valued = honey<{}>().meta<AppMeta>({ tags: "Auth" })
+		const valued = honey<{}>().meta<AppMeta>().meta({ tags: "Auth" })
 		const chained = phantom.meta({ auth: "public" }).meta({ tags: "Auth" })
 		const through = chained.use(trace).basePath("/api").context({ db: "sqlite" })
 		const other = honey<{}>().meta<{ version?: number }>().meta({ version: 1 })

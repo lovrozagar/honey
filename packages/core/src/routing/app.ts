@@ -5,7 +5,7 @@
  */
 import { type ExecutionCtx, type HoneyContext, isReservedCtxKey } from "../context/context.ts"
 import type { MaybePromise, MiddlewareFn, RuntimeMiddleware } from "../middleware/middleware.ts"
-import type { DeclaredMeta, DefaultMeta, ScopedMwEntry, WithChainMeta } from "./app-types.ts"
+import type { DeclaredMeta, DefaultMeta, MetaNeedsTwoCalls, ScopedMwEntry, WithChainMeta } from "./app-types.ts"
 import { dispatch } from "./dispatch.ts"
 import { joinPatterns } from "./pattern.ts"
 import {
@@ -123,14 +123,16 @@ export class Honey<
 		TScopedMw
 	>
 	/**
-	 * Typed chain meta, the meta type given explicitly (`meta<AppMeta>({ … })`): constrain route meta
-	 * and set defaults in one call. `TNewMeta` defaults to `never`, so a call that leaves it out
-	 * resolves to the next overload instead of binding it to a wide record.
+	 * Declaring the meta type and setting defaults in one call (`meta<AppMeta>({ … })`) is refused, and the error
+	 * names the two calls that replace it (bit 22 a). A call that gives the type explicitly leaves no inference site
+	 * for the values: TypeScript fills the second type parameter from its default, so the handle would record "every
+	 * declared key defaulted" and a route could then omit a key nothing supplies, or pass one nothing declares.
+	 * `TNewMeta` defaults to `never`, so a call that leaves the type out resolves to the next overload instead.
 	 */
 	meta<
 		TNewMeta extends Record<string, unknown> = never,
 		TValues extends Partial<DefaultMeta> & Partial<TNewMeta> = Partial<DefaultMeta> & Partial<TNewMeta>,
-	>(values: TValues): Honey<TEnv, TCtx, TRoutes, TNewMeta, TErrorFactory, TDefaultErrors, TBasePath, TTaps, TScopedMw>
+	>(values: TValues): MetaNeedsTwoCalls
 	/** Chain meta, merged into every route registered through the new handle; its values reach the routes' types (`internal: true`). */
 	meta<
 		const TValues extends Partial<DefaultMeta> &
