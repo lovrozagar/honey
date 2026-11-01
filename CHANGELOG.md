@@ -36,6 +36,7 @@ Every deliberate change has its before and after in [the migration guide](https:
 
 ### Fixed
 
+- A generated TypeScript SDK compiles clean under every strictness flag a consumer may set, `exactOptionalPropertyTypes` and `noPropertyAccessFromIndexSignature` included, and its types file imports only what it reads. A multipart form whose body is a `$ref` types its binary field as `Blob`, as an inline one does, so the SDK can upload a file again. A hook's `ctx.path` is the operation's path template as the document spells it (`/items/{id}`), which [the migration guide](https://github.com/lovrozagar/honey/blob/main/docs/migration.md) now says.
 - A honey-built Worker could not carry named exports, so a Durable Object — the kind an upload store needs — could not ship beside the fetch handler. Named exports pass through now, with `default` still honey's fetch handler. A named export that is a string, number, boolean or null is passed on as an empty object, because workerd refuses such a module.
 - Text from your OpenAPI document reached generated code raw, so a description holding C1 or bidirectional control characters could change how the generated source reads, or end a comment early. Every target escapes such text in the literals, comments and help text it emits.
 
