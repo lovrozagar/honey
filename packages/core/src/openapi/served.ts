@@ -8,7 +8,20 @@ import { ifNoneMatchHits } from "../response/etag.ts"
 import type { TypedResponse } from "../response/response.ts"
 import { isStaticPattern, joinPatterns, parsePattern } from "../routing/pattern.ts"
 import { assertRouteFree, GRAPH, type HandleView, type HoneyGraph, SERVED, VIEW } from "../routing/register.ts"
+import type { InferMeta, OpenApiMeta } from "../routing/app-types.ts"
 import type { DocsConfig, DocsContext } from "./docs-page.ts"
+
+/**
+ * The route meta a serving call puts on every route it mounts: honey's own keys and the ones handle `A`
+ * declares (`meta<T>()`), each optional, as a route's own `.meta()` takes them. Never `internal` or SERVED,
+ * the marking every served route keeps.
+ */
+export type ServedMeta<A> = Partial<
+	Omit<OpenApiMeta & ([InferMeta<A>] extends [never] ? {} : InferMeta<A>), "internal">
+> & {
+	readonly internal?: never
+	readonly [SERVED]?: never
+}
 
 /** A docs page, as `scalar` and `swagger` are: the page for the document at `config.url`. */
 export type DocsPage = (config: DocsConfig) => (ctx: DocsContext) => TypedResponse

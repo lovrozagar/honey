@@ -9,8 +9,6 @@
  * whatever the upstream said.
  */
 import { HoneyError } from "../errors/error.ts"
-import type { OpenApiMeta } from "../routing/app-types.ts"
-import { SERVED } from "../routing/register.ts"
 import {
 	answering,
 	artifact,
@@ -20,6 +18,7 @@ import {
 	JSON_TYPE,
 	mountAll,
 	type ServedContext,
+	type ServedMeta,
 	type ServedHandler,
 	type ServingHandle,
 	YAML_TYPE,
@@ -43,7 +42,7 @@ export type JsonSource = FetchedSource | { readonly inline: object | string }
 /** Where the YAML document comes from. There is no inline object: nothing converts one without a converter. */
 export type YamlSource = FetchedSource | { readonly inline: string }
 
-export type ServeStaticOpenApiOptions = {
+export type ServeStaticOpenApiOptions<A = unknown> = {
 	/** `"no-cache"` by default */
 	readonly cacheControl?: string
 	/** a docs page for the document, at `docsPath`: the page itself, `scalar` or `swagger` */
@@ -55,8 +54,8 @@ export type ServeStaticOpenApiOptions = {
 	readonly json: JsonSource
 	/** the whole path of the JSON route, in place of `${path}.json` */
 	readonly jsonPath?: string
-	/** the route's own meta, under the internal SERVED marking it cannot lift */
-	readonly meta?: Omit<OpenApiMeta, "internal"> & { readonly internal?: never; readonly [SERVED]?: never }
+	/** every mounted route's meta: honey's keys and the handle's declared ones, under the internal SERVED marking */
+	readonly meta?: ServedMeta<A>
 	/** the stem the document is served at, `"/openapi"` by default */
 	readonly path?: string
 	/** the YAML document; with none, no YAML route is mounted */
@@ -144,7 +143,7 @@ function loading(source: JsonSource | YamlSource, contentType: string): (ctx: Se
 }
 
 /** Serve a document built ahead of time or living elsewhere, and a docs page when asked, from `app`; returns `app`. */
-export function serveStaticOpenApi<A>(app: A, options: ServeStaticOpenApiOptions): A {
+export function serveStaticOpenApi<A>(app: A, options: ServeStaticOpenApiOptions<A>): A {
 	const {
 		cacheControl,
 		docs,

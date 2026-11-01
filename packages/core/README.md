@@ -892,8 +892,10 @@ const loaded = serveStaticOpenApi(honey(), {
 `docs` takes the imported page here exactly as it does in `serveOpenApi`, so neither function bundles a page it does
 not show. The JSON route is `${path}.json` (`path` is `/openapi` by default), the YAML routes `.yaml` and `.yml`
 appear only with a `yaml` source, and `jsonPath` or `yamlPath` replaces the stem outright. Every route is internal,
-so the document never documents its own endpoints, and `meta` (a `security` scheme, a `summary`) rides along under
-that marking.
+so the document never documents its own endpoints, and `meta` rides along under that marking on every route the call
+mounts, the docs page included. It takes what a route's own `.meta()` takes on that handle: honey's keys (a
+`security` scheme, a `summary`) and the ones the app declared with `meta<T>()`, so an app whose middleware turns
+`meta.cacheControl` into the header passes it here. `serveOpenApi` and `serveManifest` take the same `meta`.
 
 No copy script is needed to put the bytes where a Worker can read them: point the build plugin's output at the
 assets directory wrangler serves, and codegen writes both files there on every generate.

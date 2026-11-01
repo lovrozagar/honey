@@ -20,12 +20,13 @@ import {
 	JSON_TYPE,
 	mountAll,
 	type ServedHandler,
+	type ServedMeta,
 	type ServingHandle,
 	YAML_TYPE,
 } from "./served.ts"
 import { toYaml } from "./yaml.ts"
 
-export type ServeOpenApiOptions = Omit<GenerateOpenApiOptions, "info" | "invalidate" | "onSchemaError"> & {
+export type ServeOpenApiOptions<A = unknown> = Omit<GenerateOpenApiOptions, "info" | "invalidate" | "onSchemaError"> & {
 	readonly description?: string
 	/** a docs page for the document, at `docsPath`: the page itself, `scalar` or `swagger` */
 	readonly docs?: DocsPage
@@ -33,15 +34,19 @@ export type ServeOpenApiOptions = Omit<GenerateOpenApiOptions, "info" | "invalid
 	readonly docsPath?: string
 	/** `false` mounts nothing */
 	readonly enabled?: boolean
+	/** every mounted route's meta: honey's keys and the handle's declared ones, under the internal SERVED marking */
+	readonly meta?: ServedMeta<A>
 	/** the stem the document is served at, `"/openapi"` by default: `.json`, `.yaml` and `.yml` follow */
 	readonly path?: string
 	readonly title: string
 	readonly version: string
 }
 
-export type ServeManifestOptions = Omit<GenerateManifestOptions, "visibility"> & {
+export type ServeManifestOptions<A = unknown> = Omit<GenerateManifestOptions, "visibility"> & {
 	/** `false` mounts nothing */
 	readonly enabled?: boolean
+	/** the route's meta: honey's keys and the handle's declared ones, under the internal SERVED marking */
+	readonly meta?: ServedMeta<A>
 	/** `"/manifest.json"` by default */
 	readonly path?: string
 }
@@ -64,8 +69,18 @@ function perEpoch<T>(g: HoneyGraph, build: () => T): () => T {
 }
 
 /** Serve the app's OpenAPI document, and a docs page for it when asked, from `app`; returns `app`. */
-export function serveOpenApi<A>(app: A, options: ServeOpenApiOptions): A {
-	const { description, docs, docsPath = "/docs", enabled = true, path = "/openapi", title, version, ...rest } = options
+export function serveOpenApi<A>(app: A, options: ServeOpenApiOptions<A>): A {
+	const {
+		description,
+		docs,
+		docsPath = "/docs",
+		enabled = true,
+		meta = {},
+		path = "/openapi",
+		title,
+		version,
+		...rest
+	} = options
 	if (!enabled) return app
 	const handle = app as unknown as ServingHandle
 	const g = handle[GRAPH]
@@ -81,18 +96,18 @@ export function serveOpenApi<A>(app: A, options: ServeOpenApiOptions): A {
 		[`${path}.yml`, answering(yaml)],
 	]
 	if (docs !== undefined) routes.push(docsRoute(handle, docs, docsPath, `${path}.json`))
-	mountAll(handle, routes)
+	mountAll(handle, routes, meta)
 	return app
 }
 
 /** Serve the app's published manifest from `app`; returns `app`. */
-export function serveManifest<A>(app: A, options: ServeManifestOptions = {}): A {
-	const { enabled = true, path = "/manifest.json", ...rest } = options
+export function serveManifest<A>(app: A, options: ServeManifestOptions<A> = {}): A {
+	const { enabled = true, meta = {}, path = "/manifest.json", ...rest } = options
 	if (!enabled) return app
 	const handle = app as unknown as ServingHandle
 	const manifest = perEpoch(handle[GRAPH], () =>
 		artifact(JSON.stringify(generateManifest(handle, { ...rest, visibility: "published" })), JSON_TYPE),
 	)
-	mountAll(handle, [[path, answering(manifest)]])
+	mountAll(handle, [[path, answering(manifest)]], meta)
 	return app
 }
