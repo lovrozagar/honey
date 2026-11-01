@@ -543,6 +543,34 @@ app
 	.handler((ctx) => ctx.res.text("ok", ctx.meta.worker))
 ```
 
+## A hook's `ctx.path` is the document's path template
+
+An `onRequest` or `onResponse` hook used to be handed honey's own route spelling, with a colon before each
+parameter. It is handed the operation's path template now, as the document writes it, and `onLog`'s
+`operation` is `METHOD` plus that same path. The URL the call actually sent is `ctx.url`, with the
+parameters filled in, and `ctx.request` on the way back.
+
+A 1.0 client is generated from a document, and a document has no colon form — a third party's least of all —
+so the template is the only spelling every client can agree on. Anything that keys a table by route changes
+with it, and nothing warns you: a lookup simply misses.
+
+```ts v0
+/* a hook keyed its table on the colon form */
+const fresh: Record<string, string> = { "GET /items/:id": "x-fresh" }
+onRequest: [(ctx) => void ctx.headers.set(fresh[`${ctx.method} ${ctx.path}`] ?? "x-none", "1")]
+```
+
+```ts
+import { honey } from "@lovrozagar/honey"
+
+/* the template, which is what the document says and what onLog reports */
+const fresh: Record<string, string> = { "GET /items/{id}": "x-fresh" }
+const header = (method: string, path: string) => fresh[`${method} ${path}`]
+```
+
+A route's own `meta.invalidate` is still written by hand, so it may name its targets either way; normalize
+both to the template before you look one up.
+
 ## The generated `RouteCtx` is the route's ctx; its meta is what the app declares
 
 `types.gen.d.ts` types each route's ctx, and a service outside the app module takes it:

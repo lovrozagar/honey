@@ -805,8 +805,13 @@ describe("the C# runtime within its byte budget (bit 15, G14)", () => {
  * sse.ts +43 (parseSSEStream's caps, split over lines at the line cap), response.ts +39 (Reading's three),
  * realtime-transports.ts +18 and sdk.ts +3 (bracket access on an index signature), stale.ts +12 (StaleEntry.refreshed),
  * ws.ts +12 (WSOptions.protocols), redirects.ts -5 (a 303 deletes the body instead of voiding it).
+ * Bit 22 d, +315 B to 123,555: `ctx.path` is the operation's path template, not the filled-in URL, said on the
+ * types that declare it. No code: documentation of a contract 1.0 already has, written down because Anyrow's
+ * read-your-writes map keyed on 0.7.3's colon form and every lookup silently missed. config.ts alone, +315 over
+ * bit 22 b's own +48 there: the one-line note on OnRequestContext.path and OnResponseContext.path, and LogEntry's
+ * comment rewritten to say `operation` carries that same spelling.
  */
-const TS_RUNTIME_BYTES = 123_240
+const TS_RUNTIME_BYTES = 123_555
 
 describe("the TS runtime within its byte budget (bit 11, G14)", () => {
 	it(

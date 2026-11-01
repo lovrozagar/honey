@@ -850,6 +850,7 @@ export type OnRequestContext = {
 	invalidatedBy?: string[] | undefined
 	isStale?: boolean | undefined
 	method: string
+	/** the operation's path template, as the document spells it (`/items/{id}`), never the filled-in URL */
 	path: string
 	selector?: string | undefined
 	state: Record<string, unknown>
@@ -861,6 +862,7 @@ export type OnResponseContext = {
 	isRetry: boolean
 	isStale?: boolean
 	method: string
+	/** the operation's path template, as the document spells it (`/items/{id}`), never the filled-in URL */
 	path: string
 	readonly request: Request
 	response: Response
@@ -885,7 +887,10 @@ export type OnResponseContext = {
  */
 export type RedirectPolicy = "error" | "follow" | "manual" | "same-origin"
 
-/** One `onLog` entry: what happened to which operation (`METHOD /path`), and how long it took. */
+/**
+ * One `onLog` entry: what happened to which operation and how long it took. `operation` is `METHOD` and the
+ * path template, the same spelling a hook's `ctx.path` carries (`GET /items/{id}`).
+ */
 export type LogEntry = {
 	duration_ms: number
 	error?: unknown
