@@ -69,6 +69,7 @@
 				"integration.test.ts > SSE > GET /api/events → event stream",
 				"integration.test.ts > SSE > GET /api/events-live with Last-Event-ID → resumes",
 				"integration.test.ts > SSE > GET /api/events-live → retry directive + keepalive heartbeats",
+				"integration.test.ts > a document served from an asset binding > off Workers nothing is bound, so the route answers this app's own 500 envelope",
 				"integration.test.ts > auth > request without auth → 401",
 				"integration.test.ts > basePath boundary > GET /api-docs → 404 (not matched by basePath /api)",
 				"integration.test.ts > basePath boundary > GET /apiary → 404",
@@ -100,7 +101,9 @@
 				"websocket.test.ts > WebSocket > reconnection: onReconnect called when reconnect_token present",
 				"websocket.test.ts > WebSocket > unauthenticated WS /api/v1/socket gets rejected by middleware"
 			],
-			"skipped": []
+			"skipped": [
+				"integration.test.ts > a document served from an asset binding > on Workers, GET /api/static-openapi.json is the committed asset, with its ETag and a 304"
+			]
 		},
 		"bun/dev/mcp": {
 			"failed": [],
@@ -214,6 +217,7 @@
 				"integration.test.ts > SSE > GET /api/events → event stream",
 				"integration.test.ts > SSE > GET /api/events-live with Last-Event-ID → resumes",
 				"integration.test.ts > SSE > GET /api/events-live → retry directive + keepalive heartbeats",
+				"integration.test.ts > a document served from an asset binding > off Workers nothing is bound, so the route answers this app's own 500 envelope",
 				"integration.test.ts > auth > request without auth → 401",
 				"integration.test.ts > basePath boundary > GET /api-docs → 404 (not matched by basePath /api)",
 				"integration.test.ts > basePath boundary > GET /apiary → 404",
@@ -246,7 +250,9 @@
 				"websocket.test.ts > WebSocket > reconnection: onReconnect called when reconnect_token present",
 				"websocket.test.ts > WebSocket > unauthenticated WS /api/v1/socket gets rejected by middleware"
 			],
-			"skipped": []
+			"skipped": [
+				"integration.test.ts > a document served from an asset binding > on Workers, GET /api/static-openapi.json is the committed asset, with its ETag and a 304"
+			]
 		},
 		"bun/prod/mcp": {
 			"failed": [],
@@ -360,6 +366,7 @@
 				"integration.test.ts > SSE > GET /api/events → event stream",
 				"integration.test.ts > SSE > GET /api/events-live with Last-Event-ID → resumes",
 				"integration.test.ts > SSE > GET /api/events-live → retry directive + keepalive heartbeats",
+				"integration.test.ts > a document served from an asset binding > on Workers, GET /api/static-openapi.json is the committed asset, with its ETag and a 304",
 				"integration.test.ts > auth > request without auth → 401",
 				"integration.test.ts > basePath boundary > GET /api-docs → 404 (not matched by basePath /api)",
 				"integration.test.ts > basePath boundary > GET /apiary → 404",
@@ -391,6 +398,7 @@
 				"websocket.test.ts > WebSocket > unauthenticated WS /api/v1/socket gets rejected by middleware"
 			],
 			"skipped": [
+				"integration.test.ts > a document served from an asset binding > off Workers nothing is bound, so the route answers this app's own 500 envelope",
 				"realtime.test.ts > Realtime > REST publish reaches a subscribed chat connection"
 			]
 		},
@@ -506,6 +514,7 @@
 				"integration.test.ts > SSE > GET /api/events → event stream",
 				"integration.test.ts > SSE > GET /api/events-live with Last-Event-ID → resumes",
 				"integration.test.ts > SSE > GET /api/events-live → retry directive + keepalive heartbeats",
+				"integration.test.ts > a document served from an asset binding > on Workers, GET /api/static-openapi.json is the committed asset, with its ETag and a 304",
 				"integration.test.ts > auth > request without auth → 401",
 				"integration.test.ts > basePath boundary > GET /api-docs → 404 (not matched by basePath /api)",
 				"integration.test.ts > basePath boundary > GET /apiary → 404",
@@ -538,6 +547,7 @@
 				"websocket.test.ts > WebSocket > unauthenticated WS /api/v1/socket gets rejected by middleware"
 			],
 			"skipped": [
+				"integration.test.ts > a document served from an asset binding > off Workers nothing is bound, so the route answers this app's own 500 envelope",
 				"realtime.test.ts > Realtime > REST publish reaches a subscribed chat connection"
 			]
 		},
@@ -653,6 +663,7 @@
 				"integration.test.ts > SSE > GET /api/events → event stream",
 				"integration.test.ts > SSE > GET /api/events-live with Last-Event-ID → resumes",
 				"integration.test.ts > SSE > GET /api/events-live → retry directive + keepalive heartbeats",
+				"integration.test.ts > a document served from an asset binding > off Workers nothing is bound, so the route answers this app's own 500 envelope",
 				"integration.test.ts > auth > request without auth → 401",
 				"integration.test.ts > basePath boundary > GET /api-docs → 404 (not matched by basePath /api)",
 				"integration.test.ts > basePath boundary > GET /apiary → 404",
@@ -684,7 +695,9 @@
 				"websocket.test.ts > WebSocket > reconnection: onReconnect called when reconnect_token present",
 				"websocket.test.ts > WebSocket > unauthenticated WS /api/v1/socket gets rejected by middleware"
 			],
-			"skipped": []
+			"skipped": [
+				"integration.test.ts > a document served from an asset binding > on Workers, GET /api/static-openapi.json is the committed asset, with its ETag and a 304"
+			]
 		},
 		"node/dev/mcp": {
 			"failed": [],
@@ -798,6 +811,7 @@
 				"integration.test.ts > SSE > GET /api/events → event stream",
 				"integration.test.ts > SSE > GET /api/events-live with Last-Event-ID → resumes",
 				"integration.test.ts > SSE > GET /api/events-live → retry directive + keepalive heartbeats",
+				"integration.test.ts > a document served from an asset binding > off Workers nothing is bound, so the route answers this app's own 500 envelope",
 				"integration.test.ts > auth > request without auth → 401",
 				"integration.test.ts > basePath boundary > GET /api-docs → 404 (not matched by basePath /api)",
 				"integration.test.ts > basePath boundary > GET /apiary → 404",
@@ -830,7 +844,9 @@
 				"websocket.test.ts > WebSocket > reconnection: onReconnect called when reconnect_token present",
 				"websocket.test.ts > WebSocket > unauthenticated WS /api/v1/socket gets rejected by middleware"
 			],
-			"skipped": []
+			"skipped": [
+				"integration.test.ts > a document served from an asset binding > on Workers, GET /api/static-openapi.json is the committed asset, with its ETag and a 304"
+			]
 		},
 		"node/prod/mcp": {
 			"failed": [],

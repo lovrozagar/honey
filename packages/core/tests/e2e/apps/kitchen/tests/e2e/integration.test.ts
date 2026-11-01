@@ -380,10 +380,11 @@ test.describe("a document served from an asset binding", () => {
 		expect(await again.text()).toBe("")
 	})
 
-	test("off Workers nothing is bound, so the route answers the standard 500 envelope", async ({ request }) => {
+	test("off Workers nothing is bound, so the route answers this app's own 500 envelope", async ({ request }) => {
 		test.skip(process.env.HONEY_E2E_ENV === "cf", "on Workers the binding is there")
 		const res = await request.get("/api/static-openapi.json")
 		expect(res.status()).toBe(500)
-		expect(((await res.json()) as { error_key: string }).error_key).toBe("internal_server_error")
+		/* the failure goes through this app's error boundary, so its own key for a 500 is what a client reads */
+		expect(((await res.json()) as { error_key: string }).error_key).toBe("api_error")
 	})
 })
