@@ -2,6 +2,7 @@ import type { WSAdapter } from "@lovrozagar/honey"
 import type { RouteTree } from "@lovrozagar/honey/tree"
 import { createMiddleware, defineErrors, honey } from "@lovrozagar/honey"
 import { serveManifest, serveOpenApi } from "@lovrozagar/honey/openapi"
+import { scalar } from "@lovrozagar/honey/openapi/scalar"
 import * as z from "zod"
 
 type Env = { JWT_SECRET: string; REDIS_URL: string }
@@ -75,6 +76,6 @@ export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
 
 	const app = publicRoutes.route(accountRoutes).route(resourceRoutes)
 	return serveManifest(
-		serveOpenApi(app, { docs: "scalar", docsPath: "/reference", title: "Honey Compose", version: "0.0.1" }),
+		serveOpenApi(app, { docs: scalar, docsPath: "/reference", title: "Honey Compose", version: "0.0.1" }),
 	)
 }

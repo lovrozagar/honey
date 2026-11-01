@@ -12,6 +12,7 @@ your own route metadata to operation fields.
 ```ts
 import { honey } from "@lovrozagar/honey"
 import { serveOpenApi } from "@lovrozagar/honey/openapi"
+import { scalar } from "@lovrozagar/honey/openapi/scalar"
 
 const app = honey()
 
@@ -25,7 +26,7 @@ serveOpenApi(app, {
 	version: "1.2.0",
 	servers: [{ url: "https://{region}.api.example.com", variables: { region: { default: "eu" } } }],
 	tags: [{ name: "orders", description: "Placing and tracking orders" }],
-	docs: "scalar",
+	docs: scalar,
 })
 ```
 

@@ -89,12 +89,13 @@ Serving is the same for any app, and the reference UI comes from the document th
 ```ts
 import { honey } from "@lovrozagar/honey"
 import { serveOpenApi } from "@lovrozagar/honey/openapi"
+import { scalar } from "@lovrozagar/honey/openapi/scalar"
 import { serve } from "@lovrozagar/honey/serve"
 
 const app = honey()
 app.get("/health").handler((ctx) => ctx.res.text("ok", "ok"))
 
-await serve(serveOpenApi(app, { docs: "scalar", title: "Books", version: "1.0.0" }), { port: 3000 })
+await serve(serveOpenApi(app, { docs: scalar, title: "Books", version: "1.0.0" }), { port: 3000 })
 ```
 
 ```sh
@@ -177,6 +178,7 @@ set. Paths take `:params` and a trailing `*` wildcard; `meta()` carries what the
 ```ts
 import { honey } from "@lovrozagar/honey"
 import { serveOpenApi } from "@lovrozagar/honey/openapi"
+import { scalar } from "@lovrozagar/honey/openapi/scalar"
 
 const app = honey()
 
@@ -187,7 +189,7 @@ app
 
 app.delete("/users/:id").handler((ctx) => ctx.res.noContent())
 
-serveOpenApi(app, { title: "Users", version: "1.0.0", docs: "scalar" })
+serveOpenApi(app, { title: "Users", version: "1.0.0", docs: scalar })
 ```
 
 Sub-apps mount with `route()`, and `on()` registers one handler for several methods:
@@ -780,6 +782,7 @@ externalDocs and webhooks are all declared, never guessed.
 ```ts
 import { honey } from "@lovrozagar/honey"
 import { serveOpenApi } from "@lovrozagar/honey/openapi"
+import { scalar } from "@lovrozagar/honey/openapi/scalar"
 
 const app = honey()
 
@@ -793,7 +796,7 @@ serveOpenApi(app, {
 	version: "1.2.0",
 	servers: [{ url: "https://{region}.api.example.com", variables: { region: { default: "eu" } } }],
 	tags: [{ name: "orders", description: "Placing and tracking orders" }],
-	docs: "scalar",
+	docs: scalar,
 })
 ```
 

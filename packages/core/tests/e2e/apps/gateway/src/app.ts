@@ -2,6 +2,7 @@ import type { WSAdapter } from "@lovrozagar/honey"
 import type { RouteTree } from "@lovrozagar/honey/tree"
 import { createMiddleware, honey } from "@lovrozagar/honey"
 import { serveManifest, serveOpenApi } from "@lovrozagar/honey/openapi"
+import { swagger } from "@lovrozagar/honey/openapi/swagger"
 import { proxy } from "@lovrozagar/honey/proxy"
 import * as z from "zod"
 import { routeTree as generatedTree } from "./_gen/routes.gen.ts"
@@ -178,5 +179,5 @@ export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
 		}),
 	)
 
-	return serveManifest(serveOpenApi(app, { docs: "swagger", title: "Honey Gateway", version: "0.0.1" }))
+	return serveManifest(serveOpenApi(app, { docs: swagger, title: "Honey Gateway", version: "0.0.1" }))
 }

@@ -13,6 +13,7 @@ WebSocket routes take `ws(app, path)` from `@lovrozagar/honey/ws`, and `serveOpe
 ```ts
 import { honey } from "@lovrozagar/honey"
 import { serveOpenApi } from "@lovrozagar/honey/openapi"
+import { scalar } from "@lovrozagar/honey/openapi/scalar"
 
 const app = honey()
 
@@ -23,7 +24,7 @@ app
 
 app.delete("/users/:id").handler((ctx) => ctx.res.noContent())
 
-serveOpenApi(app, { title: "Users", version: "1.0.0", docs: "scalar" })
+serveOpenApi(app, { title: "Users", version: "1.0.0", docs: scalar })
 ```
 
 ## Reference

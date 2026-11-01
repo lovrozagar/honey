@@ -176,6 +176,8 @@ src/openapi/swagger.ts	core	src	10	Swagger docs page	openapi/swagger.ts
 src/openapi/docs-page.ts	core	src	10	docs page shell	openapi/docs-page.ts
 src/openapi/serve.ts	core	src	10	serve the document/docs	openapi/serve.ts
 src/openapi/serve-mount.test.ts	core	test	10	serving, mounting (second co-located test for serve.ts, split at the 500-line cap): all-or-nothing refusals (a path a route owns in either order, a second call's taken stem or docs path, two paths of one call, a non-fixed path), enabled:false, static precedence over a root /:slug or /*rest, one document per call (profiles, own docs page), CORS preflight through the handle's middleware	serve-endpoints*
+src/openapi/served.ts	core	src	22	the serving helpers serveOpenApi and serveStaticOpenApi both mount through (bit 22 b): the strong-ETag artifact, the cache-control answer with its 304, all-or-none mounting under the handle's basePath as internal+SERVED with a caller's extra meta, and the docs-page route at the JSON URL the browser sees	—
+src/openapi/static.ts	core	src	22	serveStaticOpenApi (bit 22 b): a document built ahead of time or living elsewhere served as JSON and YAML from a Workers ASSETS binding, a URL, an inline value or a loader; loaded once per isolate (concurrent first requests share one load, a failed one is retried), honey's own content-type, a configurable cache-control, failures as internal_server_error/bad_gateway	openapi/static.ts
 src/openapi/register.ts	core	index	10	./openapi export	openapi/register.ts
 src/meta/meta-spec.ts	core	src	09	meta-spec core	meta-spec.ts
 src/meta/meta-spec-merge.ts	core	src	09	meta merge + conflict	meta-spec-merge.ts

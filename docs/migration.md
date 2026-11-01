@@ -834,9 +834,10 @@ app.get("/openapi.json").handler(spec(app))
 ```ts
 import { honey } from "@lovrozagar/honey"
 import { serveOpenApi } from "@lovrozagar/honey/openapi"
+import { scalar } from "@lovrozagar/honey/openapi/scalar"
 
 const app = honey()
-serveOpenApi(app, { title: "Shop", version: "1.0.0", docs: "scalar" })
+serveOpenApi(app, { title: "Shop", version: "1.0.0", docs: scalar })
 ```
 
 ## `app.ws(path)` becomes `ws(app, path)`

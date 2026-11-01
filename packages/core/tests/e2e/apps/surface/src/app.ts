@@ -3,6 +3,7 @@ import type { RouteTree } from "@lovrozagar/honey/tree"
 import { createMiddleware, defineErrors, honey } from "@lovrozagar/honey"
 import { readableStream } from "@lovrozagar/honey/input"
 import { serveManifest, serveOpenApi } from "@lovrozagar/honey/openapi"
+import { scalar } from "@lovrozagar/honey/openapi/scalar"
 import { ws } from "@lovrozagar/honey/ws"
 import { SearchService } from "./service.ts"
 import * as z from "zod"
@@ -257,5 +258,5 @@ export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
 			},
 		})
 
-	return serveManifest(serveOpenApi(routed, { docs: "scalar", title: "Honey Surface", version: "1.0.0" }))
+	return serveManifest(serveOpenApi(routed, { docs: scalar, title: "Honey Surface", version: "1.0.0" }))
 }

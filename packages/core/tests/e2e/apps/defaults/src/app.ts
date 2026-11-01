@@ -2,6 +2,7 @@ import type { WSAdapter } from "@lovrozagar/honey"
 import type { RouteTree } from "@lovrozagar/honey/tree"
 import { honey } from "@lovrozagar/honey"
 import { serveManifest, serveOpenApi } from "@lovrozagar/honey/openapi"
+import { scalar } from "@lovrozagar/honey/openapi/scalar"
 import * as z from "zod"
 
 /** `routeTree`: boot from a generated route tree (`src/_gen/routes.gen.ts`) instead of building the trie. */
@@ -24,5 +25,5 @@ export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
 			const body = await ctx.req.text()
 			return ctx.res.json("created", body)
 		})
-	return serveManifest(serveOpenApi(routed, { docs: "scalar", title: "Honey Defaults", version: "0.0.1" }))
+	return serveManifest(serveOpenApi(routed, { docs: scalar, title: "Honey Defaults", version: "0.0.1" }))
 }

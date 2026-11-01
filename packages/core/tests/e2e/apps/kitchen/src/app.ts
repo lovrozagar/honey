@@ -5,6 +5,7 @@ import { cors } from "@lovrozagar/honey/cors"
 import { errorI18n } from "@lovrozagar/honey/i18n"
 import { createLogger } from "@lovrozagar/honey/logger"
 import { serveManifest, serveOpenApi } from "@lovrozagar/honey/openapi"
+import { scalar } from "@lovrozagar/honey/openapi/scalar"
 import { realtime } from "@lovrozagar/honey/realtime"
 import { ws } from "@lovrozagar/honey/ws"
 import { requestId } from "@lovrozagar/honey/request-id"
@@ -294,7 +295,7 @@ export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
 	serveManifest(
 		serveOpenApi(corsed, {
 			description: "Honey E2E Test API",
-			docs: "scalar",
+			docs: scalar,
 			title: "Honey E2E",
 			version: "1.0.0",
 		}),

@@ -29,7 +29,7 @@ function init(argv: string[] = []): string[] {
  */
 const served = (app: string) => `
 const { createJiti } = await import("jiti")
-const alias = { "@lovrozagar/honey/openapi": ${JSON.stringify(join(SRC, "openapi/register.ts"))}, "@lovrozagar/honey": ${JSON.stringify(join(SRC, "routing/app.ts"))} }
+const alias = { "@lovrozagar/honey/openapi/scalar": ${JSON.stringify(join(SRC, "openapi/scalar.ts"))}, "@lovrozagar/honey/openapi": ${JSON.stringify(join(SRC, "openapi/register.ts"))}, "@lovrozagar/honey": ${JSON.stringify(join(SRC, "routing/app.ts"))} }
 const { app } = await createJiti(${JSON.stringify(import.meta.url)}, { alias, moduleCache: false }).import(${JSON.stringify(app)})
 const get = (path) => app.fetch(new Request("http://x" + path), {})
 const [health, spec, docs] = await Promise.all([get("/health"), get("/openapi.json"), get("/docs")])

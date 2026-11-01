@@ -17,12 +17,13 @@ type PackageJson = {
 
 const APP_TS = `import { honey } from "@lovrozagar/honey"
 import { serveOpenApi } from "@lovrozagar/honey/openapi"
+import { scalar } from "@lovrozagar/honey/openapi/scalar"
 
 export const app = serveOpenApi(
 	honey()
 		.get("/health")
 		.handler((ctx) => ctx.res.text("ok", "ok")),
-	{ docs: "scalar", title: "Honey", version: "0.0.1" },
+	{ docs: scalar, title: "Honey", version: "0.0.1" },
 )
 `
 
