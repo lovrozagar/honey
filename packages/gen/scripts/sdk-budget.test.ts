@@ -794,8 +794,19 @@ describe("the C# runtime within its byte budget (bit 15, G14)", () => {
  * ClientError at every undeclared error status: Upto, 0 to N-1 as literals, with its comment (+150); the base member,
  * its status 300 to 599 less the declared ones, so a declared status still narrows its body (+117, the comment
  * rewritten included). response.ts alone.
+ * Bit 22 b, +967 B to 123,240: the runtime a consumer compiles is clean under the flags test:packaging's generated-
+ * client leg uses, which is every strictness flag we could plausibly meet. No feature: these are the bytes of saying
+ * what the code already does. Nothing to cut first, and nothing left dead. Named: request.ts +279 (every optional of
+ * RequestOptions declared `| undefined`, which is what the SDK really passes, and requestInit building its init
+ * key by key so a RequestInit never carries an undefined body or signal), hooks.ts +260 (replayable, with its doc: a
+ * body that cannot be sent twice is left out of the replay rather than set undefined, which RequestInit does not
+ * declare), realtime.ts +196 (TransportOpts, ResumableConnectionOpts and the msg frame's id and reconnectToken),
+ * http.ts +62 (Call.refreshes, Operation and StreamCall), config.ts +48 (OnRequestContext's five),
+ * sse.ts +43 (parseSSEStream's caps, split over lines at the line cap), response.ts +39 (Reading's three),
+ * realtime-transports.ts +18 and sdk.ts +3 (bracket access on an index signature), stale.ts +12 (StaleEntry.refreshed),
+ * ws.ts +12 (WSOptions.protocols), redirects.ts -5 (a 303 deletes the body instead of voiding it).
  */
-const TS_RUNTIME_BYTES = 122_273
+const TS_RUNTIME_BYTES = 123_240
 
 describe("the TS runtime within its byte budget (bit 11, G14)", () => {
 	it(
