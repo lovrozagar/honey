@@ -131,9 +131,31 @@ describe("a formatter that is not there", () => {
 		])
 	})
 
-	it("is fatal where the toolchains are required, which is CI", () => {
-		expect(() => missingFormatter("python", pass, { HONEY_REQUIRE_TOOLCHAINS: "1" }, () => undefined)).toThrow(
+	it("is fatal only where a pipeline asks for that, by its own variable", () => {
+		expect(() => missingFormatter("python", pass, { HONEY_REQUIRE_FORMATTERS: "1" }, () => undefined)).toThrow(
 			"ruff was not found",
+		)
+	})
+
+	it("is not fatal under HONEY_REQUIRE_TOOLCHAINS, which is the test harness's switch", () => {
+		/* CI sets that on six jobs to keep toolchain tests from skipping; reading it here turned every
+		   incidental generation without oxfmt into a hard failure and killed rc.10's release run */
+		const said: string[] = []
+		missingFormatter("python", pass, { HONEY_REQUIRE_TOOLCHAINS: "1" }, (line) => said.push(line))
+		expect(said.length).toBe(1)
+	})
+
+	const ts = FORMATTERS.ts as NonNullable<typeof FORMATTERS.ts>
+
+	it("says nothing for oxfmt, whose absence is the documented normal for an optional peer", () => {
+		const said: string[] = []
+		missingFormatter("ts", ts, {}, (line) => said.push(line))
+		expect(said).toEqual([])
+	})
+
+	it("still stops for oxfmt when a pipeline demands formatters, quiet or not", () => {
+		expect(() => missingFormatter("ts", ts, { HONEY_REQUIRE_FORMATTERS: "1" }, () => undefined)).toThrow(
+			"oxfmt was not found",
 		)
 	})
 })

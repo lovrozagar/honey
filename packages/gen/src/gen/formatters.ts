@@ -83,6 +83,14 @@ export async function loadOxfmt(specifier = "oxfmt"): Promise<Formatter | undefi
 export type FormatPass = {
 	readonly extension: string
 	readonly install: string
+	/**
+	 * Say nothing when this one is absent. Only `ts`: oxfmt is honey's own choice of TS formatter and a
+	 * declared optional peer, so a consumer is not expected to have it and "TS goes out as emitted" is the
+	 * documented rule (Q12, `blueprint/00-rules.md`). ruff, rustfmt and gofmt are the language's own standard
+	 * tools, which a developer of that language has — honey simply never called them, and silence there is
+	 * what let unformatted Python ship.
+	 */
+	readonly quiet?: true
 	readonly tool: string
 }
 
@@ -99,7 +107,7 @@ export const FORMATTERS: Partial<Record<Target, FormatPass>> = {
 	go: GO_PASS,
 	python: { extension: "py", install: "install ruff, or set RUFF", tool: "ruff" },
 	rust: { extension: "rs", install: "install rustfmt, or set RUSTFMT", tool: "rustfmt" },
-	ts: { extension: "ts", install: "install oxfmt", tool: "oxfmt" },
+	ts: { extension: "ts", install: "install oxfmt", quiet: true, tool: "oxfmt" },
 }
 
 /**
@@ -136,8 +144,12 @@ export async function formatterFor(
 
 /**
  * A formatter that is not there: the files go out as emitted and the skip is named, so unformatted output is
- * never silent. `HONEY_REQUIRE_TOOLCHAINS=1` — CI's test and harness jobs — makes it fail instead, which is
- * where strictness belongs: a consumer generating a Python SDK should not need ruff to get valid Python.
+ * never silent. A consumer generating a Python SDK should not need ruff to get valid Python.
+ *
+ * `HONEY_REQUIRE_FORMATTERS=1` makes it fail instead, for a pipeline that would rather stop than ship
+ * unformatted code. Deliberately NOT `HONEY_REQUIRE_TOOLCHAINS`, which this repository's CI sets on six jobs
+ * to mean "these TESTS need their toolchain, do not skip" — reading it here turned every incidental
+ * generation in CI without oxfmt into a hard failure, which is how rc.10's release run died.
  */
 export function missingFormatter(
 	target: Target,
@@ -146,6 +158,7 @@ export function missingFormatter(
 	report: (line: string) => void,
 ): void {
 	const said = `${pass.tool} was not found, so the ${target} output is not formatted (${pass.install})`
-	if (env.HONEY_REQUIRE_TOOLCHAINS === "1") throw new Error(said)
-	report(`honey-clients: ${said}\n`)
+	/* an explicit demand is honoured for every target, quiet or not: the caller asked to be stopped */
+	if (env.HONEY_REQUIRE_FORMATTERS === "1") throw new Error(said)
+	if (pass.quiet !== true) report(`honey-clients: ${said}\n`)
 }

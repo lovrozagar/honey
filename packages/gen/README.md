@@ -51,8 +51,12 @@ Each target formats what it writes with that language's own formatter, when it c
 
 A formatter it cannot find is named on standard error and skipped: the files go out as the emitter wrote them,
 which is valid source either way, so generating a Python SDK never requires you to install ruff. Set
-`HONEY_REQUIRE_TOOLCHAINS=1` to make a missing formatter fail instead, which is what honey's own CI does. An
-override that points at nothing counts as not found.
+`HONEY_REQUIRE_FORMATTERS=1` to make a missing formatter fail the run instead, for a pipeline that would
+rather stop than ship unformatted code. An override that points at nothing is refused by name.
+
+oxfmt is the exception and says nothing when absent: it is honey's own choice of TypeScript formatter and a
+declared optional peer, so not having it is the documented normal rather than news. `HONEY_REQUIRE_FORMATTERS`
+still stops for it.
 
 The `csharp` and `java` targets are not formatted today: `dotnet format` and google-java-format work over a
 project rather than a stream, which honey's post-pass does not yet do.

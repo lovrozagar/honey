@@ -5,8 +5,9 @@
  * proves ruff's output is ruff-clean and says nothing about whether honey ever calls ruff. That gap shipped
  * `--target python` output with a 623-character import line through rc.9.
  *
- * Runs where the toolchains are; `HONEY_REQUIRE_TOOLCHAINS=1` (CI's test and harness jobs) makes a missing one
- * fail rather than skip.
+ * Runs where the toolchains are; `HONEY_REQUIRE_TOOLCHAINS=1` (CI's test and harness jobs) makes a missing
+ * toolchain fail this leg rather than skip it. The product's own strictness is a different variable,
+ * `HONEY_REQUIRE_FORMATTERS`, so CI setting the first one never turns an incidental generation fatal.
  */
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
@@ -110,10 +111,10 @@ describe("a formatter that is not there", () => {
 		).rejects.toThrow(`RUFF=${missing} is not there`)
 	})
 
-	it("fails instead under HONEY_REQUIRE_TOOLCHAINS", { timeout: SPAWN_TIMEOUT }, async () => {
+	it("fails instead under HONEY_REQUIRE_FORMATTERS", { timeout: SPAWN_TIMEOUT }, async () => {
 		await expect(
 			generated({ targets: ["python"] }, document, {
-				env: { HONEY_REQUIRE_TOOLCHAINS: "1", PATH: "" },
+				env: { HONEY_REQUIRE_FORMATTERS: "1", PATH: "" },
 				report: () => undefined,
 			}),
 		).rejects.toThrow("ruff was not found")
