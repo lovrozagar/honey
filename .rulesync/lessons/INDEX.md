@@ -5,3 +5,4 @@
 | lesson | paths | hits | last-hit | summary |
 | --- | --- | --- | --- | --- |
 | .rulesync/lessons/consumer-e2e-test-costs.md | blueprint/baselines/e2e-expected.json, packages/core/tests/e2e/run.ts, packages/core/tests/e2e/apps/*/tests/e2e/*.test.ts | 1 | 2026-11-01 | A Playwright test added to a `tests/e2e/apps/*` app failed verify for two reasons at once, neither of |
+| .rulesync/lessons/slow-leg-default-timeout.md | packages/gen/src/**/*.test.ts, packages/gen/scripts/*.test.ts, packages/core/tests/**/*.test.ts | 1 | 2026-11-01 | `packages/gen/src/emit/mcp/server.test.ts`'s compiled-twin leg passed on its own and timed out at |

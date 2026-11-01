@@ -40,10 +40,22 @@ npm install --save-dev @lovrozagar/honey-clients@next
 
 Node 22.12 or later, or Bun 1.3 or later.
 
-The `go` and `cli` targets format every Go file they write with gofmt, so they need Go installed. gofmt is found by
-`$GOFMT`, then `$GOROOT/bin/gofmt`, then `gofmt` on `PATH`, then beside the `go` on `PATH`. Without one they refuse,
-rather than writing unformatted Go. The `ts` target formats with oxfmt, an optional peer: install `oxfmt` beside
-honey-clients. Without it the files go out as emitted, valid TypeScript that is not formatted.
+Each target formats what it writes with that language's own formatter, when it can find it:
+
+| target      | formatter | found by                                                                    |
+| ----------- | --------- | --------------------------------------------------------------------------- |
+| `go`, `cli` | gofmt     | `$GOFMT`, `$GOROOT/bin/gofmt`, `gofmt` on `PATH`, beside the `go` on `PATH` |
+| `python`    | ruff      | `$RUFF`, then `ruff` on `PATH`                                              |
+| `rust`      | rustfmt   | `$RUSTFMT`, the active toolchain's own binary beside `rustc`, `PATH`        |
+| `ts`        | oxfmt     | the `oxfmt` optional peer, installed beside honey-clients                   |
+
+A formatter it cannot find is named on standard error and skipped: the files go out as the emitter wrote them,
+which is valid source either way, so generating a Python SDK never requires you to install ruff. Set
+`HONEY_REQUIRE_TOOLCHAINS=1` to make a missing formatter fail instead, which is what honey's own CI does. An
+override that points at nothing counts as not found.
+
+The `csharp` and `java` targets are not formatted today: `dotnet format` and google-java-format work over a
+project rather than a stream, which honey's post-pass does not yet do.
 
 ## Start
 

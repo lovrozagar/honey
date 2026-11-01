@@ -28,6 +28,7 @@ export const SPAWNING_HELPERS = new Map([
 	["packages/gen/scripts/sdk-budget.ts", ["listedEntries", "runtimeBytes"]],
 	["packages/gen/src/cli.ts", ["generated", "main"]],
 	["packages/gen/src/emit/cli/__fixtures__/built.ts", ["builtCli"]],
+	["packages/gen/src/gen/formatters.ts", ["formatterFor"]],
 	[
 		"packages/gen/src/emit/cli/__fixtures__/install.ts",
 		["pathWith", "runPs1", "runSh", "tarGz", "which", "withCosign", "zipOf"],

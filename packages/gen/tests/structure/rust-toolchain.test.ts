@@ -68,11 +68,11 @@ describe("Rust runs through rust-env.ts only", () => {
 		).toEqual([true, true, true, false, false])
 	})
 
-	it("hands out one binary path, rustfmt's, and only to the formatter adapter", () => {
+	it("hands out one binary path, rustfmt's, and only to the formatter adapter or honey's own override", () => {
 		expect(Object.keys(env).filter((name) => /path/i.test(name))).toEqual(["rustfmtPath"])
-		const loose = others().filter(
-			({ text }) => count(text, "rustfmtPath(") !== count(text, "rustfmtFormatter(rustfmtPath("),
-		)
+		/* as python-toolchain.test.ts: the adapter, or the `RUSTFMT` override a generation reads. Nothing else. */
+		const sunk = (text: string) => count(text, "rustfmtFormatter(rustfmtPath(") + count(text, "RUSTFMT: rustfmtPath(")
+		const loose = others().filter(({ text }) => count(text, "rustfmtPath(") !== sunk(text))
 		expect(loose.map(({ path }) => path)).toEqual([])
 	})
 })

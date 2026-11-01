@@ -68,9 +68,16 @@ describe("Python runs through python-env.ts only", () => {
 		).toEqual([true, true, true, false, false])
 	})
 
-	it("hands out one binary path, ruff's, and only to the formatter adapter", () => {
+	it("hands out one binary path, ruff's, and only to the formatter adapter or honey's own override", () => {
 		expect(Object.keys(env).filter((name) => /path/i.test(name))).toEqual(["ruffPath"])
-		const loose = others().filter(({ text }) => count(text, "ruffPath(") !== count(text, "ruffFormatter(ruffPath("))
+		/*
+		 * Two sinks, one invariant: the caller names the binary, so the format is the same wherever it runs.
+		 * `ruffFormatter(ruffPath())` builds the adapter, and `RUFF: ruffPath()` hands the same path to a
+		 * generation through the override `findRuff` reads — which is how a leg drives the shipped pipeline
+		 * rather than a formatter of its own. Anything else, PATH included, still reds.
+		 */
+		const sunk = (text: string) => count(text, "ruffFormatter(ruffPath(") + count(text, "RUFF: ruffPath(")
+		const loose = others().filter(({ text }) => count(text, "ruffPath(") !== sunk(text))
 		expect(loose.map(({ path }) => path)).toEqual([])
 	})
 })

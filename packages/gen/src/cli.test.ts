@@ -3,8 +3,9 @@
  * a regeneration deletes); each target written under `<out>/<target>`, its options passed through untouched, so a
  * hostile one is refused by its own generator with that generator's message; a spec that is not JSON refused; the go
  * and cli targets' whole trees, internal/sdk included, through gofmt, found by GOFMT, GOROOT, PATH or beside the real
- * go, and a refusal when there is none; the ts target's files as oxfmt formats them, and as emitted with no error
- * when oxfmt does not resolve (bit 19 i, Q12); `--watch` regenerating in a fresh child on each change of the spec until
+ * go; the ts target's files as oxfmt formats them, and as emitted when oxfmt does not resolve (bit 19 i, Q12). Since
+ * bit 22 a formatter that is not there is named on stderr rather than passing silently, and fails only under
+ * HONEY_REQUIRE_TOOLCHAINS; `--watch` regenerating in a fresh child on each change of the spec until
  * stopped, no child left once it ends. Most legs run `main` in process; the bin legs prove the command a user runs,
  * under the Bun package.json pins (never PATH's newest).
  * Every child carries this file's mark, and the last leg fails on any that outlived its leg.
@@ -14,7 +15,8 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, symlinkS
 import { join, resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 import { format } from "oxfmt"
-import { findGofmt, generated, type GenerateContext, loadOxfmt, main } from "./cli.ts"
+import { generated, type GenerateContext, main } from "./cli.ts"
+import { findGofmt, loadOxfmt } from "./gen/formatters.ts"
 import { shop } from "./emit/cli/__fixtures__/shop.ts"
 import { EMIT_STYLE } from "./emit/shared/format.ts"
 import { generateSdk } from "./emit/ts/sdk.ts"
@@ -247,7 +249,7 @@ describe("the ts tree through oxfmt (bit 19 i, Q12)", () => {
 	})
 
 	it(
-		"writes them as emitted, with no error and nothing reported, when oxfmt does not resolve",
+		"writes them as emitted, and names the skip, when oxfmt does not resolve",
 		{ timeout: SPAWN_TIMEOUT },
 		async () => {
 			const reported: string[] = []
@@ -257,7 +259,10 @@ describe("the ts tree through oxfmt (bit 19 i, Q12)", () => {
 				(out) => out.ts,
 				(error: Error) => error.message,
 			)
-			expect({ files, reported }).toEqual({ files: emitted(), reported: [] })
+			expect({ files, reported }).toEqual({
+				files: emitted(),
+				reported: ["honey-clients: oxfmt was not found, so the ts output is not formatted (install oxfmt)\n"],
+			})
 		},
 	)
 
@@ -351,14 +356,22 @@ describe.skipIf(!GO)("the go and cli trees through gofmt (phase h)", SLOW, () =>
 		expect([ran.status, readFileSync(log, "utf8").split("\n").filter(Boolean).length]).toEqual([0, goFiles])
 	})
 
-	it("refuses the go and cli targets when no gofmt is found, nothing written", async () => {
+	it("writes the go target unformatted and names the skip when no gofmt is found", async () => {
 		const { out, spec } = specDir()
 		const ran = await run(["generate", "--spec", spec, "--target", "go", "--out", out], { PATH: "" })
-		expect([ran.status, ran.err, existsSync(out)]).toEqual([
-			1,
-			"honey-clients: gofmt is required for the go and cli targets (install Go, or set GOFMT)\n",
-			false,
+		/* valid Go either way, so a missing toolchain is a warning: a consumer never needs Go to get a Go SDK */
+		expect([ran.status, ran.err.split("\n")[0], existsSync(out)]).toEqual([
+			0,
+			"honey-clients: gofmt was not found, so the go output is not formatted (install Go, or set GOFMT)",
+			true,
 		])
+	})
+
+	it("fails instead, naming the tool, under HONEY_REQUIRE_TOOLCHAINS", async () => {
+		const { out, spec } = specDir()
+		const env = { HONEY_REQUIRE_TOOLCHAINS: "1", PATH: "" }
+		const ran = await run(["generate", "--spec", spec, "--target", "go", "--out", out], env)
+		expect([ran.status, ran.err.includes("gofmt was not found"), existsSync(out)]).toEqual([1, true, false])
 	})
 })
 
@@ -409,7 +422,7 @@ describe("finding gofmt (phase h)", () => {
 		const bare = scratch("bare")
 		writeFileSync(join(bare, "go"), "", { mode: 0o755 })
 		expect([
-			findGofmt({ GOFMT: "/x/gofmt", GOROOT: root, PATH: onPath }),
+			findGofmt({ GOFMT: join(root, "bin", "gofmt"), GOROOT: "/nonexistent", PATH: "" }),
 			findGofmt({ GOROOT: root, PATH: onPath }),
 			findGofmt({ GOROOT: "/nonexistent", PATH: onPath }),
 			findGofmt({ PATH: linked }),
@@ -417,7 +430,7 @@ describe("finding gofmt (phase h)", () => {
 			findGofmt({ PATH: "" }),
 			findGofmt({}),
 		]).toEqual([
-			"/x/gofmt",
+			join(root, "bin", "gofmt"),
 			join(root, "bin", "gofmt"),
 			join(onPath, "gofmt"),
 			join(root, "bin", "gofmt"),

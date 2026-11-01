@@ -9,8 +9,8 @@
  * write.ts: only changed files, a hashed manifest, a removed operation's unedited files deleted (bit 19 h1). `--app`
  * generates from a honey app module instead of a spec, its document made by the app's own core (ir/load.ts, bit 19 h2).
  */
-import { existsSync, readFileSync, realpathSync, statSync, watch } from "node:fs"
-import { basename, delimiter, dirname, join, resolve } from "node:path"
+import { readFileSync, watch } from "node:fs"
+import { basename, dirname, join, resolve } from "node:path"
 import { generateGoCli } from "./emit/cli/module.ts"
 import { generateCSharpSdk } from "./emit/csharp/sdk.ts"
 import { generateGoSdk } from "./emit/go/sdk.ts"
@@ -18,36 +18,13 @@ import { generateJavaSdk } from "./emit/java/sdk.ts"
 import { generateMcpServer } from "./emit/mcp/server.ts"
 import { generatePythonSdk } from "./emit/python/sdk.ts"
 import { generateRustSdk } from "./emit/rust/sdk.ts"
-import { formatFiles, type Formatter } from "./emit/shared/format.ts"
-import { gofmtFormatter } from "./emit/shared/gofmt.ts"
+import { formatFiles } from "./emit/shared/format.ts"
 import { generateSdk } from "./emit/ts/sdk.ts"
 import { type Generate, type Options, parseGenerate, type Target, usage, UsageError } from "./gen/args.ts"
+import { FORMATTERS, formatterFor, missingFormatter } from "./gen/formatters.ts"
 import { runCli } from "./gen/process.ts"
 import { appRef, loadAppDocument } from "./ir/load.ts"
 import { writeTarget } from "./gen/write.ts"
-
-/** An executable named `name` on PATH, or none. */
-function onPath(name: string, env: NodeJS.ProcessEnv): string | undefined {
-	return (env.PATH ?? "")
-		.split(delimiter)
-		.filter(Boolean)
-		.map((dir) => join(dir, name))
-		.find((path) => existsSync(path) && statSync(path).isFile())
-}
-
-/**
- * The gofmt the go and cli targets are formatted with: `$GOFMT`, else `$GOROOT/bin/gofmt`, else gofmt on PATH, else
- * the gofmt beside the real `go` on PATH (where every Go install keeps it); none when no Go is installed. Found by
- * looking, never by running Go.
- */
-export function findGofmt(env: NodeJS.ProcessEnv = process.env): string | undefined {
-	if (env.GOFMT) return env.GOFMT
-	const fromRoot = env.GOROOT ? join(env.GOROOT, "bin", "gofmt") : undefined
-	if (fromRoot !== undefined && existsSync(fromRoot)) return fromRoot
-	const go = onPath("go", env)
-	const beside = go === undefined ? undefined : join(dirname(realpathSync(go)), "gofmt")
-	return onPath("gofmt", env) ?? (beside !== undefined && existsSync(beside) ? beside : undefined)
-}
 
 /** One SDK target's generation: its files and what it reports (a name it renamed). */
 function sdkOf(target: Exclude<Target, "cli" | "mcp">, document: Record<string, unknown>, options: Options) {
@@ -91,16 +68,6 @@ function filesOf(
 	return sdk.files
 }
 
-/** oxfmt's `format`, the optional peer, when installed; else undefined (TS then goes out as emitted). */
-export async function loadOxfmt(specifier = "oxfmt"): Promise<Formatter | undefined> {
-	try {
-		return ((await import(specifier)) as { format: Formatter }).format
-	} catch (error) {
-		if ((error as { code?: string }).code === "ERR_MODULE_NOT_FOUND") return undefined
-		throw error
-	}
-}
-
 /** What a generation reads beside its run: the environment, where skips are reported, the oxfmt module to load. */
 /**
  * What one run generates: its targets, and each target's options by name (a target whose options are left out
@@ -127,15 +94,11 @@ export async function generated(
 	const out: Partial<Record<Target, Readonly<Record<string, string>>>> = {}
 	for (const target of run.targets) {
 		let files = filesOf(target, document, run.options?.[target] ?? {}, report)
-		if (target === "go" || target === "cli") {
-			const gofmt = findGofmt(env)
-			if (gofmt === undefined)
-				throw new Error("gofmt is required for the go and cli targets (install Go, or set GOFMT)")
-			files = await formatFiles(files, { go: gofmtFormatter(gofmt) })
-		}
-		if (target === "ts") {
-			const format = await loadOxfmt(oxfmt)
-			if (format !== undefined) files = await formatFiles(files, { ts: format })
+		const pass = FORMATTERS[target]
+		if (pass !== undefined) {
+			const formatter = await formatterFor(target, { env, oxfmt })
+			if (formatter === undefined) missingFormatter(target, pass, env, report)
+			else files = await formatFiles(files, { [pass.extension]: formatter })
 		}
 		out[target] = files
 	}

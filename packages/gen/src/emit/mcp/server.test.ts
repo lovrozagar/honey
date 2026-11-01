@@ -7,6 +7,7 @@
 import { join } from "node:path"
 import { createJiti } from "jiti"
 import { describe, expect, it } from "vitest"
+import { SPAWN_TIMEOUT } from "../../gen/__fixtures__/spawn-timeout.ts"
 import { clientCheck, withClients } from "./__fixtures__/clients.ts"
 import { exchange, initialize, request, typeErrors, written } from "./__fixtures__/written.ts"
 import { erased, generateMcpServer } from "./server.ts"
@@ -199,18 +200,23 @@ export const toolSpecs: readonly ToolSpec[] = [
 })
 
 describe("the compiled twin (phase a)", () => {
-	it("is each source file with its types erased by jiti, the entry a bin with its shebang, the same generated twice", () => {
-		const files = generateMcpServer(document()).files
-		const jiti = createJiti(import.meta.url, { fsCache: false, moduleCache: false })
-		const drift = Object.entries(files)
-			.filter(([path]) => path.startsWith("src/"))
-			.filter(([path, source]) => {
-				const code = jiti.transform({ filename: path, source, ts: true }).trimEnd()
-				const shebang = path === "src/server.ts" ? "#!/usr/bin/env node\n" : ""
-				return files[path.replace(/^src\//, "dist/").replace(/\.ts$/, ".js")] !== `${shebang}${code}\n`
-			})
-		expect([drift, generateMcpServer(document()).files]).toEqual([[], files])
-	})
+	/* jiti erases types over every source file, which runs past vitest's 5 s default on a loaded machine */
+	it(
+		"is each source file with its types erased by jiti, the entry a bin with its shebang, the same generated twice",
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			const files = generateMcpServer(document()).files
+			const jiti = createJiti(import.meta.url, { fsCache: false, moduleCache: false })
+			const drift = Object.entries(files)
+				.filter(([path]) => path.startsWith("src/"))
+				.filter(([path, source]) => {
+					const code = jiti.transform({ filename: path, source, ts: true }).trimEnd()
+					const shebang = path === "src/server.ts" ? "#!/usr/bin/env node\n" : ""
+					return files[path.replace(/^src\//, "dist/").replace(/\.ts$/, ".js")] !== `${shebang}${code}\n`
+				})
+			expect([drift, generateMcpServer(document()).files]).toEqual([[], files])
+		},
+	)
 })
 
 describe("what the generator refuses (phase b)", () => {
