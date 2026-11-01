@@ -1,0 +1,59 @@
+{
+	"openapi": "3.1.0",
+	"info": { "title": "Strict Realtime", "version": "1.0.0" },
+	"paths": {
+		"/events/stream": {
+			"get": {
+				"operationId": "events.stream",
+				"summary": "Stream events",
+				"parameters": [{ "in": "query", "name": "topic", "required": false, "schema": { "type": "string" } }],
+				"responses": {
+					"200": {
+						"description": "Event stream",
+						"content": { "text/event-stream": { "schema": { "type": "string" } } }
+					}
+				}
+			}
+		},
+		"/items": {
+			"get": {
+				"operationId": "item.list",
+				"responses": {
+					"200": {
+						"description": "ok",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": { "items": { "type": "array", "items": { "type": "string" } } },
+									"required": ["items"]
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"operationId": "item.create",
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": { "type": "object", "properties": { "name": { "type": "string" } }, "required": ["name"] }
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "created",
+						"content": {
+							"application/json": {
+								"schema": { "type": "object", "properties": { "id": { "type": "string" } }, "required": ["id"] }
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}

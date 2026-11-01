@@ -16,7 +16,7 @@
 import { mkdirSync, mkdtempSync, readdirSync, rmSync } from "node:fs"
 import { type AddressInfo, createServer } from "node:net"
 import { tmpdir } from "node:os"
-import { dirname, join, resolve } from "node:path"
+import { basename, dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -92,13 +92,50 @@ if (installed.code !== 0) {
 	process.exit(1)
 }
 
+/* 2b. a generated client is the consumer's own source, so it inherits the consumer's flags exactly as the
+   package does — and nothing else in the matrix compiles one: the generators' tests read the emitted text,
+   they never type-check it. Each document in the fixture becomes `src/<stem>/ts/`, which the tsconfig's
+   `src` glob already covers. The second document serves no realtime route: the runtime ships whole either
+   way, so only there does a type import the file never uses show up. */
+console.log("generating a client from each document …")
+for (const name of readdirSync(join(fixture, "documents"))) {
+	const stem = basename(name, ".json")
+	const emitted = await run(
+		[
+			"node",
+			join("node_modules", ".bin", "honey-clients"),
+			"generate",
+			"--spec",
+			join(fixture, "documents", name),
+			"--target",
+			"ts",
+			"--ts-name",
+			"Client",
+			"--ts-stem",
+			stem,
+			"--out",
+			join("src", stem),
+		],
+		consumer,
+	)
+	if (emitted.code !== 0) {
+		console.error(`FAIL  honey-clients generate from ${name}`)
+		console.error(emitted.out)
+		if (!keep) rmSync(sandbox, { force: true, recursive: true })
+		process.exit(1)
+	}
+}
+
 /* 3. type-check under maximal strictness */
 console.log("type-checking under maximal strictness …\n")
 const checked = await run(["npx", "tsc", "--noEmit", "-p", "tsconfig.json"], consumer)
 
 const lines = checked.out.split("\n").filter((l) => l.includes("error TS"))
 const inPackage = lines.filter((l) => l.includes(`node_modules/${PKG}/`))
-const inConsumer = lines.filter((l) => !l.includes(`node_modules/${PKG}/`))
+const rest = lines.filter((l) => !l.includes(`node_modules/${PKG}/`))
+const generatedDirs = readdirSync(join(fixture, "documents")).map((name) => `src/${basename(name, ".json")}/`)
+const inGenerated = rest.filter((l) => generatedDirs.some((dir) => l.includes(dir)))
+const inConsumer = rest.filter((l) => !generatedDirs.some((dir) => l.includes(dir)))
 
 if (inPackage.length > 0) {
 	const byCode = new Map<string, number>()
@@ -118,6 +155,22 @@ if (inPackage.length > 0) {
 	)
 }
 
+if (inGenerated.length > 0) {
+	const byFile = new Map<string, number>()
+	for (const line of inGenerated) {
+		const file = /^(\S+?)\(/.exec(line.trim())?.[1] ?? "?"
+		byFile.set(file, (byFile.get(file) ?? 0) + 1)
+	}
+	console.log(`FAIL  ${inGenerated.length} diagnostics in the clients honey-clients generated\n`)
+	for (const [file, n] of [...byFile].sort((a, b) => b[1] - a[1])) console.log(`  ${String(n).padStart(5)}  ${file}`)
+	console.log("\nfirst few:")
+	for (const line of inGenerated.slice(0, 5)) console.log(`  ${line.trim()}`)
+	console.log(
+		"\nGenerated code is the consumer's own source: it is compiled with the consumer's flags, and\n" +
+			"no suppression reaches it either.",
+	)
+}
+
 if (inConsumer.length > 0) {
 	console.log(`\n${inConsumer.length} diagnostics in the fixture itself (these are ours to fix):`)
 	for (const line of inConsumer.slice(0, 10)) console.log(`  ${line.trim()}`)
@@ -125,7 +178,7 @@ if (inConsumer.length > 0) {
 
 /* 4. and it must actually run — types passing while the exports map is wrong is a real
    failure mode, since `types` and `default` resolve independently */
-if (inPackage.length === 0 && inConsumer.length === 0) {
+if (inPackage.length === 0 && inGenerated.length === 0 && inConsumer.length === 0) {
 	await Bun.write(
 		join(consumer, "smoke.ts"),
 		[
@@ -259,5 +312,5 @@ async function nodeConsumer(dir: string): Promise<boolean> {
 	}
 }
 
-if (inPackage.length > 0 || inConsumer.length > 0) process.exit(1)
-console.log(`pass  0 diagnostics from ${PKG} under maximal strictness`)
+if (inPackage.length > 0 || inGenerated.length > 0 || inConsumer.length > 0) process.exit(1)
+console.log(`pass  0 diagnostics from ${PKG} or its generated clients under maximal strictness`)
