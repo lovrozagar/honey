@@ -16,6 +16,31 @@ function refused(argv: string[]): string {
 	}
 }
 
+describe("a boolean target option takes no value (bit 22)", () => {
+	const base = ["--spec", "s.json", "--out", "o", "--target", "ts"]
+
+	it("is true when bare, and reads an inline true or false, as --watch does", () => {
+		expect(parseGenerate([...base, "--ts-tanstack-query"]).options.ts).toEqual({ tanstackQuery: "true" })
+		expect(parseGenerate([...base, "--ts-tanstack-query=true"]).options.ts).toEqual({ tanstackQuery: "true" })
+		expect(parseGenerate([...base, "--ts-tanstack-query=false"]).options.ts).toEqual({ tanstackQuery: "false" })
+	})
+
+	it("refuses a value after a space, and an inline value that is not a boolean", () => {
+		expect([
+			refused([...base, "--ts-tanstack-query", "false"]),
+			refused([...base, "--ts-tanstack-query=maybe"]),
+		]).toEqual(['unexpected argument "false"', '--ts-tanstack-query takes true or false, not "maybe"'])
+	})
+
+	it("leaves a valued option of the same target alone", () => {
+		expect(parseGenerate([...base, "--ts-name", "Shop", "--ts-tanstack-query"]).options.ts).toEqual({
+			name: "Shop",
+			tanstackQuery: "true",
+		})
+		expect(refused([...base, "--ts-name"])).toBe("--ts-name requires a value")
+	})
+})
+
 describe("generate's arguments (phase h)", () => {
 	it("refuses an unknown flag, a missing value, a stray argument, an unknown target and an option no target asked for", () => {
 		const base = ["--spec", "s.json", "--out", "o"]

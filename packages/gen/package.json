@@ -44,6 +44,7 @@
 		"jiti": "2.7.0"
 	},
 	"devDependencies": {
+		"@tanstack/query-core": "5.104.5",
 		"@total-typescript/ts-reset": "catalog:",
 		"@types/node": "catalog:",
 		"@vitest/coverage-v8": "4.1.10",

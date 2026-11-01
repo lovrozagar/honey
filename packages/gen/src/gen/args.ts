@@ -6,8 +6,10 @@
  * target or an option for a target not asked for is a usage error.
  */
 /**
- * Each target, its generate function's options by name, each a string value. Since bit 21 i6 no target has a boolean
- * option: the SDKs' `throwOnError`, the last ones, are gone (a client always throws; its safe mirror answers a Result).
+ * Each target, its generate function's options by name, each carried as a string. Bit 21 i6 left no boolean option —
+ * the SDKs' `throwOnError`, the last ones, went when a client began always throwing and its safe mirror answering a
+ * Result. Bit 22 brings one back for a switch whose name is the whole option: `--ts-tanstack-query` turns the TanStack
+ * Query adapter on, and `BOOLEAN_OPTIONS` below says which options parse that way.
  */
 const TARGETS = {
 	cli: ["baseUrl", "binaryName", "envPrefix", "modulePath", "repo"],
@@ -17,11 +19,27 @@ const TARGETS = {
 	mcp: ["envPrefix", "name"],
 	python: ["packageName", "version"],
 	rust: ["crateName", "description", "homepage", "keywords", "license", "repository", "version"],
-	ts: ["name", "stem"],
+	ts: ["name", "stem", "tanstackQuery"],
 } as const satisfies Record<string, readonly string[]>
+
+/**
+ * The target options that take no value, since their name already says what they turn on
+ * (`--ts-tanstack-query`, not `--ts-query tanstack`). They stay listed in `TARGETS` above, which is what
+ * `packages/core/tests/docs/readmes.test.ts` reads to hold every flag to its README row; this table only
+ * says how one is parsed. Bare is `true` and an inline `true`/`false` is read, exactly as `--watch` is.
+ */
+const BOOLEAN_OPTIONS = { ts: ["tanstackQuery"] } as const satisfies Partial<
+	Record<keyof typeof TARGETS, readonly string[]>
+>
 
 export type Target = keyof typeof TARGETS
 export type Options = Record<string, string>
+
+/** Whether `target`'s option `key` takes no value. */
+function isBooleanOption(target: Target, key: string): boolean {
+	const keys: readonly string[] = (BOOLEAN_OPTIONS as Partial<Record<Target, readonly string[]>>)[target] ?? []
+	return keys.includes(key)
+}
 
 /** What one `generate` run asks for: a spec file or an app module (one, never both). */
 export type Generate = {
@@ -106,7 +124,9 @@ function takeFlag(
 	} else {
 		const option = optionFlag(flag)
 		if (option === undefined) throw new UsageError(`unknown option --${flag}`)
-		into.options[option.target][option.key] = valueOf(flag, inline, rest)
+		into.options[option.target][option.key] = isBooleanOption(option.target, option.key)
+			? String(booleanOf(flag, inline))
+			: valueOf(flag, inline, rest)
 	}
 }
 

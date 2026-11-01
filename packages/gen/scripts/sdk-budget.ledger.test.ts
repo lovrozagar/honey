@@ -20,6 +20,7 @@ export const LOCKS: readonly (readonly [string, string])[] = [
 	["sdk-budget.test.ts", "PYTHON_RUNTIME_BYTES"],
 	["sdk-budget.test.ts", "CSHARP_RUNTIME_BYTES"],
 	["sdk-budget.test.ts", "TS_RUNTIME_BYTES"],
+	["sdk-budget.test.ts", "TS_TANSTACK_QUERY_RUNTIME_BYTES"],
 	["sdk-budget.java.test.ts", "JAVA_RUNTIME_BYTES"],
 	["sdk-budget.cli.test.ts", "CLI_RUNTIME_BYTES"],
 	["sdk-budget.mcp.test.ts", "MCP_PORTABLE_BYTES"],

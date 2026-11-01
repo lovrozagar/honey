@@ -10,6 +10,7 @@ import { compareCodeUnits, words } from "../shared/lang.ts"
 import { MIRROR, mirrorNotice } from "../shared/mirror.ts"
 import { runtimeSource } from "./http.ts"
 import { sdkTypesText } from "./sdk-types.ts"
+import { tanstackQueryText } from "./tanstack-query.ts"
 import { memberTree, serviceMapText } from "./service-map.ts"
 
 export { sdkMemberPaths, serviceMapOf } from "./service-map.ts"
@@ -19,6 +20,8 @@ export type SdkOptions = {
 	readonly name: string
 	/** the file-name stem; the name kebab-cased when left out (`TestSDK` → `test-sdk`) */
 	readonly stem?: string
+	/** also write `<stem>.tanstack-query.gen.ts`; `@tanstack/query-core` is then the consumer's own peer */
+	readonly tanstackQuery?: boolean
 }
 
 /** The SDK's files, its stem, and what the generation tells its caller: a root group renamed off the safe mirror. */
@@ -142,15 +145,14 @@ export function generateSdk(document: Record<string, unknown>, options: SdkOptio
 	const emitted = [...memberTree(ir.tree).entries.keys()]
 	const groups = [...ir.tree.entries.keys()].sort(compareCodeUnits)
 	const notices = groups.flatMap((group, i) => mirrorNotice("ts", MIRROR, group, emitted[i] as string) ?? [])
-	return {
-		files: {
-			[`${stem}.client.gen.ts`]: clientText(name, stem, ir.servers[0], ir.auth),
-			[`${stem}.index.gen.ts`]: indexText(name, stem),
-			[`${stem}.map.gen.ts`]: serviceMapText(ir, runtime),
-			[`${stem}.runtime.gen.ts`]: runtimeSource(),
-			[`${stem}.types.gen.ts`]: sdkTypesText(ir, name, runtime),
-		},
-		notices,
-		stem,
+	const files: Record<string, string> = {
+		[`${stem}.client.gen.ts`]: clientText(name, stem, ir.servers[0], ir.auth),
+		[`${stem}.index.gen.ts`]: indexText(name, stem),
+		[`${stem}.map.gen.ts`]: serviceMapText(ir, runtime),
+		[`${stem}.runtime.gen.ts`]: runtimeSource(),
+		[`${stem}.types.gen.ts`]: sdkTypesText(ir, name, runtime),
 	}
+	/* the index never names it: its text must not vary by option, and it must never name query-core */
+	if (options.tanstackQuery === true) files[`${stem}.tanstack-query.gen.ts`] = tanstackQueryText(ir, name, stem)
+	return { files, notices, stem }
 }

@@ -59,6 +59,24 @@ describe("generateSdk: the emitted file set", () => {
 		expect(files["mock.runtime.gen.ts"]).toContain(runtimeSource())
 	})
 
+	it("adds the TanStack Query adapter only when it is asked for (bit 22)", () => {
+		const asked = generateSdk(doc(USERS), { name: "MockSDK", stem: "mock", tanstackQuery: true })
+		expect(Object.keys(asked.files).sort()).toEqual([
+			"mock.client.gen.ts",
+			"mock.index.gen.ts",
+			"mock.map.gen.ts",
+			"mock.runtime.gen.ts",
+			"mock.tanstack-query.gen.ts",
+			"mock.types.gen.ts",
+		])
+		expect(asked.files["mock.tanstack-query.gen.ts"]).toContain("export function createQueryHelpers")
+		/* off and explicitly off emit the same five files, byte for byte */
+		const off = generateSdk(doc(USERS), { name: "MockSDK", stem: "mock" })
+		const stated = generateSdk(doc(USERS), { name: "MockSDK", stem: "mock", tanstackQuery: false })
+		expect(stated.files).toEqual(off.files)
+		expect(Object.keys(off.files)).not.toContain("mock.tanstack-query.gen.ts")
+	})
+
 	// v0: 4aff94fcf0
 	it("returns each file's text by its name, and the stem", () => {
 		const result = generateSdk(doc(USERS), { name: "TestSDK" })

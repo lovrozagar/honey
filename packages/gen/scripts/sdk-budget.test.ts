@@ -831,3 +831,32 @@ describe("the TS runtime within its byte budget (bit 11, G14)", () => {
 		},
 	)
 })
+
+/*
+ * G14 (bit 22): the vendored TanStack Query adapter's bloat guard, in bytes on disk as shipped, never string
+ * length, locked at its measured bytes. Its own directory and its own lock, not the TS runtime's: every file under
+ * `runtime/ts` is concatenated into every SDK's `runtime.gen.ts`, and this adapter is written only for
+ * `--ts-tanstack-query`, so an SDK that never asked for it carries none of these bytes and names no TanStack
+ * type. Counted: the 2 adapter .ts files; the directory holds nothing else.
+ * Bit 22, its first lock, to 15,275 B: `invalidate.ts` (the GET index keyed `METHOD <path with {p} as :p>`, the
+ * param read off a mutation's input, and the key a read is cached under, prefix when a param has no value) and
+ * `query.ts` (the three option factories, the key builders, and the proxies that answer `undefined` for a kind an
+ * entry does not belong to, so a stream is in no surface). A raise names its feature bytes and cuts dead and
+ * duplicate code first; it is never silent.
+ */
+const TS_TANSTACK_QUERY_RUNTIME_BYTES = 15_275
+
+describe("the TanStack Query adapter within its byte budget (bit 22, G14)", () => {
+	it(
+		`ships every file it holds, their bytes exactly ${TS_TANSTACK_QUERY_RUNTIME_BYTES}, nothing else beside them`,
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			const { bytes, names, others } = runtimeBytes(runtimeDir("ts-tanstack-query"), ".ts")
+			expect({ bytes, names, others }).toEqual({
+				bytes: TS_TANSTACK_QUERY_RUNTIME_BYTES,
+				names: ["invalidate.ts", "query.ts"],
+				others: [],
+			})
+		},
+	)
+})

@@ -102,6 +102,7 @@ One table, since a flag that is not written down is a flag nobody finds:
 | `-h`, `--help`            | —      | the usage text                                                     |
 | `--ts-name`               | ts     | the client class's name (default `SDK`)                            |
 | `--ts-stem`               | ts     | the file stem the generated modules share                          |
+| `--ts-tanstack-query`     | ts     | also write the TanStack Query adapter; takes no value              |
 | `--go-module-path`        | go     | the Go module path the SDK is imported by                          |
 | `--rust-crate-name`       | rust   | the crate's name                                                   |
 | `--rust-version`          | rust   | the crate's version                                                |
@@ -171,6 +172,32 @@ export async function health(client: Kitchen): Promise<string> {
 	return `answered ${result.error.status}`
 }
 ```
+
+#### TanStack Query, from the same document
+
+`--ts-tanstack-query` writes one more file beside the SDK, `<stem>.tanstack-query.gen.ts`. It takes no value:
+
+```sh
+honey-clients generate --spec openapi.json --target ts --out generated --ts-name Kitchen --ts-tanstack-query
+```
+
+Its `createQueryHelpers(sdk, { getQueryClient })` gives five surfaces — `query`, `mutation`, `infiniteQuery`,
+`queryKey` and `mutationKey` — each nested exactly as the client is, so `query.org.member.list(…)` sits where
+`client.org.member.list(…)` does. `sdk` may be a client or a thunk for one, which an isomorphic app needs.
+
+The document decides what goes where. A `GET` is on `query`, every other method is on `mutation`, and an event
+stream, a WebSocket or an `x-realtime` operation is on neither, because a stream is not a cache entry. Nothing
+is keyed off a method's name. A successful write invalidates the reads its `x-invalidate` selectors name, with
+the mutation's own path params filled in; a selector whose params are not all known invalidates that read's key
+prefix instead, so it is made stale rather than missed.
+
+Two notes. `@tanstack/query-core` is your dependency, not honey's — install it yourself; the file imports it for
+types only. And a read's options carry `initialData: undefined`, which is what solid-query needs to keep the
+unseeded overload; it is harmless under react-query.
+
+Drop the flag and the next run deletes the file, the way `.honey-generated.json` deletes anything the previous
+run wrote and this one did not. The index file never re-exports the adapter, so an SDK generated without the
+flag names no TanStack type anywhere.
 
 ### The Go SDK
 

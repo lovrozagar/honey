@@ -53,7 +53,13 @@ export function findGofmt(env: NodeJS.ProcessEnv = process.env): string | undefi
 function sdkOf(target: Exclude<Target, "cli" | "mcp">, document: Record<string, unknown>, options: Options) {
 	switch (target) {
 		case "ts":
-			return generateSdk(document, { name: "SDK", ...options } as Parameters<typeof generateSdk>[1])
+			/* mapped key by key, never spread: `options` holds strings, and `tanstackQuery` is a boolean —
+			   a spread under a cast would make "false" as truthy as "true" */
+			return generateSdk(document, {
+				name: options.name ?? "SDK",
+				...(options.stem === undefined ? {} : { stem: options.stem }),
+				tanstackQuery: options.tanstackQuery === "true",
+			})
 		case "go":
 			return generateGoSdk(document, options)
 		case "rust":

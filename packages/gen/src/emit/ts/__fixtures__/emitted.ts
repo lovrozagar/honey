@@ -52,6 +52,18 @@ export async function emittedSdk(
 	return { ...(await load(files, `${stem}.index.gen.ts`)), files }
 }
 
+/**
+ * The TanStack Query adapter the SDK emits under `tanstackQuery`, imported from its own file: the index
+ * never re-exports it, so this is the only way in, and it is the text a consumer compiles.
+ */
+export async function emittedTanstackQuery(
+	document: Record<string, unknown>,
+	options: SdkOptions = { name: "TestSDK", tanstackQuery: true },
+): Promise<Record<string, unknown> & { files: Readonly<Record<string, string>> }> {
+	const { files, stem } = generateSdk(document, { ...options, tanstackQuery: true })
+	return { ...(await load(files, `${stem}.tanstack-query.gen.ts`)), files }
+}
+
 /** The app-typed client (`createClient`) as an app's `_gen/client.gen.ts` vendors it. */
 export async function emittedApp(): Promise<Record<string, unknown> & { files: Readonly<Record<string, string>> }> {
 	const { files } = generateAppClient()

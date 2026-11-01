@@ -91,6 +91,27 @@ describe("generated: a run with no options bag (bit 22 a)", () => {
 		},
 		SPAWN_TIMEOUT,
 	)
+
+	it(
+		"writes the TanStack Query adapter for --ts-tanstack-query, which takes no value (bit 22)",
+		async () => {
+			const document = {
+				info: { title: "Shop", version: "1" },
+				openapi: "3.1.0",
+				paths: { "/ping": { get: { responses: { "200": { description: "ok" } } } } },
+			}
+			const run = { options: { ts: { tanstackQuery: "true" } }, targets: ["ts"] as const }
+			const files = await generated(run, document, { env: {}, report: () => undefined })
+			expect(Object.keys(files.ts ?? {})).toContain("sdk.tanstack-query.gen.ts")
+			/* the string the parser stores must not be what decides it: "false" is off, not truthy */
+			const off = await generated({ options: { ts: { tanstackQuery: "false" } }, targets: ["ts"] as const }, document, {
+				env: {},
+				report: () => undefined,
+			})
+			expect(Object.keys(off.ts ?? {})).not.toContain("sdk.tanstack-query.gen.ts")
+		},
+		SPAWN_TIMEOUT,
+	)
 })
 
 describe("generate's usage (phase h)", () => {
