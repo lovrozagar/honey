@@ -58,6 +58,13 @@ export const TRACE: unique symbol = /* @__PURE__ */ Symbol("honey.trace")
 /** The taps `ctx.tap()` queued, and whether the route's handler answered: read by routing/tap.ts only. */
 export const TAPS: unique symbol = /* @__PURE__ */ Symbol("honey.taps")
 
+/**
+ * The instance the constructor built, on that instance: a context derived with `Object.create(ctx)`
+ * reaches it through its prototype, so its getters read and write the base's private state rather
+ * than throwing for the private fields it lacks. Not exported from the package.
+ */
+const SELF: unique symbol = /* @__PURE__ */ Symbol("honey.self")
+
 /** One `ctx.tap(key, payload)` call, waiting for the handler's answer. */
 export type TapCall = { readonly key: string; readonly payload: unknown }
 
@@ -127,6 +134,7 @@ export class HoneyContext<TEnv = Record<string, unknown>> {
 	readonly res: HoneyRes
 	readonly routePattern: string
 	readonly [REQUEST]: RequestState<TEnv>
+	readonly [SELF]: HoneyContext<TEnv>
 
 	#ac: AbortController | null = null
 	#cookies: Record<string, string> | null = null
@@ -150,6 +158,7 @@ export class HoneyContext<TEnv = Record<string, unknown>> {
 		this.routePattern = route.pattern
 		this.#routeId = route.id
 		this[REQUEST] = state
+		this[SELF] = this
 		/* called on its owner: workerd's waitUntil throws "Illegal invocation" when detached */
 		const executionCtx = state.executionCtx
 		const waitUntil = executionCtx?.waitUntil
@@ -172,40 +181,45 @@ export class HoneyContext<TEnv = Record<string, unknown>> {
 	 * id, the request id when one is set, and the trace's ids when traced. Built on first use.
 	 */
 	get log(): Logger {
-		this.#log ??= this[REQUEST].logger.child(
-			requestBindings(this.req.method, this.path, this.#routeId, {
-				requestId: (this as { requestId?: string }).requestId,
-				trace: this[REQUEST].trace?.ids(),
+		const self = this[SELF]
+		self.#log ??= self[REQUEST].logger.child(
+			requestBindings(self.req.method, self.path, self.#routeId, {
+				requestId: (self as { requestId?: string }).requestId,
+				trace: self[REQUEST].trace?.ids(),
 			}),
 		)
-		return this.#log
+		return self.#log
 	}
 
 	get cookies(): Record<string, string> {
-		this.#cookies ??= parseCookieHeader(this.req.headers.get("cookie") ?? "")
-		return this.#cookies
+		const self = this[SELF]
+		self.#cookies ??= parseCookieHeader(self.req.headers.get("cookie") ?? "")
+		return self.#cookies
 	}
 
 	/** The request headers as a record: keys are lower-case and request data, so no prototype. */
 	get headers(): Record<string, string> {
-		if (this.#headers === null) {
+		const self = this[SELF]
+		if (self.#headers === null) {
 			const out = dict<string>()
-			for (const [key, value] of this.req.headers) out[key] = value
-			this.#headers = out
+			for (const [key, value] of self.req.headers) out[key] = value
+			self.#headers = out
 		}
-		return this.#headers
+		return self.#headers
 	}
 
 	/** The query: the first value of each key. Keys are request data, so no prototype. */
 	get search(): Record<string, string> {
-		if (this.#search === null) this.#parseSearch()
-		return this.#search as Record<string, string>
+		const self = this[SELF]
+		if (self.#search === null) self.#parseSearch()
+		return self.#search as Record<string, string>
 	}
 
 	/** The query: every value of each key, in order. */
 	get searchAll(): Record<string, string[]> {
-		if (this.#searchAll === null) this.#parseSearch()
-		return this.#searchAll as Record<string, string[]>
+		const self = this[SELF]
+		if (self.#searchAll === null) self.#parseSearch()
+		return self.#searchAll as Record<string, string[]>
 	}
 
 	/**
@@ -213,8 +227,9 @@ export class HoneyContext<TEnv = Record<string, unknown>> {
 	 * drivers and timers so abandoned work stops.
 	 */
 	get signal(): AbortSignal {
-		this.#ac ??= this.#linkSignal()
-		return this.#ac.signal
+		const self = this[SELF]
+		self.#ac ??= self.#linkSignal()
+		return self.#ac.signal
 	}
 
 	/**
@@ -222,18 +237,20 @@ export class HoneyContext<TEnv = Record<string, unknown>> {
 	 * response, never on an error answer, never delaying it. A key no tap is registered for is ignored.
 	 */
 	tap(key: string, payload: unknown): void {
-		;(this.#taps ??= []).push({ key, payload })
+		const self = this[SELF]
+		;(self.#taps ??= []).push({ key, payload })
 	}
 
 	/** What `tap()` queued, or null when nothing was. */
 	get [TAPS](): readonly TapCall[] | null {
-		return this.#taps
+		return this[SELF].#taps
 	}
 
 	/** Abort `signal` with `reason`, so work that takes it stops (a timeout answered for it). */
 	[ABORT_CONTEXT](reason: unknown): void {
-		this.#ac ??= this.#linkSignal()
-		this.#ac.abort(reason)
+		const self = this[SELF]
+		self.#ac ??= self.#linkSignal()
+		self.#ac.abort(reason)
 	}
 
 	#parseSearch(): void {
