@@ -10,96 +10,8 @@ import { blockCommentText, tsString } from "../shared/escape.ts"
 import { compareCodeUnits, NameTable, pascalWords } from "../shared/lang.ts"
 import { quoteKey } from "../shared/literals.ts"
 import { irToTs, type TypeOptions } from "../shared/type-emitter.ts"
+import { importText, RESERVED, SHARED } from "./sdk-types-preamble.ts"
 import { memberTree } from "./service-map.ts"
-
-/* globals the emitted types read, and the names they declare: a component schema never takes one */
-const RESERVED = [
-	"AbortSignal",
-	"ArrayBuffer",
-	"AsyncIterable",
-	"Blob",
-	"ErrorEnvelope",
-	"ErrorField",
-	"HoneyArgs",
-	"HoneyCall",
-	"HoneySafe",
-	"HoneyStream",
-	"HttpOptions",
-	"Omit",
-	"Promise",
-	"ReadableStream",
-	"RealtimeCallOptions",
-	"RealtimeOptions",
-	"Record",
-	"ResumableConnection",
-	"Response",
-	"Result",
-	"SDKConfig",
-	"SSEEvent",
-	"SseOptions",
-	"TypedWebSocket",
-	"Uint8Array",
-	"WsOptions",
-]
-
-/** The input fields every call takes, by transport. */
-const SHARED = `export type HttpOptions = {
-	baseURL?: string
-	cookies?: Record<string, string>
-	headers?: Record<string, string>
-	idempotencyKey?: string
-	signal?: AbortSignal
-	timeout?: number
-}
-export type SseOptions = Omit<HttpOptions, "idempotencyKey"> & { lastEventId?: string }
-export type WsOptions = { protocols?: string | string[]; reconnectToken?: string }
-export type RealtimeCallOptions = Omit<HttpOptions, "idempotencyKey" | "timeout"> & RealtimeOptions
-
-type ErrorField = { error_key: string; message: string; path: string }
-
-/** honey's error envelope at one status, its error keys as literals. */
-export type ErrorEnvelope<TStatus extends number, TKey extends string> = {
-	error_key: TKey
-	fields: Record<string, ErrorField[]>
-	message: string
-	status: TStatus
-	status_key: string
-	success: false
-}
-
-/* a call's declared errors and headers, which only its safe twin reads: a type, never a value */
-declare const answer: unique symbol
-
-/** A call's input: optional when none of its fields is required. */
-type HoneyArgs<I, O> = {} extends I ? [input?: I & O] : [input: I & O]
-
-/** A REST operation: its raw overload and its value, an error status thrown; its declared errors and headers. */
-type HoneyCall<I, D, E = never, H = never> = {
-	(input: I & HttpOptions & { raw: true }): Promise<Response>
-	(...input: HoneyArgs<I, HttpOptions & { raw?: false }>): Promise<D>
-	readonly [answer]?: [E, H]
-}
-
-/** An event stream, sent when its iteration starts; its opening answer's declared errors. */
-type HoneyStream<I, V, E = never> = {
-	(...input: HoneyArgs<I, SseOptions>): AsyncIterable<V>
-	readonly [answer]?: [E, never]
-}
-
-/** \`client.safe\`: every REST and stream call answering a Result, never throwing an API answer; a connection as is. */
-export type HoneySafe<T> = {
-	[K in keyof T]: T[K] extends (...input: never[]) => ResumableConnection<infer _> | TypedWebSocket
-		? T[K]
-		: T[K] extends HoneyCall<infer I, infer D, infer E, infer H>
-			? {
-					(input: I & HttpOptions & { raw: true }): Promise<Result<Response, E>>
-					(...input: HoneyArgs<I, HttpOptions & { raw?: false }>): Promise<Result<D, E, H>>
-				}
-			: T[K] extends HoneyStream<infer I, infer V, infer E>
-				? (...input: HoneyArgs<I, SseOptions>) => Promise<Result<AsyncIterable<V>, E>>
-				: HoneySafe<T[K]>
-}
-`
 
 /** One field of an input object: required or not, by whether any of its members is. */
 type Part = { field: string; required: boolean; type: string }
@@ -282,9 +194,7 @@ export function sdkTypesText(ir: IR, name: string, runtime: string): string {
 	const schemas = model.schemaNames.map(
 		(schema) => `export type ${types.refName?.(schema)} = ${irToTs(ir.schemas[schema] as IRSchema, types)}`,
 	)
-	return `import type { RealtimeOptions, Result, ResumableConnection, SDKConfig, SSEEvent, TypedWebSocket } from "./${runtime}"
-
-${schemas.length === 0 ? "" : `${schemas.join("\n")}\n\n`}${SHARED}
+	const body = `${schemas.length === 0 ? "" : `${schemas.join("\n")}\n\n`}${SHARED}
 ${configText(name, ir.servers[0])}
 
 /** Every operation of the SDK, by its member path. */
@@ -295,4 +205,6 @@ ${members(memberTree(ir.tree), ctx, "\t").join("\n")}
 /** \`client.safe\`: every operation, a call answering a Result. */
 export type ${name}Safe = HoneySafe<${name}Operations>
 `
+	return `${importText(body, runtime)}
+${body}`
 }
