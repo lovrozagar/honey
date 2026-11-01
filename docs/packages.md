@@ -23,6 +23,7 @@ generator.
 | `@lovrozagar/honey/mcp/url-files`   | `urlFiles(options)`: `mcp()`'s opt-in file arguments as https URLs from listed hosts                                                    |
 | `@lovrozagar/honey/openapi`         | `serveOpenApi`, `serveManifest`, `generateOpenApi`, `generateManifest`, `toYaml`                                                        |
 | `@lovrozagar/honey/openapi/scalar`  | `scalar`, the Scalar API reference page                                                                                                 |
+| `@lovrozagar/honey/openapi/static`  | `serveStaticOpenApi`: a document built ahead of time or living elsewhere, served without the generator                                  |
 | `@lovrozagar/honey/openapi/swagger` | `swagger`, the Swagger UI page                                                                                                          |
 | `@lovrozagar/honey/errors`          | `defineErrors` (also on the root)                                                                                                       |
 | `@lovrozagar/honey/i18n`            | `errorI18n`, `translateError`                                                                                                           |

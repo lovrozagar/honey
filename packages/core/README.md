@@ -25,6 +25,7 @@ package, so nothing here is pseudocode.
 - [Serving on Node, Bun and Cloudflare Workers](#serving-on-node-bun-and-cloudflare-workers)
 - [Static files and proxying](#static-files-and-proxying)
 - [The OpenAPI document](#the-openapi-document)
+- [Serving a prebuilt or external document](#serving-a-prebuilt-or-external-document)
 - [The MCP server](#the-mcp-server)
 - [Logging and tracing](#logging-and-tracing)
 - [Internationalization and crypto](#internationalization-and-crypto)
@@ -847,6 +848,77 @@ serveOpenApi(app, {
 Full reference: [the OpenAPI document](https://github.com/lovrozagar/honey/blob/main/docs/openapi.md) and
 [webhooks](https://github.com/lovrozagar/honey/blob/main/docs/capabilities/webhooks.md).
 
+## Serving a prebuilt or external document
+
+`serveStaticOpenApi(app, options)` from `@lovrozagar/honey/openapi/static` serves a document someone has already
+built. Nothing generates it, so the generator never reaches the bundle: an app that serves its document this way
+carries about 1.2 KB gzipped over a bare `honey()`. Reach for it when the build plugin already wrote the document to
+disk, when a gateway serves a document assembled elsewhere, or when a Worker should answer the spec without parsing
+571 KB of it on every cold start. Reach for `serveOpenApi` instead when the running app's own routes are the
+document, which is the usual case.
+
+The source is an inline value, a Workers asset binding, a URL, or a loader of your own:
+
+```ts
+import { honey } from "@lovrozagar/honey"
+import { scalar } from "@lovrozagar/honey/openapi/scalar"
+import { serveStaticOpenApi } from "@lovrozagar/honey/openapi/static"
+
+/* a document you already have as a value: serialized once, on the first request */
+const inline = serveStaticOpenApi(honey(), {
+	json: { inline: { info: { title: "Shop", version: "1.2.0" }, openapi: "3.1.0", paths: {} } },
+})
+
+/* a Workers assets binding: env.ASSETS.fetch on the request's own origin */
+const onWorkers = serveStaticOpenApi(honey(), {
+	docs: scalar,
+	json: { asset: "/openapi.json" },
+	yaml: { asset: "/openapi.yaml" },
+})
+
+/* someone else's document, with a cache-control of its own */
+const upstream = serveStaticOpenApi(honey(), {
+	cacheControl: "public, s-maxage=3600, stale-while-revalidate=86400",
+	json: { url: "https://specs.example.com/v1/openapi.json" },
+})
+
+/* your own loader: whatever it returns is the document, a Response read once */
+const loaded = serveStaticOpenApi(honey(), {
+	json: async (ctx) => await (ctx.env as { SPECS: { get(key: string): Promise<string> } }).SPECS.get("openapi"),
+	jsonPath: "/v1/openapi/spec",
+})
+```
+
+`docs` takes the imported page here exactly as it does in `serveOpenApi`, so neither function bundles a page it does
+not show. The JSON route is `${path}.json` (`path` is `/openapi` by default), the YAML routes `.yaml` and `.yml`
+appear only with a `yaml` source, and `jsonPath` or `yamlPath` replaces the stem outright. Every route is internal,
+so the document never documents its own endpoints, and `meta` (a `security` scheme, a `summary`) rides along under
+that marking.
+
+No copy script is needed to put the bytes where a Worker can read them: point the build plugin's output at the
+assets directory wrangler serves, and codegen writes both files there on every generate.
+
+```ts
+import { honey } from "@lovrozagar/honey/plugin"
+
+export default {
+	plugins: [
+		honey({
+			app: "src/app.ts",
+			codegen: { openApi: { path: "assets/openapi.json", title: "Shop", version: "1.2.0" } },
+		}),
+	],
+}
+```
+
+A document is loaded once per process or isolate and kept with its ETag — the upstream's strong `etag` when it sent
+one, else honey's own SHA-256 tag — and concurrent first requests share that one load. A load that failed is not
+kept, so the next request tries again, but a load that succeeded is never refreshed: a long-running Node or Bun
+server serving a `url` source keeps the document it first fetched until it restarts or redeploys. A failing asset,
+an unbound binding and a failing loader are a 500; a URL that fails or answers non-2xx is a 502.
+
+Full reference: [the OpenAPI document](https://github.com/lovrozagar/honey/blob/main/docs/openapi.md).
+
 ## The MCP server
 
 There are two ways to serve your API's tools over the Model Context Protocol, and they run in different places. The
@@ -1176,6 +1248,7 @@ generator.
 | `@lovrozagar/honey/mcp/url-files`   | `urlFiles(options)`: `mcp()`'s opt-in file arguments as https URLs from listed hosts                                                    |
 | `@lovrozagar/honey/openapi`         | `serveOpenApi`, `serveManifest`, `generateOpenApi`, `generateManifest`, `toYaml`                                                        |
 | `@lovrozagar/honey/openapi/scalar`  | `scalar`, the Scalar API reference page                                                                                                 |
+| `@lovrozagar/honey/openapi/static`  | `serveStaticOpenApi`, a document built ahead of time or living elsewhere, served without the generator                                  |
 | `@lovrozagar/honey/openapi/swagger` | `swagger`, the Swagger UI page                                                                                                          |
 | `@lovrozagar/honey/errors`          | `defineErrors` (also on the root)                                                                                                       |
 | `@lovrozagar/honey/i18n`            | `errorI18n`, `translateError`, `interpolate`, `createInterpolator`                                                                      |

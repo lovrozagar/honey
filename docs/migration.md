@@ -840,6 +840,27 @@ const app = honey()
 serveOpenApi(app, { title: "Shop", version: "1.0.0", docs: scalar })
 ```
 
+## `docs: "scalar"` becomes `docs: scalar`
+
+The docs page is the page itself now, imported from its own subpath, in `serveOpenApi` and `serveStaticOpenApi`
+alike. That is what keeps the page you do not show out of the bundle: a string meant both pages were reachable, so
+both shipped. Passing a string is a type error, and at runtime it throws naming the import.
+
+```ts v0
+serveOpenApi(app, { title: "Shop", version: "1.0.0", docs: "scalar" })
+```
+
+```ts
+import { honey } from "@lovrozagar/honey"
+import { serveOpenApi } from "@lovrozagar/honey/openapi"
+import { scalar } from "@lovrozagar/honey/openapi/scalar"
+
+const app = honey()
+serveOpenApi(app, { title: "Shop", version: "1.0.0", docs: scalar })
+```
+
+Swagger UI is `import { swagger } from "@lovrozagar/honey/openapi/swagger"`, then `docs: swagger`.
+
 ## `app.ws(path)` becomes `ws(app, path)`
 
 `import { ws } from "@lovrozagar/honey/ws"`, the same shape as `realtime(app, path)`. It takes any handle `.ws()` was

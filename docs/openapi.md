@@ -30,6 +30,42 @@ serveOpenApi(app, {
 })
 ```
 
+## Prebuilt or external documents
+
+`serveStaticOpenApi(app, options)` from `@lovrozagar/honey/openapi/static` serves a document the app did not
+generate: the file the build plugin already wrote, a Workers asset binding, a URL, an inline value, or a loader of
+your own. It imports none of the generator, so it is what a Worker serving a large committed document wants; an app
+whose own routes are the document wants `serveOpenApi`.
+
+```ts
+import { honey } from "@lovrozagar/honey"
+import { scalar } from "@lovrozagar/honey/openapi/scalar"
+import { serveStaticOpenApi } from "@lovrozagar/honey/openapi/static"
+
+const app = honey()
+
+serveStaticOpenApi(app, {
+	cacheControl: "public, s-maxage=3600",
+	docs: scalar,
+	json: { asset: "/openapi.json" },
+	jsonPath: "/v1/openapi/spec",
+	meta: { summary: "The published document" },
+	yaml: { asset: "/openapi.yaml" },
+})
+```
+
+`json` is required and `yaml` optional: with no `yaml` source, no YAML route is mounted, because nothing converts the
+JSON at runtime. `path` (default `/openapi`) is the stem `.json`, `.yaml` and `.yml` hang off; `jsonPath` and
+`yamlPath` replace that path outright. `docs` is the imported page, as in `serveOpenApi`. Routes are internal and
+marked served, so the document never lists its own endpoints, and `meta` cannot lift that.
+
+A document is loaded once per process or isolate, concurrent first requests sharing that load, and kept with the
+upstream's strong `etag` when it sent one, else honey's own SHA-256 tag. A failed load is not kept and the next
+request retries; a successful one is never refreshed, so a new upstream document needs a restart or a redeploy.
+Nothing parses what is served: honey's own `content-type` is sent whatever the upstream said. A failing asset, a
+binding that is missing or cannot fetch, and a failing loader are `internal_server_error`; a URL that fails or
+answers non-2xx is `bad_gateway`.
+
 ## Reference
 
 | Value                              | Default                              | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                            | Watch for                                                                                                                                                                   |
