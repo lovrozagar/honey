@@ -44,6 +44,17 @@ describe("HoneyContext > a context derived with Object.create", () => {
 		for (const key of getters) expect(() => Reflect.get(derived, key)).not.toThrow()
 	})
 
+	it.each([
+		["Object.setPrototypeOf", (ctx: HoneyContext<{ DB: string }>) => Object.setPrototypeOf({}, ctx) as typeof ctx],
+		["a Proxy", (ctx: HoneyContext<{ DB: string }>) => new Proxy(ctx, {})],
+	])("reads the original's state through %s too", (_name, wrap) => {
+		const base = makeCtx({ req: makeReq("http://localhost/test?a=1", { cookie: "sid=abc" }) })
+		const wrapped = wrap(base)
+		expect([wrapped.cookies, wrapped.search, wrapped.signal]).toEqual([{ sid: "abc" }, { a: "1" }, base.signal])
+		wrapped.tap("k", 1)
+		expect(base[TAPS]).toEqual([{ key: "k", payload: 1 }])
+	})
+
 	it("logs as the request, whichever context asks first, even one that shadows path", () => {
 		const bound: Record<string, unknown>[] = []
 		const logger = { ...SILENT, child: (bindings: Record<string, unknown>) => (bound.push(bindings), SILENT) }

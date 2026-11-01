@@ -58,7 +58,15 @@ type SessionOptions = {
 type MessageFn = (payload: unknown) => Promise<void> | void
 type CloseFn = (reason: string) => Promise<void> | void
 
+/**
+ * The session the constructor built, on that session: one derived with `Object.create(session)` reaches it
+ * through its prototype, so its methods run on the original's private state rather than throwing for the
+ * private fields it lacks.
+ */
+const SELF: unique symbol = /* @__PURE__ */ Symbol("honey.realtimeSession")
+
 class Session implements RealtimeSession {
+	readonly [SELF]: Session = this
 	readonly #config: RealtimeConfig
 	readonly #ctx: unknown
 	readonly #log: InvokeLogger | null
@@ -94,42 +102,46 @@ class Session implements RealtimeSession {
 	}
 
 	attach(ws: WSContext): void {
-		if (this.#socket !== null || this.#closed) return
-		this.#socket = ws
-		this.#config.bus.onMessage(this.#id, this.#sendFrame)
-		void this.#lane.push(async () => {
-			const ok = await this.#invoke("handler", () => this.#config.handler(this.#ctx, this.#conn))
-			if (!ok) this.#closeSocket(ws, CLOSE_INTERNAL, "internal error")
+		const self = this[SELF]
+		if (self.#socket !== null || self.#closed) return
+		self.#socket = ws
+		self.#config.bus.onMessage(self.#id, self.#sendFrame)
+		void self.#lane.push(async () => {
+			const ok = await self.#invoke("handler", () => self.#config.handler(self.#ctx, self.#conn))
+			if (!ok) self.#closeSocket(ws, CLOSE_INTERNAL, "internal error")
 		})
 		/* frames that beat the open run after the handler, ahead of later ones */
-		if (this.#inbox.length > 0) this.#scheduleDrain()
+		if (self.#inbox.length > 0) self.#scheduleDrain()
 	}
 
 	close(reason: string): void {
-		this.#teardown()
+		const self = this[SELF]
+		self.#teardown()
 		/* frames still waiting for a message handler are dropped: none can come for a closed connection */
-		if (this.#onMessage === null) this.#inbox.length = 0
-		if (this.#closeQueued) return
-		this.#closeQueued = true
+		if (self.#onMessage === null) self.#inbox.length = 0
+		if (self.#closeQueued) return
+		self.#closeQueued = true
 		/* after every frame queued before it */
-		void this.#lane.push(async () => {
-			const fn = this.#onClose
-			if (fn !== null) await this.#invoke("close", () => fn(reason || "normal"))
+		void self.#lane.push(async () => {
+			const fn = self.#onClose
+			if (fn !== null) await self.#invoke("close", () => fn(reason || "normal"))
 		})
 	}
 
 	error(error: unknown): void {
-		reportUserError(error, { fields: this.#fields, log: this.#log, phase: "realtime socket error" })
+		const self = this[SELF]
+		reportUserError(error, { fields: self.#fields, log: self.#log, phase: "realtime socket error" })
 	}
 
 	message(data: ArrayBuffer | string): void {
+		const self = this[SELF]
 		/* the wire format is JSON text; binary frames are not part of it */
-		if (this.#closed || typeof data !== "string") return
-		const { limits } = this.#config
+		if (self.#closed || typeof data !== "string") return
+		const { limits } = self.#config
 		/* before the open there is no socket to close yet: a frame over a limit is dropped */
-		const ws = this.#socket
+		const ws = self.#socket
 		if (exceedsPayload(data, limits.maxFrameBytes)) {
-			if (ws !== null) this.#closeSocket(ws, CLOSE_TOO_BIG, "frame too large")
+			if (ws !== null) self.#closeSocket(ws, CLOSE_TOO_BIG, "frame too large")
 			return
 		}
 		let payload: unknown
@@ -139,12 +151,12 @@ class Session implements RealtimeSession {
 			/* not JSON: not a frame of this protocol */
 			return
 		}
-		if (this.#inbox.length >= limits.maxPendingFrames) {
-			if (ws !== null) this.#closeSocket(ws, CLOSE_POLICY, "too many pending frames")
+		if (self.#inbox.length >= limits.maxPendingFrames) {
+			if (ws !== null) self.#closeSocket(ws, CLOSE_POLICY, "too many pending frames")
 			return
 		}
-		this.#inbox.push(payload)
-		if (ws !== null) this.#scheduleDrain()
+		self.#inbox.push(payload)
+		if (ws !== null) self.#scheduleDrain()
 	}
 
 	#invoke(phase: "close" | "handler" | "message", fn: () => unknown): boolean | Promise<boolean> {

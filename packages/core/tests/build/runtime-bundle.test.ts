@@ -106,6 +106,9 @@ describe("the runtime bundle of an installed core (bit 19 i)", () => {
 			 * the pinned bun 1.3.11 --minify), locked at the next 100; under v0's 26,500 lock (v0's own bundle measures
 			 * 26,243 the same way). Bit 19 i2 cut the WebSocket route builder's 1,120 bytes (27,275 before): ws(app, path)
 			 * is an import, so routing/ws-builder, ws/origin, ws/session and ws/shared stay out until it is called.
+			 * rc.5 added 59 bytes (26,186 to 26,245) so a context reached through a prototype chain or a proxy reads
+			 * its original's private state: the SELF field, read once in each of the context's nine accessors.
+			 * Locked at 26,300.
 			 */
 			const gzipped = gzipSync(js, { level: 9 }).length
 			const builtBy = run(BUN as string, ["--version"], full).out.trim()
@@ -114,7 +117,7 @@ describe("the runtime bundle of an installed core (bit 19 i)", () => {
 					leaked,
 					features,
 					routeModules("minimal", entry, [...WS_ROUTE, ...MCP_ROUTE, ...GENERATION_ONLY]),
-					gzipped < 26_200,
+					gzipped < 26_300,
 					builtBy,
 				],
 				`${gzipped} bytes gzipped`,

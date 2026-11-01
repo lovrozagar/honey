@@ -181,3 +181,20 @@ describe("switchingProtocols: the 101 an adapter answers with", () => {
 		])
 	})
 })
+
+describe("WSContextImpl: a handle derived with Object.create", () => {
+	/* 1.0 keeps the send queue and limits in private fields, which a derived handle lacks: on 1.0.0-rc.4 every
+	   method threw "Cannot read private member". It uses the original's queue now, as 0.7 did. */
+	it("sends, queues, flushes and closes through the original's state", () => {
+		const raw = rawSocket(0)
+		const base = new WSContextImpl(raw)
+		const derived = Object.assign(Object.create(base) as typeof base, { tag: "derived" })
+		derived.send({ n: 1 })
+		raw.open()
+		expect(raw.sent).toEqual(['{"n":1}'])
+		derived.send("open")
+		derived.flush()
+		derived.close(1000, "bye")
+		expect([raw.sent, raw.closed, derived.readyState]).toEqual([['{"n":1}', "open"], [[1000, "bye"]], 3])
+	})
+})

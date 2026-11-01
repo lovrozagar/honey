@@ -57,9 +57,17 @@ export type RawSocket = {
 
 type Limits = Pick<ResolvedWSOptions, "backpressureLimit" | "backpressurePolicy">
 
+/**
+ * The socket handle the constructor built, on that handle: one derived with `Object.create(ws)` reaches it
+ * through its prototype, so its methods use the original's queue and limits rather than throwing for the
+ * private fields it lacks.
+ */
+const SELF: unique symbol = /* @__PURE__ */ Symbol("honey.wsContext")
+
 /** `WSContext` over a runtime socket: JSON for objects, a queue while opening, the backpressure policy. */
 export class WSContextImpl<T extends RawSocket = RawSocket> implements WSContext<T> {
 	readonly raw: T
+	readonly [SELF]: WSContextImpl<T> = this
 	readonly #limits: Limits | null
 	#queue: (ArrayBuffer | Uint8Array | string)[] = []
 
@@ -82,27 +90,30 @@ export class WSContextImpl<T extends RawSocket = RawSocket> implements WSContext
 
 	/** Send what waited while the socket opened; adapters without an `open` event call this. */
 	flush(): void {
-		const queued = this.#queue
-		this.#queue = []
-		for (const message of queued) this.send(message)
+		const self = this[SELF]
+		const queued = self.#queue
+		self.#queue = []
+		for (const message of queued) self.send(message)
 	}
 
 	close(code?: number, reason?: string): void {
-		this.#queue = []
-		this.raw.close(code, reason === undefined ? undefined : truncateUtf8(reason, MAX_CLOSE_REASON))
+		const self = this[SELF]
+		self.#queue = []
+		self.raw.close(code, reason === undefined ? undefined : truncateUtf8(reason, MAX_CLOSE_REASON))
 	}
 
 	send(data: ArrayBuffer | Uint8Array | object | string): void {
+		const self = this[SELF]
 		const payload =
 			typeof data === "string" || data instanceof ArrayBuffer || data instanceof Uint8Array
 				? data
 				: JSON.stringify(data)
-		const state = this.raw.readyState
-		if (state === 1) return this.#sendOpen(payload)
+		const state = self.raw.readyState
+		if (state === 1) return self.#sendOpen(payload)
 		/* closing or closed: nothing would ever send it */
 		if (state !== 0) return
-		if (this.#queue.length >= WS_SEND_BUFFER_MAX) this.#queue.shift()
-		this.#queue.push(payload)
+		if (self.#queue.length >= WS_SEND_BUFFER_MAX) self.#queue.shift()
+		self.#queue.push(payload)
 	}
 
 	#sendOpen(payload: ArrayBuffer | Uint8Array | string): void {
