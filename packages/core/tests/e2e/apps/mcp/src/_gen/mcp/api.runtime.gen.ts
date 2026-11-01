@@ -372,23 +372,23 @@ export function compilePattern(pattern: string): RegExp {
 /** What one call sends beyond the path: its parameters, headers, body and timing. */
 export type RequestOptions = {
 	/** a base URL for this call alone, in place of `config.baseURL` (C2) */
-	baseURL?: string
+	baseURL?: string | undefined
 	/** raw bytes sent as they are, `application/octet-stream` unless a content type is set */
-	body?: ArrayBuffer | Blob | ReadableStream<Uint8Array> | Uint8Array
-	cookies?: Record<string, string>
-	form?: Record<string, unknown>
-	headers?: Record<string, string | undefined>
+	body?: ArrayBuffer | Blob | ReadableStream<Uint8Array> | Uint8Array | undefined
+	cookies?: Record<string, string> | undefined
+	form?: Record<string, unknown> | undefined
+	headers?: Record<string, string | undefined> | undefined
 	/** the `Idempotency-Key` an idempotent operation sends; a fresh one per call otherwise */
-	idempotencyKey?: string
+	idempotencyKey?: string | undefined
 	json?: unknown
-	lastEventId?: string
-	params?: Record<string, string>
+	lastEventId?: string | undefined
+	params?: Record<string, string> | undefined
 	/** resolve the unread `Response` instead of its parsed body (C2); throw mode still throws on non-2xx */
-	raw?: boolean
-	search?: Record<string, unknown>
-	signal?: AbortSignal
+	raw?: boolean | undefined
+	search?: Record<string, unknown> | undefined
+	signal?: AbortSignal | undefined
 	/** Per-call timeout in milliseconds; overrides `config.timeout`, `0` disables it. */
-	timeout?: number
+	timeout?: number | undefined
 }
 
 /** How a request is read: by its answer (`auto`), as a value (`rest`) or as an event stream (`stream`). */
@@ -596,7 +596,9 @@ export function requestInit(
 	at: { body: BodyInit | undefined; headers: Headers; method: string; signal: AbortSignal | undefined },
 	config: Pick<ClientConfig, "credentials" | "mode">,
 ): RequestInit {
-	const init: RequestInit = { ...at }
+	const init: RequestInit = { headers: at.headers, method: at.method }
+	if (at.body !== undefined) init.body = at.body
+	if (at.signal !== undefined) init.signal = at.signal
 	if (config.credentials) init.credentials = config.credentials
 	if (config.mode) init.mode = config.mode
 	/* a stream body needs half-duplex on Node's fetch */
@@ -648,11 +650,11 @@ export type Reading = {
 	 * the non-JSON media type the operation declares: its body is read as that type, empty or not.
 	 * `null` when it declares no success body: whatever arrives is discarded and reads as null.
 	 */
-	declared?: string | null
+	declared?: string | null | undefined
 	/** the client's limits: an error message's characters, and the bytes a body may hold decoded */
-	limits?: Limits
+	limits?: Limits | undefined
 	method: string
-	raw?: boolean
+	raw?: boolean | undefined
 }
 
 /** A server's message as an Error may carry it: ASCII control characters stripped, `max` characters at most. */
@@ -733,7 +735,7 @@ export async function errorFromResponse(response: Response, limits: Limits = {})
 	const body = await readErrorBody(response, preserved, limits.maxResponseBytes)
 	const message =
 		typeof body === "object" && body !== null && "message" in body
-			? (body as Record<string, unknown>).message
+			? (body as Record<string, unknown>)["message"]
 			: undefined
 	const text =
 		typeof message === "string" && message.length > 0
@@ -843,13 +845,13 @@ export type RequestMeta = {
 }
 
 export type OnRequestContext = {
-	body?: BodyInit
+	body?: BodyInit | undefined
 	headers: Headers
-	invalidatedBy?: string[]
-	isStale?: boolean
+	invalidatedBy?: string[] | undefined
+	isStale?: boolean | undefined
 	method: string
 	path: string
-	selector?: string
+	selector?: string | undefined
 	state: Record<string, unknown>
 	url: string
 }
@@ -965,7 +967,7 @@ function nextHop(response: Response, init: RequestInit, crossOrigin: boolean): R
 		const method = (init.method ?? "GET").toUpperCase()
 		if (response.status === 303 ? method !== "HEAD" : method === "POST") {
 			next.method = "GET"
-			next.body = undefined
+			delete next.body
 			;(next.headers as Headers).delete("content-type")
 		}
 	}
@@ -1029,6 +1031,16 @@ export type ResponseAt = {
 	url: URL
 }
 
+/**
+ * `init` as a `Request` can take it: a body that cannot be sent twice is left out, never set to
+ * `undefined`, which `RequestInit` does not declare.
+ */
+function replayable(init: RequestInit): RequestInit {
+	if (isReplayable(init.body)) return init
+	const { body: _body, ...rest } = init
+	return rest
+}
+
 /** `ctx` with the read's stale view, when the SDK tracks one. */
 function withMeta<T extends object>(ctx: T, meta: RequestMeta | undefined): T {
 	if (meta) Object.assign(ctx, { invalidatedBy: meta.invalidatedBy, isStale: meta.isStale, selector: meta.selector })
@@ -1059,7 +1071,7 @@ export async function runResponseHooks(
 		path: at.path,
 		get request() {
 			/* built on demand: constructing a Request per response is not free */
-			request ??= new Request(at.url.toString(), { ...init, body: isReplayable(init.body) ? init.body : undefined })
+			request ??= new Request(at.url.toString(), replayable(init))
 			return request
 		},
 		response: at.response,
@@ -1213,7 +1225,11 @@ function readerOf(stream: ReadableStream<Uint8Array>, failed = (cause: unknown) 
  */
 export async function* parseSSEStream(
 	stream: ReadableStream<Uint8Array>,
-	opts?: { failed?: (cause: unknown) => unknown; maxLineBytes?: number; maxEventBytes?: number },
+	opts?: {
+		failed?: ((cause: unknown) => unknown) | undefined
+		maxLineBytes?: number | undefined
+		maxEventBytes?: number | undefined
+	},
 ): AsyncGenerator<SSEEvent, void, undefined> {
 	const decoder = new TextDecoder()
 	const { failed, maxEventBytes = MAX_EVENT, maxLineBytes: maxLine = MAX_LINE } = opts ?? {}
@@ -1276,7 +1292,7 @@ export type TypedWebSocket = {
 }
 
 export type WSOptions = {
-	protocols?: string | string[]
+	protocols?: string | string[] | undefined
 }
 
 type Payload = Blob | string | Uint8Array<ArrayBuffer>
@@ -1405,7 +1421,7 @@ export function createTypedWebSocket(
  */
 
 export type ServerFrame =
-	| { data: unknown; id?: string; reconnectToken?: string; t: "msg" }
+	| { data: unknown; id?: string | undefined; reconnectToken?: string | undefined; t: "msg" }
 	| { t: "pong" }
 	| { reason: string; t: "bye" }
 	| { reconnectToken: string; t: "ready" }
@@ -1437,10 +1453,10 @@ export type Transport = "longpoll" | "sse" | "ws"
 export type ConnectionState = "closed" | "connected" | "connecting" | "draining" | "idle" | "reconnecting"
 
 export type TransportOpts = {
-	headers?: Record<string, string>
-	lastEventId?: string
-	reconnectToken?: string
-	signal?: AbortSignal
+	headers?: Record<string, string> | undefined
+	lastEventId?: string | undefined
+	reconnectToken?: string | undefined
+	signal?: AbortSignal | undefined
 }
 
 /** One live transport: the adapter calls `onFrame`, `onClose` and `onError`; the client replaces them. */
@@ -1664,19 +1680,19 @@ export function createFallbackChain(opts: { timeout?: number; transports: Transp
 }
 
 export type ResumableConnectionOpts = {
-	fallbackTimeout?: number
+	fallbackTimeout?: number | undefined
 	/** Each dial's headers; a function is read on every dial, so a rotated token reaches the reconnect. */
-	headers?: Record<string, string> | (() => Record<string, string> | Promise<Record<string, string>>)
+	headers?: Record<string, string> | (() => Record<string, string> | Promise<Record<string, string>>) | undefined
 	/** Ping every this many ms (WebSocket 20 s, SSE none, unless set; 0: none); one unanswered as long reconnects. */
-	keepaliveInterval?: number
-	lastEventId?: string
+	keepaliveInterval?: number | undefined
+	lastEventId?: string | undefined
 	/** Reconnects after a drop before the stream ends; 0 retries forever. Default 5. */
-	maxReconnectAttempts?: number
-	onReconnected?: () => void
-	onReconnecting?: (attempt: number, transport: Transport) => void
-	reconnectDelayMs?: number
-	reconnectToken?: string
-	signal?: AbortSignal
+	maxReconnectAttempts?: number | undefined
+	onReconnected?: (() => void) | undefined
+	onReconnecting?: ((attempt: number, transport: Transport) => void) | undefined
+	reconnectDelayMs?: number | undefined
+	reconnectToken?: string | undefined
+	signal?: AbortSignal | undefined
 	transports: TransportAdapter[]
 	url: string
 }
@@ -1975,7 +1991,7 @@ export function createResumableConnection(opts: ResumableConnectionOpts): Resuma
 type Prepared = { body: BodyInit | undefined; headers: Headers; url: URL }
 
 /** One call: its method, path template and options; `refreshes: false` leaves a 401 to the realtime loop. */
-type Call = { method: string; opts: RequestOptions; path: string; refreshes?: false }
+type Call = { method: string; opts: RequestOptions; path: string; refreshes?: false | undefined }
 
 /** The realtime loop's refresh key, exported by the SDK under no name. */
 export const REFRESH_AUTH = /* @__PURE__ */ Symbol("honey.refreshAuth")
@@ -1983,12 +1999,12 @@ export const REFRESH_AUTH = /* @__PURE__ */ Symbol("honey.refreshAuth")
 /** One operation of a generated SDK: the call, how it is read, and its stale view for the hooks. */
 export type Operation = Call & {
 	/** the non-JSON media type the operation declares, read as that type; null when it declares no body */
-	declared?: string | null
-	meta?: RequestMeta
+	declared?: string | null | undefined
+	meta?: RequestMeta | undefined
 }
 
 /** An event stream's call: its stale view, and what runs once its answer is ok. */
-type StreamCall = Call & { meta?: RequestMeta; onOpen?: (response: Response) => void }
+type StreamCall = Call & { meta?: RequestMeta | undefined; onOpen?: ((response: Response) => void) | undefined }
 
 /** An event stream sent when its iteration starts: `open`'s events. */
 export const later = (open: () => Promise<Answer>): AsyncIterable<SSEEvent> => ({
@@ -2252,8 +2268,8 @@ function payloadOf(text: string): unknown {
 /** A payload's frame: `last_event_id` or `id` the cursor (a transport's id first), `reconnect_token` the token. */
 function frameOf(data: unknown, id?: string): Extract<ServerFrame, { t: "msg" }> {
 	const fields = (typeof data === "object" && data !== null ? data : {}) as Record<string, unknown>
-	const cursor = [fields.last_event_id, fields.id].find((v) => typeof v === "string" || typeof v === "number")
-	const reconnectToken = typeof fields.reconnect_token === "string" ? fields.reconnect_token : undefined
+	const cursor = [fields["last_event_id"], fields["id"]].find((v) => typeof v === "string" || typeof v === "number")
+	const reconnectToken = typeof fields["reconnect_token"] === "string" ? fields["reconnect_token"] : undefined
 	return { data, id: id ?? (cursor === undefined ? undefined : String(cursor)), reconnectToken, t: "msg" }
 }
 
@@ -2262,8 +2278,8 @@ const ready = (opts: TransportOpts): ServerFrame => ({ reconnectToken: opts.reco
 /** The cursor in the query: the reconnect token, and the last event id when `withId`. */
 function cursorOpts(at: Target, opts: TransportOpts, withId: boolean): RequestOptions {
 	const search = { ...at.opts.search }
-	if (opts.reconnectToken) search.reconnect_token = opts.reconnectToken
-	if (withId && opts.lastEventId) search.last_event_id = opts.lastEventId
+	if (opts.reconnectToken) search["reconnect_token"] = opts.reconnectToken
+	if (withId && opts.lastEventId) search["last_event_id"] = opts.lastEventId
 	return { ...at.opts, search }
 }
 
@@ -2401,7 +2417,7 @@ const MAX_PATTERNS = 1024
 type StaleEntry = {
 	by: Set<string>
 	/** concrete paths that have read once since this pattern was marked (pattern entries only) */
-	refreshed?: Set<string>
+	refreshed?: Set<string> | undefined
 	seq: number
 	until: number
 }
@@ -2870,7 +2886,7 @@ function pathError(e: PathParamError, entry: ServiceEntry): ClientError {
 /** The per-call options an entry adds: its `Accept` and an `Idempotency-Key`. */
 function optionsFor(entry: ServiceEntry, input: CallInput): RequestOptions {
 	const headers: Record<string, string | undefined> = {}
-	if (entry.accept) headers.accept = entry.accept
+	if (entry.accept) headers["accept"] = entry.accept
 	Object.assign(headers, input.headers)
 	if (entry.idempotent && !Object.keys(headers).some((k) => k.toLowerCase() === "idempotency-key"))
 		headers["Idempotency-Key"] = input.idempotencyKey ?? newClientRequestId()

@@ -70,15 +70,15 @@ export type ApiConfig = Omit<SDKConfig, "baseURL"> & {
 /** Every operation of the SDK, by its member path. */
 export interface ApiOperations {
 	extract: {
-		once: HoneyCall<{ params: { project_id: string }; form: CreateProjectsExtractRequest }, CreateProjectsExtractResponse200>
-		stream: HoneyStream<{ params: { project_id: string }; form: CreateProjectsExtractRequest }, SSEEvent>
+		once: HoneyCall<{ params: { project_id: string }; form: { columns?: string; file?: Blob; instruction?: string; schema?: string; strictness?: "strict" | "balanced" | "flexible"; text?: string } }, CreateProjectsExtractResponse200>
+		stream: HoneyStream<{ params: { project_id: string }; form: { columns?: string; file?: Blob; instruction?: string; schema?: string; strictness?: "strict" | "balanced" | "flexible"; text?: string } }, SSEEvent>
 		table: {
-			once: HoneyCall<{ params: { project_id: string; table_id: string }; form: CreateProjectsSuggestSchemaRequest }, CreateProjectsExtractResponse200>
-			stream: HoneyStream<{ params: { project_id: string; table_id: string }; form: CreateProjectsSuggestSchemaRequest }, SSEEvent>
+			once: HoneyCall<{ params: { project_id: string; table_id: string }; form: { file?: Blob; text?: string } }, CreateProjectsExtractResponse200>
+			stream: HoneyStream<{ params: { project_id: string; table_id: string }; form: { file?: Blob; text?: string } }, SSEEvent>
 		}
 	}
 	suggest: {
-		schema: HoneyCall<{ params: { project_id: string }; form: CreateProjectsSuggestSchemaRequest }, CreateProjectsExtractResponse200>
+		schema: HoneyCall<{ params: { project_id: string }; form: { file?: Blob; text?: string } }, CreateProjectsExtractResponse200>
 	}
 }
 

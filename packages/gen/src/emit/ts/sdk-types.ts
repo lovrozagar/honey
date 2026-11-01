@@ -37,7 +37,7 @@ function bodyField(body: IRBody): "body" | "form" | "json" | null {
 }
 
 /** One input field per body kind, the preferred content type of each kind winning: bytes, JSON, a form. */
-function bodyParts(op: SdkOp, types: TypeOptions): Part[] {
+function bodyParts(op: SdkOp, ctx: Context): Part[] {
 	const byField = new Map<string, IRBody>()
 	for (const body of bodiesOf(op.ir)) {
 		const field = bodyField(body)
@@ -46,17 +46,22 @@ function bodyParts(op: SdkOp, types: TypeOptions): Part[] {
 	return (["body", "json", "form"] as const).flatMap((field) => {
 		const body = byField.get(field)
 		if (body === undefined) return []
-		/* a multipart file part is a Blob, so a File passes; in JSON a binary field stays a string */
+		/* a multipart file part is a Blob, so a File passes; in JSON a binary field stays a string. the form's own
+		   shape is emitted, never its component's name: one named type cannot be `string` for JSON and `Blob` here,
+		   and a name is what hid the Blob until bit 22 b */
 		const type =
 			body.kind === "stream"
 				? "ArrayBuffer | Blob | ReadableStream<Uint8Array> | Uint8Array"
-				: irToTs(body.schema, field === "form" ? { ...types, binary: "Blob" } : types)
+				: field === "form"
+					? irToTs(ctx.resolve(body.schema), { ...ctx.types, binary: "Blob" })
+					: irToTs(body.schema, ctx.types)
 		return [{ field, required: body.required, type }]
 	})
 }
 
 /** A call's input object, and whether it must be passed. */
-function inputOf(op: SdkOp, types: TypeOptions): { required: boolean; type: string } {
+function inputOf(op: SdkOp, ctx: Context): { required: boolean; type: string } {
+	const { types } = ctx
 	/* a header or cookie is text on the wire: an enum keeps its values, anything else is a string */
 	const text = (p: IRParam) => (p.schema.kind === "scalar" && p.schema.enum ? irToTs(p.schema, types) : "string")
 	const pathParams = op.pathParams.map((p) => ({ ...p, required: true }))
@@ -65,7 +70,7 @@ function inputOf(op: SdkOp, types: TypeOptions): { required: boolean; type: stri
 		paramsPart("search", op.query, (p) => irToTs(p.schema, types)),
 		paramsPart("headers", op.headers, text),
 		paramsPart("cookies", op.ir.params.cookie ?? [], text),
-		...bodyParts(op, types),
+		...bodyParts(op, ctx),
 	].filter((part): part is Part => part !== null)
 	const ordered = [...parts.filter((p) => p.required), ...parts.filter((p) => !p.required)]
 	const fields = ordered.map((p) => `${p.field}${p.required ? "" : "?"}: ${p.type}`)
@@ -104,7 +109,7 @@ function headersOf(op: SdkOp): string | null {
 
 /** `op`'s member line `name`: a REST call a HoneyCall, a stream a HoneyStream, defaults dropped; a connection its method. */
 function signature(name: string, op: SdkOp, ctx: Context): string {
-	const input = inputOf(op, ctx.types)
+	const input = inputOf(op, ctx)
 	const arg = (extra: string) => {
 		const type = input.type === "{}" ? extra : `${input.type} & ${extra}`
 		return `${input.required ? "input" : "input?"}: ${type}`
