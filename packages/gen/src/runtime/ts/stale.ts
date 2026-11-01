@@ -29,7 +29,7 @@ const MAX_PATTERNS = 1024
 type StaleEntry = {
 	by: Set<string>
 	/** concrete paths that have read once since this pattern was marked (pattern entries only) */
-	refreshed?: Set<string>
+	refreshed?: Set<string> | undefined
 	seq: number
 	until: number
 }

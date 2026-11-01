@@ -14,6 +14,16 @@ export type ResponseAt = {
 	url: URL
 }
 
+/**
+ * `init` as a `Request` can take it: a body that cannot be sent twice is left out, never set to
+ * `undefined`, which `RequestInit` does not declare.
+ */
+function replayable(init: RequestInit): RequestInit {
+	if (isReplayable(init.body)) return init
+	const { body: _body, ...rest } = init
+	return rest
+}
+
 /** `ctx` with the read's stale view, when the SDK tracks one. */
 function withMeta<T extends object>(ctx: T, meta: RequestMeta | undefined): T {
 	if (meta) Object.assign(ctx, { invalidatedBy: meta.invalidatedBy, isStale: meta.isStale, selector: meta.selector })
@@ -44,7 +54,7 @@ export async function runResponseHooks(
 		path: at.path,
 		get request() {
 			/* built on demand: constructing a Request per response is not free */
-			request ??= new Request(at.url.toString(), { ...init, body: isReplayable(init.body) ? init.body : undefined })
+			request ??= new Request(at.url.toString(), replayable(init))
 			return request
 		},
 		response: at.response,

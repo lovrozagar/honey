@@ -5,7 +5,7 @@
  */
 
 export type ServerFrame =
-	| { data: unknown; id?: string; reconnectToken?: string; t: "msg" }
+	| { data: unknown; id?: string | undefined; reconnectToken?: string | undefined; t: "msg" }
 	| { t: "pong" }
 	| { reason: string; t: "bye" }
 	| { reconnectToken: string; t: "ready" }
@@ -37,10 +37,10 @@ export type Transport = "longpoll" | "sse" | "ws"
 export type ConnectionState = "closed" | "connected" | "connecting" | "draining" | "idle" | "reconnecting"
 
 export type TransportOpts = {
-	headers?: Record<string, string>
-	lastEventId?: string
-	reconnectToken?: string
-	signal?: AbortSignal
+	headers?: Record<string, string> | undefined
+	lastEventId?: string | undefined
+	reconnectToken?: string | undefined
+	signal?: AbortSignal | undefined
 }
 
 /** One live transport: the adapter calls `onFrame`, `onClose` and `onError`; the client replaces them. */
@@ -264,19 +264,19 @@ export function createFallbackChain(opts: { timeout?: number; transports: Transp
 }
 
 export type ResumableConnectionOpts = {
-	fallbackTimeout?: number
+	fallbackTimeout?: number | undefined
 	/** Each dial's headers; a function is read on every dial, so a rotated token reaches the reconnect. */
-	headers?: Record<string, string> | (() => Record<string, string> | Promise<Record<string, string>>)
+	headers?: Record<string, string> | (() => Record<string, string> | Promise<Record<string, string>>) | undefined
 	/** Ping every this many ms (WebSocket 20 s, SSE none, unless set; 0: none); one unanswered as long reconnects. */
-	keepaliveInterval?: number
-	lastEventId?: string
+	keepaliveInterval?: number | undefined
+	lastEventId?: string | undefined
 	/** Reconnects after a drop before the stream ends; 0 retries forever. Default 5. */
-	maxReconnectAttempts?: number
-	onReconnected?: () => void
-	onReconnecting?: (attempt: number, transport: Transport) => void
-	reconnectDelayMs?: number
-	reconnectToken?: string
-	signal?: AbortSignal
+	maxReconnectAttempts?: number | undefined
+	onReconnected?: (() => void) | undefined
+	onReconnecting?: ((attempt: number, transport: Transport) => void) | undefined
+	reconnectDelayMs?: number | undefined
+	reconnectToken?: string | undefined
+	signal?: AbortSignal | undefined
 	transports: TransportAdapter[]
 	url: string
 }

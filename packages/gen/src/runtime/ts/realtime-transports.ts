@@ -28,8 +28,8 @@ function payloadOf(text: string): unknown {
 /** A payload's frame: `last_event_id` or `id` the cursor (a transport's id first), `reconnect_token` the token. */
 function frameOf(data: unknown, id?: string): Extract<ServerFrame, { t: "msg" }> {
 	const fields = (typeof data === "object" && data !== null ? data : {}) as Record<string, unknown>
-	const cursor = [fields.last_event_id, fields.id].find((v) => typeof v === "string" || typeof v === "number")
-	const reconnectToken = typeof fields.reconnect_token === "string" ? fields.reconnect_token : undefined
+	const cursor = [fields["last_event_id"], fields["id"]].find((v) => typeof v === "string" || typeof v === "number")
+	const reconnectToken = typeof fields["reconnect_token"] === "string" ? fields["reconnect_token"] : undefined
 	return { data, id: id ?? (cursor === undefined ? undefined : String(cursor)), reconnectToken, t: "msg" }
 }
 
@@ -38,8 +38,8 @@ const ready = (opts: TransportOpts): ServerFrame => ({ reconnectToken: opts.reco
 /** The cursor in the query: the reconnect token, and the last event id when `withId`. */
 function cursorOpts(at: Target, opts: TransportOpts, withId: boolean): RequestOptions {
 	const search = { ...at.opts.search }
-	if (opts.reconnectToken) search.reconnect_token = opts.reconnectToken
-	if (withId && opts.lastEventId) search.last_event_id = opts.lastEventId
+	if (opts.reconnectToken) search["reconnect_token"] = opts.reconnectToken
+	if (withId && opts.lastEventId) search["last_event_id"] = opts.lastEventId
 	return { ...at.opts, search }
 }
 

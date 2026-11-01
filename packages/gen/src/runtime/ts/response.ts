@@ -45,11 +45,11 @@ export type Reading = {
 	 * the non-JSON media type the operation declares: its body is read as that type, empty or not.
 	 * `null` when it declares no success body: whatever arrives is discarded and reads as null.
 	 */
-	declared?: string | null
+	declared?: string | null | undefined
 	/** the client's limits: an error message's characters, and the bytes a body may hold decoded */
-	limits?: Limits
+	limits?: Limits | undefined
 	method: string
-	raw?: boolean
+	raw?: boolean | undefined
 }
 
 /** A server's message as an Error may carry it: ASCII control characters stripped, `max` characters at most. */
@@ -130,7 +130,7 @@ export async function errorFromResponse(response: Response, limits: Limits = {})
 	const body = await readErrorBody(response, preserved, limits.maxResponseBytes)
 	const message =
 		typeof body === "object" && body !== null && "message" in body
-			? (body as Record<string, unknown>).message
+			? (body as Record<string, unknown>)["message"]
 			: undefined
 	const text =
 		typeof message === "string" && message.length > 0

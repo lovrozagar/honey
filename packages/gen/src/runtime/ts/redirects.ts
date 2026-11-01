@@ -22,7 +22,7 @@ function nextHop(response: Response, init: RequestInit, crossOrigin: boolean): R
 		const method = (init.method ?? "GET").toUpperCase()
 		if (response.status === 303 ? method !== "HEAD" : method === "POST") {
 			next.method = "GET"
-			next.body = undefined
+			delete next.body
 			;(next.headers as Headers).delete("content-type")
 		}
 	}

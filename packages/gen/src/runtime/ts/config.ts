@@ -16,13 +16,13 @@ export type RequestMeta = {
 }
 
 export type OnRequestContext = {
-	body?: BodyInit
+	body?: BodyInit | undefined
 	headers: Headers
-	invalidatedBy?: string[]
-	isStale?: boolean
+	invalidatedBy?: string[] | undefined
+	isStale?: boolean | undefined
 	method: string
 	path: string
-	selector?: string
+	selector?: string | undefined
 	state: Record<string, unknown>
 	url: string
 }

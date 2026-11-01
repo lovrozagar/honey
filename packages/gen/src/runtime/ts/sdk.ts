@@ -80,7 +80,7 @@ function pathError(e: PathParamError, entry: ServiceEntry): ClientError {
 /** The per-call options an entry adds: its `Accept` and an `Idempotency-Key`. */
 function optionsFor(entry: ServiceEntry, input: CallInput): RequestOptions {
 	const headers: Record<string, string | undefined> = {}
-	if (entry.accept) headers.accept = entry.accept
+	if (entry.accept) headers["accept"] = entry.accept
 	Object.assign(headers, input.headers)
 	if (entry.idempotent && !Object.keys(headers).some((k) => k.toLowerCase() === "idempotency-key"))
 		headers["Idempotency-Key"] = input.idempotencyKey ?? newClientRequestId()

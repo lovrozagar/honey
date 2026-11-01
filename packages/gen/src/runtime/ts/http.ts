@@ -21,7 +21,7 @@ import { parseSSEStream, type SSEEvent } from "./sse.ts"
 type Prepared = { body: BodyInit | undefined; headers: Headers; url: URL }
 
 /** One call: its method, path template and options; `refreshes: false` leaves a 401 to the realtime loop. */
-type Call = { method: string; opts: RequestOptions; path: string; refreshes?: false }
+type Call = { method: string; opts: RequestOptions; path: string; refreshes?: false | undefined }
 
 /** The realtime loop's refresh key, exported by the SDK under no name. */
 export const REFRESH_AUTH = /* @__PURE__ */ Symbol("honey.refreshAuth")
@@ -29,12 +29,12 @@ export const REFRESH_AUTH = /* @__PURE__ */ Symbol("honey.refreshAuth")
 /** One operation of a generated SDK: the call, how it is read, and its stale view for the hooks. */
 export type Operation = Call & {
 	/** the non-JSON media type the operation declares, read as that type; null when it declares no body */
-	declared?: string | null
-	meta?: RequestMeta
+	declared?: string | null | undefined
+	meta?: RequestMeta | undefined
 }
 
 /** An event stream's call: its stale view, and what runs once its answer is ok. */
-type StreamCall = Call & { meta?: RequestMeta; onOpen?: (response: Response) => void }
+type StreamCall = Call & { meta?: RequestMeta | undefined; onOpen?: ((response: Response) => void) | undefined }
 
 /** An event stream sent when its iteration starts: `open`'s events. */
 export const later = (open: () => Promise<Answer>): AsyncIterable<SSEEvent> => ({

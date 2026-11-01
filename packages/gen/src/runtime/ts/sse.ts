@@ -115,7 +115,11 @@ function readerOf(stream: ReadableStream<Uint8Array>, failed = (cause: unknown) 
  */
 export async function* parseSSEStream(
 	stream: ReadableStream<Uint8Array>,
-	opts?: { failed?: (cause: unknown) => unknown; maxLineBytes?: number; maxEventBytes?: number },
+	opts?: {
+		failed?: ((cause: unknown) => unknown) | undefined
+		maxLineBytes?: number | undefined
+		maxEventBytes?: number | undefined
+	},
 ): AsyncGenerator<SSEEvent, void, undefined> {
 	const decoder = new TextDecoder()
 	const { failed, maxEventBytes = MAX_EVENT, maxLineBytes: maxLine = MAX_LINE } = opts ?? {}

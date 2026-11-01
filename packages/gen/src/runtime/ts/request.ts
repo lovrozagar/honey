@@ -4,23 +4,23 @@ import { ClientError } from "./error.ts"
 /** What one call sends beyond the path: its parameters, headers, body and timing. */
 export type RequestOptions = {
 	/** a base URL for this call alone, in place of `config.baseURL` (C2) */
-	baseURL?: string
+	baseURL?: string | undefined
 	/** raw bytes sent as they are, `application/octet-stream` unless a content type is set */
-	body?: ArrayBuffer | Blob | ReadableStream<Uint8Array> | Uint8Array
-	cookies?: Record<string, string>
-	form?: Record<string, unknown>
-	headers?: Record<string, string | undefined>
+	body?: ArrayBuffer | Blob | ReadableStream<Uint8Array> | Uint8Array | undefined
+	cookies?: Record<string, string> | undefined
+	form?: Record<string, unknown> | undefined
+	headers?: Record<string, string | undefined> | undefined
 	/** the `Idempotency-Key` an idempotent operation sends; a fresh one per call otherwise */
-	idempotencyKey?: string
+	idempotencyKey?: string | undefined
 	json?: unknown
-	lastEventId?: string
-	params?: Record<string, string>
+	lastEventId?: string | undefined
+	params?: Record<string, string> | undefined
 	/** resolve the unread `Response` instead of its parsed body (C2); throw mode still throws on non-2xx */
-	raw?: boolean
-	search?: Record<string, unknown>
-	signal?: AbortSignal
+	raw?: boolean | undefined
+	search?: Record<string, unknown> | undefined
+	signal?: AbortSignal | undefined
 	/** Per-call timeout in milliseconds; overrides `config.timeout`, `0` disables it. */
-	timeout?: number
+	timeout?: number | undefined
 }
 
 /** How a request is read: by its answer (`auto`), as a value (`rest`) or as an event stream (`stream`). */
@@ -228,7 +228,9 @@ export function requestInit(
 	at: { body: BodyInit | undefined; headers: Headers; method: string; signal: AbortSignal | undefined },
 	config: Pick<ClientConfig, "credentials" | "mode">,
 ): RequestInit {
-	const init: RequestInit = { ...at }
+	const init: RequestInit = { headers: at.headers, method: at.method }
+	if (at.body !== undefined) init.body = at.body
+	if (at.signal !== undefined) init.signal = at.signal
 	if (config.credentials) init.credentials = config.credentials
 	if (config.mode) init.mode = config.mode
 	/* a stream body needs half-duplex on Node's fetch */

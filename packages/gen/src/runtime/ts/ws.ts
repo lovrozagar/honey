@@ -21,7 +21,7 @@ export type TypedWebSocket = {
 }
 
 export type WSOptions = {
-	protocols?: string | string[]
+	protocols?: string | string[] | undefined
 }
 
 type Payload = Blob | string | Uint8Array<ArrayBuffer>
