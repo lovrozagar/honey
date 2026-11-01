@@ -1188,17 +1188,13 @@ class EventFields {
 	}
 }
 
-/**
- * The complete lines at the head of `pending` (CRLF, LF or CR), what is left after them, and how
- * much of that rest is already known to hold no line end. `from` is that count from the last call:
- * the scan resumes there, so a long line arriving in many chunks is read once, not once per chunk.
- */
-function completeLines(pending: string, from: number): { lines: string[]; rest: string; scanned: number } {
+/** The complete lines at the head of `pending` (CRLF, LF or CR), and what is left after them. */
+function completeLines(pending: string): { lines: string[]; rest: string } {
 	const lines: string[] = []
 	let start = 0
-	let end = from
+	let end = 0
 	while (start < pending.length) {
-		end = Math.max(end, start)
+		end = start
 		while (end < pending.length && pending.charCodeAt(end) !== 10 && pending.charCodeAt(end) !== 13) end++
 		if (end === pending.length) break
 		/* a CR as the last character may be the first half of CRLF */
@@ -1206,7 +1202,31 @@ function completeLines(pending: string, from: number): { lines: string[]; rest: 
 		lines.push(pending.slice(start, end))
 		start = end + (pending.charCodeAt(end) === 13 && pending.charCodeAt(end + 1) === 10 ? 2 : 1)
 	}
-	return { lines, rest: pending.slice(start), scanned: Math.max(end - start, 0) }
+	return { lines, rest: pending.slice(start) }
+}
+
+/** The open line as its pieces and their UTF-8 bytes: joining it per chunk was quadratic. */
+function openLine(max: number) {
+	let pieces: string[] = []
+	let bytes = 0
+	return {
+		/** The lines `text` completes; with no line end, and no CR before it, it extends the open line. */
+		take(text: string): string[] {
+			const last = pieces[pieces.length - 1]
+			if (!/[\r\n]/.test(text) && last?.charCodeAt(last.length - 1) !== 13) {
+				pieces.push(text)
+				bytes += bytesOf(text, max)
+				return []
+			}
+			const { lines, rest } = completeLines(pieces.join("") + text)
+			pieces = rest === "" ? [] : [rest]
+			bytes = bytesOf(rest, max)
+			return lines
+		},
+		over: () => bytes > max,
+		/** only a CR is open, held back as a possible CRLF's first half */
+		lone: () => pieces.length === 1 && pieces[0] === "\r",
+	}
 }
 
 /** `stream`'s reader, and a read whose failure throws `failed`'s error for it. */
@@ -1240,29 +1260,24 @@ export async function* parseSSEStream(
 	const { failed, maxEventBytes = MAX_EVENT, maxLineBytes: maxLine = MAX_LINE } = opts ?? {}
 	const { read, reader } = readerOf(stream, failed)
 	const fields = new EventFields(maxEventBytes)
-	let pending = ""
-	let scanned = 0
+	const open = openLine(maxLine)
 	let first = true
 	try {
 		for (let chunk = await read(); !chunk.done; chunk = await read()) {
-			pending += decoder.decode(chunk.value, { stream: true })
-			if (first && pending.length > 0) {
-				if (pending.charCodeAt(0) === 0xfeff) pending = pending.slice(1)
+			let text = decoder.decode(chunk.value, { stream: true })
+			if (first && text.length > 0) {
+				if (text.charCodeAt(0) === 0xfeff) text = text.slice(1)
 				first = false
 			}
-			const complete = completeLines(pending, scanned)
-			pending = complete.rest
-			scanned = complete.scanned
-			const { lines } = complete
-			for (const line of lines) {
+			for (const line of open.take(text)) {
 				if (overLine(line, maxLine)) throw new Error(`SSE line exceeds ${maxLine} bytes`)
 				const out = line === "" ? fields.dispatch() : fields.read(line)
 				if (out) yield out
 			}
-			if (overLine(pending, maxLine)) throw new Error(`SSE line exceeds ${maxLine} bytes`)
+			if (open.over()) throw new Error(`SSE line exceeds ${maxLine} bytes`)
 		}
 		/* a lone CR held back at the end of the stream still ends a blank line; anything else open is discarded */
-		if (pending === "\r") {
+		if (open.lone()) {
 			const out = fields.dispatch()
 			if (out) yield out
 		}

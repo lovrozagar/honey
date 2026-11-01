@@ -810,8 +810,12 @@ describe("the C# runtime within its byte budget (bit 15, G14)", () => {
  * read-your-writes map keyed on 0.7.3's colon form and every lookup silently missed. config.ts alone, +315 over
  * bit 22 b's own +48 there: the one-line note on OnRequestContext.path and OnResponseContext.path, and LogEntry's
  * comment rewritten to say `operation` carries that same spelling.
+ * rc.7, +362 B to 123,917, all in sse.ts: parseSSEStream keeps an open line as its pieces and counts its UTF-8 bytes
+ * as they arrive (openLine), where it re-counted and re-joined the whole line on every chunk. A 1 MiB line in 256-byte
+ * chunks took 2.5 s and timed out a loaded verify at 30 s; it takes about 5 ms now. Net of the resume offset
+ * completeLines no longer needs, which the pieces made dead; a closure, not a class, since it is 145 B smaller.
  */
-const TS_RUNTIME_BYTES = 123_555
+const TS_RUNTIME_BYTES = 123_917
 
 describe("the TS runtime within its byte budget (bit 11, G14)", () => {
 	it(

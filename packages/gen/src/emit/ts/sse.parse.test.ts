@@ -142,6 +142,33 @@ describe("parseSSEStream: framing", () => {
 	})
 })
 
+describe("parseSSEStream: cost", () => {
+	/* A 1 MiB line in small chunks: re-counting the whole pending line on every chunk made this quadratic, so
+	   256-byte chunks cost ~19x what 4 KiB chunks did (2.5 s against 0.13 s) and a loaded runner timed out at 30 s.
+	   Linear, the two cost about the same. A ratio, not a time, so a loaded machine slows both sides alike. */
+	const overlong = async (chunkSize: number) => {
+		const chunk = new TextEncoder().encode("x".repeat(chunkSize))
+		let pushed = 0
+		const stream = new ReadableStream<Uint8Array>({
+			pull(controller) {
+				if (pushed >= 2 * 1024 * 1024) return controller.close()
+				controller.enqueue(pushed === 0 ? new TextEncoder().encode("data: ") : chunk)
+				pushed += pushed === 0 ? 6 : chunkSize
+			},
+		})
+		const started = performance.now()
+		await expect(parseStream(stream)).rejects.toThrow("SSE line exceeds")
+		return performance.now() - started
+	}
+
+	it("reads an overlong line in small chunks in about the time it reads it in large ones", async () => {
+		await overlong(4096)
+		const large = await overlong(4096)
+		const small = await overlong(256)
+		expect(small / large).toBeLessThan(6)
+	}, 60_000)
+})
+
 /** The shared SSE parse vectors (WHATWG event stream interpretation): chunks in, events out. */
 const VECTORS: ReadonlyArray<readonly [name: string, chunks: Chunk[], events: Event[]]> = [
 	["single event", ["data: hello\n\n"], [{ data: "hello" }]],
