@@ -87,9 +87,37 @@ export function paramsOf(input: unknown): Record<string, string> {
 }
 
 /**
- * The key a read is cached under: its member path, plus `{ params }` once every path param has a value.
- * One missing value leaves the prefix, which invalidates every query of that read — the key-space answer to
- * a partially resolved route, never a dropped target.
+ * There are two kinds of key here and they are not the same job.
+ *
+ * `readKey` is an IDENTITY: the key one read is cached under. TanStack needs every input the `queryFn`
+ * sends to be in it, so it holds the request object whole — `params`, `search`, and anything else the SDK
+ * puts there. Only the request: `init` carries a signal and a timeout, which say nothing about the answer
+ * and would not hash. Two reads of one route that differ by search are two entries, which is the whole
+ * point.
+ *
+ * `keyOf` is a FILTER: the prefix an `x-invalidate` target makes stale. A mutation knows its own path
+ * params and nothing about what a reader searched for, so it names `{ params }` at most and TanStack's
+ * partial matching does the rest — `[sdk, …member, { params }]` matches a longer key that also carries
+ * `search`, and `[sdk, …member]` matches every search there is.
+ *
+ * Collapsing the two is what shipped in 1.0.0-rc.8 with `search` missing from read keys.
+ */
+export function readKey(sdkName: string, member: readonly string[], req: unknown): QueryKey {
+	const prefix = [sdkName, ...member]
+	return req === undefined ? prefix : [...prefix, req]
+}
+
+/**
+ * The marker that keeps a paged read off the plain read's entry: their cached shapes differ, one being
+ * `InfiniteData`. It goes LAST so an invalidation filter still prefix-matches the paged key — a filter
+ * compares only its own positions, so a shorter one reaches the longer key.
+ */
+export const INFINITE = "infinite"
+
+/**
+ * The prefix an `x-invalidate` target makes stale: the read's member path, plus `{ params }` once every
+ * path param has a value. One missing value leaves the bare prefix, which invalidates every query of that
+ * read — the key-space answer to a partially resolved route, never a dropped target.
  */
 export function keyOf(sdkName: string, read: Read, params: Record<string, string>): QueryKey {
 	const prefix = [sdkName, ...read.member]

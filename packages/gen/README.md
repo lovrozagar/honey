@@ -187,9 +187,22 @@ Its `createQueryHelpers(sdk, { getQueryClient })` gives five surfaces — `query
 
 The document decides what goes where. A `GET` is on `query`, every other method is on `mutation`, and an event
 stream, a WebSocket or an `x-realtime` operation is on neither, because a stream is not a cache entry. Nothing
-is keyed off a method's name. A successful write invalidates the reads its `x-invalidate` selectors name, with
-the mutation's own path params filled in; a selector whose params are not all known invalidates that read's key
-prefix instead, so it is made stale rather than missed.
+is keyed off a method's name.
+
+**Keys.** A read's key is `[<SDK name>, ...the member path, the request]` — the request object whole, so
+`params`, `search` and anything else the SDK sends are all in it. That is what TanStack requires: every input
+the `queryFn` depends on belongs in the key, so two reads of one route that differ only by `search` are two
+cache entries. `init` is not in the key, since a signal and a timeout say nothing about the answer. A read with
+no request keys as `[<SDK name>, ...the member path]`. `queryKey.<…>(req)` returns exactly the key
+`query.<…>({ reqOptions: { req } })` writes. A paged read carries a trailing `"infinite"` marker, because its
+cached shape is `InfiniteData` and it must not share the plain read's entry.
+
+**Invalidation** works by prefix, which is why the two are not the same shape. A successful write makes stale
+the reads its `x-invalidate` selectors name, with the mutation's own path params filled in:
+`[<SDK name>, ...the member path, { params }]`. TanStack matches objects partially and compares only the
+filter's own positions, so that reaches every search of that read, the paged entry included. When a selector's
+params are not all known the filter stays the bare prefix, which reaches everything under it — made stale
+rather than missed.
 
 Two notes. `@tanstack/query-core` is your dependency, not honey's — install it yourself; the file imports it for
 types only. And a read's options carry `initialData: undefined`, which is what solid-query needs to keep the

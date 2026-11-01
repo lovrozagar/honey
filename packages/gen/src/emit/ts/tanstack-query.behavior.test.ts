@@ -5,7 +5,7 @@
  * `monorepo/packages/query-client/src/repo.query-client.invalidation.test.ts`, so a read-after-write that
  * worked there works here.
  */
-import { QueryClient, type QueryKey } from "@tanstack/query-core"
+import { hashKey, partialMatchKey, QueryClient, type QueryKey } from "@tanstack/query-core"
 import { describe, expect, it } from "vitest"
 import type { ServiceMap } from "../../runtime/ts/sdk.ts"
 import type { Surface } from "../../runtime/ts-tanstack-query/query.ts"
@@ -106,6 +106,108 @@ describe("the adapter's surfaces follow the service map, not method names", () =
 			"update",
 			{ params: { organization_id: ORG } },
 		])
+	})
+})
+
+/* the queryFn sends req.search, so two searches are two cache entries; keying on params alone merged them */
+const searchMap: ServiceMap = {
+	auth: {
+		listSecurityEvents: { method: "GET", path: "/v1/auth/events" },
+		revokeSession: { invalidate: ["GET /v1/auth/events"], method: "POST", path: "/v1/auth/sessions/revoke" },
+	},
+	org: {
+		get: { method: "GET", params: ["organization_id"], path: "/v1/organizations/{organization_id}" },
+		update: {
+			invalidate: ["GET /v1/organizations/:organization_id"],
+			method: "PATCH",
+			params: ["organization_id"],
+			path: "/v1/organizations/{organization_id}",
+		},
+	},
+}
+const searchSdk = {
+	auth: { listSecurityEvents: () => Promise.resolve({}), revokeSession: () => Promise.resolve({}) },
+	org: { get: () => Promise.resolve({}), update: () => Promise.resolve({}) },
+}
+const withSearch = (client?: QueryClient) =>
+	queryHelpers(searchSdk, searchMap, SDK_NAME, client === undefined ? {} : { getQueryClient: () => client })
+
+describe("a read's key holds every input that changes its answer", () => {
+	it("separates two pages of one route that differ only by search", () => {
+		const h = withSearch()
+		const first = h.query.auth.listSecurityEvents({ reqOptions: { req: { search: { limit: 20 } } } })
+		const next = h.query.auth.listSecurityEvents({ reqOptions: { req: { search: { before: "c1", limit: 20 } } } })
+		expect(first.queryKey).not.toEqual(next.queryKey)
+		expect(hashKey(first.queryKey)).not.toBe(hashKey(next.queryKey))
+	})
+
+	it("holds the request itself, params and search together", () => {
+		const options = withSearch().query.org.get({
+			reqOptions: { req: { params: { organization_id: ORG }, search: { expand: "members" } } },
+		})
+		expect(options.queryKey).toEqual([
+			SDK_NAME,
+			"org",
+			"get",
+			{ params: { organization_id: ORG }, search: { expand: "members" } },
+		])
+	})
+
+	it("keys a read with no request by its member path alone", () => {
+		expect(withSearch().query.auth.listSecurityEvents().queryKey).toEqual([SDK_NAME, "auth", "listSecurityEvents"])
+	})
+
+	it("is stable under property order, so one search is one entry however it is written", () => {
+		const h = withSearch()
+		const a = h.query.auth.listSecurityEvents({ reqOptions: { req: { search: { before: "c1", limit: 20 } } } })
+		const b = h.query.auth.listSecurityEvents({ reqOptions: { req: { search: { limit: 20, before: "c1" } } } })
+		expect(hashKey(a.queryKey)).toBe(hashKey(b.queryKey))
+	})
+
+	it("gives queryKey.* exactly the key query.* writes for that request", () => {
+		const h = withSearch()
+		const req = { params: { organization_id: ORG }, search: { expand: "members" } }
+		expect(h.queryKey.org.get(req)).toEqual(h.query.org.get({ reqOptions: { req } }).queryKey)
+		expect(h.queryKey.auth.listSecurityEvents()).toEqual(h.query.auth.listSecurityEvents().queryKey)
+	})
+})
+
+describe("a read's key and an invalidation filter meet without colliding", () => {
+	it("keeps an infinite read off the plain read's entry, whose data shape differs", () => {
+		const h = withSearch()
+		const plain = h.query.auth.listSecurityEvents({ reqOptions: { req: { search: { limit: 20 } } } })
+		const paged = h.infiniteQuery.auth.listSecurityEvents({
+			buildReqOptions: (before: string | null) => ({ req: { search: { before, limit: 20 } } }),
+			getNextPageParam: () => null,
+			initialPageParam: null,
+		})
+		expect(paged.queryKey).not.toEqual(plain.queryKey)
+		expect(hashKey(paged.queryKey)).not.toBe(hashKey(plain.queryKey))
+	})
+
+	it("still lets a write reach both entries by prefix, filled params and all", async () => {
+		const { client, keys } = trackingClient()
+		const h = withSearch(client)
+		await h.mutation.auth.revokeSession().mutationFn({})
+		await h.mutation.org.update().mutationFn({ params: { organization_id: ORG } })
+		expect(keys).toEqual([
+			[SDK_NAME, "auth", "listSecurityEvents"],
+			[SDK_NAME, "org", "get", { params: { organization_id: ORG } }],
+		])
+		/* what TanStack does with those filters: the prefix matches every search, and the params object
+		   partially matches a key that also carries search, including the infinite read's longer key */
+		const plain = h.query.auth.listSecurityEvents({ reqOptions: { req: { search: { limit: 20 } } } }).queryKey
+		const paged = h.infiniteQuery.auth.listSecurityEvents({
+			buildReqOptions: () => ({ req: { search: { limit: 20 } } }),
+			getNextPageParam: () => null,
+			initialPageParam: null,
+		}).queryKey
+		const one = h.query.org.get({
+			reqOptions: { req: { params: { organization_id: ORG }, search: { expand: "members" } } },
+		}).queryKey
+		expect(partialMatchKey(plain, keys[0] as QueryKey)).toBe(true)
+		expect(partialMatchKey(paged, keys[0] as QueryKey)).toBe(true)
+		expect(partialMatchKey(one, keys[1] as QueryKey)).toBe(true)
 	})
 })
 

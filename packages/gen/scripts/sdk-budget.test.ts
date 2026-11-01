@@ -843,8 +843,15 @@ describe("the TS runtime within its byte budget (bit 11, G14)", () => {
  * `query.ts` (the three option factories, the key builders, and the proxies that answer `undefined` for a kind an
  * entry does not belong to, so a stream is in no surface). A raise names its feature bytes and cuts dead and
  * duplicate code first; it is never silent.
+ * Bit 22 fix, +1,332 B to 16,607 B: a read's key holds the request whole, so two reads of one route that
+ * differ by `search` are two entries. rc.8 keyed a read with the invalidation filter's builder, which names
+ * `{ params }` at most, and a paged list stored page 2 under page 1's key. invalidate.ts +1,032 (readKey, the
+ * INFINITE marker, and the note telling an identity key from a filter key — the distinction whose absence
+ * was the bug), query.ts +300 (the three factories keyed through readKey, the paged one marked, and `entry`
+ * dropped from two of them now that nothing reads `params` there: dead parameters a consumer's
+ * `noUnusedParameters` would refuse).
  */
-const TS_TANSTACK_QUERY_RUNTIME_BYTES = 15_275
+const TS_TANSTACK_QUERY_RUNTIME_BYTES = 16_607
 
 describe("the TanStack Query adapter within its byte budget (bit 22, G14)", () => {
 	it(

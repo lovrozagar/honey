@@ -62,7 +62,11 @@ const document = {
 			},
 		},
 		"/orgs/{org_id}/members": {
-			get: { operationId: "org.member.list", parameters: [param("org_id")], responses: { 200: json() } },
+			get: {
+				operationId: "org.member.list",
+				parameters: [param("org_id"), { in: "query", name: "limit", schema: { type: "integer" } }],
+				responses: { 200: json() },
+			},
 		},
 	},
 } as unknown as OpenApiDocument
@@ -82,6 +86,17 @@ export const create = helpers.mutation.org.create()
 export const update = helpers.mutation.org.update()
 export const listKey = helpers.queryKey.org.list()
 export const oneKey = helpers.queryKey.org.get({ params: { org_id: "o1" } })
+
+/* search belongs in the key, so the typed request has to accept it on both the read and its key builder */
+export const page = helpers.query.org.member.list({
+	reqOptions: { req: { params: { org_id: "o1" }, search: { limit: 20 } } },
+})
+export const pageKey = helpers.queryKey.org.member.list({ params: { org_id: "o1" }, search: { limit: 20 } })
+export const paged = helpers.infiniteQuery.org.member.list({
+	buildReqOptions: (limit: number) => ({ req: { params: { org_id: "o1" }, search: { limit } } }),
+	getNextPageParam: () => null,
+	initialPageParam: 20,
+})
 `
 
 /** The project written out, and what `tsc` says about it: `""` when it is clean. */

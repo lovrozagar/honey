@@ -28,13 +28,13 @@ import type { ServiceEntry, ServiceMap } from "../ts/sdk.ts"
 import {
 	childOf,
 	indexReads,
+	INFINITE,
 	invalidatedBy,
 	isEntry,
 	isStream,
-	keyOf,
-	paramsOf,
 	READ,
 	type Read,
+	readKey,
 } from "./invalidate.ts"
 
 /** The SDK, or a thunk for one: an isomorphic app builds a client per request. */
@@ -143,13 +143,13 @@ type Context = {
 	sdkName: string
 }
 
-function queryOptionsAt(ctx: Context, member: string[], entry: ServiceEntry) {
+function queryOptionsAt(ctx: Context, member: string[]) {
 	return (options?: { queryProps?: object; reqOptions?: { init?: unknown; req?: unknown } }) => {
 		const { init, req } = options?.reqOptions ?? {}
 		const args = init === undefined ? [req] : [req, init]
 		return {
 			queryFn: () => methodAt(readSdk(ctx.sdk), member)(...args),
-			queryKey: keyOf(ctx.sdkName, { member, params: entry.params ?? [] }, paramsOf(req)),
+			queryKey: readKey(ctx.sdkName, member, req),
 			...options?.queryProps,
 			/* after the spread: a caller's queryProps cannot un-seed the Solid overload */
 			initialData: undefined,
@@ -173,7 +173,7 @@ function mutationOptionsAt(ctx: Context, member: string[], entry: ServiceEntry) 
 	})
 }
 
-function infiniteOptionsAt(ctx: Context, member: string[], entry: ServiceEntry) {
+function infiniteOptionsAt(ctx: Context, member: string[]) {
 	return (options: {
 		buildReqOptions: (pageParam: unknown) => { init?: unknown; req: unknown }
 		infiniteQueryProps?: object
@@ -188,25 +188,21 @@ function infiniteOptionsAt(ctx: Context, member: string[], entry: ServiceEntry) 
 				const args = init === undefined ? [req] : [req, init]
 				return methodAt(readSdk(ctx.sdk), member)(...args)
 			},
-			queryKey: keyOf(
-				ctx.sdkName,
-				{ member, params: entry.params ?? [] },
-				paramsOf(buildReqOptions(initialPageParam).req),
-			),
+			queryKey: [...readKey(ctx.sdkName, member, buildReqOptions(initialPageParam).req), INFINITE],
 			...infiniteQueryProps,
 		}
 	}
 }
 
-function keyFactoryAt(ctx: Context, member: string[], entry: ServiceEntry) {
-	return (req?: unknown) => keyOf(ctx.sdkName, { member, params: entry.params ?? [] }, paramsOf(req))
+function keyFactoryAt(ctx: Context, member: string[]) {
+	return (req?: unknown) => readKey(ctx.sdkName, member, req)
 }
 
 function factoryFor(ctx: Context, surface: Kind, member: string[], entry: ServiceEntry): unknown {
-	if (surface === "query") return queryOptionsAt(ctx, member, entry)
+	if (surface === "query") return queryOptionsAt(ctx, member)
 	if (surface === "mutation") return mutationOptionsAt(ctx, member, entry)
-	if (surface === "infiniteQuery") return infiniteOptionsAt(ctx, member, entry)
-	return keyFactoryAt(ctx, member, entry)
+	if (surface === "infiniteQuery") return infiniteOptionsAt(ctx, member)
+	return keyFactoryAt(ctx, member)
 }
 
 /**
