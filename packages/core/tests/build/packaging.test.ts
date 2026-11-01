@@ -205,7 +205,7 @@ describe.sequential("the tarballs, installed (bit 19 i)", () => {
 	])(
 		"type-checks against every core subpath, the generated types included, with %s resolution and every strict flag",
 		(resolution, module) => {
-			expect(strictCheck(app, resolution, module)).toEqual([48, 0, ""])
+			expect(strictCheck(app, resolution, module)).toEqual([49, 0, ""])
 		},
 		60_000,
 	)
@@ -214,7 +214,7 @@ describe.sequential("the tarballs, installed (bit 19 i)", () => {
 		const dir = consumer(join(files.out, "core-only"), { "@lovrozagar/honey": `file:${tarballs.core}` }, [
 			"@types/node",
 		])
-		expect(strictCheck(dir, "Bundler", "ESNext")).toEqual([48, 0, ""])
+		expect(strictCheck(dir, "Bundler", "ESNext")).toEqual([49, 0, ""])
 	}, 60_000)
 
 	it("honey-clients in the install generates a TypeScript SDK from the app, its runtime files read from dist/", () => {

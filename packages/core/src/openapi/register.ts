@@ -25,6 +25,15 @@ export {
 } from "./manifest.ts"
 export { type DocsConfig, inlineJson } from "./docs-page.ts"
 export { scalar } from "./scalar.ts"
+export type { DocsPage } from "./served.ts"
 export { type ServeManifestOptions, type ServeOpenApiOptions, serveManifest, serveOpenApi } from "./serve.ts"
+export {
+	type DocumentLoader,
+	type FetchedSource,
+	type JsonSource,
+	type ServeStaticOpenApiOptions,
+	serveStaticOpenApi,
+	type YamlSource,
+} from "./static.ts"
 export { swagger } from "./swagger.ts"
 export { toYaml } from "./yaml.ts"

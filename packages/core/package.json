@@ -144,6 +144,11 @@
 			"types": "./dist/openapi/scalar.d.ts",
 			"default": "./dist/openapi/scalar.js"
 		},
+		"./openapi/static": {
+			"honey-source": "./src/openapi/static.ts",
+			"types": "./dist/openapi/static.d.ts",
+			"default": "./dist/openapi/static.js"
+		},
 		"./openapi/swagger": {
 			"honey-source": "./src/openapi/swagger.ts",
 			"types": "./dist/openapi/swagger.d.ts",
