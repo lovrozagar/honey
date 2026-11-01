@@ -363,3 +363,27 @@ test.describe("the served bundle (Q14)", () => {
 		expect([res.status(), await res.json()]).toEqual([200, { bundle: true }])
 	})
 })
+
+test.describe("a document served from an asset binding", () => {
+	test("on Workers, GET /api/static-openapi.json is the committed asset, with its ETag and a 304", async ({
+		request,
+	}) => {
+		test.skip(process.env.HONEY_E2E_ENV !== "cf", "the ASSETS binding is a Workers one")
+		const res = await request.get("/api/static-openapi.json")
+		expect(res.status()).toBe(200)
+		expect(res.headers()["content-type"]).toBe("application/json; charset=utf-8")
+		expect(((await res.json()) as { info: { title: string } }).info.title).toBe("Honey CF assets")
+		const etag = res.headers()["etag"] ?? ""
+		expect(etag).toMatch(/^"/)
+		const again = await request.get("/api/static-openapi.json", { headers: { "if-none-match": etag } })
+		expect(again.status()).toBe(304)
+		expect(await again.text()).toBe("")
+	})
+
+	test("off Workers nothing is bound, so the route answers the standard 500 envelope", async ({ request }) => {
+		test.skip(process.env.HONEY_E2E_ENV === "cf", "on Workers the binding is there")
+		const res = await request.get("/api/static-openapi.json")
+		expect(res.status()).toBe(500)
+		expect(((await res.json()) as { error_key: string }).error_key).toBe("internal_server_error")
+	})
+})

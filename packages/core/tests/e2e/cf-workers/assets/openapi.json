@@ -1,0 +1,17 @@
+{
+	"openapi": "3.1.0",
+	"info": {
+		"title": "Honey CF assets",
+		"version": "1.0.0",
+		"description": "A document written ahead of time and served from the Workers ASSETS binding, so the e2e run proves serveStaticOpenApi against a real Workers runtime. Nothing generates it."
+	},
+	"paths": {
+		"/api/health": {
+			"get": {
+				"operationId": "assets.health",
+				"summary": "Liveness",
+				"responses": { "200": { "description": "ok" } }
+			}
+		}
+	}
+}

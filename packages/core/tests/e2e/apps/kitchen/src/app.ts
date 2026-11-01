@@ -5,6 +5,7 @@ import { cors } from "@lovrozagar/honey/cors"
 import { errorI18n } from "@lovrozagar/honey/i18n"
 import { createLogger } from "@lovrozagar/honey/logger"
 import { serveManifest, serveOpenApi } from "@lovrozagar/honey/openapi"
+import { serveStaticOpenApi } from "@lovrozagar/honey/openapi/static"
 import { scalar } from "@lovrozagar/honey/openapi/scalar"
 import { realtime } from "@lovrozagar/honey/realtime"
 import { ws } from "@lovrozagar/honey/ws"
@@ -291,6 +292,9 @@ export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
 		})
 
 	/* ---- codegen endpoints ---- */
+
+	/* a document written ahead of time, served from the Workers ASSETS binding (no generator) */
+	serveStaticOpenApi(corsed, { json: { asset: "/openapi.json" }, path: "/static-openapi" })
 
 	serveManifest(
 		serveOpenApi(corsed, {

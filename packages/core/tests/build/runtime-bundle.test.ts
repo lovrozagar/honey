@@ -55,6 +55,10 @@ const WS_ROUTE = ["routing/ws-builder", "ws/origin", "ws/session", "ws/shared"]
 /* the output-key check runs where an app is documented or its tree generated, never on a request (bit 21 f2) */
 const GENERATION_ONLY = ["openapi/output-keys"]
 
+/* what a document built ahead of time never needs: the generator and either docs page */
+const GENERATOR = ["openapi/generate", "openapi/collect", "openapi/components", "openapi/yaml"]
+const PAGES = ["openapi/scalar", "openapi/swagger"]
+
 /* the MCP mount's modules: mcp(app, path, handler) reaches mount alone (bit 21 e, H24.3), oauth() its resource server
  * by an import of its own, so a mount without it carries none of it (bit 21 f, H23), and uploads() and urlFiles() the
  * same (bit 21 g) */
@@ -203,6 +207,51 @@ describe("the runtime bundle of an installed core (bit 19 i)", () => {
 				["mcp/mount", "mcp/oauth"],
 				["mcp/mount", "mcp/uploads", "mcp/url-files"],
 			])
+		},
+		60_000,
+	)
+
+	it.skipIf(!BUN)(
+		`serveStaticOpenApi carries no generator and no page it was not given (bun ${pinnedBunVersion()})`,
+		() => {
+			const served = [
+				'import { honey } from "@lovrozagar/honey"',
+				'import { serveStaticOpenApi } from "@lovrozagar/honey/openapi/static"',
+				'const app = serveStaticOpenApi(honey(), { json: { asset: "/openapi.json" } })',
+				"export default { fetch: (req: Request) => app.fetch(req, {}) }",
+				"",
+			]
+			const withPage = [
+				'import { honey } from "@lovrozagar/honey"',
+				'import { scalar } from "@lovrozagar/honey/openapi/scalar"',
+				'import { serveStaticOpenApi } from "@lovrozagar/honey/openapi/static"',
+				'const app = serveStaticOpenApi(honey(), { docs: scalar, json: { asset: "/openapi.json" } })',
+				"export default { fetch: (req: Request) => app.fetch(req, {}) }",
+				"",
+			]
+			const generated = [
+				'import { honey } from "@lovrozagar/honey"',
+				'import { serveOpenApi } from "@lovrozagar/honey/openapi"',
+				'const app = serveOpenApi(honey(), { title: "Doc", version: "1.0.0" })',
+				"export default { fetch: (req: Request) => app.fetch(req, {}) }",
+				"",
+			]
+			/*
+			 * what serving a document already written costs: the router, context, responses and telemetry, plus
+			 * openapi/served and openapi/static. Measured 27,478 bytes gzipped (level 9, the pinned bun
+			 * --minify), locked at the next 100. The minimal bundle is 26,245 of that, so serving a document the
+			 * app did not generate costs 1,233 bytes: the two modules, and nothing of the generator or a page.
+			 */
+			const gzipped = gzipSync(bunBundle("static-doc", served), { level: 9 }).length
+			expect(
+				[
+					routeModules("static-doc", served, [...GENERATOR, ...PAGES]),
+					routeModules("static-page", withPage, [...GENERATOR, ...PAGES]),
+					routeModules("generated-doc", generated, PAGES),
+					gzipped < 27_500,
+				],
+				`${gzipped} bytes gzipped`,
+			).toEqual([[], ["openapi/scalar"], [], true])
 		},
 		60_000,
 	)
