@@ -4,5 +4,7 @@
 
 | lesson | paths | hits | last-hit | summary |
 | --- | --- | --- | --- | --- |
+| .rulesync/lessons/ci-env-differs-from-local.md | packages/gen/src/**, packages/core/src/**, .github/workflows/ci.yml | 1 | 2026-11-01 | 1.0.0-rc.10's release run died on five tests after a green local `bun run verify`. CI runs the same |
 | .rulesync/lessons/consumer-e2e-test-costs.md | blueprint/baselines/e2e-expected.json, packages/core/tests/e2e/run.ts, packages/core/tests/e2e/apps/*/tests/e2e/*.test.ts | 1 | 2026-11-01 | A Playwright test added to a `tests/e2e/apps/*` app failed verify for two reasons at once, neither of |
+| .rulesync/lessons/run-the-gates-that-read-your-source.md | packages/gen/src/**, packages/core/src/**, packages/core/lint/**, packages/gen/tests/structure/**, blueprint/files.tsv | 1 | 2026-11-01 | Plan 21 took four `bun run verify` passes. Every pass found a real defect, and none of them was in a |
 | .rulesync/lessons/slow-leg-default-timeout.md | packages/gen/src/**/*.test.ts, packages/gen/scripts/*.test.ts, packages/core/tests/**/*.test.ts | 1 | 2026-11-01 | `packages/gen/src/emit/mcp/server.test.ts`'s compiled-twin leg passed on its own and timed out at |

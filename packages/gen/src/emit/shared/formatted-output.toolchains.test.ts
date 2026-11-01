@@ -111,6 +111,19 @@ describe("a formatter that is not there", () => {
 		).rejects.toThrow(`RUFF=${missing} is not there`)
 	})
 
+	it("reports for gofmt too, where the go target used to refuse outright", { timeout: SPAWN_TIMEOUT }, async () => {
+		const reported: string[] = []
+		const files = await generated({ targets: ["go"] }, document, {
+			env: { PATH: "" },
+			report: (line) => reported.push(line),
+		})
+		/* before bit 22 this threw: "gofmt is required for the go and cli targets" */
+		expect(Object.keys(files.go ?? {}).length).toBeGreaterThan(0)
+		expect(reported).toEqual([
+			"honey-clients: gofmt was not found, so the go output is not formatted (install Go, or set GOFMT)\n",
+		])
+	})
+
 	it("fails instead under HONEY_REQUIRE_FORMATTERS", { timeout: SPAWN_TIMEOUT }, async () => {
 		await expect(
 			generated({ targets: ["python"] }, document, {

@@ -2,12 +2,10 @@
  * The honey-clients generate CLI (bit 17 phase h): a usage error is exit 1 with the usage text (and --help names what
  * a regeneration deletes); each target written under `<out>/<target>`, its options passed through untouched, so a
  * hostile one is refused by its own generator with that generator's message; a spec that is not JSON refused; the go
- * and cli targets' whole trees, internal/sdk included, through gofmt, found by GOFMT, GOROOT, PATH or beside the real
- * go; the ts target's files as oxfmt formats them, and as emitted when oxfmt does not resolve (bit 19 i, Q12). Since
- * bit 22 a formatter that is not there is named on stderr rather than passing silently, and fails only under
- * HONEY_REQUIRE_FORMATTERS; `--watch` regenerating in a fresh child on each change of the spec until
- * stopped, no child left once it ends. Most legs run `main` in process; the bin legs prove the command a user runs,
- * under the Bun package.json pins (never PATH's newest).
+ * and cli targets' whole trees through gofmt, found by GOFMT, GOROOT, PATH or beside the real go; the ts target's
+ * files as oxfmt formats them, and as emitted when oxfmt does not resolve (bit 19 i, Q12); since bit 22 a formatter
+ * that is not there is named on stderr, fatal only under HONEY_REQUIRE_FORMATTERS; `--watch` regenerating in a fresh
+ * child on each change until stopped. Most legs run `main` in process; the bin legs prove the command a user runs.
  * Every child carries this file's mark, and the last leg fails on any that outlived its leg.
  */
 import { spawnSync } from "node:child_process"
@@ -322,11 +320,24 @@ describe("the generate report: the safe mirror (bit 21 i1, i2, i3, i4, i5, i6)",
 		async (target) => {
 			const get = { get: { operationId: "safe.get", responses: { 204: { description: "none" } } } }
 			const { out, spec } = specDir({ ...(shop() as Record<string, unknown>), paths: { "/safe": get } })
-			const ran = await run(["generate", "--spec", spec, "--target", target, "--out", out])
+			/* an empty PATH so the run finds no formatter wherever it runs: this leg is about the rename it
+			   names on stderr, and inheriting the machine's toolchains would let ruff's presence decide it */
+			const ran = await run(["generate", "--spec", spec, "--target", target, "--out", out], { PATH: "" })
 			const [mirror, renamed] = SPELLED[target]
+			const rename = `honey-clients: ${target}: the root group "${mirror}" is emitted as "${renamed}": "${mirror}" is the client's safe mirror\n`
+			/* oxfmt is quiet when absent, and csharp and java have no formatter here, so those say nothing */
+			const tool = {
+				go: "gofmt (install Go, or set GOFMT)",
+				python: "ruff (install ruff, or set RUFF)",
+				rust: "rustfmt (install rustfmt, or set RUSTFMT)",
+			}[target as string]
+			const skip =
+				tool === undefined
+					? ""
+					: `honey-clients: ${tool.replace(" (", ` was not found, so the ${target} output is not formatted (`)}\n`
 			expect([ran.status, ran.err, filesUnder(out).some((file) => file.endsWith(WRITTEN[target]))]).toEqual([
 				0,
-				`honey-clients: ${target}: the root group "${mirror}" is emitted as "${renamed}": "${mirror}" is the client's safe mirror\n`,
+				`${rename}${skip}`,
 				true,
 			])
 		},
@@ -352,24 +363,6 @@ describe.skipIf(!GO)("the go and cli trees through gofmt (phase h)", SLOW, () =>
 		const ran = await run(["generate", "--spec", spec, "--target", "cli", "--out", out], { GOFMT: wrapper })
 		const goFiles = filesUnder(out).filter((name) => name.endsWith(".go")).length
 		expect([ran.status, readFileSync(log, "utf8").split("\n").filter(Boolean).length]).toEqual([0, goFiles])
-	})
-
-	it("writes the go target unformatted and names the skip when no gofmt is found", async () => {
-		const { out, spec } = specDir()
-		const ran = await run(["generate", "--spec", spec, "--target", "go", "--out", out], { PATH: "" })
-		/* valid Go either way, so a missing toolchain is a warning: a consumer never needs Go to get a Go SDK */
-		expect([ran.status, ran.err.split("\n")[0], existsSync(out)]).toEqual([
-			0,
-			"honey-clients: gofmt was not found, so the go output is not formatted (install Go, or set GOFMT)",
-			true,
-		])
-	})
-
-	it("fails instead, naming the tool, under HONEY_REQUIRE_FORMATTERS", async () => {
-		const { out, spec } = specDir()
-		const env = { HONEY_REQUIRE_FORMATTERS: "1", PATH: "" }
-		const ran = await run(["generate", "--spec", spec, "--target", "go", "--out", out], env)
-		expect([ran.status, ran.err.includes("gofmt was not found"), existsSync(out)]).toEqual([1, true, false])
 	})
 })
 
