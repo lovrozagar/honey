@@ -1095,3 +1095,5 @@ tests/fixture/jwt-known-answer.ts	core	test	21	tokens jose signed, public keys o
 tests/integration/security/jwt-adversarial.test.ts	core	test	21	algorithm confusion and a token with no exp, rerun by the mutation harness	jwt.ts
 src/security/webhook.ts	core	src	21	signWebhook: the Standard Webhooks headers on WebCrypto alone	crypto.ts
 tests/integration/security/webhook-adversarial.test.ts	core	test	21	a short secret and a signature leaving the id and timestamp out, rerun by the mutation harness	crypto.ts
+src/context/user-agent.ts	core	src	21	parseUserAgent: a coarse browser, OS and device from a capped header	user-agent.ts
+src/context/user-agent.test.ts	core	test	21	real headers, the 512 character cap and versions past the safe range	user-agent.ts

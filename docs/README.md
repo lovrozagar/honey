@@ -24,6 +24,7 @@ client and an MCP server. These pages cover each part, each with an example the 
 - [Internationalization](i18n.md)
 - [Crypto](crypto.md)
 - [JWT](jwt.md)
+- [User agent](user-agent.md)
 - [The OpenAPI document](openapi.md)
 - [The build plugin](plugin.md)
 

@@ -8,7 +8,7 @@ What each directory is for, in both packages. The exhaustive, normative file lis
 packages/core/
   src/
     routing/        route model, pattern, tree, request-path, finalize, dispatch (splits v0 index.ts 3,829 + tree.ts 558)
-    context/        HoneyContext, ctx builders, cookies, cookie-sign
+    context/        HoneyContext, ctx builders, cookies, cookie-sign, user-agent
     input/          input, params, query, headers, json, form, binary (A1); body-limit/kind, accepts
     validation/     validate-input, validate-output, content-type (the standard-schema runners)
     response/       response, builder (ex honey-response), media-type, binary (A1), sse, range (A3), etag + last-modified (A4), cache-control (A4), with-headers, response-headers (A2), static

@@ -29,7 +29,28 @@ const { emittedRouteTree } = (await import(
 	resolvePath(REPO, "packages/gen/src/emit/ts/__fixtures__/emitted.ts")
 )) as typeof import("../../../../gen/src/emit/ts/__fixtures__/emitted.ts")
 
+const { parseUserAgent } = (await import(
+	resolvePath(REPO, "packages/core/src/context/user-agent.ts")
+)) as typeof import("../../../src/context/user-agent.ts")
+
 const get = (target: string) => new Request(`http://app.test${target}`)
+
+/* the best of a few timed windows, so one slow round cannot pass for growth */
+const fastestCallMs = (run: () => void) => {
+	let fastest = Number.POSITIVE_INFINITY
+	for (let round = 0; round < 5; round++) {
+		const start = performance.now()
+		let calls = 0
+		let elapsed = 0
+		do {
+			run()
+			calls++
+			elapsed = performance.now() - start
+		} while (elapsed < 30)
+		fastest = Math.min(fastest, elapsed / calls)
+	}
+	return fastest
+}
 
 const ANY_VALUE = { "~standard": { validate: (value: unknown) => ({ value }), vendor: "test", version: 1 } } as const
 
@@ -54,6 +75,24 @@ describe("v1 adversarial: a generated route tree keeps a leaf's body gate", () =
 			const headers = { "content-type": "text/plain" }
 			const res = await gateway.fetch(new Request("http://x/items", { body: "x", headers, method: "POST" }), {})
 			expect([res.status, reached]).toEqual([415, []])
+		},
+		SPAWN_TIMEOUT,
+	)
+})
+
+describe("v1 adversarial: a client's user agent stays cheap to read", () => {
+	it("reads nothing past the first 512 characters", () => {
+		expect(parseUserAgent(`${"x".repeat(511)} Chrome/141`).browser).toBeNull()
+	})
+
+	it(
+		"takes twice the time for twice the header",
+		() => {
+			const header = (length: number) => `Version/${"1".repeat(length - "Version/".length)}`
+			fastestCallMs(() => parseUserAgent(header(512)))
+			const short = fastestCallMs(() => parseUserAgent(header(256)))
+			const long = fastestCallMs(() => parseUserAgent(header(512)))
+			expect(long / short).toBeLessThan(5)
 		},
 		SPAWN_TIMEOUT,
 	)

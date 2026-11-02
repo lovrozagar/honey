@@ -28,6 +28,51 @@ const keep = process.argv.includes("--keep")
 
 const PKG = "@lovrozagar/honey"
 
+/* a real header, then what ./user-agent must answer for it through the packed subpath */
+const PINNED_USER_AGENTS = [
+	[
+		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36",
+		"Chrome",
+		141,
+		"desktop",
+		"Windows",
+		"10",
+	],
+	[
+		"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Safari/605.1.15",
+		"Safari",
+		18,
+		"desktop",
+		"macOS",
+		"10.15.7",
+	],
+	["Mozilla/5.0 (X11; Linux x86_64; rv:144.0) Gecko/20100101 Firefox/144.0", "Firefox", 144, "desktop", "Linux", null],
+	[
+		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0",
+		"Edge",
+		141,
+		"desktop",
+		"Windows",
+		"10",
+	],
+	[
+		"Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1",
+		"Safari",
+		18,
+		"mobile",
+		"iOS",
+		"18.6",
+	],
+	[
+		"Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36",
+		"Chrome",
+		141,
+		"mobile",
+		"Android",
+		"14",
+	],
+]
+
 /**
  * `count` distinct ports the OS holds free now, all bound at once so none repeats: a fixed port in the
  * ephemeral range is any outbound socket's on a shared machine.
@@ -184,6 +229,7 @@ if (inPackage.length === 0 && inGenerated.length === 0 && inConsumer.length === 
 		[
 			'import { honey } from "@lovrozagar/honey"',
 			'import { serveOpenApi } from "@lovrozagar/honey/openapi"',
+			'import { parseUserAgent } from "@lovrozagar/honey/user-agent"',
 			'import * as z from "zod"',
 			"const app = honey<{}>()",
 			'app.get("/hi").output({ "application/json": { ok: z.object({ ok: z.boolean() }) } })',
@@ -195,6 +241,12 @@ if (inPackage.length === 0 && inGenerated.length === 0 && inConsumer.length === 
 			"if (spec.status !== 200) throw new Error(`openapi returned ${spec.status}`)",
 			'if (!("/hi" in ((await spec.json()) as { paths: Record<string, unknown> }).paths)) {',
 			'\tthrow new Error("route missing from the generated document")',
+			"}",
+			`for (const [header, browser, browserMajor, deviceType, os, osVersion] of ${JSON.stringify(PINNED_USER_AGENTS)} as const) {`,
+			"\tconst read = parseUserAgent(header)",
+			"\tconst want = [browser, browserMajor, deviceType, os, osVersion]",
+			"\tconst got = [read.browser, read.browserMajor, read.deviceType, read.os, read.osVersion]",
+			"\tif (JSON.stringify(got) !== JSON.stringify(want)) throw new Error(`${header} read as ${got}`)",
 			"}",
 			'console.log("runtime ok")',
 		].join("\n"),

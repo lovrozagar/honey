@@ -78,7 +78,7 @@ describe("the guide carries every break a 0.7.3 app can meet (bit 22 a)", () => 
 			baseline: Object.keys(baseline).length,
 			live: Object.keys(live).length,
 			root: live["."]?.size ?? 0,
-		}).toEqual({ baseline: 48, live: 51, root: 78 })
+		}).toEqual({ baseline: 48, live: 52, root: 78 })
 	})
 
 	it("judges every removed name, and no name it no longer loses", () => {

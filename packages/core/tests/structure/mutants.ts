@@ -4,6 +4,7 @@
  */
 import type { ServerResponse } from "node:http"
 import type { TapCall } from "../../src/context/context.ts"
+import type { ParsedUserAgent } from "../../src/context/user-agent.ts"
 import type { CompressOptions } from "../../src/middleware/compress.ts"
 import type { CompiledChain } from "../../src/middleware/middleware.ts"
 import type { StaticConfig } from "../../src/response/static.ts"
@@ -106,6 +107,21 @@ export function bodylessRouteTree(real: GenerateRouteTree): GenerateRouteTree {
 	return (tree) => {
 		const routes = Object.entries(tree.routes).map(([id, { bd: _bd, ...entry }]) => [id, entry])
 		return real({ ...tree, routes: Object.fromEntries(routes) })
+	}
+}
+
+export type ParseUserAgent = (header: string | null | undefined) => ParsedUserAgent
+
+/** parseUserAgent that reads a long header's end, as a parser with no cap would reach it. */
+export function uncappedParseUserAgent(real: ParseUserAgent): ParseUserAgent {
+	return (header) => real(header?.slice(-512))
+}
+
+/** parseUserAgent that first runs one pattern spanning the Version and Safari tokens, cubic on digits. */
+export function cubicParseUserAgent(real: ParseUserAgent): ParseUserAgent {
+	return (header) => {
+		;/\bVersion\/(\d+)[\d.]*.*\bSafari\//.exec((header ?? "").slice(0, 512))
+		return real(header)
 	}
 }
 

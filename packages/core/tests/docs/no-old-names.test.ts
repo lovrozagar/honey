@@ -80,7 +80,7 @@ describe("the docs name no removed name (bit 21 i7d)", () => {
 			examples: files.filter((file) => file.startsWith("docs/examples/")).length,
 			exempt: files.includes(EXEMPT),
 			pages: files.filter((file) => file.endsWith(".md")).length,
-		}).toEqual({ examples: 6, exempt: true, pages: 37 })
+		}).toEqual({ examples: 6, exempt: true, pages: 38 })
 	})
 
 	/* one line per removed name, so a name dropped from REMOVED reds here rather than going unread over the docs */

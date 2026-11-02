@@ -249,6 +249,11 @@
 			"types": "./dist/ws/route.d.ts",
 			"default": "./dist/ws/route.js"
 		},
+		"./user-agent": {
+			"honey-source": "./src/context/user-agent.ts",
+			"types": "./dist/context/user-agent.d.ts",
+			"default": "./dist/context/user-agent.js"
+		},
 		"./webhook": {
 			"honey-source": "./src/security/webhook.ts",
 			"types": "./dist/security/webhook.d.ts",
