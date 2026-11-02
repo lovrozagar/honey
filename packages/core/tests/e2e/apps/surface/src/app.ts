@@ -258,5 +258,5 @@ export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
 			},
 		})
 
-	return serveManifest(serveOpenApi(routed, { docs: scalar, title: "Honey Surface", version: "1.0.0" }))
+	return serveManifest(serveOpenApi(routed, { docs: { "/docs": scalar }, title: "Honey Surface", version: "1.0.0" }))
 }

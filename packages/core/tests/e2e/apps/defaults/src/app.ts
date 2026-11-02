@@ -25,5 +25,5 @@ export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
 			const body = await ctx.req.text()
 			return ctx.res.json("created", body)
 		})
-	return serveManifest(serveOpenApi(routed, { docs: scalar, title: "Honey Defaults", version: "0.0.1" }))
+	return serveManifest(serveOpenApi(routed, { docs: { "/docs": scalar }, title: "Honey Defaults", version: "0.0.1" }))
 }

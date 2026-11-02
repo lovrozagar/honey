@@ -8,8 +8,13 @@ import { generateOpenApi } from "./generate.ts"
 import { generateManifest } from "./manifest.ts"
 import { scalar } from "./scalar.ts"
 import { serveStaticOpenApi } from "./static.ts"
+import { swagger } from "./swagger.ts"
 
 type App = { fetch(request: Request, env: object): Promise<Response> | Response }
+
+/** What a refused `docs` value is shown to pass instead. */
+const MAP_FIX =
+	'import { scalar } from "@lovrozagar/honey/openapi/scalar" (or swagger from "@lovrozagar/honey/openapi/swagger") and pass docs: { "/docs": scalar }'
 
 const DOC = { info: { title: "Prebuilt", version: "2.0.0" }, openapi: "3.1.0", paths: {} }
 const YAML = 'openapi: "3.1.0"\ninfo:\n  title: Prebuilt\n'
@@ -217,31 +222,56 @@ describe("serveStaticOpenApi: where it mounts", () => {
 })
 
 describe("serveStaticOpenApi: where it mounts", () => {
-	it("serves the docs page at docsPath, pointing at the JSON URL the browser sees", async () => {
+	it("serves each docs page at its own path, every one pointing at the JSON URL the browser sees", async () => {
 		const app = honey<{}>().stripPrefix("/edge")
-		serveStaticOpenApi(app.basePath("/v1"), { docs: scalar, json: { inline: DOC }, jsonPath: "/spec" })
-		const plain = serveStaticOpenApi(host(), { docs: scalar, docsPath: "/reference", json: { inline: DOC } })
+		serveStaticOpenApi(app.basePath("/v1"), {
+			docs: { "/openapi/scalar": scalar, "/openapi/swagger": swagger },
+			json: { inline: DOC },
+			jsonPath: "/spec",
+		})
+		const plain = serveStaticOpenApi(host(), { docs: { "/reference": scalar }, json: { inline: DOC } })
 		expect([
-			await (await get(app, "/edge/v1/docs")).text(),
+			await (await get(app, "/edge/v1/openapi/scalar")).text(),
+			await (await get(app, "/edge/v1/openapi/swagger")).text(),
 			await (await get(plain, "/reference")).text(),
 			(await get(plain, "/docs")).status,
 		]).toEqual([
+			expect.stringContaining('"url":"/edge/v1/spec"'),
 			expect.stringContaining('"url":"/edge/v1/spec"'),
 			expect.stringContaining('"url":"/openapi.json"'),
 			404,
 		])
 	})
+
+	it("mounts no route when a page's path is taken or given twice", async () => {
+		const app = host()
+		app.get("/swagger").handler((c) => c.res.text("ok", "mine"))
+		expect(() =>
+			serveStaticOpenApi(app, { docs: { "/scalar": scalar, "/swagger": swagger }, json: { inline: DOC } }),
+		).toThrow("Duplicate route: GET /swagger")
+		expect(() => serveStaticOpenApi(host(), { docs: { "/openapi.json": scalar }, json: { inline: DOC } })).toThrow(
+			"Duplicate route: GET /openapi.json",
+		)
+		expect([(await get(app, "/scalar")).status, (await get(app, "/openapi.json")).status]).toEqual([404, 404])
+	})
 })
 
 describe("serveStaticOpenApi: where it mounts", () => {
-	it("refuses the name `docs` never took here either, naming the import that gives the page", () => {
+	it("refuses a page given without its path, and a name in place of a page, showing the map", () => {
 		expect(() =>
 			serveStaticOpenApi(host(), {
-				// @ts-expect-error docs is the page, not its name
-				docs: "scalar",
+				// @ts-expect-error docs maps each path to its page
+				docs: scalar,
 				json: { inline: DOC },
 			}),
-		).toThrow(/import \{ scalar \} from "@lovrozagar\/honey\/openapi\/scalar"/)
+		).toThrow(new TypeError(`docs maps each path to its page: ${MAP_FIX}`))
+		expect(() =>
+			serveStaticOpenApi(host(), {
+				// @ts-expect-error a page is the page itself, not its name
+				docs: { "/reference": "scalar" },
+				json: { inline: DOC },
+			}),
+		).toThrow(new TypeError(`docs at /reference is not a page: ${MAP_FIX}`))
 	})
 })
 
@@ -272,7 +302,7 @@ describe("serveStaticOpenApi: what it answers with", () => {
 describe("serveStaticOpenApi: what it answers with", () => {
 	it("keeps every served route out of the document and the manifest, the caller's own meta under the internal marking", async () => {
 		const app = serveStaticOpenApi(host(), {
-			docs: scalar,
+			docs: { "/docs": scalar },
 			json: { inline: DOC },
 			meta: { security: [{ bearer: [] }], summary: "The published document" },
 			yaml: { inline: YAML },

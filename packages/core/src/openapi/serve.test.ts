@@ -13,6 +13,10 @@ import { swagger } from "./swagger.ts"
 import type { DocsPage } from "./served.ts"
 
 type Doc = { info: Record<string, unknown>; paths: Record<string, Record<string, Record<string, unknown>>> }
+
+/** The refusal of a `docs` value that is not the path-to-page map, opening with `what`. */
+const MAP_HINT = (what: string) =>
+	`${what}: import { scalar } from "@lovrozagar/honey/openapi/scalar" (or swagger from "@lovrozagar/honey/openapi/swagger") and pass docs: { "/docs": scalar }`
 type App = { fetch(request: Request, env: object): Promise<Response> | Response }
 
 const get = (app: App, path: string, init?: RequestInit) => app.fetch(new Request(`http://x${path}`, init), {})
@@ -32,7 +36,7 @@ function usersServing(tree?: RouteTree) {
 	const app = honey<{}>()
 	if (tree !== undefined) app.routeTree(tree)
 	app.get("/users").handler((c) => c.res.json("ok", []))
-	return serveOpenApi(app, { docs: scalar, title: "T", version: "1" })
+	return serveOpenApi(app, { docs: { "/docs": scalar }, title: "T", version: "1" })
 }
 
 describe("serveOpenApi: the document, as JSON and YAML", () => {
@@ -114,7 +118,7 @@ describe("serveOpenApi: the routes it mounts are internal", () => {
 	// v0: 3731e492aa
 	// v0: 315fd50504
 	it("leaves every served route out of the generated and served document and manifest", async () => {
-		const app = serveManifest(serveOpenApi(users(), { docs: scalar, title: "Demo", version: "1" }))
+		const app = serveManifest(serveOpenApi(users(), { docs: { "/docs": scalar }, title: "Demo", version: "1" }))
 		const served = ["/openapi.json", "/openapi.yaml", "/openapi.yml", "/docs", "/manifest.json"]
 		const manifest = (await (await get(app, "/manifest.json")).json()) as { routes: { path: string }[] }
 		const paths = [
@@ -269,31 +273,41 @@ describe("serveOpenApi: the docs UI", () => {
 	// v0: b8afbd8d98
 	// v0: 7af4a56bf4
 	// v0: b76e662e6a
-	it("mounts no docs page unless asked, Scalar or Swagger at /docs when asked, each pointing at the JSON", async () => {
-		const page = async (docs?: DocsPage) => {
-			const res = await get(serveOpenApi(users(), { docs, title: "T", version: "1" }), "/docs")
+	it("mounts no docs page unless asked, and each page it is given at its own path, every one pointing at the JSON", async () => {
+		const app = serveOpenApi(users(), {
+			docs: { "/docs/scalar": scalar, "/docs/swagger": swagger },
+			title: "T",
+			version: "1",
+		})
+		const page = async (served: App, path: string) => {
+			const res = await get(served, path)
+			const body = await res.text()
 			return [
 				res.status,
-				res.status === 200 ? /cdn\.jsdelivr\.net\/npm\/(@scalar|swagger-ui-dist)/.exec(await res.text())?.[1] : null,
+				res.status === 200 ? /cdn\.jsdelivr\.net\/npm\/(@scalar|swagger-ui-dist)/.exec(body)?.[1] : null,
+				res.status === 200 && body.includes('"url":"/openapi.json"'),
 			]
 		}
-		expect([await page(), await page(scalar), await page(swagger)]).toEqual([
-			[404, null],
-			[200, "@scalar"],
-			[200, "swagger-ui-dist"],
+		expect([
+			await page(serveOpenApi(users(), { title: "T", version: "1" }), "/docs"),
+			await page(app, "/docs/scalar"),
+			await page(app, "/docs/swagger"),
+			await page(app, "/docs"),
+		]).toEqual([
+			[404, null, false],
+			[200, "@scalar", true],
+			[200, "swagger-ui-dist", true],
+			[404, null, false],
 		])
-		expect(await text(serveOpenApi(users(), { docs: swagger, title: "T", version: "1" }), "/docs")).toContain(
-			'"url":"/openapi.json"',
-		)
 	})
 
 	// v0: 8333ad60e0
 	// v0: d3c0fb55b5
-	it("mounts at docsPath, and points at the URL the browser sees: stripped prefix, then basePath, then the stem", async () => {
+	it("points each page at the URL the browser sees: stripped prefix, then basePath, then the stem", async () => {
 		const based = honey<{}>()
-		serveOpenApi(based.basePath("/api"), { docs: scalar, docsPath: "/reference", title: "T", version: "1" })
+		serveOpenApi(based.basePath("/api"), { docs: { "/reference": scalar }, title: "T", version: "1" })
 		const stripped = honey<{}>().stripPrefix("/edge")
-		serveOpenApi(stripped.basePath("/v1"), { docs: scalar, title: "T", version: "1" })
+		serveOpenApi(stripped.basePath("/v1"), { docs: { "/docs": scalar }, title: "T", version: "1" })
 		expect([
 			await text(based, "/api/reference"),
 			await text(stripped, "/edge/v1/docs"),
@@ -306,18 +320,36 @@ describe("serveOpenApi: the docs UI", () => {
 	})
 })
 
-describe("serveOpenApi: docs takes the page itself", () => {
-	it("refuses the name the option used to take, naming the import that replaces it", () => {
-		const served = () =>
+describe("serveOpenApi: docs maps each path to its page", () => {
+	it("refuses a page given without its path, and a path given a name in place of its page, showing the map", () => {
+		const bare = () =>
 			serveOpenApi(users(), {
-				/* what a 1.0.0-rc.5 app passed: a type error, and a throw naming the import for a JavaScript caller */
-				// @ts-expect-error docs is the page, not its name
-				docs: "scalar",
+				/* what a 1.0.0-rc.14 app passed: a type error, and a throw showing the map for a JavaScript caller */
+				// @ts-expect-error docs maps each path to its page
+				docs: scalar,
 				title: "T",
 				version: "1",
 			})
-		expect(served).toThrow(/import \{ scalar \} from "@lovrozagar\/honey\/openapi\/scalar"/)
-		expect(served).toThrow(TypeError)
+		const named = () =>
+			serveOpenApi(users(), {
+				// @ts-expect-error a page is the page itself, not its name
+				docs: { "/reference": "scalar" },
+				title: "T",
+				version: "1",
+			})
+		expect(bare).toThrow(new TypeError(MAP_HINT("docs maps each path to its page")))
+		expect(named).toThrow(new TypeError(MAP_HINT("docs at /reference is not a page")))
+	})
+
+	it("mounts no page when another path of the call is taken, a path twice, or a parameterized one", async () => {
+		const taken = honey<{}>()
+		taken.get("/swagger").handler((c) => c.res.text("ok", "mine"))
+		const serving = (app: ReturnType<typeof honey<{}>>, docs: Readonly<Record<string, DocsPage>>) => () =>
+			serveOpenApi(app, { docs, title: "T", version: "1" })
+		expect(serving(taken, { "/scalar": scalar, "/swagger": swagger })).toThrow("Duplicate route: GET /swagger")
+		expect(serving(honey<{}>(), { "/openapi.json": scalar })).toThrow("Duplicate route: GET /openapi.json")
+		expect(serving(honey<{}>(), { "/:page": scalar })).toThrow("cannot serve at /:page: a served path is fixed")
+		expect([(await get(taken, "/scalar")).status, (await get(taken, "/openapi.json")).status]).toEqual([404, 404])
 	})
 })
 
@@ -369,12 +401,13 @@ describe("serving across composed apps (F15)", () => {
 		async (order) => {
 			const sub = honey<{}>()
 			sub.get("/users").handler((c) => c.res.text("ok", "users"))
-			serveManifest(serveOpenApi(sub, { docs: scalar, title: "Sub", version: "1" }))
+			serveManifest(serveOpenApi(sub, { docs: { "/docs": scalar }, title: "Sub", version: "1" }))
 			const gateway = honey<{}>()
 			gateway.get("/health").handler((c) => c.res.text("ok", "ok"))
-			if (order === "gateway-first") serveOpenApi(gateway, { docs: swagger, title: "Gateway", version: "1" })
+			if (order === "gateway-first")
+				serveOpenApi(gateway, { docs: { "/docs": swagger }, title: "Gateway", version: "1" })
 			gateway.route(sub)
-			if (order === "sub-first") serveOpenApi(gateway, { docs: swagger, title: "Gateway", version: "1" })
+			if (order === "sub-first") serveOpenApi(gateway, { docs: { "/docs": swagger }, title: "Gateway", version: "1" })
 			const doc = await json(gateway, "/openapi.json")
 			expect([
 				doc.info.title,
@@ -391,10 +424,10 @@ describe("serving across composed and loaded apps (F15)", () => {
 	// v0: 4c03f4af4e
 	// v0: d2293e2891
 	it("mounts two serving apps without a collision, and leaves served routes out of a snapshot an app loads and serves again", async () => {
-		const a = serveOpenApi(users(), { docs: scalar, title: "A", version: "1" })
+		const a = serveOpenApi(users(), { docs: { "/docs": scalar }, title: "A", version: "1" })
 		const b = honey<{}>()
 		b.get("/b").handler((c) => c.res.text("ok", "b"))
-		serveOpenApi(b, { docs: scalar, title: "B", version: "1" })
+		serveOpenApi(b, { docs: { "/docs": scalar }, title: "B", version: "1" })
 		a.route(b)
 		const snapshot = usersServing().toRouteTree()
 		const loaded = usersServing(snapshot)

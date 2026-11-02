@@ -25,7 +25,7 @@ describe("served routes: the handle's own declared meta", () => {
 	it("reaches the middleware on every route serveStaticOpenApi mounts, the docs page included", async () => {
 		const app = gateway()
 		serveStaticOpenApi(app, {
-			docs: scalar,
+			docs: { "/docs": scalar },
 			json: { inline: { openapi: "3.1.0" } },
 			meta: { cacheControl: "public, s-maxage=3600" },
 			yaml: { inline: "openapi: 3.1.0\n" },
@@ -39,7 +39,7 @@ describe("served routes: the handle's own declared meta", () => {
 	it("reaches it on every route serveOpenApi and serveManifest mount", async () => {
 		const app = gateway()
 		app.get("/health").handler((c) => c.res.text("ok", "ok"))
-		serveOpenApi(app, { docs: scalar, meta: { cacheControl: "max-age=60" }, title: "T", version: "1" })
+		serveOpenApi(app, { docs: { "/docs": scalar }, meta: { cacheControl: "max-age=60" }, title: "T", version: "1" })
 		serveManifest(app, { meta: { cacheControl: "max-age=5" } })
 		const paths = ["/openapi.json", "/openapi.yaml", "/openapi.yml", "/docs", "/manifest.json"]
 		const seen = await Promise.all(paths.map((p) => header(app, p)))
@@ -57,9 +57,9 @@ describe("served routes: the handle's own declared meta", () => {
 				})
 		const generated = guarded()
 		generated.get("/health").handler((c) => c.res.text("ok", "ok"))
-		serveOpenApi(generated, { docs: scalar, meta: { security: ["iaKey"] }, title: "T", version: "1" })
+		serveOpenApi(generated, { docs: { "/docs": scalar }, meta: { security: ["iaKey"] }, title: "T", version: "1" })
 		const prebuilt = guarded()
-		serveStaticOpenApi(prebuilt, { docs: scalar, json: { inline: "{}" }, meta: { security: ["iaKey"] } })
+		serveStaticOpenApi(prebuilt, { docs: { "/docs": scalar }, json: { inline: "{}" }, meta: { security: ["iaKey"] } })
 		const seen = await Promise.all(
 			[generated, prebuilt].flatMap((app) => ["/openapi.json", "/docs"].map((p) => header(app, p))),
 		)

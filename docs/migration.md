@@ -856,14 +856,15 @@ import { serveOpenApi } from "@lovrozagar/honey/openapi"
 import { scalar } from "@lovrozagar/honey/openapi/scalar"
 
 const app = honey()
-serveOpenApi(app, { title: "Shop", version: "1.0.0", docs: scalar })
+serveOpenApi(app, { title: "Shop", version: "1.0.0", docs: { "/docs": scalar } })
 ```
 
-## `docs: "scalar"` becomes `docs: scalar`
+## `docs: "scalar"` becomes `docs: { "/docs": scalar }`
 
-The docs page is the page itself now, imported from its own subpath, in `serveOpenApi` and `serveStaticOpenApi`
-alike. That is what keeps the page you do not show out of the bundle: a string meant both pages were reachable, so
-both shipped. Passing a string is a type error, and at runtime it throws naming the import.
+`docs` maps each path to its page now, the page itself imported from its own subpath, in `serveOpenApi` and
+`serveStaticOpenApi` alike. Importing the page keeps the one you do not show out of the bundle: a string meant both
+pages were reachable, so both shipped. The path is the map's key, so `docsPath` is gone, and one document can have
+several pages. A string or a page without its path is a type error, and at runtime it throws showing the map.
 
 ```ts v0
 serveOpenApi(app, { title: "Shop", version: "1.0.0", docs: "scalar" })
@@ -875,10 +876,10 @@ import { serveOpenApi } from "@lovrozagar/honey/openapi"
 import { scalar } from "@lovrozagar/honey/openapi/scalar"
 
 const app = honey()
-serveOpenApi(app, { title: "Shop", version: "1.0.0", docs: scalar })
+serveOpenApi(app, { title: "Shop", version: "1.0.0", docs: { "/docs": scalar } })
 ```
 
-Swagger UI is `import { swagger } from "@lovrozagar/honey/openapi/swagger"`, then `docs: swagger`.
+Swagger UI is `import { swagger } from "@lovrozagar/honey/openapi/swagger"`, then `docs: { "/docs": swagger }`.
 
 ## Names that said `cloudflare` say `workers`
 

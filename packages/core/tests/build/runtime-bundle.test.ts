@@ -226,7 +226,7 @@ describe("the runtime bundle of an installed core (bit 19 i)", () => {
 				'import { honey } from "@lovrozagar/honey"',
 				'import { scalar } from "@lovrozagar/honey/openapi/scalar"',
 				'import { serveStaticOpenApi } from "@lovrozagar/honey/openapi/static"',
-				'const app = serveStaticOpenApi(honey(), { docs: scalar, json: { asset: "/openapi.json" } })',
+				'const app = serveStaticOpenApi(honey(), { docs: { "/docs": scalar }, json: { asset: "/openapi.json" } })',
 				"export default { fetch: (req: Request) => app.fetch(req, {}) }",
 				"",
 			]
@@ -242,7 +242,10 @@ describe("the runtime bundle of an installed core (bit 19 i)", () => {
 			 * openapi/served and openapi/static. Measured 27,478 bytes gzipped (level 9, the pinned bun
 			 * --minify), locked at the next 100. The minimal bundle is 26,245 of that, so serving a document the
 			 * app did not generate costs 1,233 bytes: the two modules, and nothing of the generator or a page.
-			 * The generated tree's body gate added its 58 bytes here too (27,480 to 27,538), locked at 27,600.
+			 * The generated tree's body gate added its 58 bytes here too (27,480 to 27,538). Plan 38 added 166
+			 * (27,538 to 27,704) though this call takes no auth: 63 for refusing auth beside a cacheControl at
+			 * runtime, 103 for the docs map's two refusals and the guarded branch in answering and mountAll. The
+			 * guard itself is basic()'s, so none of it is here. Locked at 27,800.
 			 */
 			const gzipped = gzipSync(bunBundle("static-doc", served), { level: 9 }).length
 			expect(
@@ -250,7 +253,7 @@ describe("the runtime bundle of an installed core (bit 19 i)", () => {
 					routeModules("static-doc", served, [...GENERATOR, ...PAGES]),
 					routeModules("static-page", withPage, [...GENERATOR, ...PAGES]),
 					routeModules("generated-doc", generated, PAGES),
-					gzipped < 27_600,
+					gzipped < 27_800,
 				],
 				`${gzipped} bytes gzipped`,
 			).toEqual([[], ["openapi/scalar"], [], true])
@@ -286,6 +289,26 @@ describe("the runtime bundle of an installed core (bit 19 i)", () => {
 				false,
 				[],
 				true,
+			])
+		},
+		60_000,
+	)
+
+	it.skipIf(!BUN)(
+		`basic() and credentialsMatch alone carry none of honey()'s router or the generator (bun ${pinnedBunVersion()})`,
+		() => {
+			const guard = [
+				'import { basic, credentialsMatch } from "@lovrozagar/honey/openapi/auth"',
+				"export const auth = basic({",
+				'\trealm: "Internal",',
+				'\tverify: ({ password, username }) => credentialsMatch({ password, username }, { password: "pw", username: "docs" }),',
+				"})",
+				"",
+			]
+			const js = bunBundle("openapi-auth-plain", guard, false)
+			expect([js.includes("/dist/routing/"), routeModules("openapi-auth", guard, [...GENERATOR, ...PAGES])]).toEqual([
+				false,
+				[],
 			])
 		},
 		60_000,

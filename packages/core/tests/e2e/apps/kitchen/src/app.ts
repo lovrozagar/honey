@@ -318,7 +318,7 @@ export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
 	serveManifest(
 		serveOpenApi(corsed, {
 			description: "Honey E2E Test API",
-			docs: scalar,
+			docs: { "/docs": scalar },
 			title: "Honey E2E",
 			version: "1.0.0",
 		}),

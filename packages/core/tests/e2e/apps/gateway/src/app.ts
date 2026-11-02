@@ -184,5 +184,5 @@ export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
 		}),
 	)
 
-	return serveManifest(serveOpenApi(app, { docs: swagger, title: "Honey Gateway", version: "0.0.1" }))
+	return serveManifest(serveOpenApi(app, { docs: { "/docs": swagger }, title: "Honey Gateway", version: "0.0.1" }))
 }

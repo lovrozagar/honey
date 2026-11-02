@@ -23,7 +23,7 @@ export const app = serveOpenApi(
 	honey()
 		.get("/health")
 		.handler((ctx) => ctx.res.text("ok", "ok")),
-	{ docs: scalar, title: "Honey", version: "0.0.1" },
+	{ docs: { "/docs": scalar }, title: "Honey", version: "0.0.1" },
 )
 `
 

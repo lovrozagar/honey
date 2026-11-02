@@ -144,6 +144,11 @@
 			"types": "./dist/openapi/register.d.ts",
 			"default": "./dist/openapi/register.js"
 		},
+		"./openapi/auth": {
+			"honey-source": "./src/openapi/auth.ts",
+			"types": "./dist/openapi/auth.d.ts",
+			"default": "./dist/openapi/auth.js"
+		},
 		"./openapi/scalar": {
 			"honey-source": "./src/openapi/scalar.ts",
 			"types": "./dist/openapi/scalar.d.ts",

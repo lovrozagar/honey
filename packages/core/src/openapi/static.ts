@@ -1,22 +1,23 @@
 /**
- * `serveStaticOpenApi(app, options)`: the JSON (and YAML) routes, plus a docs page when asked, for a document
+ * `serveStaticOpenApi(app, options)`: the JSON (and YAML) routes, plus docs pages when asked, for a document
  * built ahead of time or living elsewhere — a Workers asset binding, a URL, an inline value or a loader. It
  * carries none of the generator, so an app that already has its document on disk pays for serving it and
  * nothing more. Each route is a plain internal GET on the handle, marked SERVED, so the document never
  * documents its own endpoints. A document is loaded once per process or isolate, concurrent first requests
  * sharing that one load, and a load that failed is not kept, so the next request tries again. Nothing parses
  * the document: it is a build artifact or an upstream's responsibility, and honey's own content-type is sent
- * whatever the upstream said.
+ * whatever the upstream said. `auth` puts a Basic guard in front of every route the call mounts.
  */
 import { HoneyError } from "../errors/error.ts"
 import {
 	answering,
 	artifact,
 	type Artifact,
-	type DocsPage,
-	docsRoute,
+	type DocsPages,
+	docsRoutes,
 	JSON_TYPE,
 	mountAll,
+	type ServedAccess,
 	type ServedContext,
 	type ServedMeta,
 	type ServedHandler,
@@ -65,13 +66,9 @@ export type YamlSource =
 	  }
 
 /** What `serveStaticOpenApi` takes: where the document comes from, and where and how it is served. */
-export type ServeStaticOpenApiOptions<A = unknown> = {
-	/** `"no-cache"` by default */
-	readonly cacheControl?: string
-	/** a docs page for the document, at `docsPath`: the page itself, `scalar` or `swagger` */
-	readonly docs?: DocsPage
-	/** `"/docs"` by default */
-	readonly docsPath?: string
+export type ServeStaticOpenApiOptions<A = unknown> = ServedAccess<true> & {
+	/** the docs pages for the document, each path (under the handle's basePath) mapped to the page itself: `{ "/docs": scalar }` */
+	readonly docs?: DocsPages
 	/** `false` mounts nothing */
 	readonly enabled?: boolean
 	/** where the JSON document comes from; it loads on the first request and is kept for the process or isolate, and a failed load is tried again on the next request */
@@ -166,28 +163,21 @@ function loading(source: JsonSource | YamlSource, contentType: string): (ctx: Se
 	}
 }
 
-/** Serve a document built ahead of time or living elsewhere, and a docs page when asked, from `app`; returns `app`. */
+/** Serve a document built ahead of time or living elsewhere, and its docs pages when asked, from `app`; returns `app`. */
 export function serveStaticOpenApi<A>(app: A, options: ServeStaticOpenApiOptions<A>): A {
-	const {
-		cacheControl,
-		docs,
-		docsPath = "/docs",
-		enabled = true,
-		json,
-		jsonPath,
-		meta = {},
-		path = "/openapi",
-	} = options
+	const { auth, cacheControl, docs, enabled = true, json, jsonPath, meta = {}, path = "/openapi" } = options
+	if (auth !== undefined && cacheControl !== undefined)
+		throw new TypeError("serveStaticOpenApi: auth answers private, no-store; leave cacheControl out beside it")
 	if (!enabled) return app
 	const handle = app as unknown as ServingHandle
 	const stem = jsonPath ?? `${path}.json`
-	const routes: [string, ServedHandler][] = [[stem, answering(loading(json, JSON_TYPE), cacheControl)]]
+	const routes: [string, ServedHandler][] = [[stem, answering(loading(json, JSON_TYPE), cacheControl, auth)]]
 	if (options.yaml !== undefined) {
-		const served = answering(loading(options.yaml, YAML_TYPE), cacheControl)
+		const served = answering(loading(options.yaml, YAML_TYPE), cacheControl, auth)
 		const at = options.yamlPath === undefined ? [`${path}.yaml`, `${path}.yml`] : [options.yamlPath]
 		for (const yamlPath of at) routes.push([yamlPath, served])
 	}
-	if (docs !== undefined) routes.push(docsRoute(handle, docs, docsPath, stem))
-	mountAll(handle, routes, meta)
+	if (docs !== undefined) routes.push(...docsRoutes(handle, docs, stem))
+	mountAll(handle, routes, meta, auth)
 	return app
 }

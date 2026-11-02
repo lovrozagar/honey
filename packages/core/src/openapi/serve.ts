@@ -1,13 +1,14 @@
 /**
  * `serveOpenApi(app, options)` and `serveManifest(app, options?)`: an app serving its own document
- * (JSON at `${path}.json`, the same document as YAML at `.yaml` and `.yml`, and a docs page when
- * asked) and its published manifest. Each is a plain internal GET on the handle it is called on,
+ * (JSON at `${path}.json`, the same document as YAML at `.yaml` and `.yml`, and each docs page it is
+ * given at its own path) and its published manifest. Each is a plain internal GET on the handle it is called on,
  * so the handle's basePath and middleware apply, marked SERVED so it stays with this app. A call
  * mounts all its routes or, when any path is taken, none. Each artifact is built once per route
  * change, a failed build kept for its routes too, and answered with a strong ETag, `no-cache` and a
  * 304 for a matching `If-None-Match`. A served document never runs the invalidate check and
- * documents a schema it cannot convert unconstrained, with a warning. `docs` is the page itself, so
- * an app that shows none carries neither page, and one that shows one carries only that one.
+ * documents a schema it cannot convert unconstrained, with a warning. `docs` maps each path to the page
+ * itself, so an app that shows none carries neither page, and one that shows one carries only that one.
+ * `auth` puts a Basic guard in front of every route the call mounts.
  */
 import { GRAPH, type HoneyGraph } from "../routing/register.ts"
 import { type GenerateOpenApiOptions, generateOpenApi } from "./generate.ts"
@@ -15,10 +16,11 @@ import { type GenerateManifestOptions, generateManifest } from "./manifest.ts"
 import {
 	answering,
 	artifact,
-	type DocsPage,
-	docsRoute,
+	type DocsPages,
+	docsRoutes,
 	JSON_TYPE,
 	mountAll,
+	type ServedAccess,
 	type ServedHandler,
 	type ServedMeta,
 	type ServingHandle,
@@ -27,24 +29,23 @@ import {
 import { toYaml } from "./yaml.ts"
 
 /** What `serveOpenApi` takes: the document's info and generation options, and where and how it is served. */
-export type ServeOpenApiOptions<A = unknown> = Omit<GenerateOpenApiOptions, "info" | "invalidate" | "onSchemaError"> & {
-	/** the document's `info.description`; CommonMark */
-	readonly description?: string
-	/** a docs page for the document, at `docsPath`: the page itself, `scalar` or `swagger` */
-	readonly docs?: DocsPage
-	/** `"/docs"` by default */
-	readonly docsPath?: string
-	/** `false` mounts nothing */
-	readonly enabled?: boolean
-	/** every mounted route's meta: honey's keys and the handle's declared ones, under the internal SERVED marking */
-	readonly meta?: ServedMeta<A>
-	/** the stem the document is served at, `"/openapi"` by default: `.json`, `.yaml` and `.yml` follow */
-	readonly path?: string
-	/** the document's `info.title` */
-	readonly title: string
-	/** the document's `info.version` */
-	readonly version: string
-}
+export type ServeOpenApiOptions<A = unknown> = Omit<GenerateOpenApiOptions, "info" | "invalidate" | "onSchemaError"> &
+	ServedAccess<false> & {
+		/** the document's `info.description`; CommonMark */
+		readonly description?: string
+		/** the docs pages for the document, each path (under the handle's basePath) mapped to the page itself: `{ "/docs": scalar }` */
+		readonly docs?: DocsPages
+		/** `false` mounts nothing */
+		readonly enabled?: boolean
+		/** every mounted route's meta: honey's keys and the handle's declared ones, under the internal SERVED marking */
+		readonly meta?: ServedMeta<A>
+		/** the stem the document is served at, `"/openapi"` by default: `.json`, `.yaml` and `.yml` follow */
+		readonly path?: string
+		/** the document's `info.title` */
+		readonly title: string
+		/** the document's `info.version` */
+		readonly version: string
+	}
 
 /** What `serveManifest` takes: the manifest's generation options, and where and how it is served. There is no `visibility` choice: a served manifest always leaves out internal routes and keeps only built-in keys and keys with a metaSpec entry other than `false`. */
 export type ServeManifestOptions<A = unknown> = Omit<GenerateManifestOptions, "visibility"> & {
@@ -73,19 +74,9 @@ function perEpoch<T>(g: HoneyGraph, build: () => T): () => T {
 	}
 }
 
-/** Serve the app's OpenAPI document, and a docs page for it when asked, from `app`; returns `app`. */
+/** Serve the app's OpenAPI document, and its docs pages when asked, from `app`; returns `app`. */
 export function serveOpenApi<A>(app: A, options: ServeOpenApiOptions<A>): A {
-	const {
-		description,
-		docs,
-		docsPath = "/docs",
-		enabled = true,
-		meta = {},
-		path = "/openapi",
-		title,
-		version,
-		...rest
-	} = options
+	const { auth, description, docs, enabled = true, meta = {}, path = "/openapi", title, version, ...rest } = options
 	if (!enabled) return app
 	const handle = app as unknown as ServingHandle
 	const g = handle[GRAPH]
@@ -96,12 +87,12 @@ export function serveOpenApi<A>(app: A, options: ServeOpenApiOptions<A>): A {
 	const json = perEpoch(g, () => artifact(JSON.stringify(document()), JSON_TYPE))
 	const yaml = perEpoch(g, () => artifact(toYaml(document()), YAML_TYPE))
 	const routes: [string, ServedHandler][] = [
-		[`${path}.json`, answering(json)],
-		[`${path}.yaml`, answering(yaml)],
-		[`${path}.yml`, answering(yaml)],
+		[`${path}.json`, answering(json, undefined, auth)],
+		[`${path}.yaml`, answering(yaml, undefined, auth)],
+		[`${path}.yml`, answering(yaml, undefined, auth)],
 	]
-	if (docs !== undefined) routes.push(docsRoute(handle, docs, docsPath, `${path}.json`))
-	mountAll(handle, routes, meta)
+	if (docs !== undefined) routes.push(...docsRoutes(handle, docs, `${path}.json`))
+	mountAll(handle, routes, meta, auth)
 	return app
 }
 

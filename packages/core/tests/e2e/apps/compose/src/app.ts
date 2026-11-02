@@ -75,7 +75,5 @@ export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
 		})
 
 	const app = publicRoutes.route(accountRoutes).route(resourceRoutes)
-	return serveManifest(
-		serveOpenApi(app, { docs: scalar, docsPath: "/reference", title: "Honey Compose", version: "0.0.1" }),
-	)
+	return serveManifest(serveOpenApi(app, { docs: { "/reference": scalar }, title: "Honey Compose", version: "0.0.1" }))
 }

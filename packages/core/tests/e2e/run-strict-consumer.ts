@@ -154,8 +154,7 @@ for (const name of readdirSync(join(fixture, "documents"))) {
 			join(fixture, "documents", name),
 			"--target",
 			"ts",
-			"--ts-name",
-			"Client",
+			/* no --ts-name: the CLI's default name, SDK, is the one an SDK's own SDKConfig once collided with */
 			"--ts-stem",
 			stem,
 			"--out",

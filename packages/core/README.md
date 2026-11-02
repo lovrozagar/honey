@@ -96,7 +96,7 @@ import { serve } from "@lovrozagar/honey/serve"
 const app = honey()
 app.get("/health").handler((ctx) => ctx.res.text("ok", "ok"))
 
-await serve(serveOpenApi(app, { docs: scalar, title: "Books", version: "1.0.0" }), { port: 3000 })
+await serve(serveOpenApi(app, { docs: { "/docs": scalar }, title: "Books", version: "1.0.0" }), { port: 3000 })
 ```
 
 ```sh
@@ -190,7 +190,7 @@ app
 
 app.delete("/users/:id").handler((ctx) => ctx.res.noContent())
 
-serveOpenApi(app, { title: "Users", version: "1.0.0", docs: scalar })
+serveOpenApi(app, { title: "Users", version: "1.0.0", docs: { "/docs": scalar } })
 ```
 
 Sub-apps mount with `route()`, and `on()` registers one handler for several methods:
@@ -799,7 +799,7 @@ serveOpenApi(app, {
 	version: "1.2.0",
 	servers: [{ url: "https://{region}.api.example.com", variables: { region: { default: "eu" } } }],
 	tags: [{ name: "orders", description: "Placing and tracking orders" }],
-	docs: scalar,
+	docs: { "/docs": scalar },
 })
 ```
 
@@ -875,7 +875,7 @@ const inline = serveStaticOpenApi(honey(), {
 
 /* a Workers assets binding: env.ASSETS.fetch on the request's own origin */
 const onWorkers = serveStaticOpenApi(honey(), {
-	docs: scalar,
+	docs: { "/docs": scalar },
 	json: { asset: "/openapi.json" },
 	yaml: { asset: "/openapi.yaml" },
 })
@@ -897,7 +897,7 @@ const loaded = serveStaticOpenApi(honey(), {
 not show. The JSON route is `${path}.json` (`path` is `/openapi` by default), the YAML routes `.yaml` and `.yml`
 appear only with a `yaml` source, and `jsonPath` or `yamlPath` replaces the stem outright. Every route is internal,
 so the document never documents its own endpoints, and `meta` rides along under that marking on every route the call
-mounts, the docs page included. It takes what a route's own `.meta()` takes on that handle: honey's keys (a
+mounts, the docs pages included. It takes what a route's own `.meta()` takes on that handle: honey's keys (a
 `security` scheme, a `summary`) and the ones the app declared with `meta<T>()`, so an app whose middleware turns
 `meta.cacheControl` into the header passes it here. `serveOpenApi` and `serveManifest` take the same `meta`.
 
@@ -1265,6 +1265,7 @@ generator.
 | `@lovrozagar/honey/mcp/uploads`     | `uploads(options)`, `memoryUploadStore()`: `mcp()`'s opt-in out-of-band file uploads (the file-uploads extension's flow)                |
 | `@lovrozagar/honey/mcp/url-files`   | `urlFiles(options)`: `mcp()`'s opt-in file arguments as https URLs from listed hosts                                                    |
 | `@lovrozagar/honey/openapi`         | `serveOpenApi`, `serveManifest`, `generateOpenApi`, `generateManifest`, `toYaml`                                                        |
+| `@lovrozagar/honey/openapi/auth`    | `basic`, `credentialsMatch`: HTTP Basic in front of a served document and its docs pages                                                |
 | `@lovrozagar/honey/openapi/scalar`  | `scalar`, the Scalar API reference page                                                                                                 |
 | `@lovrozagar/honey/openapi/static`  | `serveStaticOpenApi`, a document built ahead of time or living elsewhere, served without the generator                                  |
 | `@lovrozagar/honey/openapi/swagger` | `swagger`, the Swagger UI page                                                                                                          |
