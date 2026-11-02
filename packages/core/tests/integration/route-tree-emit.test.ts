@@ -30,6 +30,7 @@ import {
 	register,
 	runtimeApp,
 } from "./route-tree-emit/reference.ts"
+import { SPAWN_TIMEOUT } from "../fixture/spawn-timeout.ts"
 import { caseLabel, rng, runs } from "./security/rng.ts"
 import { ws } from "../../src/ws/route.ts"
 
@@ -261,7 +262,7 @@ describe("route-tree emit: no schema data in the module", () => {
 	// v0: 93fc232f69
 	// v0: 262ea9454c
 	// v0: 55cd3dbcf2
-	it("carries no input or output schema, media type, input source or validator for any route", async () => {
+	it("carries no input or output schema, response media type, input source or validator for any route", async () => {
 		const listQuery = z
 			.object({ cursor: z.string().optional(), limit: z.string() })
 			.transform((q) => ({ ...q, limit: Number(q.limit) }))
@@ -291,11 +292,120 @@ describe("route-tree emit: no schema data in the module", () => {
 		app.get("/health").handler((c) => c.res.text("ok", "ok"))
 		const { routes, text } = await emitted(app)
 		const leaked = Object.values(routes).flatMap((entry) =>
-			Object.keys(entry).filter((k) => !["bek", "ek", "es", "mt"].includes(k)),
+			Object.keys(entry).filter((k) => !["bd", "bek", "ek", "es", "mt"].includes(k)),
 		)
-		const words = ["application/json", "text/html", "redirect", "moved_permanently", "cursor", "email", '"json"']
+		const words = ["application/json", "text/html", "redirect", "moved_permanently", "cursor", "email"]
 		expect([leaked, words.filter((word) => text.includes(word)), text.includes('"cookies"')]).toEqual([[], [], false])
 	})
+})
+
+/** A service declaring each body kind; only its tree crosses to the gateway. */
+function bodyService(): App {
+	const app = honey<{}>()
+	app
+		.post("/json")
+		.input({ json: z.object({ a: z.number() }) })
+		.handler((c) => c.res.text("ok", "service"))
+	app
+		.post("/form")
+		.input({ form: z.object({ a: z.string() }) })
+		.handler((c) => c.res.text("ok", "service"))
+	app
+		.post("/png")
+		.input({ binary: "image/png" })
+		.handler((c) => c.res.text("ok", "service"))
+	app
+		.post("/image")
+		.input({ binary: "image/*" })
+		.handler((c) => c.res.text("ok", "service"))
+	app
+		.post("/none")
+		.input({ binary: [] })
+		.handler((c) => c.res.text("ok", "service"))
+	app.post("/open").handler((c) => c.res.text("ok", "service"))
+	return app
+}
+
+/** A gateway booted from the module emitted for `bodyService`, echoing what its catch-all receives. */
+async function bodyGateway(): Promise<Honey<{}>> {
+	const gateway = honey<{}>().routeTree((await emitted(bodyService())).routeTree)
+	gateway.all("/*").handler(async (c) => c.res.text("ok", `reached ${await c.req.text()}`))
+	return gateway
+}
+
+const posted = (type: string | null, body: BodyInit = '{"a":1}'): RequestInit => {
+	const headers = new Headers()
+	if (type !== null) headers.set("content-type", type)
+	return { body, headers, method: "POST" }
+}
+
+describe("route-tree emit: a generated leaf refuses a body its route does not declare", () => {
+	it(
+		"answers 415 for another media type or none, as the live snapshot does",
+		async () => {
+			const gateway = await bodyGateway()
+			expect([
+				(await call(gateway, "/json", posted("text/plain")))[0],
+				(await call(gateway, "/form", posted("application/json")))[0],
+				(await call(gateway, "/png", posted("image/jpeg")))[0],
+				(await call(gateway, "/image", posted("text/plain")))[0],
+				(await call(gateway, "/none", posted("image/png")))[0],
+				(await call(gateway, "/json", { method: "POST" }))[0],
+			]).toEqual([415, 415, 415, 415, 415, 415])
+		},
+		SPAWN_TIMEOUT,
+	)
+
+	it(
+		"refuses a streamed body that names no media type",
+		async () => {
+			const stream = new Blob(["x"]).stream()
+			const init = { ...posted(null, stream), duplex: "half" } as RequestInit
+			expect((await call(await bodyGateway(), "/json", init))[0]).toBe(415)
+		},
+		SPAWN_TIMEOUT,
+	)
+})
+
+describe("route-tree emit: a generated leaf forwards what its route declares", () => {
+	it(
+		"forwards a matching request with its body intact, and leaves a route with no declared body ungated",
+		async () => {
+			const gateway = await bodyGateway()
+			expect([
+				await call(gateway, "/json", posted("application/json; charset=utf-8")),
+				await call(gateway, "/form", posted("application/x-www-form-urlencoded", "a=1")),
+				await call(gateway, "/form", posted("multipart/form-data; boundary=x", "--x--")),
+				await call(gateway, "/png", posted("image/png", "bytes")),
+				await call(gateway, "/image", posted("image/webp", "bytes")),
+				await call(gateway, "/open", posted("text/plain", "free")),
+			]).toEqual([
+				[200, 'reached {"a":1}'],
+				[200, "reached a=1"],
+				[200, "reached --x--"],
+				[200, "reached bytes"],
+				[200, "reached bytes"],
+				[200, "reached free"],
+			])
+		},
+		SPAWN_TIMEOUT,
+	)
+
+	it(
+		"carries the body kind as data and no validator",
+		async () => {
+			const { routes, text } = await emitted(bodyService())
+			expect([
+				routes["POST /json"]?.bd,
+				routes["POST /form"]?.bd,
+				routes["POST /png"]?.bd,
+				routes["POST /none"]?.bd,
+				routes["POST /open"]?.bd,
+				text.includes("iv:"),
+			]).toEqual(["json", "form", ["image/png"], [], undefined, false])
+		},
+		SPAWN_TIMEOUT,
+	)
 })
 
 describe("route-tree emit: route data the module carries", () => {

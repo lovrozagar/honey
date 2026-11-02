@@ -34,10 +34,10 @@ export const routes: RouteTree["routes"] = S<RouteTree["routes"][string]>({
 	[P1]: { ek: A0, es: J0 },
 	[P2]: { ek: A0, es: J0 },
 	[P3]: { ek: A1, es: J1 },
-	[P4]: { ek: A1, es: J1 },
+	[P4]: { bd: "json", ek: A1, es: J1 },
 	[P5]: { ek: A2, es: J2 },
 	[P6]: { ek: A2, es: J2 },
-	[P7]: { ek: [T0,T3,T1,"rate_limited"], es: {"expired_token":T2,"forbidden":T3,"invalid_token":T2,"rate_limited":"too_many_requests"} }
+	[P7]: { bd: "json", ek: [T0,T3,T1,"rate_limited"], es: {"expired_token":T2,"forbidden":T3,"invalid_token":T2,"rate_limited":"too_many_requests"} }
 })
 
 

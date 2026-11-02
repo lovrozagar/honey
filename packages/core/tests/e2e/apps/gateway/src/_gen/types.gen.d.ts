@@ -2,13 +2,15 @@ import type { HoneyContext, WithOutput, OpenApiMeta } from "@lovrozagar/honey"
 
 export type BaseCtx = HoneyContext<unknown>
 
-export type RouteSelector = "GET /articles" | "GET /articles/meta" | "GET /nl/c/:delivery/:url" | "GET /ping" | "GET /users" | "GET /users/:id" | "GET /v1/openapi/spec"
+export type RouteSelector = "GET /articles" | "GET /articles/meta" | "GET /nl/c/:delivery/:url" | "GET /ping" | "GET /users" | "GET /users/:id" | "GET /v1/openapi/spec" | "POST /users"
 
 declare module "@lovrozagar/honey" {
 	interface HoneyCodegen {
 		routeSelector: RouteSelector
 	}
 }
+
+type CreateUserRequest = { name: string }
 
 type ListArticlesResponse200 = { articles: { id: string; title: string }[]; count: number; hasMore: boolean; nextCursor: string | null }
 
@@ -54,6 +56,13 @@ export type Routes = {
 			ctx: WithOutput<BaseCtx & { readonly meta: Readonly<Partial<Omit<OpenApiMeta, keyof { permissions?: string[]; tenant?: string; worker?: "edge" | "origin" }>> & { permissions?: string[]; tenant?: string; worker?: "edge" | "origin" }>; readonly routePattern: "/users" }, never>
 			errors: never
 			input: {}
+			meta: { worker: "origin" }
+			output: {}
+		}
+		post: {
+			ctx: WithOutput<BaseCtx & { readonly input: { json: CreateUserRequest }; readonly meta: Readonly<Partial<Omit<OpenApiMeta, keyof { permissions?: string[]; tenant?: string; worker?: "edge" | "origin" }>> & { permissions?: string[]; tenant?: string; worker?: "edge" | "origin" }>; readonly routePattern: "/users" }, never>
+			errors: never
+			input: { json: CreateUserRequest }
 			meta: { worker: "origin" }
 			output: {}
 		}

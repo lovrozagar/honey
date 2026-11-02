@@ -7,6 +7,7 @@
  */
 import { resolve as resolvePath } from "node:path"
 import { describe, expect, it, vi } from "vitest"
+import { SPAWN_TIMEOUT } from "../../fixture/spawn-timeout.ts"
 import { guardNamed } from "../../structure/mutation-harness.ts"
 
 const REPO = resolvePath(import.meta.dirname, "../../../../..")
@@ -24,7 +25,39 @@ const { honey } = (await import(
 	resolvePath(REPO, "packages/core/src/routing/app.ts")
 )) as typeof import("../../../src/routing/app.ts")
 
+const { emittedRouteTree } = (await import(
+	resolvePath(REPO, "packages/gen/src/emit/ts/__fixtures__/emitted.ts")
+)) as typeof import("../../../../gen/src/emit/ts/__fixtures__/emitted.ts")
+
 const get = (target: string) => new Request(`http://app.test${target}`)
+
+const ANY_VALUE = { "~standard": { validate: (value: unknown) => ({ value }), vendor: "test", version: 1 } } as const
+
+describe("v1 adversarial: a generated route tree keeps a leaf's body gate", () => {
+	it(
+		"never forwards a media type the route refuses",
+		async () => {
+			const service = honey<{}>()
+			service
+				.post("/items")
+				.input({ json: ANY_VALUE })
+				.handler((c) => c.res.text("ok", "service"))
+			const { routeTree } = (await emittedRouteTree(service.toRouteTree())) as unknown as {
+				routeTree: Parameters<ReturnType<typeof honey>["routeTree"]>[0]
+			}
+			const reached: string[] = []
+			const gateway = honey<{}>().routeTree(routeTree)
+			gateway.all("/*").handler((c) => {
+				reached.push(c.req.url)
+				return c.res.text("ok", "forwarded")
+			})
+			const headers = { "content-type": "text/plain" }
+			const res = await gateway.fetch(new Request("http://x/items", { body: "x", headers, method: "POST" }), {})
+			expect([res.status, reached]).toEqual([415, []])
+		},
+		SPAWN_TIMEOUT,
+	)
+})
 
 describe("v1 adversarial: concurrent requests share no state", () => {
 	// v0: bc90bcafb2

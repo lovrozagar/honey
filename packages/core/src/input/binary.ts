@@ -34,7 +34,7 @@ function rangeOf(declared: string): Range | null {
 }
 
 /** The declared types as ranges; one that is no media type or range throws, naming the route. */
-export function binaryRanges(declared: BinaryTypes, method: string, path: string): readonly Range[] {
+export function binaryRanges(declared: string | readonly string[], method: string, path: string): readonly Range[] {
 	return (typeof declared === "string" ? [declared] : declared).map((type) => {
 		const range = rangeOf(type)
 		if (range !== null) return range

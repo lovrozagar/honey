@@ -175,7 +175,12 @@ export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
 	/* every downstream route delegates here with its own pattern and meta */
 	app.all("/*").handler(
 		proxy({
-			destination: (_ctx, url, init) => users.fetch(new Request(new URL(url, "http://users.internal"), init), {}),
+			destination: async (_ctx, url, init) => {
+				const answer = await users.fetch(new Request(new URL(url, "http://users.internal"), init), {})
+				const headers = new Headers(answer.headers)
+				headers.set("x-reached-service", "users")
+				return new Response(answer.body, { headers, status: answer.status })
+			},
 		}),
 	)
 

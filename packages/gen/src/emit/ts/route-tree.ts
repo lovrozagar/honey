@@ -1,7 +1,8 @@
 /**
  * `generateRouteTree(tree)` (F2/F17): a route-tree snapshot (core's v2 wire format, restated here
  * because gen never imports core) as a TS module an app boots from. Topology with route-id leaves,
- * each route's data (meta, error keys, error statuses, boundary key), shared values interned.
+ * each route's data (meta, error keys, error statuses, boundary key, declared body kind), shared
+ * values interned.
  * Live validators (`iv`, `out`) and the handler record (`h`) are never written (Q1).
  */
 import { InternPool } from "../../ir/route-tree-intern.ts"
@@ -35,6 +36,8 @@ export type TreeNodeV2 = {
 
 /** One route's data in a snapshot; `h`, `iv` and `out` are live values, never emitted. */
 export type RouteEntryV2 = {
+	/** The declared body as data: `"json"`, `"form"`, or the binary media types. */
+	bd?: string | readonly string[]
 	/**
 	 * The error key an undeclared throw from this route is answered with; null when it has none, which answers an
 	 * internal error.
@@ -78,6 +81,7 @@ export type RouteTreeV2 = {
 
 /** One route as emitted: only the fields a booted app reads. */
 type Emitted = {
+	bd: string | readonly string[] | null
 	bek: string | null
 	ek: readonly string[]
 	es: Record<string, string> | null
@@ -169,7 +173,15 @@ function emittedRoutes(tree: RouteTreeV2): Emitted[] {
 			if (mt !== null) assertJsonMeta(id, mt)
 			const es = entry.es && Object.keys(entry.es).length > 0 ? entry.es : null
 			const sorted = es && Object.fromEntries(Object.entries(es).sort(([a], [b]) => compareCodeUnits(a, b)))
-			return { bek: entry.bek ?? null, ek: entry.ek ?? [], es: sorted, i: entry.i ?? null, id, mt }
+			return {
+				bd: entry.bd ?? null,
+				bek: entry.bek ?? null,
+				ek: entry.ek ?? [],
+				es: sorted,
+				i: entry.i ?? null,
+				id,
+				mt,
+			}
 		})
 }
 
@@ -219,6 +231,7 @@ const keyText = (key: string) => (key === "__proto__" ? '["__proto__"]' : tsStri
 function internOf(routes: readonly Emitted[]): InternPool {
 	const intern = new InternPool()
 	for (const route of routes) {
+		intern.count(route.bd)
 		intern.count(route.bek)
 		if (route.ek.length > 0) intern.count(route.ek)
 		intern.count(route.es)
@@ -235,6 +248,7 @@ function internOf(routes: readonly Emitted[]): InternPool {
 
 function routeLine(route: Emitted, intern: InternPool): string {
 	const parts: string[] = []
+	if (route.bd !== null) parts.push(`bd: ${intern.expr(route.bd)}`)
 	if (route.bek !== null) parts.push(`bek: ${intern.expr(route.bek)}`)
 	if (route.ek.length > 0) parts.push(`ek: ${intern.expr(route.ek)}`)
 	if (route.es !== null) parts.push(`es: ${intern.expr(route.es)}`)

@@ -28,8 +28,10 @@ import {
 	rawServerTiming,
 	rawTargetProxy,
 	reflectingCors,
+	bodylessRouteTree,
 	confusedVerifyJwt,
 	expOptionalVerifyJwt,
+	type GenerateRouteTree,
 	textIpAllowed,
 	type VerifyJwt,
 	textIpRestrict,
@@ -213,6 +215,12 @@ export const GUARDS: readonly Guard[] = [
 		disable: () => ({ ipAllowed: textIpAllowed }),
 		id: "v1-ip-allowed-canonical",
 		module: "packages/core/src/middleware/ip-restrict.ts",
+	},
+	{
+		catches: "v1: a generated route tree dropping the declared body, so a leaf forwards what its route refuses",
+		disable: (original) => ({ generateRouteTree: bodylessRouteTree(original.generateRouteTree as GenerateRouteTree) }),
+		id: "v1-generated-body-gate",
+		module: "packages/gen/src/emit/ts/route-tree.ts",
 	},
 	{
 		catches: "v1: a public key verifying as an HMAC secret, so anyone holding it forges tokens (algorithm confusion)",

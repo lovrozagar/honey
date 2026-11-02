@@ -1,4 +1,5 @@
 import { honey } from "@lovrozagar/honey"
+import * as z from "zod"
 
 /**
  * A downstream service behind the gateway. In production it would be its own Worker reached
@@ -7,5 +8,10 @@ import { honey } from "@lovrozagar/honey"
 export const users = honey()
 
 users.get("/users/").handler((ctx) => ctx.res.json("ok", { service: "users", users: [] }))
+
+users
+	.post("/users/")
+	.input({ json: z.object({ name: z.string() }) })
+	.handler((ctx) => ctx.res.json("ok", { name: ctx.input.json.name, service: "users" }))
 
 users.get("/users/:id/").handler((ctx) => ctx.res.json("ok", { id: ctx.params.id, service: "users" }))

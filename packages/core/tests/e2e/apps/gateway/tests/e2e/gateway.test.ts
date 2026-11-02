@@ -1,5 +1,18 @@
 import { expect, test } from "@playwright/test"
 
+test.describe("gateway refuses a body its generated tree says the route cannot take", () => {
+	test("another media type is 415 and never reaches the service", async ({ request }) => {
+		const res = await request.post("/app/users/", { data: "x", headers: { "content-type": "text/plain" } })
+		expect([res.status(), res.headers()["x-reached-service"]]).toEqual([415, undefined])
+	})
+
+	test("the declared media type is forwarded", async ({ request }) => {
+		const res = await request.post("/app/users/", { data: { name: "Ada" } })
+		expect([res.status(), res.headers()["x-reached-service"]]).toEqual([200, "users"])
+		expect(await res.json()).toEqual({ name: "Ada", service: "users" })
+	})
+})
+
 test.describe("stripPrefix + enforce", () => {
 	test("GET /app/ping → 308 /app/ping/", async ({ request }) => {
 		const res = await request.get("/app/ping", { maxRedirects: 0 })

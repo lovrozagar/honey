@@ -15,7 +15,18 @@ type BodySchemas = {
 	readonly json?: unknown
 }
 
+/** A route's declared body as data a generated tree can carry: `"json"`, `"form"`, or the binary media types. */
+export type DeclaredBody = "form" | "json" | readonly string[]
+
 const BODIES = ["binary", "form", "json"] as const
+
+/** What `schemas` declare as a body, or `null` when they declare none. */
+export function declaredBody(schemas: BodySchemas | null | undefined): DeclaredBody | null {
+	const binary = schemas?.binary as string | readonly string[] | undefined
+	if (binary !== undefined) return typeof binary === "string" ? [binary] : binary
+	if (schemas?.json !== undefined) return "json"
+	return schemas?.form === undefined ? null : "form"
+}
 
 /**
  * Throws when `schemas` declare a body that `methods` at `path` can never receive (every method

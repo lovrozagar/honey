@@ -108,6 +108,24 @@
             "description": "Success"
           }
         }
+      },
+      "post": {
+        "x-honey-route": "POST /users",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUserRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
       }
     },
     "/users/{id}/": {
@@ -204,6 +222,17 @@
           "nextCursor"
         ],
         "additionalProperties": false
+      },
+      "CreateUserRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ]
       }
     }
   }

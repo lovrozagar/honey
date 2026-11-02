@@ -4,6 +4,7 @@
  */
 import { canonical, expandOptional, parsePattern, type RouteId, routeId, type Segment } from "./pattern.ts"
 import type { InputSchemas } from "../input/input.ts"
+import type { DeclaredBody } from "../validation/content-type.ts"
 import type { OutputSchemas } from "./output-types.ts"
 import type { RouteRecord } from "./record.ts"
 import type { HttpMethod } from "./types.ts"
@@ -30,6 +31,8 @@ export type TreeNode = {
 
 /** Descriptive data for one route in a tree. Generated files carry only this. */
 export type RouteEntry = {
+	/** the declared body as data: a delegated leaf's media type is checked against it */
+	bd?: DeclaredBody
 	/** boundary error key */
 	bek?: string | null
 	/** declared error keys */
@@ -40,7 +43,7 @@ export type RouteEntry = {
 	h?: RouteRecord
 	/** internal route (spec, docs, manifest) */
 	i?: 1 | true
-	/** what `.input()` declares: a delegated leaf's body media type is checked against it */
+	/** what `.input()` declares: live only, so a generated tree carries `bd` instead */
 	iv?: InputSchemas | null
 	/** route meta */
 	mt?: Readonly<Record<string, unknown>> | null

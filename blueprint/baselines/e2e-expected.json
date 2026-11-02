@@ -35,6 +35,8 @@
 		"bun/dev/gateway": {
 			"failed": [],
 			"passed": [
+				"gateway.test.ts > gateway refuses a body its generated tree says the route cannot take > another media type is 415 and never reaches the service",
+				"gateway.test.ts > gateway refuses a body its generated tree says the route cannot take > the declared media type is forwarded",
 				"gateway.test.ts > gateway served from its generated merged tree > a downstream route is forwarded through the catch-all proxy",
 				"gateway.test.ts > gateway served from its generated merged tree > a path no route serves is 404, not forwarded",
 				"gateway.test.ts > gateway served from its generated merged tree > an own param route next to the catch-all is served by the gateway",
@@ -183,6 +185,8 @@
 		"bun/prod/gateway": {
 			"failed": [],
 			"passed": [
+				"gateway.test.ts > gateway refuses a body its generated tree says the route cannot take > another media type is 415 and never reaches the service",
+				"gateway.test.ts > gateway refuses a body its generated tree says the route cannot take > the declared media type is forwarded",
 				"gateway.test.ts > gateway served from its generated merged tree > a downstream route is forwarded through the catch-all proxy",
 				"gateway.test.ts > gateway served from its generated merged tree > a path no route serves is 404, not forwarded",
 				"gateway.test.ts > gateway served from its generated merged tree > an own param route next to the catch-all is served by the gateway",
@@ -332,6 +336,8 @@
 		"cf/dev/gateway": {
 			"failed": [],
 			"passed": [
+				"gateway.test.ts > gateway refuses a body its generated tree says the route cannot take > another media type is 415 and never reaches the service",
+				"gateway.test.ts > gateway refuses a body its generated tree says the route cannot take > the declared media type is forwarded",
 				"gateway.test.ts > gateway served from its generated merged tree > a downstream route is forwarded through the catch-all proxy",
 				"gateway.test.ts > gateway served from its generated merged tree > a path no route serves is 404, not forwarded",
 				"gateway.test.ts > gateway served from its generated merged tree > an own param route next to the catch-all is served by the gateway",
@@ -480,6 +486,8 @@
 		"cf/prod/gateway": {
 			"failed": [],
 			"passed": [
+				"gateway.test.ts > gateway refuses a body its generated tree says the route cannot take > another media type is 415 and never reaches the service",
+				"gateway.test.ts > gateway refuses a body its generated tree says the route cannot take > the declared media type is forwarded",
 				"gateway.test.ts > gateway served from its generated merged tree > a downstream route is forwarded through the catch-all proxy",
 				"gateway.test.ts > gateway served from its generated merged tree > a path no route serves is 404, not forwarded",
 				"gateway.test.ts > gateway served from its generated merged tree > an own param route next to the catch-all is served by the gateway",
@@ -629,6 +637,8 @@
 		"node/dev/gateway": {
 			"failed": [],
 			"passed": [
+				"gateway.test.ts > gateway refuses a body its generated tree says the route cannot take > another media type is 415 and never reaches the service",
+				"gateway.test.ts > gateway refuses a body its generated tree says the route cannot take > the declared media type is forwarded",
 				"gateway.test.ts > gateway served from its generated merged tree > a downstream route is forwarded through the catch-all proxy",
 				"gateway.test.ts > gateway served from its generated merged tree > a path no route serves is 404, not forwarded",
 				"gateway.test.ts > gateway served from its generated merged tree > an own param route next to the catch-all is served by the gateway",
@@ -777,6 +787,8 @@
 		"node/prod/gateway": {
 			"failed": [],
 			"passed": [
+				"gateway.test.ts > gateway refuses a body its generated tree says the route cannot take > another media type is 415 and never reaches the service",
+				"gateway.test.ts > gateway refuses a body its generated tree says the route cannot take > the declared media type is forwarded",
 				"gateway.test.ts > gateway served from its generated merged tree > a downstream route is forwarded through the catch-all proxy",
 				"gateway.test.ts > gateway served from its generated merged tree > a path no route serves is 404, not forwarded",
 				"gateway.test.ts > gateway served from its generated merged tree > an own param route next to the catch-all is served by the gateway",

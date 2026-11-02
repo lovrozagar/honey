@@ -131,6 +131,35 @@ describe("generateRouteTree: the module", () => {
 	})
 
 	// v0: aa9b10eb21
+})
+
+describe("generateRouteTree: a declared body", () => {
+	it("writes a declared body as data, shares a repeated one, and leaves an undeclared route without it", async () => {
+		const { routes, text } = await emitted(
+			treeOf([
+				["POST", "/a", { bd: ["image/png"] }],
+				["POST", "/b", { bd: ["image/png"] }],
+				["POST", "/c", { bd: "json" }],
+				["POST", "/d", { bd: [] }],
+				["POST", "/e"],
+			]),
+		)
+		expect([
+			routes["POST /a"]?.bd,
+			routes["POST /a"]?.bd === routes["POST /b"]?.bd,
+			routes["POST /c"]?.bd,
+			routes["POST /d"]?.bd,
+			routes["POST /e"],
+		]).toEqual([["image/png"], true, "json", [], {}])
+		expect(text).not.toMatch(/\biv:/)
+	})
+
+	it("refuses a lone surrogate in a binary type", () => {
+		expect(() => generateRouteTree(treeOf([["POST", "/a", { bd: ["image/\ud800"] }]]))).toThrow(/not well-formed/)
+	})
+})
+
+describe("generateRouteTree: wildcards", () => {
 	it("keeps a wildcard's name, named or not, and its route id", async () => {
 		const { routes, tree } = await emitted(
 			treeOf([

@@ -23,6 +23,7 @@ import {
 	type RouteEntry,
 	type RouteTree,
 } from "./tree.ts"
+import { declaredBody } from "../validation/content-type.ts"
 
 /** Serve `tree` on `g`: frozen in place, its live records copied, the rest bound as routes register. */
 export function loadRouteTree(g: HoneyGraph, tree: RouteTree): void {
@@ -75,7 +76,9 @@ export function snapshotRouteTree(g: HoneyGraph): RouteTree {
 		const cm = [...r.cm, ...scopesFor(g, expandOptional(r.sg))]
 		const h: RouteHandler = { ...r, cm, dk: new Set(ek), rb: policy.boundaryKey, xm: route.meta }
 		const es = statusKeysOf(ek, [r.ef, ...chainErrorFactories(mw), r.own.errorFactory])
+		const bd = declaredBody(r.iv)
 		routes[id] = {
+			...(bd === null ? {} : { bd }),
 			bek: policy.boundaryKey,
 			ek,
 			...(es === null ? {} : { es }),

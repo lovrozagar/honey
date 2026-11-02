@@ -13,6 +13,31 @@
     },
     {
       "errors": [],
+      "input": {
+        "json": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name"
+          ]
+        }
+      },
+      "meta": {
+        "worker": "origin"
+      },
+      "method": "POST",
+      "middleware": [
+        "anonymous"
+      ],
+      "params": [],
+      "path": "/users"
+    },
+    {
+      "errors": [],
       "meta": {
         "worker": "origin"
       },

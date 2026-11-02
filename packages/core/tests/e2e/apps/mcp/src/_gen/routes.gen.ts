@@ -25,11 +25,11 @@ const M4 = {"mcp":true,"security":A0,"operationId":"extract.table.stream"} as un
 export const tree: TreeNode = N(S({ "v1": N(S({ "projects": N(undefined, null, { n: "project_id", c: N(S({ "extract": N(undefined, S({ POST: P0 })), "extract-stream": N(undefined, S({ POST: P1 })), "suggest-schema": N(undefined, S({ POST: P2 })), "tables": N(undefined, null, { n: "table_id", c: N(S({ "extract": N(undefined, S({ POST: P3 })), "extract-stream": N(undefined, S({ POST: P4 })) })) }) })) }) })) }))
 
 export const routes: RouteTree["routes"] = S<RouteTree["routes"][string]>({
-	[P0]: { mt: M0 },
-	[P1]: { mt: M1 },
-	[P2]: { mt: M2 },
-	[P3]: { mt: M3 },
-	[P4]: { mt: M4 }
+	[P0]: { bd: "form", mt: M0 },
+	[P1]: { bd: "form", mt: M1 },
+	[P2]: { bd: "form", mt: M2 },
+	[P3]: { bd: "form", mt: M3 },
+	[P4]: { bd: "form", mt: M4 }
 })
 
 export type MetaShape = {

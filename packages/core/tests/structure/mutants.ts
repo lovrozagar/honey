@@ -97,6 +97,17 @@ export function textIpAllowed(ip: string | null, lists: IpLists): boolean {
 	return !named(lists.deny) && (!lists.allow?.length || named(lists.allow))
 }
 
+/** The tree emitter, as the mutant below wraps it. */
+export type GenerateRouteTree = (tree: { routes: Record<string, { bd?: unknown }> }) => string
+
+/** generateRouteTree that drops each route's declared body, so a leaf forwards what its route refuses. */
+export function bodylessRouteTree(real: GenerateRouteTree): GenerateRouteTree {
+	return (tree) => {
+		const routes = Object.entries(tree.routes).map(([id, { bd: _bd, ...entry }]) => [id, entry])
+		return real({ ...tree, routes: Object.fromEntries(routes) })
+	}
+}
+
 export type VerifyJwt = (token: string, options: VerifyJwtOptions) => Promise<JwtVerifyResult>
 
 /** verifyJwt that takes the algorithm from the token and a public key's text as its HMAC secret. */
