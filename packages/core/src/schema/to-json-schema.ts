@@ -11,6 +11,7 @@ import { valibotJsonSchema } from "./valibot.ts"
 import { yupJsonSchema } from "./yup.ts"
 import { zodJsonSchema } from "./zod.ts"
 
+/** A JSON Schema document as a plain object. */
 export type JsonSchema = Record<string, unknown>
 
 /** Which side of a schema to describe: what it accepts, or what it hands back. */
@@ -21,14 +22,43 @@ export type EffectConverter = (schema: never) => unknown
 
 /** Why a schema came out wholly or partly unconstrained. */
 export type ConversionIssue =
-	| { readonly io: SchemaIo; readonly kind: "degraded"; readonly nodes: readonly string[]; readonly vendor: string }
-	| { readonly io: SchemaIo; readonly kind: "unsupported"; readonly vendor: string }
-	| { readonly error: unknown; readonly io: SchemaIo; readonly kind: "failed"; readonly vendor: string }
+	| {
+			/** The side of the schema that was converted. */
+			readonly io: SchemaIo
+			/** Conversion finished, but the nodes in `nodes` came out unconstrained. Only zod schemas report this. */
+			readonly kind: "degraded"
+			/** The zod node kinds JSON Schema cannot express, such as `transform`, sorted; `unrecognized` for a value zod 4 does not recognize. */
+			readonly nodes: readonly string[]
+			/** The validator library's name from the schema's `~standard.vendor`, such as `zod`. */
+			readonly vendor: string
+	  }
+	| {
+			/** The side of the schema that was requested. */
+			readonly io: SchemaIo
+			/** No object came out, so the schema is `{}`: honey has no converter for this validator, no Effect converter was passed, or the converter returned a non-object. */
+			readonly kind: "unsupported"
+			/** The validator library's name from the schema's `~standard.vendor`, such as `zod`. */
+			readonly vendor: string
+	  }
+	| {
+			/** What the converter threw. */
+			readonly error: unknown
+			/** The side of the schema that was requested. */
+			readonly io: SchemaIo
+			/** The converter threw, so the schema came out as `{}`. */
+			readonly kind: "failed"
+			/** The validator library's name from the schema's `~standard.vendor`, such as `zod`. */
+			readonly vendor: string
+	  }
 
+/** Options for `jsonSchemaOf`. */
 export type JsonSchemaOptions = {
-	/** Converters core cannot import itself. */
-	readonly converters?: { readonly effect?: EffectConverter }
-	/** Hears each schema that came out unconstrained, once. */
+	/** Converters honey cannot import itself. */
+	readonly converters?: {
+		/** Effect's JSON Schema function, passed in because honey never imports Effect. Unset, an Effect schema comes out as `{}` and is reported as `unsupported`. */
+		readonly effect?: EffectConverter
+	}
+	/** Called once per conversion that went wrong in a way honey can detect. Default: nothing hears it. Not every `{}` is reported: a valibot, yup or older ArkType node with no conversion comes out unconstrained silently. */
 	readonly report?: (issue: ConversionIssue) => void
 }
 

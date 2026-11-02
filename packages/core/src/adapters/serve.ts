@@ -10,18 +10,23 @@ export const DEFAULT_MAX_REQUEST_BODY = 128 * 1024 * 1024
 
 const DEFAULT_CLOSE_TIMEOUT = 1_000
 
-type FetchApp<TEnv> = { fetch(request: Request, env: TEnv): Response | Promise<Response> }
+/** Anything `serve` can run: an object with a Fetch-style `fetch` handler, such as a honey app. */
+type FetchApp<TEnv> = {
+	/** Answers one request. `env` is `ServeOptions.env`; on Bun, a copy that also carries the server. */
+	fetch(request: Request, env: TEnv): Response | Promise<Response>
+}
 
+/** Options for `serve`. The fields marked Node only have no effect on Bun. */
 export type ServeOptions<TEnv> = {
-	/** Handed to the app as `ctx.env`. Default `{}`. */
+	/** Handed to the app as `ctx.env`; on Bun, a copy that also carries the server. Default `{}`. */
 	env?: TEnv
-	/** Default `0.0.0.0`: every interface. */
+	/** Default `0.0.0.0`: every IPv4 interface. */
 	hostname?: string
 	/** Default 3000; `0` picks a free port. */
 	port?: number
 	/** The largest request body a read accepts, in bytes; over it the answer is 413. Default 128 MiB. */
 	maxRequestBodySize?: number
-	/** Errors the adapter could not hand to the app (it then answers 500). Default on Node: the app's logger. */
+	/** Errors the adapter could not hand to the app (it then answers 500). Default: the app's logger, or a default logger for a plain fetch handler. */
 	onError?: (error: unknown) => void
 	/** Node only: `server.headersTimeout`, in ms. */
 	headersTimeout?: number
@@ -33,11 +38,15 @@ export type ServeOptions<TEnv> = {
 	upgradeTimeout?: number
 }
 
+/** A running server returned by `serve`. */
 export type ServeHandle = {
 	/** Stop accepting connections and let in-flight requests finish for up to `timeout` ms (default 1000); then cut every connection. */
 	close(timeout?: number): Promise<void>
+	/** The hostname as configured, `0.0.0.0` by default. A name or wildcard is not resolved to an address. */
 	readonly hostname: string
+	/** The port the server listens on; the one the OS picked when `port` was `0`. */
 	readonly port: number
+	/** The runtime `serve` detected and started the app on. */
 	readonly runtime: "bun" | "node"
 	/** Where a client on this machine reaches the server. */
 	readonly url: string
@@ -49,6 +58,12 @@ function urlOf(hostname: string, port: number): string {
 	return `http://${host.includes(":") ? `[${host}]` : host}:${port}`
 }
 
+/**
+ * Starts the app on the runtime this process runs on (Bun or Node) and resolves once it is
+ * listening. Rejects on Cloudflare Workers, where you export the app instead of starting it; when
+ * no supported runtime is detected; when the app's WebSocket adapter is for another runtime; and
+ * when the server cannot bind, such as a port already in use.
+ */
 export async function serve<TEnv>(app: FetchApp<TEnv>, options: ServeOptions<TEnv> = {}): Promise<ServeHandle> {
 	const runtime = detectRuntime()
 	if (runtime === "cloudflare") {

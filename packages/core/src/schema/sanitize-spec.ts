@@ -4,6 +4,7 @@
  */
 import type { SchemaSpec } from "./slots.ts"
 
+/** What to remove from an OpenAPI document before it is published. */
 export type OpenApiSanitizeOptions = {
 	/** Drop each security requirement that names one of these schemes, on operations and the root. */
 	readonly stripSecurityRequirements?: readonly string[]

@@ -17,8 +17,11 @@ import { ABORT_REQUEST, BODY_OVERFLOW, nodeRequest } from "./request.ts"
 import { writeResponse } from "./response.ts"
 import { nodeRequestUrl } from "./url.ts"
 
+/** Options for the Node adapter's `serve`, the `node:http` server behind the runtime-neutral `serve`. */
 export type NodeServeOptions<TEnv> = {
+	/** Handed to the app as `ctx.env`. */
 	env: TEnv
+	/** Interface to bind. Unset, Node binds every interface. */
 	hostname?: string
 	/** Default: a free port. */
 	port?: number
@@ -36,6 +39,7 @@ export type NodeServeOptions<TEnv> = {
 	onError?: (error: unknown) => void
 }
 
+/** A Node `http.Server` with a graceful `shutdown`. */
 export type HoneyServer = Server & {
 	/**
 	 * Stop accepting connections and let in-flight requests finish. Responses already streaming
@@ -45,7 +49,11 @@ export type HoneyServer = Server & {
 	shutdown(timeout?: number): Promise<void>
 }
 
-type FetchApp<TEnv> = { fetch(request: Request, env: TEnv): Response | Promise<Response> }
+/** Anything the server can run: an object with a Fetch-style `fetch` handler, such as a honey app. */
+type FetchApp<TEnv> = {
+	/** Answers one request; `env` is the value passed as `NodeServeOptions.env`. */
+	fetch(request: Request, env: TEnv): Response | Promise<Response>
+}
 
 function abort(request: Request, reason?: unknown): void {
 	;(request as unknown as Record<typeof ABORT_REQUEST, (reason?: unknown) => void>)[ABORT_REQUEST](reason)

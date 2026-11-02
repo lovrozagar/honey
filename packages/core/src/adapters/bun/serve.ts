@@ -39,7 +39,7 @@ export type BunServeOptions<TEnv> = {
 	env: TEnv
 	hostname: string
 	maxRequestBodySize: number
-	/** Errors the app could not answer; Bun then answers 500. Unset, Bun's own error handling applies. */
+	/** Errors the app could not answer; Bun then answers 500. Unset, they go to the app's logger, or a default one for a plain fetch handler. */
 	onError?: (error: unknown) => void
 	port: number
 }
@@ -84,12 +84,12 @@ function isWebSocketUpgrade(request: Request): boolean {
 	return request.headers.get("upgrade")?.toLowerCase() === "websocket"
 }
 
-/** Bun expects nothing back from a fetch that upgraded the request. */
 /** The default failure reporter: the app's logger, or a default one for a plain fetch handler. */
 function reportTo(logger: Logger): (error: unknown) => void {
 	return (error) => logger.error({ err: HoneyError.serialize(error) }, "serve failed")
 }
 
+/** Bun expects nothing back from a fetch that upgraded the request. */
 function unlessUpgraded(response: Response): Response | undefined {
 	return response.status === 101 ? undefined : response
 }
