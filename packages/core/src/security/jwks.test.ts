@@ -181,7 +181,9 @@ describe("remoteJwks with keys held through an outage", () => {
 		const forged = await signJwt(claims, { alg: "RS256", key: privateKey, kid: "k9" })
 		expect(await verifyJwt(forged, options)).toEqual(failure("unknown_key"))
 	})
+})
 
+describe("remoteJwks with a fetch that never settles", () => {
 	it("replaces a fetch that never settles, as one left behind by a finished Workers request", async () => {
 		const { jwk, privateKey } = await rsaPair()
 		const fetchMock = vi
@@ -194,6 +196,27 @@ describe("remoteJwks with keys held through an outage", () => {
 		await expect(verifyJwt(token, options)).rejects.toThrow("timed out")
 		vi.setSystemTime(NOW * 1000 + 11)
 		expect((await verifyJwt(token, options)).success).toBe(true)
+		expect(fetchMock).toHaveBeenCalledTimes(2)
+	})
+
+	it("a replaced fetch that lands late leaves the fetch that replaced it", async () => {
+		const first = Promise.withResolvers<Response>()
+		const second = Promise.withResolvers<Response>()
+		const fetchMock = vi
+			.fn<() => Promise<Response>>()
+			.mockImplementationOnce(() => first.promise)
+			.mockImplementationOnce(() => second.promise)
+			.mockImplementation(async () => Response.json({ keys: [] }))
+		vi.stubGlobal("fetch", fetchMock)
+		const source = remoteJwks(JWKS_URL, { cooldownMs: 0, timeoutMs: 1000 })
+		const replaced = source({ alg: "RS256", kid: "k1" })
+		vi.setSystemTime(NOW * 1000 + 1000)
+		const replacing = source({ alg: "RS256", kid: "k2" })
+		first.resolve(Response.json({ keys: [{ kid: "k1", kty: "RSA" }] }))
+		expect(await replaced).toEqual({ kid: "k1", kty: "RSA" })
+		const unknown = source({ alg: "RS256", kid: "k3" })
+		second.resolve(Response.json({ keys: [{ kid: "k2", kty: "RSA" }] }))
+		expect(await Promise.all([replacing, unknown])).toEqual([{ kid: "k2", kty: "RSA" }, null])
 		expect(fetchMock).toHaveBeenCalledTimes(2)
 	})
 
