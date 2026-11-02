@@ -45,8 +45,8 @@ export type RouteInfo = {
 	/** the route's id (`GET /users/:id`); empty for a request no route serves */
 	readonly id: string
 	/**
-	 * The error factories handlers on this route get: its declared keys, or all of the app's when it declares none;
-	 * `null` when neither the app nor the route has a factory.
+	 * The error factories handlers on this route get: the keys the route, its middleware and the app's defaults declare,
+	 * or all of the app's when none of them declares one; `null` when neither the app nor the route has a factory.
 	 */
 	readonly errors: Readonly<Record<string, (...args: never[]) => unknown>> | null
 	/** The route's metadata: what its middleware contributes, overlaid by what the route states itself. */
@@ -142,7 +142,10 @@ export class HoneyContext<TEnv = Record<string, unknown>> {
 	 * itself; elsewhere a rejection goes to the request's logger.
 	 */
 	readonly background: (p: Promise<unknown>) => void
-	/** The environment passed to `app.fetch()`: the bindings on Workers, the `env` serve option on Bun and Node. */
+	/**
+	 * The environment passed to `app.fetch()`: the bindings on Workers, the `env` serve option on Node, and on Bun a copy
+	 * of that option that also carries the server.
+	 */
 	readonly env: TEnv
 	/**
 	 * The error behind the response, once a handler or a deeper middleware threw and the `next()`
@@ -150,8 +153,8 @@ export class HoneyContext<TEnv = Record<string, unknown>> {
 	 */
 	readonly error: HoneyError | undefined = undefined
 	/**
-	 * The error factories this route may use: its declared keys, or all of the app's when it declares none. Empty when
-	 * neither the app nor the route has a factory.
+	 * The error factories this route may use: the keys the route, its middleware and the app's defaults declare, or all
+	 * of the app's when none of them declares one. Empty when neither the app nor the route has a factory.
 	 */
 	readonly errors: Readonly<Record<string, (...args: never[]) => unknown>>
 	/** The execution context passed to `app.fetch()`: Workers provide one, the Bun and Node adapters do not. */
@@ -273,8 +276,8 @@ export class HoneyContext<TEnv = Record<string, unknown>> {
 	}
 
 	/**
-	 * Aborts when the client disconnects or the server shuts down. Pass it to `fetch()`, database
-	 * drivers and timers so abandoned work stops.
+	 * Aborts when the client disconnects, the server shuts down or `timeout()` answers for the
+	 * request. Pass it to `fetch()`, database drivers and timers so abandoned work stops.
 	 */
 	get signal(): AbortSignal {
 		const self = this[SELF]

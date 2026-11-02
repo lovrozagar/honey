@@ -84,7 +84,7 @@ export class Honey<
 		return this.#derive({ basePath: joinPatterns(this[VIEW].basePath, prefix) })
 	}
 
-	/** Static values every route registered through the new handle finds on `ctx`. */
+	/** Static values every route registered through the new handle finds on `ctx`. Throws on a name honey keeps for itself, such as `env`. */
 	context<TAdds extends Record<string, unknown>>(
 		values: TAdds,
 	): Honey<TEnv, TCtx & Readonly<TAdds>, TRoutes, TMeta, TErrorFactory, TDefaultErrors, TBasePath, TTaps, TScopedMw> {
@@ -204,8 +204,8 @@ export class Honey<
 	}
 
 	/**
-	 * Mount a sub-app under this handle's basePath (and `prefix`): this handle's chain runs before
-	 * the sub's; the sub's own basePath stays part of each path.
+	 * Mount a sub-app under this handle's basePath: this handle's chain runs before the sub's; the
+	 * sub's own basePath stays part of each path.
 	 */
 	route<TSubRoutes, TSubMeta, TSubFactory, TSubDefaults extends string, TSubBase extends string>(
 		sub: Honey<TEnv, TCtx, TSubRoutes, TSubMeta, TSubFactory, TSubDefaults, TSubBase>,
@@ -266,7 +266,7 @@ export class Honey<
 		return startRoute(this.#graph, this[VIEW], this, { extraMethods, method, path })
 	}
 
-	/** One route for several methods: one record per method. */
+	/** Start one route at `path`, under this handle's base path, for each of `methods`; `.handler()` registers them all. */
 	on<const TPath extends string, const TMethods extends readonly [HttpMethod | "ALL", ...(HttpMethod | "ALL")[]]>(
 		methods: TMethods,
 		path: TPath,

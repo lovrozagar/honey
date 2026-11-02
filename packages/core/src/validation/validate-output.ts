@@ -16,7 +16,10 @@ import type { HeadersCheck } from "../response/response-headers.ts"
 import type { OutputSchemas, StatusSchemas } from "../routing/output-types.ts"
 import type { StandardSchemaLike, StandardSchemaResult } from "./standard-schema.ts"
 
-/** Whether `.output()` routes check their answers: never, always, or outside production. */
+/**
+ * Whether `.output()` routes check their answers: `"off"` (the default) never, `"always"` always, and `"dev"` unless
+ * NODE_ENV is `production` and never where there is no `process` to read it from, as on Workers.
+ */
 export type OutputValidationMode = "always" | "dev" | "off"
 
 type ProcessLike = { readonly env?: { readonly NODE_ENV?: string | undefined } } | undefined
