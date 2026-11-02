@@ -8,20 +8,29 @@ import { compareCodeUnits } from "../schema/canonicalize.ts"
 import type { Operation } from "./paths.ts"
 import type { Convert } from "./responses.ts"
 
+/** How a webhook is signed, stated in the document as `x-honey-signature` for a subscriber to verify. */
 export type WebhookSignature = {
+	/** the signing algorithm; any other value fails the document */
 	readonly algorithm: "hmac-sha256"
+	/** how the digest is written in the header */
 	readonly encoding: "base64" | "hex"
+	/** the name of the header that carries the signature */
 	readonly header: string
 	/** what precedes the digest in the header, as `sha256=` */
 	readonly prefix?: string
 }
 
+/** One request the API sends a subscriber. */
 export type OpenApiWebhook = {
+	/** the JSON request body's schema, converted as output the API writes */
 	readonly body: unknown
+	/** what the webhook is; CommonMark */
 	readonly description?: string
 	/** `"post"` by default */
 	readonly method?: string
+	/** how the request is signed; with none, the document states no signature */
 	readonly signature?: WebhookSignature
+	/** a short label for the operation */
 	readonly summary?: string
 }
 

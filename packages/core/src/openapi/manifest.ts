@@ -15,26 +15,51 @@ import { type CollectedError, type CollectedRoute, collectRoutes } from "./colle
 import { extractSchemas, type RouteSchemas } from "./extract-schemas.ts"
 import type { OpenApiRouteInfo } from "./generate.ts"
 
+/** One route of the manifest. A route with an optional parameter is one entry, with its fullest variant's `params`. */
 export type ManifestRoute = {
+	/** the error keys the route may answer; each is described in the manifest's `errors` */
 	readonly errors: readonly string[]
+	/** the JSON Schema of each input source, by source name such as `json` or `search`; a `binary` source is left out */
 	readonly input?: Readonly<Record<string, JsonSchema>>
+	/** the route's meta; under `"published"` visibility, only built-in keys and keys with a metaSpec entry other than `false` */
 	readonly meta: Readonly<Record<string, unknown>>
+	/** the method in uppercase, such as `GET`; `ALL` for an `all()` route */
 	readonly method: string
+	/** the names of the middleware the route runs, in order; an unnamed one is `anonymous` */
 	readonly middleware: readonly string[]
+	/** the JSON Schema of each response, by content type and then by status key; `headers` and `redirect` declarations are left out */
 	readonly output?: Readonly<Record<string, Readonly<Record<string, JsonSchema>>>>
+	/** the names of the route's path parameters; an unnamed wildcard is `wildcard` */
 	readonly params: readonly string[]
+	/** the route's pattern with parameters as `:name`, such as `/users/:id`; not the OpenAPI `{id}` form */
 	readonly path: string
 }
 
-export type ManifestError = { readonly errorKey: string; readonly status: number; readonly statusKey: string }
+/** An error key a route may answer, with its status. */
+export type ManifestError = {
+	/** the error key, as listed in a route's `errors` */
+	readonly errorKey: string
+	/** the numeric HTTP status; `0` when nothing says what it is */
+	readonly status: number
+	/** the status as its key, such as `"not_found"`; `"unknown"` when nothing says what it is */
+	readonly statusKey: string
+}
 
-export type RouteManifest = { readonly errors: readonly ManifestError[]; readonly routes: readonly ManifestRoute[] }
+/** The app's routes as plain data. */
+export type RouteManifest = {
+	/** every error key the listed routes may answer, once, sorted by key */
+	readonly errors: readonly ManifestError[]
+	/** the HTTP routes in registration order; WebSocket routes and the routes a serving call such as `serveOpenApi` mounted are never listed */
+	readonly routes: readonly ManifestRoute[]
+}
 
+/** What `generateManifest` takes: how schemas convert, which routes it lists and how much it keeps. */
 export type GenerateManifestOptions = {
+	/** the converters honey cannot import itself: `effect`, without which an Effect schema comes out as `{}` */
 	readonly converters?: JsonSchemaOptions["converters"]
 	/** leave out every route this answers false for */
 	readonly filterRoutes?: (route: OpenApiRouteInfo) => boolean
-	/** `"all"` (the default) keeps everything; `"published"` applies the document's visibility */
+	/** `"all"` (the default) keeps internal routes and every meta key; `"published"` drops internal routes and keeps only built-in keys and keys with a metaSpec entry other than `false` */
 	readonly visibility?: "all" | "published"
 }
 

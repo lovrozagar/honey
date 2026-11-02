@@ -2,6 +2,7 @@
 import type { TypedResponse } from "../response/response.ts"
 import { type DocsConfig, type DocsContext, docsPage, inlineJson, SWAGGER_UI } from "./docs-page.ts"
 
+/** The Swagger UI page for the document at `config.url`. Pass this function itself as `docs` to `serveOpenApi` or `serveStaticOpenApi`. The page loads pinned assets from jsDelivr, each checked by an integrity hash. */
 export function swagger(config: DocsConfig): (ctx: DocsContext) => TypedResponse {
 	const inline = inlineJson({ dom_id: "#swagger-ui", ...config })
 	return docsPage(

@@ -6,15 +6,23 @@
  * no text holds a stray control character (a URL or description lands verbatim in docs pages and SDKs).
  */
 
+/** One `{name}` variable of a server URL. */
 export type OpenApiServerVariable = {
+	/** the value used when the client picks none; must be in `enum` when `enum` is set */
 	readonly default: string
+	/** what the variable is for; CommonMark */
 	readonly description?: string
+	/** the values the variable may take; at least one */
 	readonly enum?: readonly string[]
 }
 
+/** One server the API is reachable at. */
 export type OpenApiServer = {
+	/** what the server is; CommonMark */
 	readonly description?: string
+	/** the server's URL; `{name}` marks a variable declared in `variables` */
 	readonly url: string
+	/** the variables `url` uses, by name: letters, digits and `_` only, and each one must appear in `url` */
 	readonly variables?: Readonly<Record<string, OpenApiServerVariable>>
 }
 

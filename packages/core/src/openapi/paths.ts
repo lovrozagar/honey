@@ -11,7 +11,9 @@ import type { JsonSchema } from "../schema/to-json-schema.ts"
 import type { CollectedRoute, CollectedRoutes, CollectedWsRoute } from "./collect.ts"
 import type { Convert, DeclaredError, ResponseObject } from "./responses.ts"
 
+/** One OpenAPI Operation Object. */
 export type Operation = Record<string, unknown>
+/** One OpenAPI Path Item: its operations by lowercase method. */
 export type PathItem = Record<string, Operation>
 
 /** One emitted operation, for the checks that run over the whole document. */

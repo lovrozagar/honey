@@ -26,7 +26,9 @@ import {
 } from "./served.ts"
 import { toYaml } from "./yaml.ts"
 
+/** What `serveOpenApi` takes: the document's info and generation options, and where and how it is served. */
 export type ServeOpenApiOptions<A = unknown> = Omit<GenerateOpenApiOptions, "info" | "invalidate" | "onSchemaError"> & {
+	/** the document's `info.description`; CommonMark */
 	readonly description?: string
 	/** a docs page for the document, at `docsPath`: the page itself, `scalar` or `swagger` */
 	readonly docs?: DocsPage
@@ -38,10 +40,13 @@ export type ServeOpenApiOptions<A = unknown> = Omit<GenerateOpenApiOptions, "inf
 	readonly meta?: ServedMeta<A>
 	/** the stem the document is served at, `"/openapi"` by default: `.json`, `.yaml` and `.yml` follow */
 	readonly path?: string
+	/** the document's `info.title` */
 	readonly title: string
+	/** the document's `info.version` */
 	readonly version: string
 }
 
+/** What `serveManifest` takes: the manifest's generation options, and where and how it is served. There is no `visibility` choice: a served manifest always leaves out internal routes and keeps only built-in keys and keys with a metaSpec entry other than `false`. */
 export type ServeManifestOptions<A = unknown> = Omit<GenerateManifestOptions, "visibility"> & {
 	/** `false` mounts nothing */
 	readonly enabled?: boolean

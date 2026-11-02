@@ -24,24 +24,47 @@ import {
 	YAML_TYPE,
 } from "./served.ts"
 
-/** A document the app loads itself: whatever it answers is served, a `Response`'s body read once. */
+/** A document the app loads itself. A string or a 2xx `Response`'s body is served and kept; a non-2xx `Response` or a throw answers 500 and the next request loads again. */
 export type DocumentLoader = (ctx: {
+	/** the runtime's env for the request, such as Workers bindings */
 	readonly env: unknown
+	/** the request that set off this load */
 	readonly req: Request
 }) => Promise<Response | string> | Response | string
 
 /** A document fetched when a request first asks for it: an asset binding, a URL, or the app's own loader. */
 export type FetchedSource =
 	| DocumentLoader
-	| { readonly asset: string; readonly binding?: string }
-	| { readonly init?: RequestInit; readonly url: string }
+	| {
+			/** the asset's path, resolved against the request URL; a non-2xx answer becomes a 500 */
+			readonly asset: string
+			/** the env key of the asset binding, `"ASSETS"` by default; a missing binding answers 500 */
+			readonly binding?: string
+	  }
+	| {
+			/** `fetch` options for the request, such as auth headers */
+			readonly init?: RequestInit
+			/** the URL to fetch; a failure or non-2xx answers 502 */
+			readonly url: string
+	  }
 
 /** Where the JSON document comes from; an inline object is serialized once, on the first request. */
-export type JsonSource = FetchedSource | { readonly inline: object | string }
+export type JsonSource =
+	| FetchedSource
+	| {
+			/** the document, as an object (serialized with `JSON.stringify`) or as JSON text served as is */
+			readonly inline: object | string
+	  }
 
 /** Where the YAML document comes from. There is no inline object: nothing converts one without a converter. */
-export type YamlSource = FetchedSource | { readonly inline: string }
+export type YamlSource =
+	| FetchedSource
+	| {
+			/** the document as YAML text, served as is */
+			readonly inline: string
+	  }
 
+/** What `serveStaticOpenApi` takes: where the document comes from, and where and how it is served. */
 export type ServeStaticOpenApiOptions<A = unknown> = {
 	/** `"no-cache"` by default */
 	readonly cacheControl?: string
@@ -51,6 +74,7 @@ export type ServeStaticOpenApiOptions<A = unknown> = {
 	readonly docsPath?: string
 	/** `false` mounts nothing */
 	readonly enabled?: boolean
+	/** where the JSON document comes from; it loads on the first request and is kept for the process or isolate, and a failed load is tried again on the next request */
 	readonly json: JsonSource
 	/** the whole path of the JSON route, in place of `${path}.json` */
 	readonly jsonPath?: string

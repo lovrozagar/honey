@@ -45,13 +45,27 @@ const csp = (scriptNonce: string) =>
 
 /** What a docs page reads of its context: the HTML answer. */
 export type DocsContext = {
+	/** the response helpers; a docs page uses only `html` */
 	readonly res: {
-		html(statusKey: "ok", body: string, options?: { headers?: Record<string, string> }): TypedResponse
+		/** answers 200 with an HTML body */
+		html(
+			statusKey: "ok",
+			body: string,
+			options?: {
+				/** headers added to the response */
+				headers?: Record<string, string>
+			},
+		): TypedResponse
 	}
 }
 
 /** A docs page config: the document URL, and the rest of the UI's own options. */
-export type DocsConfig = { readonly url: string; readonly [key: string]: unknown }
+export type DocsConfig = {
+	/** where the page loads the OpenAPI document from */
+	readonly url: string
+	/** any other key goes to the UI's own configuration as JSON, so a function is dropped */
+	readonly [key: string]: unknown
+}
 
 /**
  * JSON for an inline `<script>`: `<`, `>` and `&` cannot end the element or start an entity, and

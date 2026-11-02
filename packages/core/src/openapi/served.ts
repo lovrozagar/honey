@@ -19,6 +19,7 @@ import type { DocsConfig, DocsContext } from "./docs-page.ts"
 export type ServedMeta<A> = Partial<
 	Omit<OpenApiMeta & ([InferMeta<A>] extends [never] ? {} : InferMeta<A>), "internal">
 > & {
+	/** Not settable: every served route is internal, so it never appears in generated artifacts. */
 	readonly internal?: never
 	readonly [SERVED]?: never
 }

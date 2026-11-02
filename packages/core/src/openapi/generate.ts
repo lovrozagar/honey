@@ -45,17 +45,23 @@ export type { OpenApiWebhook, WebhookSignature } from "./webhooks.ts"
 
 /** What `filterRoutes` is shown of a route: its resolved meta, its method and its honey pattern. */
 export type OpenApiRouteInfo = {
+	/** the route's whole meta, before the metaSpec filters any key */
 	readonly meta: Readonly<Record<string, unknown>>
+	/** the method in uppercase, such as `GET`; `ALL` for an `all()` route, `WS` for a WebSocket route */
 	readonly method: string
+	/** the route's pattern with parameters as `:name`, such as `/users/:id`; not the OpenAPI `{id}` form */
 	readonly path: string
 }
 
+/** What `generateOpenApi` takes besides the app: the document's info, and how it converts, filters and reports. */
 export type GenerateOpenApiOptions = {
+	/** the converters honey cannot import itself: `effect`, without which an Effect schema comes out as `{}` */
 	readonly converters?: JsonSchemaOptions["converters"]
 	/** the document's own external docs */
 	readonly externalDocs?: OpenApiExternalDocs
 	/** leave out every route this answers false for */
 	readonly filterRoutes?: (route: OpenApiRouteInfo) => boolean
+	/** the document's Info Object; keys other than `title`, `version` and `description` are dropped */
 	readonly info: OpenApiInfo
 	/** mutations that declare no `invalidate`: reported at `"warn"` (the default), failing at `"error"` */
 	readonly invalidate?: InvalidateCheckConfig
@@ -65,6 +71,7 @@ export type GenerateOpenApiOptions = {
 	readonly onSchemaError?: "throw" | "warn"
 	/** the metaSpec profile this document carries */
 	readonly profile?: string
+	/** the document's `components.securitySchemes`; an operation naming a scheme missing here fails the document, and with this option unset it only warns */
 	readonly securitySchemes?: Readonly<Record<string, unknown>>
 	/** the servers it lists, in place of the stripped prefix; that prefix is appended to each */
 	readonly servers?: readonly OpenApiServer[]
@@ -74,6 +81,7 @@ export type GenerateOpenApiOptions = {
 	readonly webhooks?: Readonly<Record<string, OpenApiWebhook>>
 }
 
+/** Any app or handle that holds a route graph. */
 type App = { readonly [GRAPH]: HoneyGraph }
 
 /** What a conversion issue reports, and how loudly. */

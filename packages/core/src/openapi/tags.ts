@@ -6,12 +6,23 @@
  */
 import type { EmittedOperation } from "./paths.ts"
 
-export type OpenApiExternalDocs = { readonly description?: string; readonly url: string }
-
-export type OpenApiTag = {
+/** A link to documentation outside the document. */
+export type OpenApiExternalDocs = {
+	/** what the link leads to; CommonMark */
 	readonly description?: string
+	/** where the documentation is */
+	readonly url: string
+}
+
+/** Metadata for a tag that operations name. A declared tag no operation names is left out, with a warning; declaring a name twice fails the document. */
+export type OpenApiTag = {
+	/** what the tag groups; CommonMark */
+	readonly description?: string
+	/** documentation outside the document */
 	readonly externalDocs?: OpenApiExternalDocs
+	/** the tag, as operations name it */
 	readonly name: string
+	/** a display label written to the document as is, for docs tools that read this extension */
 	readonly "x-displayName"?: string
 }
 
