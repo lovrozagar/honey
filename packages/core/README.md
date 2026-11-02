@@ -824,25 +824,29 @@ serveManifest(app, { path: "/manifest.json" })
 const pages = [scalar({ title: "Shop", url: "/openapi.json" }), swagger({ title: "Shop", url: "/openapi.json" })]
 ```
 
-Webhooks, the requests your API sends out, are declared with the document, so it states each one's body:
+Webhooks, the requests your API sends out, are declared once as a contract: the document states each event as a
+Standard Webhooks delivery, and the contract signs each attempt:
 
 ```ts
 import { honey } from "@lovrozagar/honey"
 import { serveOpenApi } from "@lovrozagar/honey/openapi"
+import { webhookContract } from "@lovrozagar/honey/webhook"
 import * as z from "zod"
+
+const events = webhookContract({
+	"order.shipped": z.object({ orderId: z.string(), shippedAt: z.string() }),
+})
 
 const app = honey()
 
-serveOpenApi(app, {
-	title: "Shop",
-	version: "1.0.0",
-	webhooks: {
-		orderShipped: {
-			body: z.object({ orderId: z.string(), shippedAt: z.string() }),
-			summary: "An order left the warehouse",
-		},
-	},
-})
+serveOpenApi(app, { title: "Shop", version: "1.0.0", webhooks: events })
+
+const { body, headers } = await events.sign(
+	"order.shipped",
+	{ orderId: "ord_1", shippedAt: "2026-11-02T12:00:00Z" },
+	{ id: "msg_1", occurredAt: new Date(), secrets: "whsec_a2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2s=" },
+)
+await fetch("https://example.com/hook", { body, headers, method: "POST" })
 ```
 
 Full reference: [the OpenAPI document](https://github.com/lovrozagar/honey/blob/main/docs/openapi.md) and

@@ -36,12 +36,12 @@ import { addErrorResponses, type Convert, type ErrorSettings, ordered, successRe
 import { checkSecurity } from "./security.ts"
 import { type OpenApiServer, serversOf } from "./servers.ts"
 import { type OpenApiExternalDocs, type OpenApiTag, tagsOf } from "./tags.ts"
-import { type OpenApiWebhook, webhooksOf } from "./webhooks.ts"
+import type { WebhookContract, WebhookEvents } from "../security/webhook-contract.ts"
+import { webhooksOf } from "./webhooks.ts"
 
 export type { OpenApiDocument, OpenApiInfo } from "./document.ts"
 export type { OpenApiServer, OpenApiServerVariable } from "./servers.ts"
 export type { OpenApiExternalDocs, OpenApiTag } from "./tags.ts"
-export type { OpenApiWebhook } from "./webhooks.ts"
 
 /** What `filterRoutes` is shown of a route: its resolved meta, its method and its honey pattern. */
 export type OpenApiRouteInfo = {
@@ -77,8 +77,8 @@ export type GenerateOpenApiOptions = {
 	readonly servers?: readonly OpenApiServer[]
 	/** metadata for the tags operations name; tags are never derived */
 	readonly tags?: readonly OpenApiTag[]
-	/** the requests the API sends subscribers, by name */
-	readonly webhooks?: Readonly<Record<string, OpenApiWebhook>>
+	/** the events the API sends subscribers, from `webhookContract`; each documented as a Standard Webhooks delivery */
+	readonly webhooks?: WebhookContract<WebhookEvents>
 }
 
 /** Any app or handle that holds a route graph. */

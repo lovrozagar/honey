@@ -1,7 +1,7 @@
 import { createHmac } from "node:crypto"
 import { Webhook } from "standardwebhooks"
 import { describe, expect, it } from "vitest"
-import { signWebhook } from "./webhook.ts"
+import { signWebhook } from "./webhook-sign.ts"
 
 const KEY = Buffer.from("k".repeat(32)).toString("base64")
 const SECRET = `whsec_${KEY}`

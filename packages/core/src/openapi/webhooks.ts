@@ -1,62 +1,45 @@
 /**
- * The document's webhooks (OpenAPI 3.1): each request the API sends a subscriber, by name, as the
- * operation the subscriber serves. Its body converts on the output side, as the API writes it. A
- * declaration that cannot be sent as written is refused.
+ * The document's webhooks (OpenAPI 3.1): each event of the app's webhook contract, by type, as the
+ * POST a subscriber serves. Every delivery is a Standard Webhooks one, so each states the three
+ * signature headers, the `{ type, timestamp, data }` envelope and `x-honey-webhook`, which tells a
+ * generator to emit a verifier. `data` converts on the output side, as the sender writes it.
  */
+import type { WebhookContract, WebhookEvents } from "../security/webhook-contract.ts"
 import { compareCodeUnits } from "../schema/canonicalize.ts"
 import type { Operation } from "./paths.ts"
 import type { Convert } from "./responses.ts"
 
-/** One request the API sends a subscriber. */
-export type OpenApiWebhook = {
-	/** the JSON request body's schema, converted as output the API writes */
-	readonly body: unknown
-	/** what the webhook is; CommonMark */
-	readonly description?: string
-	/** `"post"` by default */
-	readonly method?: string
-	/** a short label for the operation */
-	readonly summary?: string
-}
-
-const METHODS: readonly string[] = ["delete", "get", "patch", "post", "put"]
 /* C0, DEL and C1 */
 const CONTROL = /\p{Cc}/u
-/* a summary or description is CommonMark text: tabs and line breaks are its own */
-const STRAY = /(?![\t\n\r])\p{Cc}/u
 
-/** Each reason `webhook` cannot be sent as written. */
-function webhookErrors(webhook: OpenApiWebhook, method: string): string[] {
-	const errors = METHODS.includes(method) ? [] : [`method "${webhook.method}" is not one of ${METHODS.join(", ")}`]
-	for (const [field, text] of [
-		["summary", webhook.summary],
-		["description", webhook.description],
-	] as const) {
-		if (text !== undefined && STRAY.test(text)) errors.push(`the ${field} holds a control character`)
-	}
-	return errors
-}
+/* the headers every delivery carries, in the order the scheme names them */
+const HEADERS = ["webhook-id", "webhook-timestamp", "webhook-signature"]
 
-/** The 3.1 `webhooks` of `webhooks`, by name in code-unit order; each refusal reported through `error`. */
+/** The 3.1 `webhooks` of `contract`, by event type in code-unit order; each refusal reported through `error`. */
 export function webhooksOf(
-	webhooks: Readonly<Record<string, OpenApiWebhook>> | undefined,
+	contract: WebhookContract<WebhookEvents> | undefined,
 	convert: Convert,
 	error: (message: string) => void,
 ): Record<string, Record<string, Operation>> {
+	const events = contract?.events ?? {}
 	const out: Record<string, Record<string, Operation>> = {}
-	for (const name of Object.keys(webhooks ?? {}).sort(compareCodeUnits)) {
-		const webhook = (webhooks as Record<string, OpenApiWebhook>)[name] as OpenApiWebhook
-		const method = (webhook.method ?? "post").toLowerCase()
-		if (name === "") error("a webhook needs a name")
-		else if (CONTROL.test(name)) error(`webhook ${JSON.stringify(name)}: the name holds a control character`)
-		for (const reason of webhookErrors(webhook, method)) error(`webhook ${JSON.stringify(name)}: ${reason}`)
-		const operation: Operation = {}
-		if (webhook.summary !== undefined) operation.summary = webhook.summary
-		if (webhook.description !== undefined) operation.description = webhook.description
-		const schema = convert(webhook.body, "output", `${name}Webhook`)
-		operation.requestBody = { content: { "application/json": { schema } }, required: true }
-		operation.responses = { "200": { description: "Received" } }
-		out[name] = { [method]: operation }
+	for (const type of Object.keys(events).sort(compareCodeUnits)) {
+		if (type === "") error("a webhook event needs a type")
+		else if (CONTROL.test(type)) error(`webhook ${JSON.stringify(type)}: the type holds a control character`)
+		const data = convert(events[type], "output", `${type}Data`)
+		const envelope = {
+			properties: { data, timestamp: { format: "date-time", type: "string" }, type: { const: type } },
+			required: ["type", "timestamp", "data"],
+			type: "object",
+		}
+		out[type] = {
+			post: {
+				"x-honey-webhook": "standard-webhooks",
+				parameters: HEADERS.map((name) => ({ in: "header", name, required: true, schema: { type: "string" } })),
+				requestBody: { content: { "application/json": { schema: envelope } }, required: true },
+				responses: { "2XX": { description: "Received" } },
+			},
+		}
 	}
 	return out
 }

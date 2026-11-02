@@ -6,66 +6,66 @@ generator.
 
 ## @lovrozagar/honey
 
-| Export                              | What it holds                                                                                                                           |
-| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `@lovrozagar/honey`                 | `honey`, `HoneyError`, `defineErrors`, `createMiddleware`, `defineMiddleware`, `mergeTree`, `detectRuntime`, and the type helpers below |
-| `@lovrozagar/honey/serve`           | `serve(app, options)`: Node or Bun, whichever runs it                                                                                   |
-| `@lovrozagar/honey/node`            | `serve` for `node:http` directly                                                                                                        |
-| `@lovrozagar/honey/ws`              | `ws(app, path)`, a WebSocket route                                                                                                      |
-| `@lovrozagar/honey/ws/bun`          | `bunWebSocket`                                                                                                                          |
-| `@lovrozagar/honey/ws/node`         | `nodeWebSocket` (with the optional `ws` peer)                                                                                           |
-| `@lovrozagar/honey/webhook`         | `signWebhook`                                                                                                                           |
-| `@lovrozagar/honey/cron`            | `defineCron`, `CronConfig`, `CronDefinition`, `CronHandler`, `CronJob`, `CronSchedule`                                                  |
-| `@lovrozagar/honey/cron/serve`      | `serveCron`, `ServeCronOptions`, `CronHandle`, `CronFailure`                                                                            |
-| `@lovrozagar/honey/cron/workers`    | `workersCron`, `WorkersScheduledController`                                                                                             |
-| `@lovrozagar/honey/queue`           | `queueContract`, `queueMessage`, `defineConsumer`, `deadLetter`, `QueueBodyError`, `QueueDeadLetter`, and their types                   |
-| `@lovrozagar/honey/queue/serve`     | `serveQueue`, `memoryQueueStore`, `QueueStore`, `ServeQueueOptions`, `QueueHandle`, `QueueFailure` and the store's types                |
-| `@lovrozagar/honey/queue/workers`   | `workersQueue`, `WorkersQueueOptions` and the binding's types                                                                           |
-| `@lovrozagar/honey/user-agent`      | `parseUserAgent`, `ParsedUserAgent`, `DeviceType`                                                                                       |
-| `@lovrozagar/honey/ws/workers`      | `workersWebSocket`                                                                                                                      |
-| `@lovrozagar/honey/ws/session`      | `createWsSession`: the session runtime a custom WebSocket adapter builds on                                                             |
-| `@lovrozagar/honey/realtime`        | `realtime(app, path, options)`: a resumable connection over WebSocket, SSE and long-poll                                                |
-| `@lovrozagar/honey/mcp`             | `mcp(app, path, handler, options?)`: the app's tools over MCP's Streamable HTTP, the handler `codegen.mcp` writes                       |
-| `@lovrozagar/honey/mcp/oauth`       | `oauth(options)`: `mcp()`'s opt-in OAuth 2.1 resource server (RFC 9728 metadata, Bearer challenges)                                     |
-| `@lovrozagar/honey/mcp/uploads`     | `uploads(options)`, `memoryUploadStore()`: `mcp()`'s opt-in out-of-band file uploads (the file-uploads extension's flow)                |
-| `@lovrozagar/honey/mcp/url-files`   | `urlFiles(options)`: `mcp()`'s opt-in file arguments as https URLs from listed hosts                                                    |
-| `@lovrozagar/honey/openapi`         | `serveOpenApi`, `serveManifest`, `generateOpenApi`, `generateManifest`, `toYaml`                                                        |
-| `@lovrozagar/honey/openapi/scalar`  | `scalar`, the Scalar API reference page                                                                                                 |
-| `@lovrozagar/honey/openapi/static`  | `serveStaticOpenApi`: a document built ahead of time or living elsewhere, served without the generator                                  |
-| `@lovrozagar/honey/openapi/swagger` | `swagger`, the Swagger UI page                                                                                                          |
-| `@lovrozagar/honey/errors`          | `defineErrors` (also on the root)                                                                                                       |
-| `@lovrozagar/honey/i18n`            | `errorI18n`, `translateError`                                                                                                           |
-| `@lovrozagar/honey/input`           | `readableStream()`, a streamed request body as input                                                                                    |
-| `@lovrozagar/honey/range`           | `rangeResponse`, a `Range` request answered from bytes                                                                                  |
-| `@lovrozagar/honey/cache-control`   | `cacheControl`, `httpDate`                                                                                                              |
-| `@lovrozagar/honey/compress`        | `compress`                                                                                                                              |
-| `@lovrozagar/honey/etag`            | `etag`, `notModified`                                                                                                                   |
-| `@lovrozagar/honey/rate-limit`      | `rateLimit`, `memoryStore`                                                                                                              |
-| `@lovrozagar/honey/cors`            | `cors`                                                                                                                                  |
-| `@lovrozagar/honey/csrf`            | `csrf`                                                                                                                                  |
-| `@lovrozagar/honey/body-limit`      | `bodyLimit`                                                                                                                             |
-| `@lovrozagar/honey/timeout`         | `timeout`                                                                                                                               |
-| `@lovrozagar/honey/jwt`             | `signJwt`, `verifyJwt`, `remoteJwks`, `decodeJwtPayload`, `importPkcs8`, `isJwsAlgorithm`                                               |
-| `@lovrozagar/honey/ip-restrict`     | `ipRestrict`, `ipAllowed`, `isIpRule`                                                                                                   |
-| `@lovrozagar/honey/request-id`      | `requestId`                                                                                                                             |
-| `@lovrozagar/honey/secure-headers`  | `secureHeaders`                                                                                                                         |
-| `@lovrozagar/honey/server-timing`   | `serverTiming`                                                                                                                          |
-| `@lovrozagar/honey/powered-by`      | `poweredBy`                                                                                                                             |
-| `@lovrozagar/honey/pretty-json`     | `prettyJson`                                                                                                                            |
-| `@lovrozagar/honey/logger`          | `createLogger`                                                                                                                          |
-| `@lovrozagar/honey/curl-logger`     | `curlLogger`, a request logged as a `curl` command                                                                                      |
-| `@lovrozagar/honey/telemetry/otel`  | `otelAdapter`                                                                                                                           |
-| `@lovrozagar/honey/static`          | `staticFiles`                                                                                                                           |
-| `@lovrozagar/honey/proxy`           | `proxy`, a route that forwards to an upstream                                                                                           |
-| `@lovrozagar/honey/accepts`         | `accepts`, content negotiation                                                                                                          |
-| `@lovrozagar/honey/cookie`          | `serializeCookie`, `parseCookieHeader`                                                                                                  |
-| `@lovrozagar/honey/cookie-sign`     | `sign`, `verify`, `createCookieSigner`                                                                                                  |
-| `@lovrozagar/honey/crypto`          | `timingSafeEqual`                                                                                                                       |
-| `@lovrozagar/honey/request-to-curl` | `requestToCurl`                                                                                                                         |
-| `@lovrozagar/honey/testing`         | `testClient`, an app called in process or over `serve`                                                                                  |
-| `@lovrozagar/honey/tree`            | the route tree's types and helpers                                                                                                      |
-| `@lovrozagar/honey/plugin`          | `honey()`, the Vite plugin that generates the app's artifacts                                                                           |
-| `@lovrozagar/honey/build`           | `createBuildPlugin`, a production bundle for a deploy target                                                                            |
+| Export                              | What it holds                                                                                                                                       |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@lovrozagar/honey`                 | `honey`, `HoneyError`, `defineErrors`, `createMiddleware`, `defineMiddleware`, `mergeTree`, `detectRuntime`, and the type helpers below             |
+| `@lovrozagar/honey/serve`           | `serve(app, options)`: Node or Bun, whichever runs it                                                                                               |
+| `@lovrozagar/honey/node`            | `serve` for `node:http` directly                                                                                                                    |
+| `@lovrozagar/honey/ws`              | `ws(app, path)`, a WebSocket route                                                                                                                  |
+| `@lovrozagar/honey/ws/bun`          | `bunWebSocket`                                                                                                                                      |
+| `@lovrozagar/honey/ws/node`         | `nodeWebSocket` (with the optional `ws` peer)                                                                                                       |
+| `@lovrozagar/honey/webhook`         | `webhookContract`, `signWebhook`, `SignedWebhook`, `WebhookContract`, `WebhookEvents`, `WebhookSignOptions`, `SignWebhookOptions`, `WebhookHeaders` |
+| `@lovrozagar/honey/cron`            | `defineCron`, `CronConfig`, `CronDefinition`, `CronHandler`, `CronJob`, `CronSchedule`                                                              |
+| `@lovrozagar/honey/cron/serve`      | `serveCron`, `ServeCronOptions`, `CronHandle`, `CronFailure`                                                                                        |
+| `@lovrozagar/honey/cron/workers`    | `workersCron`, `WorkersScheduledController`                                                                                                         |
+| `@lovrozagar/honey/queue`           | `queueContract`, `queueMessage`, `defineConsumer`, `deadLetter`, `QueueBodyError`, `QueueDeadLetter`, and their types                               |
+| `@lovrozagar/honey/queue/serve`     | `serveQueue`, `memoryQueueStore`, `QueueStore`, `ServeQueueOptions`, `QueueHandle`, `QueueFailure` and the store's types                            |
+| `@lovrozagar/honey/queue/workers`   | `workersQueue`, `WorkersQueueOptions` and the binding's types                                                                                       |
+| `@lovrozagar/honey/user-agent`      | `parseUserAgent`, `ParsedUserAgent`, `DeviceType`                                                                                                   |
+| `@lovrozagar/honey/ws/workers`      | `workersWebSocket`                                                                                                                                  |
+| `@lovrozagar/honey/ws/session`      | `createWsSession`: the session runtime a custom WebSocket adapter builds on                                                                         |
+| `@lovrozagar/honey/realtime`        | `realtime(app, path, options)`: a resumable connection over WebSocket, SSE and long-poll                                                            |
+| `@lovrozagar/honey/mcp`             | `mcp(app, path, handler, options?)`: the app's tools over MCP's Streamable HTTP, the handler `codegen.mcp` writes                                   |
+| `@lovrozagar/honey/mcp/oauth`       | `oauth(options)`: `mcp()`'s opt-in OAuth 2.1 resource server (RFC 9728 metadata, Bearer challenges)                                                 |
+| `@lovrozagar/honey/mcp/uploads`     | `uploads(options)`, `memoryUploadStore()`: `mcp()`'s opt-in out-of-band file uploads (the file-uploads extension's flow)                            |
+| `@lovrozagar/honey/mcp/url-files`   | `urlFiles(options)`: `mcp()`'s opt-in file arguments as https URLs from listed hosts                                                                |
+| `@lovrozagar/honey/openapi`         | `serveOpenApi`, `serveManifest`, `generateOpenApi`, `generateManifest`, `toYaml`                                                                    |
+| `@lovrozagar/honey/openapi/scalar`  | `scalar`, the Scalar API reference page                                                                                                             |
+| `@lovrozagar/honey/openapi/static`  | `serveStaticOpenApi`: a document built ahead of time or living elsewhere, served without the generator                                              |
+| `@lovrozagar/honey/openapi/swagger` | `swagger`, the Swagger UI page                                                                                                                      |
+| `@lovrozagar/honey/errors`          | `defineErrors` (also on the root)                                                                                                                   |
+| `@lovrozagar/honey/i18n`            | `errorI18n`, `translateError`                                                                                                                       |
+| `@lovrozagar/honey/input`           | `readableStream()`, a streamed request body as input                                                                                                |
+| `@lovrozagar/honey/range`           | `rangeResponse`, a `Range` request answered from bytes                                                                                              |
+| `@lovrozagar/honey/cache-control`   | `cacheControl`, `httpDate`                                                                                                                          |
+| `@lovrozagar/honey/compress`        | `compress`                                                                                                                                          |
+| `@lovrozagar/honey/etag`            | `etag`, `notModified`                                                                                                                               |
+| `@lovrozagar/honey/rate-limit`      | `rateLimit`, `memoryStore`                                                                                                                          |
+| `@lovrozagar/honey/cors`            | `cors`                                                                                                                                              |
+| `@lovrozagar/honey/csrf`            | `csrf`                                                                                                                                              |
+| `@lovrozagar/honey/body-limit`      | `bodyLimit`                                                                                                                                         |
+| `@lovrozagar/honey/timeout`         | `timeout`                                                                                                                                           |
+| `@lovrozagar/honey/jwt`             | `signJwt`, `verifyJwt`, `remoteJwks`, `decodeJwtPayload`, `importPkcs8`, `isJwsAlgorithm`                                                           |
+| `@lovrozagar/honey/ip-restrict`     | `ipRestrict`, `ipAllowed`, `isIpRule`                                                                                                               |
+| `@lovrozagar/honey/request-id`      | `requestId`                                                                                                                                         |
+| `@lovrozagar/honey/secure-headers`  | `secureHeaders`                                                                                                                                     |
+| `@lovrozagar/honey/server-timing`   | `serverTiming`                                                                                                                                      |
+| `@lovrozagar/honey/powered-by`      | `poweredBy`                                                                                                                                         |
+| `@lovrozagar/honey/pretty-json`     | `prettyJson`                                                                                                                                        |
+| `@lovrozagar/honey/logger`          | `createLogger`                                                                                                                                      |
+| `@lovrozagar/honey/curl-logger`     | `curlLogger`, a request logged as a `curl` command                                                                                                  |
+| `@lovrozagar/honey/telemetry/otel`  | `otelAdapter`                                                                                                                                       |
+| `@lovrozagar/honey/static`          | `staticFiles`                                                                                                                                       |
+| `@lovrozagar/honey/proxy`           | `proxy`, a route that forwards to an upstream                                                                                                       |
+| `@lovrozagar/honey/accepts`         | `accepts`, content negotiation                                                                                                                      |
+| `@lovrozagar/honey/cookie`          | `serializeCookie`, `parseCookieHeader`                                                                                                              |
+| `@lovrozagar/honey/cookie-sign`     | `sign`, `verify`, `createCookieSigner`                                                                                                              |
+| `@lovrozagar/honey/crypto`          | `timingSafeEqual`                                                                                                                                   |
+| `@lovrozagar/honey/request-to-curl` | `requestToCurl`                                                                                                                                     |
+| `@lovrozagar/honey/testing`         | `testClient`, an app called in process or over `serve`                                                                                              |
+| `@lovrozagar/honey/tree`            | the route tree's types and helpers                                                                                                                  |
+| `@lovrozagar/honey/plugin`          | `honey()`, the Vite plugin that generates the app's artifacts                                                                                       |
+| `@lovrozagar/honey/build`           | `createBuildPlugin`, a production bundle for a deploy target                                                                                        |
 
 ## @lovrozagar/honey-clients
 

@@ -1,16 +1,17 @@
 import { describe, expect, it } from "vitest"
 import * as z from "zod"
 import { honey } from "../routing/app.ts"
-import { generateOpenApi, type GenerateOpenApiOptions } from "./generate.ts"
+import { webhookContract, type WebhookEvents } from "../security/webhook.ts"
+import { generateOpenApi } from "./generate.ts"
 
 const INFO = { title: "T", version: "1" }
 type Doc = ReturnType<typeof generateOpenApi>
 
-/** A document of one route and `webhooks`. */
-function documented(webhooks: GenerateOpenApiOptions["webhooks"]): Doc {
+/** A document of one route and the webhook contract of `events`, or none. */
+function documented(events: WebhookEvents | undefined): Doc {
 	const app = honey<{}>()
 	app.get("/a").handler((c) => c.res.text("ok", "ok"))
-	return generateOpenApi(app, { info: INFO, webhooks })
+	return generateOpenApi(app, { info: INFO, webhooks: events === undefined ? undefined : webhookContract(events) })
 }
 
 /** `schema` with a component reference followed. */
@@ -20,65 +21,71 @@ function resolved(doc: Doc, schema: unknown): Record<string, unknown> {
 	return doc.components?.schemas?.[ref.split("/").pop() as string] ?? {}
 }
 
-const Paid = z.object({ amount: z.number(), id: z.string() })
+/** The webhook `type`'s operation and its JSON body's schema, references followed. */
+function delivery(doc: Doc, type: string) {
+	const operation = doc.webhooks?.[type]?.post as Record<string, unknown>
+	const content = (operation.requestBody as { content: Record<string, { schema: unknown }> }).content
+	const envelope = resolved(doc, content["application/json"]?.schema)
+	const properties = envelope.properties as Record<string, unknown>
+	return { content, envelope, operation, properties }
+}
 
-describe("webhooks: what the API sends, documented in 3.1 webhooks", () => {
-	it("documents each webhook by name as a POST of its converted body, a 200 acknowledging it, after paths", () => {
-		const doc = documented({
-			"invoice.paid": { body: Paid, description: "Sent once an invoice is paid.", summary: "Invoice paid" },
-		})
-		const operation = doc.webhooks?.["invoice.paid"]?.post as Record<string, unknown>
-		const body = (operation.requestBody as { content: Record<string, { schema: unknown }> }).content
+const Batch = z.object({ batchId: z.string(), rows: z.number() })
+
+describe("webhooks: each event of the contract documented as one Standard Webhooks delivery", () => {
+	it("documents an event as a POST under its type: the marker, the three signed headers, the envelope, a 2XX", () => {
+		const doc = documented({ "batch.complete": Batch })
+		const { content, envelope, operation, properties } = delivery(doc, "batch.complete")
 		expect([
 			Object.keys(doc),
-			Object.keys(doc.webhooks?.["invoice.paid"] ?? {}),
-			operation.summary,
-			operation.description,
+			Object.keys(doc.webhooks?.["batch.complete"] ?? {}),
+			operation["x-honey-webhook"],
+			operation.parameters,
 			(operation.requestBody as { required: boolean }).required,
-			Object.keys(body),
-			resolved(doc, body["application/json"]?.schema).required,
+			Object.keys(content),
+			envelope.required,
+			properties.type,
+			properties.timestamp,
+			resolved(doc, properties.data).required,
 			operation.responses,
 		]).toEqual([
 			["openapi", "info", "paths", "webhooks"],
 			["post"],
-			"Invoice paid",
-			"Sent once an invoice is paid.",
+			"standard-webhooks",
+			["webhook-id", "webhook-timestamp", "webhook-signature"].map((name) => ({
+				in: "header",
+				name,
+				required: true,
+				schema: { type: "string" },
+			})),
 			true,
 			["application/json"],
-			["amount", "id"],
-			{ "200": { description: "Received" } },
+			["type", "timestamp", "data"],
+			{ const: "batch.complete" },
+			{ format: "date-time", type: "string" },
+			["batchId", "rows"],
+			{ "2XX": { description: "Received" } },
 		])
 	})
 
-	it("uses the method a webhook names, lists webhooks by name, and has none when none are declared", () => {
-		const doc = documented({ "b.removed": { body: Paid, method: "DELETE" }, "a.made": { body: Paid, method: "put" } })
-		expect([
-			Object.keys(doc.webhooks ?? {}),
-			Object.keys(doc.webhooks?.["a.made"] ?? {}),
-			Object.keys(doc.webhooks?.["b.removed"] ?? {}),
-			documented(undefined).webhooks,
-			documented({}).webhooks,
-		]).toEqual([["a.made", "b.removed"], ["put"], ["delete"], undefined, undefined])
+	it("documents data as the schema's output, what the sender writes", () => {
+		const doc = documented({ counted: z.object({ note: z.string().optional(), rows: z.number().default(0) }) })
+		expect(resolved(doc, delivery(doc, "counted").properties.data).required).toEqual(["rows"])
 	})
 
-	it("takes no signature and writes no extension: an operation holds only its own OpenAPI fields", () => {
-		const doc = documented({
-			// @ts-expect-error a webhook declares no signature scheme
-			"invoice.paid": { body: Paid, signature: { algorithm: "hmac-sha256", encoding: "hex", header: "X-Signature" } },
-		})
-		expect(Object.keys(doc.webhooks?.["invoice.paid"]?.post ?? {})).toEqual(["requestBody", "responses"])
+	it("lists events by type in code-unit order, and has no webhooks when none are declared", () => {
+		const doc = documented({ ping: z.object({}), "batch.failed": Batch, "batch.complete": Batch })
+		expect([Object.keys(doc.webhooks ?? {}), documented(undefined).webhooks, documented({}).webhooks]).toEqual([
+			["batch.complete", "batch.failed", "ping"],
+			undefined,
+			undefined,
+		])
 	})
 })
 
-describe("webhooks: a declaration that cannot be sent is refused", () => {
-	it("refuses a bad method, no name and a control character", () => {
-		const bad = (webhook: Record<string, unknown>) => () => documented({ hook: { body: Paid, ...webhook } as never })
-		expect(bad({ method: "TRACE" })).toThrow(/INVALID_WEBHOOK.*webhook "hook": method "TRACE" is not one of/s)
-		expect(() => documented({ "": { body: Paid } })).toThrow(/INVALID_WEBHOOK.*a webhook needs a name/s)
-		expect(() => documented({ "a\nb": { body: Paid } })).toThrow(/INVALID_WEBHOOK.*the name holds a control character/s)
-		expect(bad({ description: "Paid.\n\n\u001b[2J" })).toThrow(
-			/INVALID_WEBHOOK.*webhook "hook": the description holds a control character/s,
-		)
-		expect(() => documented({ hook: { body: Paid, description: "Paid.\n\tAgain.", summary: "Paid" } })).not.toThrow()
+describe("webhooks: an event type no receiver could key on is refused", () => {
+	it("refuses an empty type and a control character", () => {
+		expect(() => documented({ "": Batch })).toThrow(/INVALID_WEBHOOK.*a webhook event needs a type/s)
+		expect(() => documented({ "a\nb": Batch })).toThrow(/INVALID_WEBHOOK.*the type holds a control character/s)
 	})
 })

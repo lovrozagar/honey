@@ -240,13 +240,13 @@ export const GUARDS: readonly Guard[] = [
 		catches: "v1: a webhook secret too short to protect anything",
 		disable: (original) => ({ signWebhook: laxSecretSignWebhook(original.signWebhook as SignWebhook) }),
 		id: "v1-webhook-secret-bounds",
-		module: "packages/core/src/security/webhook.ts",
+		module: "packages/core/src/security/webhook-sign.ts",
 	},
 	{
 		catches: "v1: a webhook signature leaving the id and timestamp out, so a captured delivery replays",
 		disable: (original) => ({ signWebhook: bodyOnlySignWebhook(original.signWebhook as SignWebhook) }),
 		id: "v1-webhook-signed-content",
-		module: "packages/core/src/security/webhook.ts",
+		module: "packages/core/src/security/webhook-sign.ts",
 	},
 	{
 		catches: "v1: a user agent read past its cap, so a client decides how much of its header is scanned",

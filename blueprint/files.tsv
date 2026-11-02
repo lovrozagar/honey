@@ -1092,7 +1092,13 @@ src/security/jwks.ts	core	src	21	remoteJwks: an issuer's keys, single flight, co
 src/security/jwt.ts	core	src	21	signJwt, verifyJwt and the claim rules on WebCrypto alone	jwt.ts
 tests/fixture/jwt-known-answer.ts	core	test	21	tokens jose signed, public keys only	jwt.ts
 tests/integration/security/jwt-adversarial.test.ts	core	test	21	algorithm confusion and a token with no exp, rerun by the mutation harness	jwt.ts
-src/security/webhook.ts	core	src	21	signWebhook: the Standard Webhooks headers on WebCrypto alone	crypto.ts
+src/security/webhook.ts	core	src	21	./webhook entry: re-exports webhookContract and signWebhook (roadmap 3 slice 2 split them out)	crypto.ts
+src/security/webhook-sign.ts	core	src	21	signWebhook: the Standard Webhooks headers on WebCrypto alone; its own module so the v1-webhook mutants reach the contract	crypto.ts
+src/security/webhook-contract.ts	core	src	21	webhookContract: the events an API sends, one signed attempt of each ({ type, timestamp, data } JSON and its headers); generateOpenApi documents each event from it	crypto.ts
+src/security/webhook-sign.test.ts	core	test	21	signWebhook against standardwebhooks: string and byte bodies, rotation, bad input (moved from webhook.test.ts)	crypto.ts
+src/security/webhook.test.ts	core	test	21	the entry: a contract attempt carries the headers signWebhook gives its body	crypto.ts
+src/security/webhook-contract.test.ts	core	test	21	a contract delivery verified by standardwebhooks, rotation, retries keeping body and id, a late retry, bad input	crypto.ts
+tests/types/webhook.typetest.ts	core	test	21	what a webhook contract lets a sender write, and that the document takes only a contract	crypto.ts
 tests/integration/security/webhook-adversarial.test.ts	core	test	21	a short secret and a signature leaving the id and timestamp out, rerun by the mutation harness	crypto.ts
 src/context/user-agent.ts	core	src	21	parseUserAgent: a coarse browser, OS and device from a capped header	user-agent.ts
 src/context/user-agent.test.ts	core	test	21	real headers, the 512 character cap and versions past the safe range	user-agent.ts

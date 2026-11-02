@@ -13,7 +13,6 @@ export {
 	type OpenApiServer,
 	type OpenApiServerVariable,
 	type OpenApiTag,
-	type OpenApiWebhook,
 } from "./generate.ts"
 export {
 	type GenerateManifestOptions,

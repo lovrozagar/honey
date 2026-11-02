@@ -1,5 +1,5 @@
 /**
- * `./webhook`: signs an outgoing webhook to the Standard Webhooks scheme on WebCrypto alone, so Node, Bun and Workers
+ * Signs an outgoing webhook to the Standard Webhooks scheme on WebCrypto alone, so Node, Bun and Workers
  * share it and a receiver verifies with any library for that scheme. Keys are imported per call: no secret sits in
  * module state.
  */
