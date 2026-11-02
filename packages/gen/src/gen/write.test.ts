@@ -135,6 +135,27 @@ describe("a regeneration deletes only the stale files the last one wrote (bit 19
 	})
 })
 
+describe("a caller that places a target's files itself", () => {
+	it("hands a file the caller stops passing and has rewritten over to the caller: kept once, then never listed", () => {
+		const out = scratch()
+		writeTarget(out, { "package.json": "generated", "src/index.ts": "index" })
+		writeFileSync(join(out, "package.json"), "hand-kept")
+		const handed = writeTarget(out, { "src/index.ts": "index" })
+		const after = writeTarget(out, { "src/index.ts": "index" })
+		expect({
+			after,
+			handed,
+			kept: contentOf(join(out, "package.json")),
+			manifest: manifestOf(out),
+		}).toEqual({
+			after: { deleted: [], kept: [], written: [] },
+			handed: { deleted: [], kept: ["package.json"], written: [] },
+			kept: "hand-kept",
+			manifest: { "src/index.ts": sha256("index") },
+		})
+	})
+})
+
 describe("a regeneration keeps what it cannot safely delete (bit 19 h1)", () => {
 	// v0: 0e84e508c7
 	it("goes on when the user deleted a stale file's directory", () => {

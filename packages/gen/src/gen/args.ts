@@ -14,7 +14,7 @@ const TARGETS = {
 	csharp: ["clientName", "packageId", "rootNamespace", "version"],
 	go: ["modulePath"],
 	java: ["artifactId", "clientName", "groupId", "packageName", "version"],
-	mcp: ["envPrefix", "name"],
+	mcp: ["envPrefix", "name", "version"],
 	python: ["packageName", "version"],
 	rust: ["crateName", "description", "homepage", "keywords", "license", "repository", "version"],
 	ts: ["name", "stem", "tanstackQuery"],

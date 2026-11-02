@@ -298,7 +298,20 @@ describe("the options (F2, phase a)", () => {
 		)
 	})
 
+	it("versions the server and its package by the version option, not the document's", () => {
+		const files = generateMcpServer(document("Shop", "1.2.0"), { version: "2.3.0-rc.1" }).files
+		expect({
+			package: (JSON.parse(files["package.json"] as string) as { version: string }).version,
+			served: [files["src/server.ts"], files["dist/server.js"]].map((text) =>
+				text?.includes('{ name: "shop", version: "2.3.0-rc.1" }'),
+			),
+		}).toEqual({ package: "2.3.0-rc.1", served: [true, true] })
+	})
+
 	it.each([
+		["version", "v2"],
+		["version", "1.0"],
+		["version", '1.0.0"'],
 		["name", "Shop"],
 		["name", "a b"],
 		["name", "$(rm)"],

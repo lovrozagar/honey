@@ -3,7 +3,16 @@
  * deep path. A consumer that writes the files itself (a flat layout, or a document patched in memory) needs this —
  * the bin always writes `<out>/<target>/` — and the leg is here so the names cannot quietly drop off the entry.
  */
-import { generated, type GenerateRun, type Options, type Target, writeGenerated } from "@lovrozagar/honey-clients"
+import {
+	generated,
+	type GenerateRun,
+	MANIFEST,
+	type Options,
+	type Target,
+	writeGenerated,
+	type Written,
+	writeTarget,
+} from "@lovrozagar/honey-clients"
 
 const document: Record<string, unknown> = {
 	info: { title: "Strict", version: "1.0.0" },
@@ -22,4 +31,9 @@ export async function emit(): Promise<readonly string[]> {
 
 export async function write(out: string): Promise<number> {
 	return writeGenerated({ ...run, out }, document, { err: () => undefined, out: () => undefined }, {})
+}
+
+export async function place(dir: string): Promise<{ readonly manifest: string; readonly written: Written }> {
+	const { ts = {} } = await generated(run, document, { env: {}, report: () => undefined })
+	return { manifest: MANIFEST, written: writeTarget(dir, ts) }
 }

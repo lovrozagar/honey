@@ -145,6 +145,7 @@ One table, since a flag that is not written down is a flag nobody finds:
 | `--cli-env-prefix`        | cli    | the prefix of the environment variables it reads                   |
 | `--mcp-name`              | mcp    | the server's name, and the stem of its bin                         |
 | `--mcp-env-prefix`        | mcp    | the prefix of the environment variables it reads                   |
+| `--mcp-version`           | mcp    | its server info and package version; the document's by default     |
 
 ## The six SDKs
 
@@ -473,6 +474,12 @@ nothing outside `<out>/<target>` is touched, and no symlink is followed. Without
 Every target is held to the same conformance grid: one shared scenario suite runs against a live reference server
 for all eight targets, and each decoded answer and each request on the wire must match one expected table. A feature
 that works in one SDK and breaks in another fails the grid.
+
+To lay the files out yourself, `generated(run, document, ctx)` from `@lovrozagar/honey-clients` returns each
+target's files unwritten, and `writeTarget(dir, files)` writes one target's into a directory you pick under the same
+rules, keeping `MANIFEST` (`.honey-generated.json`) there. A file the last call wrote that you leave out of `files` is
+stale: deleted if unedited, kept and named in the result's `kept` if you changed it, and dropped from the manifest
+either way, so a file you take over by editing is never touched again.
 
 This package also exports the app-side generators the honey CLI and Vite plugin use: `generateRouteTree`,
 `generateTypes` and `extractTypes` from `@lovrozagar/honey-clients`, and the command's own entry at

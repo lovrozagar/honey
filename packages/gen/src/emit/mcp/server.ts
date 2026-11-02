@@ -20,6 +20,8 @@ export type McpServerOptions = {
 	readonly name?: string
 	/** the prefix of its environment variables; by default the name's words, uppercased, joined by `_` */
 	readonly envPrefix?: string
+	/** the version its server info and package.json carry, one npm accepts; by default the document's */
+	readonly version?: string
 }
 
 export type GeneratedMcpServer = {
@@ -42,6 +44,8 @@ export function resolved(options: McpServerOptions, title: string | undefined) {
 	if (!NAME.test(name)) throw new Error(`Invalid name: ${JSON.stringify(name)}`)
 	const envPrefix = options.envPrefix ?? name.toUpperCase().replaceAll("-", "_")
 	if (!ENV_PREFIX.test(envPrefix)) throw new Error(`Invalid envPrefix: ${JSON.stringify(envPrefix)}`)
+	if (options.version !== undefined && !SEMVER.test(options.version))
+		throw new Error(`Invalid version: ${JSON.stringify(options.version)}`)
 	return { envPrefix, name }
 }
 
@@ -226,7 +230,7 @@ export function generateMcpServer(
 ): GeneratedMcpServer {
 	const ir = toIR(document as OpenApiDocument, { deriveOperationIds: true })
 	const { envPrefix, name } = resolved(options, ir.info.title)
-	const version = ir.info.version ?? "0.0.0"
+	const version = options.version ?? ir.info.version ?? "0.0.0"
 	const specs = toolsOf(ir)
 	if (specs.length === 0)
 		throw new Error(

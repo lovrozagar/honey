@@ -49,7 +49,9 @@ honey-clients generate --spec openapi.json --target mcp --out ./mcp
 
 The server's name is the document's title, lower case and hyphenated (`Anyrow` gives `anyrow`, its bin
 `anyrow-mcp`), or the mcp target's `name` option. Its environment variables are that name upper case with `_` for
-`-` (`ANYROW_…`), or the target's `envPrefix` option.
+`-` (`ANYROW_…`), or the target's `envPrefix` option. The version it reports to clients, and its package's, is the
+document's `info.version` (`0.0.0` in `package.json` when npm would refuse it), or the target's `version` option,
+which must be one npm accepts: the API's version is rarely the server package's.
 
 | Variable                     | Default                     | What it does                                                                                      |
 | ---------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------- |

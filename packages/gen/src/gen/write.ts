@@ -23,7 +23,14 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path"
 export const MANIFEST = ".honey-generated.json"
 
 /** What a write did: the files rewritten, the stale ones deleted, and the edited stale ones kept. */
-export type Written = { readonly deleted: string[]; readonly kept: string[]; readonly written: string[] }
+export type Written = {
+	/** each stale file removed, its path relative to the directory */
+	readonly deleted: string[]
+	/** each stale file left in place because it was edited since, not a regular file, or outside the directory */
+	readonly kept: string[]
+	/** each file whose bytes changed, so it was rewritten; an unchanged one is left untouched */
+	readonly written: string[]
+}
 
 const sha256 = (bytes: string | Buffer) => createHash("sha256").update(bytes).digest("hex")
 
@@ -82,7 +89,12 @@ function prune(dir: string, path: string): void {
 		rmdirSync(at)
 }
 
-/** `files` written under `dir`, the manifest updated, and the previous run's stale, unedited files deleted. */
+/**
+ * `files` written under `dir`, the manifest updated, and the previous run's stale, unedited files deleted. A file the
+ * previous manifest lists that `files` leaves out is stale: deleted when its bytes still hash as listed, kept and named
+ * when edited since, and dropped from the manifest either way, so a file the caller takes over is kept once and never
+ * touched again. A file the manifest never listed is never touched.
+ */
 export function writeTarget(dir: string, files: Readonly<Record<string, string>>): Written {
 	const root = resolve(dir)
 	const paths = Object.keys(files).map((rel) => [rel, confined(root, rel)] as const)
