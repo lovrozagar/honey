@@ -63,7 +63,7 @@
     },
     "packages/core": {
       "name": "@lovrozagar/honey",
-      "version": "1.0.0-rc.14",
+      "version": "1.0.0-rc.15",
       "bin": {
         "honey": "bin/honey.js",
       },
@@ -238,7 +238,7 @@
     },
     "packages/gen": {
       "name": "@lovrozagar/honey-clients",
-      "version": "1.0.0-rc.14",
+      "version": "1.0.0-rc.15",
       "bin": {
         "honey-clients": "bin/honey-clients.js",
       },
