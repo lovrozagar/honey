@@ -45,11 +45,13 @@ export type RouteInfo = {
 	/** the route's id (`GET /users/:id`); empty for a request no route serves */
 	readonly id: string
 	/**
-	 * The error factories handlers on this route get: the keys the route, its middleware and the app's defaults declare,
-	 * or all of the app's when none of them declares one; `null` when neither the app nor the route has a factory.
+	 * The error factories handlers on this route get. With no key declared, every key of the app's factory. Once the route,
+	 * its middleware or the app's defaults declare a key, only the declared keys that the factory named by `.errors()` or
+	 * the app's defines; a key a middleware brings from its own factory stays out. `null` when neither the app nor the route
+	 * has a factory.
 	 */
 	readonly errors: Readonly<Record<string, (...args: never[]) => unknown>> | null
-	/** The route's metadata: what its middleware contributes, overlaid by what the route states itself. */
+	/** The route's metadata: what its middleware contributes, overlaid by its handle's `.meta()`, then the route's own. */
 	readonly meta: Readonly<Record<string, unknown>>
 	/** The route's path pattern, for example `/users/:id`; empty when no route serves the request. */
 	readonly pattern: string
@@ -57,10 +59,10 @@ export type RouteInfo = {
 
 const EMPTY: Readonly<Record<string, never>> = /* @__PURE__ */ Object.freeze({})
 
-/** The route info of a context that serves no route (a miss, a bare context). */
+/** The route info of a context built without a route, as a test builds one; a 404 or 405 has route info of its own. */
 export const NO_ROUTE: RouteInfo = /* @__PURE__ */ Object.freeze({ errors: null, id: "", meta: EMPTY, pattern: "" })
 
-/** The context's slot for its request state: not exported from the package, so user code cannot reach it. */
+/** The context's slot for its request state: an own symbol key the package does not export, so it is no part of the API. */
 export const REQUEST: unique symbol = /* @__PURE__ */ Symbol("honey.request")
 
 /** Abort `ctx.signal` from inside honey (a timeout): not exported from the package. */
@@ -138,8 +140,9 @@ export function setCtxError(ctx: HoneyContext<never> | HoneyContext, error: Hone
  */
 export class HoneyContext<TEnv = Record<string, unknown>> {
 	/**
-	 * Keep a promise running past the response: `waitUntil` on Workers, which reports a rejection
-	 * itself; elsewhere a rejection goes to the request's logger.
+	 * Keep a promise running past the response. With a `waitUntil` on the execution context (Workers) the runtime holds it
+	 * open and reports a rejection itself. On Bun and Node nothing waits for it, so `close()` or the process exiting can cut
+	 * it off; a rejection goes to the request's logger as an error.
 	 */
 	readonly background: (p: Promise<unknown>) => void
 	/**
@@ -148,30 +151,41 @@ export class HoneyContext<TEnv = Record<string, unknown>> {
 	 */
 	readonly env: TEnv
 	/**
-	 * The error behind the response, once a handler or a deeper middleware threw and the `next()`
-	 * boundary turned it into an error response; `undefined` while nothing failed.
+	 * The error behind the response, once a handler or a deeper middleware threw, or returned no `Response`, and the
+	 * `next()` boundary turned that into an error response: the thrown `HoneyError`, what `onError` replaced it with, or the
+	 * boundary error or 500 it became. `undefined` while nothing failed, and on a 404, a 405 or an error status a handler
+	 * returned without throwing.
 	 */
 	readonly error: HoneyError | undefined = undefined
 	/**
-	 * The error factories this route may use: the keys the route, its middleware and the app's defaults declare, or all
-	 * of the app's when none of them declares one. Empty when neither the app nor the route has a factory.
+	 * The error factories this route may use. With no key declared, every key of the app's factory. Once the route, its
+	 * middleware or the app's defaults declare a key, only the declared keys that the factory named by `.errors()` or the
+	 * app's defines; a key a middleware brings from its own factory stays out. A middleware's key counts, so `timeout()`
+	 * alone can leave this empty. Empty when neither the app nor the route has a factory.
 	 */
 	readonly errors: Readonly<Record<string, (...args: never[]) => unknown>>
 	/** The execution context passed to `app.fetch()`: Workers provide one, the Bun and Node adapters do not. */
 	readonly executionCtx: ExecutionCtx | undefined
 	/**
-	 * The route's metadata: what its middleware contributes, overlaid by what the route states. Empty when neither sets
-	 * any.
+	 * The route's metadata: what its middleware contributes, overlaid by its handle's `.meta()`, then the route's own. Empty
+	 * when none of them sets any.
 	 */
 	readonly meta: Readonly<Record<string, unknown>>
-	/** The route's path parameters by name, percent-decoded. Empty when no route serves the request. */
+	/**
+	 * The route's path parameters by name, percent-decoded; a malformed escape stays as sent. An optional parameter left out
+	 * has no key, and an unnamed wildcard is under `*`. Empty on a route without parameters or when no route serves the
+	 * request; an empty one may be frozen, so do not write to it.
+	 */
 	readonly params: Record<string, string>
 	/**
-	 * The request path without the query, normalized the same way on every runtime: repeated slashes collapse, dot
-	 * segments resolve, and percent escapes stay encoded.
+	 * The request path without the query or the app's `stripPrefix`, normalized the same way on every runtime: repeated
+	 * slashes collapse, dot segments resolve, and percent escapes stay encoded.
 	 */
 	readonly path: string
-	/** The incoming request. */
+	/**
+	 * The incoming request. On Node it is a view shaped like one: `instanceof Request` is false there, and
+	 * `toFetchRequest()` gives the real `Request`.
+	 */
 	readonly req: Request
 	/** Builders for the response: `json`, `text`, `redirect` and the rest. */
 	readonly res: HoneyRes
@@ -218,16 +232,18 @@ export class HoneyContext<TEnv = Record<string, unknown>> {
 
 	/**
 	 * The client address the platform reports, in one canonical spelling: `CF-Connecting-IP` on Workers, the socket on
-	 * Bun and Node; `null` when nothing reports one. Forwarding headers are not trusted, so behind your own reverse
-	 * proxy this is the proxy's address.
+	 * Bun and Node. Bun reports it through the server in `env`, which `serve()` puts there. `null` when nothing reports one
+	 * or what it reports is not one address. Forwarding headers are not trusted, so behind your own reverse proxy this is
+	 * the proxy's address.
 	 */
 	get ip(): string | null {
 		return ipOf(this[REQUEST])
 	}
 
 	/**
-	 * This request's logger: a child of the app's that binds method, path (without its query), route
-	 * id, the request id when one is set, and the trace's ids when traced. Built on first use.
+	 * This request's logger: a child of the app's that binds method, path (without its query), route id, the request id
+	 * when one is set, and the trace's ids when traced. Built once, on first use, so a request id set after that is not on
+	 * it: read `log` after `requestId()` has run.
 	 */
 	get log(): Logger {
 		const self = this[SELF]
@@ -241,8 +257,9 @@ export class HoneyContext<TEnv = Record<string, unknown>> {
 	}
 
 	/**
-	 * The request's cookies by name, percent-decoded, parsed from the `Cookie` header on first use. When a name
-	 * repeats, the first value wins.
+	 * The request's cookies by name, percent-decoded, parsed from the `Cookie` header on first use. Surrounding double
+	 * quotes are dropped and a malformed escape stays as sent. When a name repeats, the first value wins. Names are request
+	 * data, so no prototype.
 	 */
 	get cookies(): Record<string, string> {
 		const self = this[SELF]
@@ -261,14 +278,17 @@ export class HoneyContext<TEnv = Record<string, unknown>> {
 		return self.#headers
 	}
 
-	/** The query: the first value of each key. Keys are request data, so no prototype. */
+	/**
+	 * The query, decoded with `+` as a space: the first value of each key, empty for a key with no value. Keys are request
+	 * data, so no prototype.
+	 */
 	get search(): Record<string, string> {
 		const self = this[SELF]
 		if (self.#search === null) self.#parseSearch()
 		return self.#search as Record<string, string>
 	}
 
-	/** The query: every value of each key, in order. */
+	/** The query, decoded as `search` is: every value of each key, in order. Keys are request data, so no prototype. */
 	get searchAll(): Record<string, string[]> {
 		const self = this[SELF]
 		if (self.#searchAll === null) self.#parseSearch()
@@ -276,8 +296,11 @@ export class HoneyContext<TEnv = Record<string, unknown>> {
 	}
 
 	/**
-	 * Aborts when the client disconnects, the server shuts down or `timeout()` answers for the
-	 * request. Pass it to `fetch()`, database drivers and timers so abandoned work stops.
+	 * Aborts when `timeout()` answers for the request, with a `TimeoutError` as its reason. On Bun and Node it also aborts
+	 * when the client disconnects, and when shutdown gives up on the request: once `close()`'s timeout runs out, or as soon
+	 * as shutdown starts for a response already streaming on Node. On Workers do not rely on a disconnect: the request's own
+	 * signal does not fire on one in workerd. A normal answer does not abort it. Pass it to `fetch()`, database drivers and
+	 * timers so abandoned work stops.
 	 */
 	get signal(): AbortSignal {
 		const self = this[SELF]
@@ -286,8 +309,10 @@ export class HoneyContext<TEnv = Record<string, unknown>> {
 	}
 
 	/**
-	 * Fire the app's tap for `key` with `payload` once this request's handler answered: after the
-	 * response, never on an error answer, never delaying it. A key no tap is registered for is ignored.
+	 * Fire the app's tap for `key` with `payload` once the chain settled on this request's handler's answer. Nothing fires
+	 * when a throw or a middleware answered instead, but an error status the handler returned still fires, as does an answer
+	 * a middleware replaced afterwards. The tap cannot change the response, but it can start before the response is written,
+	 * so its synchronous work can delay it. A key no tap is registered for is ignored.
 	 */
 	tap(key: string, payload: unknown): void {
 		const self = this[SELF]

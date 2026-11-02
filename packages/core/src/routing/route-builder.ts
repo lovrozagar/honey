@@ -343,7 +343,7 @@ export class RouteBuilder<B extends BuilderTypes> {
 		return this.#next({ middlewares: [...this.#s.middlewares, mw as unknown as RuntimeMiddleware] })
 	}
 
-	/** Register the route, once per method, and return the app typed with it. */
+	/** Register the route, once per method, and return the app typed with it. Throws on a route already registered. */
 	handler(fn: (ctx: RouteHandlerCtx<B>) => MaybePromise<TypedResponse>): HandlerReturn<B> {
 		const s = this.#s
 		settle(s.graph, s.pending, s.view.node)

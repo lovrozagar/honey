@@ -30,7 +30,8 @@ export { GRAPH } from "./register.ts"
 /**
  * An app handle. Start a route with `get`, `post` or another method call and register it with `.handler()`, mount
  * sub-apps with `route`, and serve through `fetch`. `use()`, `basePath()`, `context()` and `meta(values)` return a new
- * handle on the same app and leave this one unchanged. Create an app with `honey()`.
+ * handle on the same app and leave this one's chain, base path and values as they were; a scope from `use(path, mw)`
+ * still covers the whole app, this handle's routes included. Create an app with `honey()`.
  */
 export class Honey<
 	TEnv,
@@ -77,14 +78,20 @@ export class Honey<
 		return new Honey<TEnv>(this.#graph, { ...this[VIEW], ...changes }) as never
 	}
 
-	/** A new handle whose routes register under `prefix`, joined to the current base path. */
+	/**
+	 * A new handle whose routes register under `prefix`, joined to the current base path. Throws on an invalid pattern,
+	 * which includes joining onto a base path that ends in a wildcard or an optional parameter.
+	 */
 	basePath<P extends string>(
 		prefix: P,
 	): Honey<TEnv, TCtx, TRoutes, TMeta, TErrorFactory, TDefaultErrors, MergePath<TBasePath, P>, TTaps, TScopedMw> {
 		return this.#derive({ basePath: joinPatterns(this[VIEW].basePath, prefix) })
 	}
 
-	/** Static values every route registered through the new handle finds on `ctx`. Throws on a name honey keeps for itself, such as `env`. */
+	/**
+	 * Static values every route registered or mounted through the new handle finds on `ctx`. They are not set on a 404, a
+	 * 405 or a CORS preflight, even for middleware those run. Throws on a name honey keeps for itself, such as `env`.
+	 */
 	context<TAdds extends Record<string, unknown>>(
 		values: TAdds,
 	): Honey<TEnv, TCtx & Readonly<TAdds>, TRoutes, TMeta, TErrorFactory, TDefaultErrors, TBasePath, TTaps, TScopedMw> {
@@ -92,7 +99,11 @@ export class Honey<
 		return this.#derive({ contextValues: { ...this[VIEW].contextValues, ...values } })
 	}
 
-	/** The app's error factory; routes mounted from another app keep that app's. */
+	/**
+	 * The app's error factory. A route mounted from an app that set its own keeps that one; a route from an app without a
+	 * factory uses this one. The keys `not_found`, `method_not_allowed` and `bad_request`, when the factory has them, build
+	 * honey's own 404, 405 and 400 answers.
+	 */
 	errorFactory<TFactory extends Record<string, (...args: never[]) => unknown>>(
 		factory: TFactory,
 	): Honey<TEnv, TCtx, TRoutes, TMeta, TFactory, TDefaultErrors, TBasePath, TTaps, TScopedMw> {
@@ -101,7 +112,12 @@ export class Honey<
 		return this as never
 	}
 
-	/** Error keys every route of this app declares, registered before or after the call. */
+	/**
+	 * Error keys every route of this app declares, registered before or after the call, except a route mounted from an app
+	 * with its own factory, which keeps that app's defaults. A declared key closes a route: `ctx.errors` holds declared keys
+	 * only, and a thrown `HoneyError` with another key (honey's own keys excepted) answers as the boundary error, or a 500.
+	 * The keys are typed from the factory, so call `errorFactory()` first.
+	 */
 	defaultErrors<TKeys extends ([TErrorFactory] extends [never] ? never : keyof TErrorFactory & string)>(
 		...keys: TKeys[]
 	): Honey<TEnv, TCtx, TRoutes, TMeta, TErrorFactory, TDefaultErrors | TKeys, TBasePath, TTaps, TScopedMw> {
@@ -110,7 +126,12 @@ export class Honey<
 		return this as never
 	}
 
-	/** The error an undeclared or unknown throw becomes on routes without their own `.boundary()`. */
+	/**
+	 * The error an undeclared or unknown throw becomes on routes without their own `.boundary()`, except a route mounted
+	 * from an app with its own factory, which keeps that app's. `key` also counts as a default error, so it closes every
+	 * route as `defaultErrors()` does. A key with a payload schema cannot be built here: the answer is a 500 under that key.
+	 * The key is typed from the factory, so call `errorFactory()` first.
+	 */
 	defaultBoundary<TKey extends ([TErrorFactory] extends [never] ? never : keyof TErrorFactory & string)>(
 		key: TKey,
 	): Honey<TEnv, TCtx, TRoutes, TMeta, TErrorFactory, TDefaultErrors | TKey, TBasePath, TTaps, TScopedMw> {
@@ -147,7 +168,10 @@ export class Honey<
 	>(
 		values: TValues,
 	): Honey<TEnv, TCtx, TRoutes, AllChainMeta<TNewMeta>, TErrorFactory, TDefaultErrors, TBasePath, TTaps, TScopedMw>
-	/** Chain meta, merged into every route registered through the new handle; its values reach the routes' types (`internal: true`). */
+	/**
+	 * Chain meta, merged into every route registered or mounted through the new handle; a route's own `.meta()` wins. Its
+	 * values reach the routes' types (`internal: true`).
+	 */
 	meta<
 		const TValues extends Partial<DefaultMeta> &
 			([DeclaredMeta<TMeta>] extends [never] ? Record<string, unknown> : Partial<DeclaredMeta<TMeta>>),
@@ -169,11 +193,18 @@ export class Honey<
 		return this.#derive({ chainMeta: { ...this[VIEW].chainMeta, ...values } })
 	}
 
-	/** Chain middleware: a new handle whose routes run `mw`; this handle is unchanged. */
+	/**
+	 * Chain middleware: a new handle whose routes run `mw`; this handle is unchanged. It also runs on a 404 or 405 when
+	 * every route starts with it. If nothing registers, mounts or serves through the new handle, the first request throws.
+	 */
 	use<TAdds>(
 		mw: MiddlewareFn<TCtx, TAdds>,
 	): Honey<TEnv, TCtx & TAdds, TRoutes, TMeta, TErrorFactory, TDefaultErrors, TBasePath, TTaps, TScopedMw>
-	/** Scoped middleware: runs for every request path under `path`, whichever handle registered the route. */
+	/**
+	 * Scoped middleware: runs for every request path under `path`, rebased on this handle's base path and matched by whole
+	 * segments, whichever handle registered the route and whether before or after this call. A 404 or 405 under it runs it
+	 * too. On a route it runs after the chain and before route middleware. Throws on an invalid pattern.
+	 */
 	use<const TPath extends string, TAdds>(
 		path: TPath,
 		mw: MiddlewareFn<TCtx, TAdds>,
@@ -204,8 +235,11 @@ export class Honey<
 	}
 
 	/**
-	 * Mount a sub-app under this handle's basePath: this handle's chain runs before the sub's; the
-	 * sub's own basePath stays part of each path.
+	 * Mount a sub-app under this handle's basePath: this handle's chain runs before the sub's; the sub's own basePath stays
+	 * part of each path. The routes are copied now, so ones the sub registers later are not served here. They keep the
+	 * sub's error factory and taps; its other settings, such as `onError`, do not apply. Returns this handle. Throws a
+	 * `TypeError` when `sub` is not an app, and an `Error` on a route this app already has, or when the sub left a `use()`
+	 * handle unused or a route without `.handler()`. Mounting a handle of this same app does nothing.
 	 */
 	route<TSubRoutes, TSubMeta, TSubFactory, TSubDefaults extends string, TSubBase extends string>(
 		sub: Honey<TEnv, TCtx, TSubRoutes, TSubMeta, TSubFactory, TSubDefaults, TSubBase>,
@@ -222,7 +256,11 @@ export class Honey<
 	>
 	/**
 	 * Mount a sub-app under this handle's basePath joined with `prefix`: this handle's chain runs before the sub's; the
-	 * sub's own basePath stays part of each path. Throws a `TypeError` when `sub` is not an app.
+	 * sub's own basePath stays part of each path. The routes are copied now, so ones the sub registers later are not served
+	 * here. They keep the sub's error factory and taps; its other settings, such as `onError`, do not apply. Returns this
+	 * handle. Throws a `TypeError` when `sub` is not an app, and an `Error` on an invalid `prefix`, on a route this app
+	 * already has, or when the sub left a `use()` handle unused or a route without `.handler()`. Mounting a handle of this
+	 * same app does nothing.
 	 */
 	route<
 		const TPrefix extends string,
@@ -266,7 +304,10 @@ export class Honey<
 		return startRoute(this.#graph, this[VIEW], this, { extraMethods, method, path })
 	}
 
-	/** Start one route at `path`, under this handle's base path, for each of `methods`; `.handler()` registers them all. */
+	/**
+	 * Start one route at `path`, under this handle's base path, for each of `methods`. Throws on an invalid pattern.
+	 * `.handler()` registers them all and throws on a duplicate; routes left without it make the first request throw.
+	 */
 	on<const TPath extends string, const TMethods extends readonly [HttpMethod | "ALL", ...(HttpMethod | "ALL")[]]>(
 		methods: TMethods,
 		path: TPath,
@@ -275,43 +316,74 @@ export class Honey<
 		return this.#builder(first, path, rest) as never
 	}
 
-	/** Start a route at `path`, under this handle's base path, for every method with no route of its own there; `.handler()` registers it. */
+	/**
+	 * Start a route at `path`, under this handle's base path, for every method with no route of its own there. `OPTIONS`
+	 * counts, so it also answers CORS preflights for the path; `HEAD` goes to a `GET` route on the path first. Throws on an
+	 * invalid pattern. `.handler()` registers it and throws on a duplicate; a route left without it makes the first request
+	 * throw.
+	 */
 	all<const TPath extends string>(path: TPath): StartOf<this, TPath, "ALL"> {
 		return this.#builder("ALL", path) as never
 	}
-	/** Start a `DELETE` route at `path`, under this handle's base path; `.handler()` registers it. */
+	/**
+	 * Start a `DELETE` route at `path`, under this handle's base path. Throws on an invalid pattern. `.handler()`
+	 * registers it and throws on a duplicate; a route left without it makes the first request throw.
+	 */
 	delete<const TPath extends string>(path: TPath): StartOf<this, TPath, "DELETE"> {
 		return this.#builder("DELETE", path) as never
 	}
 	/**
-	 * Start a `GET` route at `path`, under this handle's base path; `.handler()` registers it. It also answers HEAD
-	 * requests, without the body, when the path has no `HEAD` route.
+	 * Start a `GET` route at `path`, under this handle's base path. It also answers HEAD requests, without the body, when
+	 * the path has no `HEAD` route. Throws on an invalid pattern. `.handler()` registers it and throws on a duplicate; a
+	 * route left without it makes the first request throw.
 	 */
 	get<const TPath extends string>(path: TPath): StartOf<this, TPath, "GET"> {
 		return this.#builder("GET", path) as never
 	}
-	/** Start a `HEAD` route at `path`, under this handle's base path; `.handler()` registers it. It takes over HEAD from a `GET` route. */
+	/**
+	 * Start a `HEAD` route at `path`, under this handle's base path. It takes over HEAD from a `GET` route, and its answer
+	 * goes out without a body. Throws on an invalid pattern. `.handler()` registers it and throws on a duplicate; a route
+	 * left without it makes the first request throw.
+	 */
 	head<const TPath extends string>(path: TPath): StartOf<this, TPath, "HEAD"> {
 		return this.#builder("HEAD", path) as never
 	}
-	/** Start an `OPTIONS` route at `path`, under this handle's base path; `.handler()` registers it. */
+	/**
+	 * Start an `OPTIONS` route at `path`, under this handle's base path. It takes over the path's CORS preflight: the chain
+	 * of the route the preflight asks about does not run. Throws on an invalid pattern. `.handler()` registers it and throws
+	 * on a duplicate; a route left without it makes the first request throw.
+	 */
 	options<const TPath extends string>(path: TPath): StartOf<this, TPath, "OPTIONS"> {
 		return this.#builder("OPTIONS", path) as never
 	}
-	/** Start a `PATCH` route at `path`, under this handle's base path; `.handler()` registers it. */
+	/**
+	 * Start a `PATCH` route at `path`, under this handle's base path. Throws on an invalid pattern. `.handler()`
+	 * registers it and throws on a duplicate; a route left without it makes the first request throw.
+	 */
 	patch<const TPath extends string>(path: TPath): StartOf<this, TPath, "PATCH"> {
 		return this.#builder("PATCH", path) as never
 	}
-	/** Start a `POST` route at `path`, under this handle's base path; `.handler()` registers it. */
+	/**
+	 * Start a `POST` route at `path`, under this handle's base path. Throws on an invalid pattern. `.handler()`
+	 * registers it and throws on a duplicate; a route left without it makes the first request throw.
+	 */
 	post<const TPath extends string>(path: TPath): StartOf<this, TPath, "POST"> {
 		return this.#builder("POST", path) as never
 	}
-	/** Start a `PUT` route at `path`, under this handle's base path; `.handler()` registers it. */
+	/**
+	 * Start a `PUT` route at `path`, under this handle's base path. Throws on an invalid pattern. `.handler()`
+	 * registers it and throws on a duplicate; a route left without it makes the first request throw.
+	 */
 	put<const TPath extends string>(path: TPath): StartOf<this, TPath, "PUT"> {
 		return this.#builder("PUT", path) as never
 	}
 
-	/** The Fetch handler an adapter calls. Finalizes once; a later registration re-finalizes. */
+	/**
+	 * The Fetch handler an adapter calls, serving the whole app whichever handle it is called on. Call it as a method:
+	 * detached, as in `{ fetch: app.fetch }`, it throws a `TypeError`. Finalizes once; a later registration re-finalizes.
+	 * Throws synchronously when the app cannot finalize, such as a route without `.handler()`, a `use()` handle nothing
+	 * used, or `requestLog()` with `logger(false)`.
+	 */
 	fetch(request: Request, env: TEnv, executionCtx?: ExecutionCtx): MaybePromise<Response> {
 		const g = this.#graph
 		if (!g.served.has(this[VIEW].chain)) {

@@ -46,13 +46,13 @@ export type TapHandler<TEnv, TTaps, TKey extends string> = (
 /** `ctx.tap()` as a handler sees it: the declared keys and their payloads, or any key without `.taps<T>()`. */
 export type TapMethod<TTaps> = [keyof TTaps] extends [never]
 	? {
-			/** Queues a tap for `key`, fired after the response if the handler's answer goes out; a key no `app.tap` handles is ignored. */ tap(
+			/** Queues a tap for `key`, fired once the handler has answered, if its answer goes out; a key no `app.tap` handles is ignored. */ tap(
 				key: string,
 				payload: unknown,
 			): void
 		}
 	: {
-			/** Queues a tap for a declared key, fired after the response if the handler's answer goes out; a key no `app.tap` handles is ignored. */ tap<
+			/** Queues a tap for a declared key, fired once the handler has answered, if its answer goes out; a key no `app.tap` handles is ignored. */ tap<
 				const TKey extends keyof TTaps & string,
 			>(
 				key: TKey,

@@ -35,7 +35,7 @@ export abstract class SettingsChain<TEnv> {
 	protected abstract invalidate(): void
 
 	/**
-	 * Register the hook for `key`. It runs in the background after a route's handler answered: once if the route's meta
+	 * Register the hook for `key`. It runs once a route's handler has answered, and a synchronous tap can delay the response: once if the route's meta
 	 * sets `key`, and once per `ctx.tap(key, payload)`. Nothing fires on an error answer, a 404 or 405, an answer from
 	 * middleware, or a WebSocket upgrade. A throw is logged as a warning.
 	 */
