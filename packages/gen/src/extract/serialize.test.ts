@@ -2,7 +2,15 @@ import { readFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 import { Project, ts } from "ts-morph"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
-import { extract, type FixtureProject, fixtureProject, lines, SLOW, shown } from "./__fixtures__/project.ts"
+import {
+	COMPILER_OPTIONS,
+	extract,
+	type FixtureProject,
+	fixtureProject,
+	lines,
+	SLOW,
+	shown,
+} from "./__fixtures__/project.ts"
 import { Serializer } from "./serialize.ts"
 
 /** The serialized type of each `declare const name: …` in `source`, by name. */
@@ -288,12 +296,19 @@ function strictErrors(files: readonly string[]): string[] {
 }
 
 describe("global types: an ambient namespace's", () => {
-	it(
-		"writes an ambient type by its global name: Cloudflare.Env stays assignable to R2Bucket under a strict consumer",
-		() => {
+	/* the declaration reaches tsc through compilerOptions.types, or only through include, which nothing imports */
+	const configs = {
+		include: { compilerOptions: COMPILER_OPTIONS, include: ["app.ts", "worker-configuration.d.ts"] },
+		types: { compilerOptions: { ...COMPILER_OPTIONS, types: ["./worker-configuration.d.ts"] } },
+	}
+
+	it.each(Object.entries(configs))(
+		"writes an ambient type by its global name: Cloudflare.Env stays assignable to R2Bucket under a strict consumer (declared via %s)",
+		(_, tsconfig) => {
 			// v0: 25080c8dd7
-			const ambient = fixtureProject({ types: ["./worker-configuration.d.ts"] })
+			const ambient = fixtureProject()
 			try {
+				ambient.write("tsconfig.json", JSON.stringify(tsconfig))
 				ambient.write(
 					"worker-configuration.d.ts",
 					readFileSync(resolve(import.meta.dirname, "__fixtures__/ambient-env/worker-configuration.d.ts"), "utf8"),
@@ -349,6 +364,40 @@ describe("global types: a `declare global` interface", () => {
 			} finally {
 				global.dispose()
 			}
+		},
+		SLOW,
+	)
+})
+
+describe("unresolved types: a name the program cannot resolve", () => {
+	let project: FixtureProject
+	beforeAll(() => {
+		project = fixtureProject()
+	})
+	afterAll(() => project.dispose())
+
+	it(
+		"refuses the app's env, a middleware addition and the declared meta by the name written, never writing unknown or {}",
+		() => {
+			const env = project.write(
+				"unresolved/env.ts",
+				lines('import { honey } from "@lovrozagar/honey"', "export const app = honey<Missing.Env>()"),
+			)
+			const middleware = project.write(
+				"unresolved/middleware.ts",
+				lines(
+					'import { createMiddleware, honey } from "@lovrozagar/honey"',
+					"const mw = createMiddleware((_c, next) => next({ db: null as unknown as Nope }))",
+					"export const app = honey<{}>().use(mw)",
+				),
+			)
+			const meta = project.write(
+				"unresolved/meta.ts",
+				lines('import { honey } from "@lovrozagar/honey"', "export const app = honey<{}>().meta<Gone>()"),
+			)
+			expect(() => extract(env)).toThrow("type Missing.Env does not resolve")
+			expect(() => extract(middleware)).toThrow("type Nope does not resolve")
+			expect(() => extract(meta)).toThrow("type Gone does not resolve")
 		},
 		SLOW,
 	)

@@ -60,6 +60,24 @@ describe("loadEntry: the app under its export", () => {
 		},
 		SLOW,
 	)
+
+	it(
+		"reads an entry that no tsconfig governs",
+		() => {
+			const root = mkdtempSync(join(tmpdir(), "honey-no-tsconfig-"))
+			try {
+				writeFileSync(join(root, "package.json"), JSON.stringify({ name: "bare" }))
+				const entryPath = join(root, "app.ts")
+				writeFileSync(entryPath, "export const app = { $env: null as unknown as { K: string } }")
+				const entry = loadEntry(tsMorph, { entryPath, exportName: "app" })
+				const env = entry.appType.getProperty("$env")
+				expect(env && entry.checker.typeToString(entry.checker.getTypeOfSymbol(env))).toBe("{ K: string; }")
+			} finally {
+				rmSync(root, { force: true, recursive: true })
+			}
+		},
+		SLOW,
+	)
 })
 
 describe("registrations: the routes the program's own files register", () => {

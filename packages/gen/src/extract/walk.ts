@@ -58,13 +58,21 @@ export function findTsConfig(fromPath: string): string | undefined {
 	return undefined
 }
 
-/** Load the entry and its app: `export const app`, an export list, an unexported declaration of the name, or `export default`. */
+/**
+ * Load the entry and its app: `export const app`, an export list, an unexported declaration of the name, or `export default`.
+ * The program is the entry, what it imports, and the tsconfig's own declaration files: an ambient one that only
+ * `include` names (wrangler's `worker-configuration.d.ts`) declares globals the app's types use, as under `tsc -p`.
+ */
 export function loadEntry(tsMorph: TsMorph, options: EntryOptions): LoadedEntry {
-	const project = new tsMorph.Project({
-		skipAddingFilesFromTsConfig: true,
-		tsConfigFilePath: options.tsconfigPath ?? findTsConfig(options.entryPath),
-	})
+	const tsConfigFilePath = options.tsconfigPath ?? findTsConfig(options.entryPath)
+	const project = new tsMorph.Project({ skipAddingFilesFromTsConfig: true, tsConfigFilePath })
 	project.addSourceFilesAtPaths(options.entryPath)
+	if (tsConfigFilePath !== undefined) {
+		const { ts } = tsMorph
+		const { config } = ts.readConfigFile(tsConfigFilePath, ts.sys.readFile)
+		const { fileNames } = ts.parseJsonConfigFileContent(config, ts.sys, dirname(tsConfigFilePath))
+		for (const name of fileNames) if (name.endsWith(".d.ts")) project.addSourceFileAtPath(name)
+	}
 	project.resolveSourceFileDependencies()
 	const file = project.getSourceFileOrThrow(options.entryPath)
 	const decl =

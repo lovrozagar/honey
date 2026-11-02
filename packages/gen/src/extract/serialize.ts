@@ -6,6 +6,8 @@
  * reader relies on: optional and rest parameters, generic signatures, tuple rest and optional
  * elements, literal types, quoted keys and precedence (`(() => void)[]`, `(A | B) & C`). A type it
  * is still writing when it meets it again is written as `unknown` there, never expanded without end.
+ * A name the program cannot resolve throws: TypeScript reads it as `any`, and writing that as `unknown`
+ * would hand the output a type the source never had.
  */
 import type { ts } from "ts-morph"
 import { quoteKey } from "../emit/shared/literals.ts"
@@ -131,6 +133,7 @@ export class Serializer {
 	}
 
 	serialize(type: ts.Type): string {
+		this.#resolved(type)
 		if (this.#active.has(type)) return "unknown"
 		this.#active.add(type)
 		try {
@@ -245,7 +248,16 @@ export class Serializer {
 
 	/** An object type written out member by member, never by its alias name: a core-internal alias stays out of the output. */
 	shape(type: ts.Type): string {
+		this.#resolved(type)
 		return this.#object(type)
+	}
+
+	/** Throws on TypeScript's error type, an unresolved name; a written `any` passes. */
+	#resolved(type: ts.Type): void {
+		if ((type as { intrinsicName?: string }).intrinsicName !== "error") return
+		throw new Error(
+			`type ${this.checker.typeToString(type)} does not resolve in the program honey reads: the entry, its imports and its tsconfig's .d.ts files`,
+		)
 	}
 
 	/** An optional member's type, without the `| undefined` its `?` already says (a `null` stays). */
