@@ -294,7 +294,7 @@ describe("each shipped bin picks what it runs (bit 19 i)", () => {
 		["honey-clients", "cli"],
 	] as const
 
-	// v0: 5082f5f697
+	// v0: 4982f5f697
 	it.each(BINS)(
 		"%s on Node in a repository checkout runs the source, never a possibly stale dist/",
 		{ timeout: SPAWN_TIMEOUT },
