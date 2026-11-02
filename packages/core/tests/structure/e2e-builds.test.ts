@@ -60,10 +60,11 @@ const judge = (ms: number, referenceMs: number, factor: number, mode: "judge" | 
 	})
 
 describe("the e2e build gate's ratio", () => {
-	it("derives one ceiling from both runner classes: the worst ratio x 1.10, each class's median beside it", () => {
+	it("derives one ceiling from both runner classes under the 2% rule, each class's median beside it", () => {
 		/* the fast runner's cold 1.16x build (3132 ms) reads as the middle class: a job is classed by its own builds' ms */
 		const byClass = { fast: 14.95, middle: 17.17, slow: 15.1 }
-		expect(CEILING).toEqual({ baseline: 15.1, byClass, catches: "+25%", ceiling: 18.89 })
+		/* one cell carries the whole 2% budget: its log-normal tail, 20.322, sits over the worst x 1.10, 18.887 */
+		expect(CEILING).toEqual({ baseline: 15.1, byClass, catches: "+35%", ceiling: 20.322 })
 	})
 
 	it("passes the unchanged build on either runner class, the 1.16x cold build included", () => {
@@ -75,7 +76,7 @@ describe("the e2e build gate's ratio", () => {
 
 	it("reds honey generate made 1.5x slower, on the fast runner class and on the slow one", () => {
 		const slower = LOCAL.generate * 1.5 + LOCAL.bundle
-		const regressed = "build ratio 21.5 over its 18.89 ceiling (CI median 15.1)"
+		const regressed = "build ratio 21.5 over its 20.322 ceiling (CI median 15.1)"
 		/* on the slow class the same build also crosses the hang guard: both checks report, the ratio's independently */
 		expect(Object.values(PROFILES).map((factor) => judge(slower, LOCAL.reference, factor))).toEqual([
 			{ failures: [regressed], hung: false, ratio: 21.5, status: "REGRESSED" },
@@ -114,6 +115,32 @@ describe("the e2e build gate's ratio", () => {
 			{ failures: [], hung: false, ratio: 21.5, status: "recorded" },
 			{ failures: [], hung: false, ratio: 21.5, status: "unbaselined" },
 		])
+	})
+})
+
+/*
+ * The ceiling rule's reference values, from its stdlib Python form (bit 21 bref ceiling_rule.py): chi-square's lower
+ * 10% quantiles at 5, 11 and 23 degrees of freedom, and z at 2% over 42 cells and over one.
+ */
+const CHI2_LOW = [1.6103, 5.5778, 14.848] as const
+const Z = { 1: 2.05375, 42: 3.30423 } as const
+
+describe("the e2e build gate's ceiling rule", () => {
+	it("reads chi-square and normal quantiles to their tables", () => {
+		const chi2 = [5, 11, 23].map((df) => Number(gate.chiSquareQuantile(0.1, df).toFixed(4)))
+		const z = [1, 42].map((cells) => Number(gate.normalQuantile(1 - 0.02 / cells).toFixed(5)))
+		expect({ chi2, z }).toEqual({ chi2: [...CHI2_LOW], z: [Z[1], Z[42]] })
+	})
+
+	it("takes a spread cell's log-normal tail at 2% over the cells, which the worst x 1.10 sits under", () => {
+		/* CI's Node 22 cells move between runner classes, about 1.8 and 2.35: worst x 1.10 is 2.64 */
+		const bimodal = [1.8, 1.85, 1.82, 2.3, 2.35, 2.4, 1.79, 2.1]
+		expect(Number(gate.ceilingRule(bimodal, 42).toFixed(3))).toBe(3.985)
+	})
+
+	it("keeps the worst x 1.10 for a tight cell, whose tail sits under it", () => {
+		const tight = [...Array.from({ length: 11 }, () => 2), 2.02]
+		expect(Number(gate.ceilingRule(tight, 42).toFixed(3))).toBe(2.222)
 	})
 })
 
@@ -323,7 +350,7 @@ describe("the e2e build gate's derive across commits: the runner classes it asks
 		expect([cell?.groups, cell?.refused, cell?.ceiling?.ceiling]).toEqual([
 			[{ classes: { slow: 6 }, commit: NEW.commit, n: 6 }],
 			undefined,
-			16.63,
+			16.632,
 		])
 	})
 

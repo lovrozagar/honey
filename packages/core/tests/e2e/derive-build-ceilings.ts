@@ -7,8 +7,8 @@
  *
  * Reads each run's build and prod e2e jobs' logs through `gh`, takes their `RATIO build` lines, classes each job by its
  * own surface builds on bun (build-gate.ts jobClass), prints one row per job (run, job, class, surface ms, the honey-free
- * reference's median) and writes the ceilings: per runtime key and cell, the median, the worst x 1.10 and each class's
- * median. It refuses fewer than 6 runs, or Bun jobs that never landed on both the fast and the slow runner class.
+ * reference's median) and writes the ceilings: per runtime key and cell, the median, ceilingRule's ceiling (a 2%
+ * false-red budget shared by every cell) and each class's median. It refuses fewer than 6 runs, or Bun jobs that never landed on both the fast and the slow runner class.
  * Records from ci.yml dispatched with build_mode=record; a judged run's lines count too.
  *
  * --by-commit, for runs spanning code versions: each cell's samples grouped by their run's head commit, pooled when
@@ -105,8 +105,11 @@ const note =
 	"reference build's (packages/core/tests/e2e/build-gate.ts), from the RATIO build lines of the build and prod e2e " +
 	`jobs of CI runs ${[...new Set(runs)].sort().join(", ")} (ci.yml dispatched with build_mode=record). Each job is ` +
 	"classed fast, middle or slow by its own surface builds on bun, Node-only jobs unclassified; byClass is each class's " +
-	"median. baseline: the median of every job's ratio. ceiling: the worst plus a 10% margin (worst x 1.10). A ratio " +
-	"above its ceiling is REGRESSED. catches: ceiling / baseline. No retry: a red with honey unchanged is answered by a " +
+	"median. baseline: the median of every job's ratio. ceiling (build-gate.ts ceilingRule): per cell, fit " +
+	"log(ratio) (mean m, sample sd s), sigma_upper = s * sqrt((n-1)/chi2_0.10,n-1) (one-sided 90% upper bound on " +
+	`sigma), z = Phi^-1(1 - 0.02/G) with G = ${Object.values(builds).flatMap(Object.keys).length} cells, ceiling = ` +
+	"max(worst x 1.10, exp(m + z*sigma_upper)), so the cells share a 2% per-run false-red budget. A ratio above its " +
+	"ceiling is REGRESSED. catches: ceiling / baseline. No retry: a red with honey unchanged is answered by a " +
 	"re-record (6+ runs spanning both runner classes, derived by derive-build-ceilings.ts), never a rerun." +
 	(byCommit
 		? " Derived --by-commit: a cell whose head-commit groups agree (each group's median within the other's range, " +
