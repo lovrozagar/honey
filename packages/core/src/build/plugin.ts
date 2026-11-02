@@ -33,6 +33,16 @@ type ResolvedViteConfig = {
 }
 type HotUpdate = { file: string; modules: unknown[]; server: { moduleGraph: ModuleGraph }; timestamp?: number }
 
+export type HoneyVitePlugin = {
+	api: { honeyConfig: HoneyVitePluginConfig }
+	buildStart(): Promise<void>
+	configResolved(cfg: ResolvedViteConfig): void
+	hotUpdate(this: unknown, ctx: HotUpdate): Promise<unknown[] | undefined>
+	load(id: string): Promise<{ code: string; moduleType: string } | undefined>
+	name: string
+	resolveId(id: string): string | undefined
+}
+
 /** `honey generate <args>` in a child (core's own bin on this runtime); resolves when it exits 0. */
 export function runGenerate(args: readonly string[], options: { cwd: string; env: NodeJS.ProcessEnv }): Promise<void> {
 	const bin = fileURLToPath(new URL("../../bin/honey.js", import.meta.url))
@@ -113,7 +123,7 @@ const isHoneyPlugin = (plugin: unknown) =>
 	(plugin as { name?: unknown } | null)?.name === "honey" &&
 	(plugin as { api?: { honeyConfig?: unknown } }).api?.honeyConfig !== undefined
 
-export function honey(config: HoneyVitePluginConfig) {
+export function honey(config: HoneyVitePluginConfig): [HoneyVitePlugin] {
 	const resolved = resolveHoneyConfig(config)
 	const matchesWatch = compileGlobs(resolved.watch)
 	const at = { command: "build" as "build" | "serve", configFile: undefined as string | undefined, index: -1 }
@@ -132,7 +142,7 @@ export function honey(config: HoneyVitePluginConfig) {
 		() => regenerate().catch((error: unknown) => process.stderr.write(`honey: generation failed: ${error}\n`)),
 		SAVES_REMEMBERED,
 	)
-	const plugin = {
+	const plugin: HoneyVitePlugin = {
 		/** read by `honey generate` to find this plugin's config in a loaded Vite config */
 		api: { honeyConfig: config },
 		/* Vite calls this once per environment, back to back: the second joins the first's generation */

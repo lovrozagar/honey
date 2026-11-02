@@ -85,13 +85,15 @@ export type GenerateContext = {
 	readonly oxfmt?: string
 }
 
+export type GeneratedFiles = Partial<Record<Target, Readonly<Record<string, string>>>>
+
 /** Every file a run writes, by target and its path under the target's directory, Go's through gofmt, TS's through oxfmt. */
 export async function generated(
 	run: GenerateRun,
 	document: Record<string, unknown>,
 	{ env, oxfmt, report }: GenerateContext,
-) {
-	const out: Partial<Record<Target, Readonly<Record<string, string>>>> = {}
+): Promise<GeneratedFiles> {
+	const out: GeneratedFiles = {}
 	for (const target of run.targets) {
 		let files = filesOf(target, document, run.options?.[target] ?? {}, report)
 		const pass = FORMATTERS[target]

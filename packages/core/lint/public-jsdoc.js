@@ -44,6 +44,7 @@ function isLiteral(node) {
 }
 
 function statesItsType(init) {
+	if (init?.type === "TSSatisfiesExpression") return statesItsType(init.expression)
 	if (isLiteral(init) || init?.type === "TSAsExpression") return true
 	const isFunction = init?.type === "ArrowFunctionExpression" || init?.type === "FunctionExpression"
 	return isFunction && Boolean(init.returnType)

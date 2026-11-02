@@ -209,6 +209,7 @@ describe("honey/public-jsdoc: inferred shapes", { timeout: SPAWN_TIMEOUT }, () =
 		["a boolean", "/** The switch. */\nexport const c = true\n"],
 		["arithmetic on numbers", "/** The ceiling. */\nexport const c = 128 * 1024 * 1024\n"],
 		["as const", '/** The list. */\nexport const c = ["a", "b"] as const\n'],
+		["as const with satisfies", '/** The list. */\nexport const c = ["a"] as const satisfies readonly string[]\n'],
 		["an annotation", "/** The list. */\nexport const c: string[] = []\n"],
 		["an explicit cast", "/** The list. */\nexport const c = [] as string[]\n"],
 		["a typed arrow", "/** Runs. */\nexport const f = (a: string): string => a\n"],

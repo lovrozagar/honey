@@ -83,6 +83,25 @@ type EntryContext = {
 	load(module: { id: string }): Promise<{ exports?: readonly string[] | null }>
 }
 
+type VirtualEntry = { code: string; moduleType: "js" }
+
+export type HoneyBuildPlugin = {
+	apply: "build"
+	config(): {
+		build: {
+			emptyOutDir: boolean
+			minify: boolean
+			outDir: string
+			rolldownOptions: { external: string[]; input: string; output: { entryFileNames: string } }
+			ssr: boolean
+		}
+		ssr: { noExternal?: boolean; target: Target["ssrTarget"] }
+	}
+	load(this: EntryContext, id: string): Promise<VirtualEntry> | VirtualEntry | undefined
+	name: string
+	resolveId(id: string): string | undefined
+}
+
 /** The app entry's exports a Worker passes on: all but the app's own and `default`, which honey's fetch handler is. */
 async function passedOn(context: EntryContext, app: BuildApp): Promise<string[]> {
 	const resolved = await context.resolve(`./${app.entry}`)
@@ -103,13 +122,13 @@ const TARGETS: Readonly<Record<BuildTarget, Target & { readonly named: boolean }
 }
 
 /** The Vite plugin that builds `app` for `config.target`: `vite build` with it emits `<outDir>/index.js`. */
-export function createBuildPlugin(config: HoneyBuildConfig, app: BuildApp) {
+export function createBuildPlugin(config: HoneyBuildConfig, app: BuildApp): HoneyBuildPlugin {
 	if (!Object.hasOwn(TARGETS, config.target)) {
 		throw new Error(`honey build: unknown target "${config.target}"; expected node, bun or cloudflare`)
 	}
 	const target = TARGETS[config.target]
 	return {
-		apply: "build" as const,
+		apply: "build",
 		config() {
 			return {
 				build: {
@@ -130,7 +149,10 @@ export function createBuildPlugin(config: HoneyBuildConfig, app: BuildApp) {
 		load(this: EntryContext, id: string) {
 			if (id !== RESOLVED_ENTRY) return undefined
 			const port = config.port ?? 3000
-			const module = (named: readonly string[]) => ({ code: target.entry(app, port, named), moduleType: "js" as const })
+			const module = (named: readonly string[]): VirtualEntry => ({
+				code: target.entry(app, port, named),
+				moduleType: "js",
+			})
 			/* only a Worker passes exports on, which needs the build to read its entry */
 			return target.named ? passedOn(this, app).then(module) : module([])
 		},
