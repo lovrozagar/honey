@@ -17,7 +17,7 @@ export const RUNTIME_IDS = ["node", "bun"] as const
 export type RuntimeId = (typeof RUNTIME_IDS)[number]
 
 /** Deploy target the bundle is produced for — honey/build's `target`. */
-export const TARGET_IDS = ["node", "bun", "cloudflare"] as const
+export const TARGET_IDS = ["node", "bun", "workers"] as const
 export type TargetId = (typeof TARGET_IDS)[number]
 
 const e2eRoot = dirname(fileURLToPath(import.meta.url))
@@ -69,7 +69,7 @@ type AppBuild = {
  */
 const DEFAULT_MAX_GZIP_KB: Record<TargetId, number> = {
 	bun: 110,
-	cloudflare: 110,
+	workers: 110,
 	node: 110,
 }
 

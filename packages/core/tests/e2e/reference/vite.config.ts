@@ -7,8 +7,8 @@
  */
 import { builtinModules } from "node:module"
 
-const target = (process.env.HONEY_BUILD_TARGET ?? "node") as "bun" | "cloudflare" | "node"
-const worker = target === "cloudflare"
+const target = (process.env.HONEY_BUILD_TARGET ?? "node") as "bun" | "workers" | "node"
+const worker = target === "workers"
 
 /**
  * Units of honey-free, single-threaded JS work the reference does at buildStart (bit 21 bref), as an app build's

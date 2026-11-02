@@ -5,7 +5,7 @@
 {
 	"compatibility_date": "2026-01-20",
 	"durable_objects": { "bindings": [{ "class_name": "McpUploads", "name": "MCP_UPLOADS" }] },
-	"main": "../apps/mcp/dist/cloudflare/index.js",
+	"main": "../apps/mcp/dist/workers/index.js",
 	"migrations": [{ "new_sqlite_classes": ["McpUploads"], "tag": "v1" }],
 	"name": "honey-cf-e2e",
 	"workers_dev": true,

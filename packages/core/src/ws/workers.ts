@@ -1,7 +1,7 @@
 /**
  * The Cloudflare Workers WebSocket adapter: a `WebSocketPair`, the server side accepted and wired
  * to the handler, the client side handed back in the 101. `idleTimeout` is not enforced: Workers
- * has no ping API and evicts idle sockets itself. Set it with `app.wsAdapter(cfWebSocket())`.
+ * has no ping API and evicts idle sockets itself. Set it with `app.wsAdapter(workersWebSocket())`.
  */
 import {
 	fireHandler,
@@ -51,10 +51,10 @@ function wire(
 
 /**
  * Create the WebSocket adapter for Cloudflare Workers. Workers has no default adapter, so a WebSocket route needs
- * `app.wsAdapter(cfWebSocket())`. It takes the shared adapter options, but `idleTimeout` has no effect here. Throws a
+ * `app.wsAdapter(workersWebSocket())`. It takes the shared adapter options, but `idleTimeout` has no effect here. Throws a
  * `TypeError` for an invalid option.
  */
-export function cfWebSocket(options?: WSAdapterOptions): WSAdapter {
+export function workersWebSocket(options?: WSAdapterOptions): WSAdapter {
 	const resolved = resolveWSOptions(options)
 	return {
 		options: resolved,

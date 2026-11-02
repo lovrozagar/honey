@@ -10,8 +10,8 @@ import { BUILD_SPECS } from "../e2e/builds.ts"
 
 const KEY = "bun 1.3"
 /*
- * CI run 40877110861's build (bun) job, the one false red of k=1: the cloudflare reference 139 ms; defaults×cloudflare
- * built once in 2,949 ms (ratio 21.21) where compose×cloudflare took 2,472 and gateway×cloudflare 2,501, siblings that
+ * CI run 40877110861's build (bun) job, the one false red of k=1: the cloudflare reference 139 ms; defaults×workers
+ * built once in 2,949 ms (ratio 21.21) where compose×workers took 2,472 and gateway×workers 2,501, siblings that
  * track it within a few %. Its normal build there is its CI median 17.84 x 139 = 2,480 ms; blueprint/baselines/build.json
  * held it to 20.98. Honey generate is ~90% of a build (this machine's surface: 1,286 of 1,421 ms).
  */
@@ -69,7 +69,7 @@ describe("the e2e build gate's report-only interim", () => {
 
 	it("judges no cell against an emptied baseline: each reads unbaselined, never failing", () => {
 		const emptied: gate.BuildBaseline = { builds: {}, note: "", runs: [] }
-		const ceiling = emptied.builds[KEY]?.["defaults×cloudflare"]
+		const ceiling = emptied.builds[KEY]?.["defaults×workers"]
 		const builds = [RED_JOB.spike, RED_JOB.spike, RED_JOB.spike]
 		expect([
 			gate.recordedCells(emptied),

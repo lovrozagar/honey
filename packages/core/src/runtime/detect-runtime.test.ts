@@ -7,8 +7,8 @@ describe("detectRuntime: which runtime this process is", () => {
 	// v0: 481a9a3cb7
 	it.each([
 		["Bun's global", { Bun: {}, ...node }, "bun"],
-		["the Workers user agent", { navigator: { userAgent: "Cloudflare-Workers" } }, "cloudflare"],
-		["workerd's user agent", { navigator: { userAgent: "workerd/1.2" } }, "cloudflare"],
+		["the Workers user agent", { navigator: { userAgent: "Cloudflare-Workers" } }, "workers"],
+		["workerd's user agent", { navigator: { userAgent: "workerd/1.2" } }, "workers"],
 		["Node's version", node, "node"],
 		["Node's version beside a browser-like navigator", { navigator: { userAgent: "Node.js/26" }, ...node }, "node"],
 	])("%s → %s", (_source, g, runtime) => {

@@ -14,7 +14,7 @@ generator.
 | `@lovrozagar/honey/ws`              | `ws(app, path)`, a WebSocket route                                                                                                      |
 | `@lovrozagar/honey/ws/bun`          | `bunWebSocket`                                                                                                                          |
 | `@lovrozagar/honey/ws/node`         | `nodeWebSocket` (with the optional `ws` peer)                                                                                           |
-| `@lovrozagar/honey/ws/cloudflare`   | `cfWebSocket`                                                                                                                           |
+| `@lovrozagar/honey/ws/workers`      | `workersWebSocket`                                                                                                                      |
 | `@lovrozagar/honey/ws/session`      | `createWsSession`: the session runtime a custom WebSocket adapter builds on                                                             |
 | `@lovrozagar/honey/realtime`        | `realtime(app, path, options)`: a resumable connection over WebSocket, SSE and long-poll                                                |
 | `@lovrozagar/honey/mcp`             | `mcp(app, path, handler, options?)`: the app's tools over MCP's Streamable HTTP, the handler `codegen.mcp` writes                       |

@@ -1,4 +1,4 @@
-import { cfWebSocket } from "@lovrozagar/honey/ws/cloudflare"
+import { workersWebSocket } from "@lovrozagar/honey/ws/workers"
 import { loadE2eApp } from "../../load.ts"
 
 type WorkerEnv = Record<string, unknown> & { HONEY_E2E_APP?: string }
@@ -8,7 +8,7 @@ let cached: { app: ReturnType<typeof loadE2eApp>; name: string } | null = null
 function appFor(env: WorkerEnv) {
 	const name = env.HONEY_E2E_APP ?? "kitchen"
 	if (cached?.name === name) return cached.app
-	const app = loadE2eApp(name, cfWebSocket())
+	const app = loadE2eApp(name, workersWebSocket())
 	cached = { app, name }
 	return app
 }

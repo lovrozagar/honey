@@ -575,7 +575,7 @@ export default app
 ```
 
 Built by honey's build plugin for Workers, with this module as the app's entry
-(`createBuildPlugin({ target: "cloudflare" }, { entry: "src/app.ts", export: "default" })`), the Worker exports
+(`createBuildPlugin({ target: "workers" }, { entry: "src/app.ts", export: "default" })`), the Worker exports
 `UploadClaim` beside its default fetch: every named export of the entry passes through, so a Durable Object class, a
 `WorkerEntrypoint` or a Workflow is the Worker's own. An entry that exports a default beside a named app is refused,
 since the Worker's default is honey's fetch. Its config binds the class, the migration creating its namespace:

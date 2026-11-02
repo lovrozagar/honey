@@ -33,7 +33,7 @@ describe("honey/boundaries: imports", () => {
 		const fixture = {
 			"packages/core/src/routing/dispatch.ts": 'import { serve } from "../adapters/node/serve.ts"\n',
 			"packages/core/src/runtime/peer.ts": 'export const load = () => import("../ws/bun.ts")\n',
-			"packages/core/src/response/sse.ts": 'export { cfWebSocket } from "../ws/cloudflare.ts"\n',
+			"packages/core/src/response/sse.ts": 'export { workersWebSocket } from "../ws/workers.ts"\n',
 			"packages/core/src/adapters/bun/serve.ts": 'import { bunWebSocket } from "../../ws/bun.ts"\n',
 			"packages/core/src/adapters/node/serve.ts":
 				'import { nodeWebSocket } from "../../ws/node.ts"\nimport { x } from "../workers/serve.ts"\n',
@@ -133,7 +133,7 @@ describe("honey/boundaries: runtime globals", () => {
 			"packages/core/src/adapters/node/serve.ts":
 				"export const a = process.env.PORT\nexport const b = Buffer.alloc(1)\n",
 			"packages/core/src/adapters/bun/serve.ts": "export const s = Bun.serve\n",
-			"packages/core/src/ws/cloudflare.ts": "export const p = new WebSocketPair()\n",
+			"packages/core/src/ws/workers.ts": "export const p = new WebSocketPair()\n",
 			"packages/core/src/build/cli.ts": "export const argv = process.argv\n",
 			"packages/gen/src/cli.ts": "export const argv = process.argv\n",
 			"packages/core/src/routing/match.ts": "const o = { process: 1, Bun: 2 }\nexport const n = o.process + o.Bun\n",

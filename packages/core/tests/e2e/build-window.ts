@@ -6,7 +6,7 @@
  * judged on the median of its builds over the median of those references: both sides of the ratio from the same
  * minutes of the same runner. A reference timed once per target at the job's start and reused for every cell of that
  * target redded unchanged code twice in 6 CI runs at 5f2942e: 40965667478's runner slowed ~14% after its reference was
- * taken (surface×cloudflare built in 7,446 ms against its usual ~6,500, ratio 31.87 over 30.6), and 40969532154's
+ * taken (surface×workers built in 7,446 ms against its usual ~6,500, ratio 31.87 over 30.6), and 40969532154's
  * reference read fast (148-163 ms, other runs 164-247), lifting every cell of its targets (mcp×bun 16.54 over 16.35).
  * The reference keeps one untimed warm-up per target, its first build in the job (a cold one is ~1.36x a warm one).
  * The hang guard bounds the app builds only, not the references: a reference is honey-free, so it has no honey to hang.

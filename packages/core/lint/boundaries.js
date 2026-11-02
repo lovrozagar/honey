@@ -9,7 +9,7 @@ const NODE_BUILTINS = new Set(builtinModules)
 const RUNTIME_FILES = [
 	["node", /^(?:adapters\/node\/|ws\/node\.ts$)/],
 	["bun", /^(?:adapters\/bun\/|ws\/bun\.ts$)/],
-	["workers", /^(?:adapters\/workers\/|ws\/cloudflare\.ts$)/],
+	["workers", /^(?:adapters\/workers\/|ws\/workers\.ts$)/],
 	["build", /^build\//],
 ]
 

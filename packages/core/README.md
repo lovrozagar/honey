@@ -51,7 +51,7 @@ Node 22.12 or later, Bun 1.3 or later, or Cloudflare Workers. A schema library i
 through [Standard Schema](https://standardschema.dev), so Zod, Valibot, ArkType, Effect Schema and Yup all work. The
 examples here use Zod.
 
-`honey init` writes `src/app.ts`, `src/server.ts` and a Vite config; `honey init --cf` adds a Worker entry and a
+`honey init` writes `src/app.ts`, `src/server.ts` and a Vite config; `honey init --workers` adds a Worker entry and a
 `wrangler.jsonc`.
 
 ## A route, end to end
@@ -658,13 +658,13 @@ setInterval(() => prices.publish("ticker", { eur: 1.08, at: Date.now() }), 1000)
 ```ts
 import { createWsSession } from "@lovrozagar/honey/ws/session"
 import { bunWebSocket } from "@lovrozagar/honey/ws/bun"
-import { cfWebSocket } from "@lovrozagar/honey/ws/cloudflare"
+import { workersWebSocket } from "@lovrozagar/honey/ws/workers"
 import { nodeWebSocket } from "@lovrozagar/honey/ws/node"
 import { honey } from "@lovrozagar/honey"
 
 /* each runtime's adapter; serve() sets the first two, a Worker entry the third */
-const adapters = [bunWebSocket(), nodeWebSocket(), cfWebSocket()]
-const app = honey().wsAdapter(cfWebSocket())
+const adapters = [bunWebSocket(), nodeWebSocket(), workersWebSocket()]
+const app = honey().wsAdapter(workersWebSocket())
 
 /* the ordered lane a custom adapter drives: open, then messages, then close */
 const session = createWsSession({
@@ -1148,7 +1148,7 @@ import { createBuildPlugin } from "@lovrozagar/honey/build"
 import { defineConfig } from "vite"
 
 export default defineConfig({
-	plugins: [createBuildPlugin({ target: "cloudflare", minify: true }, { entry: "src/app.ts", export: "app" })],
+	plugins: [createBuildPlugin({ target: "workers", minify: true }, { entry: "src/app.ts", export: "app" })],
 })
 ```
 
@@ -1159,7 +1159,7 @@ honey generate                       # reads vite.config.* and the honey() plugi
 honey generate --app src/app.ts --tree --types --manifest
 honey generate --config vite.config.ts --plugin 0 --watch
 honey generate --merge-tree src/_gen/routes.gen.ts   # a gateway's merged tree
-honey init --cf --force
+honey init --workers --force
 ```
 
 | Flag                  | What it does                                                               |
@@ -1241,7 +1241,7 @@ generator.
 | `@lovrozagar/honey/ws`              | `ws(app, path)`, a WebSocket route                                                                                                      |
 | `@lovrozagar/honey/ws/bun`          | `bunWebSocket`                                                                                                                          |
 | `@lovrozagar/honey/ws/node`         | `nodeWebSocket` (with the optional `ws` peer)                                                                                           |
-| `@lovrozagar/honey/ws/cloudflare`   | `cfWebSocket`                                                                                                                           |
+| `@lovrozagar/honey/ws/workers`      | `workersWebSocket`                                                                                                                      |
 | `@lovrozagar/honey/ws/session`      | `createWsSession`: the session runtime a custom WebSocket adapter builds on                                                             |
 | `@lovrozagar/honey/realtime`        | `realtime(app, path, options)`: a resumable connection over WebSocket, SSE and long-poll                                                |
 | `@lovrozagar/honey/mcp`             | `mcp(app, path, handler, options?)`: the app's tools over MCP's Streamable HTTP, the handler `codegen.mcp` writes                       |

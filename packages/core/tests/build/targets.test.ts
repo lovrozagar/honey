@@ -20,7 +20,7 @@ const WRANGLER = resolve(CORE, "../../node_modules/.bin/wrangler")
  * Each leg serves on a port below the OS's ephemeral range, checked free when the suite starts, the three distinct: a
  * port inside the range can be drawn as an outgoing connection's source port before the leg's server binds it.
  */
-const PORTS: Record<BuildTarget, number> = { bun: 0, cloudflare: 0, node: 0 }
+const PORTS: Record<BuildTarget, number> = { bun: 0, workers: 0, node: 0 }
 
 /* the first ephemeral port (Linux's ip_local_port_range; macOS's range starts higher still) */
 function ephemeralFloor(): number {
@@ -169,10 +169,10 @@ const SERVED = [200, "ok", "3.1.0", "Build Fixture", true]
 
 describe.sequential("the build plugin's bundles, served (bit 19 h2)", () => {
 	// v0: e6b3d639a5
-	it("cloudflare: vite build then wrangler/workerd serves health + openapi", async (ctx) => {
+	it("workers: vite build then wrangler/workerd serves health + openapi", async (ctx) => {
 		/* reported as skipped, never as passed: a missing toolchain must not read as a green run */
 		if (!existsSync(WRANGLER)) ctx.skip("wrangler is not installed")
-		const outDir = await viteBuild("cloudflare")
+		const outDir = await viteBuild("workers")
 		const wrangler = {
 			compatibility_date: "2026-01-20",
 			compatibility_flags: ["nodejs_compat"],
@@ -180,7 +180,7 @@ describe.sequential("the build plugin's bundles, served (bit 19 h2)", () => {
 			name: "honey-build-fixture",
 		}
 		writeFileSync(resolve(outDir, "wrangler.jsonc"), `${JSON.stringify(wrangler, null, 2)}\n`)
-		const port = String(PORTS.cloudflare)
+		const port = String(PORTS.workers)
 		const args = ["dev", "--ip", "127.0.0.1", "--port", port, "--inspector-port", "0", "--log-level", "error"]
 		const child = start(WRANGLER, args, { cwd: outDir })
 		await healthy(`http://127.0.0.1:${port}`, child, 25_000)
@@ -188,10 +188,10 @@ describe.sequential("the build plugin's bundles, served (bit 19 h2)", () => {
 	}, 90_000)
 
 	it(
-		"cloudflare: the Worker exports the entry's Durable Object class, which workerd then serves (bit 21 h)",
+		"workers: the Worker exports the entry's Durable Object class, which workerd then serves (bit 21 h)",
 		async (ctx) => {
 			if (!existsSync(WRANGLER)) ctx.skip("wrangler is not installed")
-			const outDir = await viteBuild("cloudflare", "tests/build/fixture/worker-object.ts", "cloudflare-object")
+			const outDir = await viteBuild("workers", "tests/build/fixture/worker-object.ts", "cloudflare-object")
 			const exported = /export\s*\{[^}]*\bCounter\b[^}]*\}/.test(readFileSync(resolve(outDir, "index.js"), "utf8"))
 			expect(exported).toBe(true)
 			const wrangler = {
@@ -202,7 +202,7 @@ describe.sequential("the build plugin's bundles, served (bit 19 h2)", () => {
 				name: "honey-build-object-fixture",
 			}
 			writeFileSync(resolve(outDir, "wrangler.jsonc"), `${JSON.stringify(wrangler, null, 2)}\n`)
-			const port = String(PORTS.cloudflare)
+			const port = String(PORTS.workers)
 			const args = ["dev", "--ip", "127.0.0.1", "--port", port, "--inspector-port", "0", "--log-level", "error"]
 			const persist = ["--persist-to", resolve(outDir, "state")]
 			const child = start(WRANGLER, [...args, ...persist], { cwd: outDir })
@@ -217,11 +217,11 @@ describe.sequential("the build plugin's bundles, served (bit 19 h2)", () => {
 	)
 
 	it(
-		"cloudflare: an entry's plain values (an object, a string, a function) leave the Worker serving (bit 21 h)",
+		"workers: an entry's plain values (an object, a string, a function) leave the Worker serving (bit 21 h)",
 		async (ctx) => {
 			if (!existsSync(WRANGLER)) ctx.skip("wrangler is not installed")
 			/* workerd refuses a module whose named export is no function or object: one string export stopped the Worker */
-			const outDir = await viteBuild("cloudflare", "tests/build/fixture/worker-values.ts", "cloudflare-values")
+			const outDir = await viteBuild("workers", "tests/build/fixture/worker-values.ts", "cloudflare-values")
 			const wrangler = {
 				compatibility_date: "2026-01-20",
 				durable_objects: { bindings: [{ class_name: "Counter", name: "COUNTER" }] },
@@ -230,7 +230,7 @@ describe.sequential("the build plugin's bundles, served (bit 19 h2)", () => {
 				name: "honey-build-values-fixture",
 			}
 			writeFileSync(resolve(outDir, "wrangler.jsonc"), `${JSON.stringify(wrangler, null, 2)}\n`)
-			const port = String(PORTS.cloudflare)
+			const port = String(PORTS.workers)
 			const args = ["dev", "--ip", "127.0.0.1", "--port", port, "--inspector-port", "0", "--log-level", "error"]
 			start(WRANGLER, [...args, "--persist-to", resolve(outDir, "state")], { cwd: outDir })
 			const base = `http://127.0.0.1:${port}`

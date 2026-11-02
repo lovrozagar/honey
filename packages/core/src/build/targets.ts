@@ -8,8 +8,8 @@
  */
 import { builtinModules } from "node:module"
 
-/** The runtime a bundle is built for: `node` and `bun` bundles start a server, a `cloudflare` bundle is a Worker. */
-export type BuildTarget = "bun" | "cloudflare" | "node"
+/** The runtime a bundle is built for: `node` and `bun` bundles start a server, a `workers` bundle is a Worker. */
+export type BuildTarget = "bun" | "node" | "workers"
 
 /** Options for `createBuildPlugin`: the runtime to build for and how the bundle is written. */
 export type HoneyBuildConfig = {
@@ -178,14 +178,14 @@ async function passedOn(context: EntryContext, app: BuildApp): Promise<string[]>
 
 const TARGETS: Readonly<Record<BuildTarget, Target & { readonly named: boolean }>> = {
 	bun: { entry: serverEntry, named: false, noExternal: false, ssrTarget: "node" },
-	cloudflare: { entry: workerEntry, named: true, noExternal: true, ssrTarget: "webworker" },
+	workers: { entry: workerEntry, named: true, noExternal: true, ssrTarget: "webworker" },
 	node: { entry: serverEntry, named: false, noExternal: false, ssrTarget: "node" },
 }
 
 /** The Vite plugin that builds `app` for `config.target`: `vite build` with it emits `<outDir>/index.js`. */
 export function createBuildPlugin(config: HoneyBuildConfig, app: BuildApp): HoneyBuildPlugin {
 	if (!Object.hasOwn(TARGETS, config.target)) {
-		throw new Error(`honey build: unknown target "${config.target}"; expected node, bun or cloudflare`)
+		throw new Error(`honey build: unknown target "${config.target}"; expected node, bun or workers`)
 	}
 	const target = TARGETS[config.target]
 	return {

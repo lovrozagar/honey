@@ -1,7 +1,7 @@
 /**
  * `honey init` (bit 19 h1, ported from v0's unit/plugin/cli-init.test.ts onto runInit; the CLI's exit codes are h2's):
  * the app, server, Vite config and package.json written; an existing app refused without --force and overwritten with
- * it; --cf (and --cloudflare) adding the Worker; an existing package.json's scripts and type kept and reported; the
+ * it; --workers adding the Worker; an existing package.json's scripts and type kept and reported; the
  * scaffolded app serving /health, its document and its docs on v1's own source.
  */
 import { execFile } from "node:child_process"
@@ -91,12 +91,12 @@ describe("honey init", () => {
 	})
 
 	// v0: 2bf1aba4cd
-	it("--cf writes wrangler.jsonc and a worker that exports fetch", () => {
-		init(["--cf"])
+	it("--workers writes wrangler.jsonc and a worker that exports fetch", () => {
+		init(["--workers"])
 		const worker = read("src/worker.ts")
 		expect([
 			read("wrangler.jsonc").includes('"main": "src/worker.ts"'),
-			["cfWebSocket", "export default", "app.fetch"].every((part) => worker.includes(part)),
+			["workersWebSocket", "export default", "app.fetch"].every((part) => worker.includes(part)),
 		]).toEqual([true, true])
 	})
 })
@@ -154,9 +154,7 @@ describe("honey init and an existing package.json", () => {
 	})
 
 	// v0: f384f4046d
-	it("--cloudflare is an alias of --cf; unknown flags fail", () => {
-		init(["--cloudflare"])
-		expect(existsSync(join(dir, "wrangler.jsonc"))).toBe(true)
+	it("unknown flags fail", () => {
 		expect(() => parseInitFlags(["--forse"])).toThrow("unknown option --forse")
 	})
 })

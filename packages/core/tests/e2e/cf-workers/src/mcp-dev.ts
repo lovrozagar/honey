@@ -4,12 +4,12 @@
  * wrangler.jsonc deploys as honey-cf-e2e, carries no Durable Object.
  */
 import { createApp } from "@honey/e2e-mcp"
-import { cfWebSocket } from "@lovrozagar/honey/ws/cloudflare"
-import { workerUploadStore } from "../../apps/mcp/src/uploads-store.cloudflare.ts"
+import { workersWebSocket } from "@lovrozagar/honey/ws/workers"
+import { workerUploadStore } from "../../apps/mcp/src/uploads-store.workers.ts"
 
 export { McpUploads } from "../../apps/mcp/src/uploads-object.ts"
 
-const app = createApp(cfWebSocket(), { uploadStore: workerUploadStore() })
+const app = createApp(workersWebSocket(), { uploadStore: workerUploadStore() })
 
 export default {
 	fetch(request: Request, env: Record<string, unknown>, ctx: ExecutionContext) {

@@ -19,7 +19,7 @@ export type RequestLogEntry = {
 	readonly requestId?: string
 	/** the route that served it; empty for a request no route served */
 	readonly routeId: string
-	/** The runtime the app is running on, `bun`, `cloudflare`, `node`, or `unknown`. */
+	/** The runtime the app is running on, `bun`, `node`, `workers`, or `unknown`. */
 	readonly runtime: string
 	/** the status sent, or "aborted" when the client left before the body ended */
 	readonly status: number | "aborted"

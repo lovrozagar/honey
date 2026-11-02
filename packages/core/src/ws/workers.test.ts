@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { cfWebSocket } from "./cloudflare.ts"
+import { workersWebSocket } from "./workers.ts"
 import type { WSHandler } from "./contract.ts"
 
 /** One side of a Workers WebSocketPair: events in, sends and closes recorded. */
@@ -64,12 +64,12 @@ afterEach(() => {
 	vi.unstubAllGlobals()
 })
 
-describe("cfWebSocket: the upgrade", () => {
+describe("workersWebSocket: the upgrade", () => {
 	// v0: cc33c57bd8
 	it("accepts the server side, opens the handler, and answers 101 carrying the client side", async () => {
 		const pairs = workers()
 		const { handler, seen } = recordingHandler()
-		const { response, socket } = await cfWebSocket().upgrade(request(), {}, handler)
+		const { response, socket } = await workersWebSocket().upgrade(request(), {}, handler)
 		await settle()
 		const pair = pairs[0] as { client: PairSocket; server: PairSocket }
 		expect([
@@ -85,7 +85,7 @@ describe("cfWebSocket: the upgrade", () => {
 	// v0: 485d1a3bc6
 	it("answers with the subprotocol chosen from the offered ones, and none when nothing was offered", async () => {
 		workers()
-		const adapter = cfWebSocket({ protocol: (offered) => offered.at(-1) })
+		const adapter = workersWebSocket({ protocol: (offered) => offered.at(-1) })
 		const [chosen, none] = await Promise.all([
 			adapter.upgrade(request("a, b"), {}, {}),
 			adapter.upgrade(request(), {}, {}),
@@ -97,12 +97,12 @@ describe("cfWebSocket: the upgrade", () => {
 	})
 })
 
-describe("cfWebSocket: events from the runtime", () => {
+describe("workersWebSocket: events from the runtime", () => {
 	// v0: 0d0e5e9658
 	it("message, error and close reach the handler; the close is echoed so the client's handshake completes", async () => {
 		const pairs = workers()
 		const { handler, seen } = recordingHandler()
-		await cfWebSocket().upgrade(request(), {}, handler)
+		await workersWebSocket().upgrade(request(), {}, handler)
 		const server = (pairs[0] as { server: PairSocket }).server
 		server.dispatchEvent(Object.assign(new Event("message"), { data: "hi" }))
 		server.dispatchEvent(new Event("error"))
@@ -117,7 +117,7 @@ describe("cfWebSocket: events from the runtime", () => {
 	// v0: b4ea2b7621
 	it("echoes a close code that can never be sent (1005, 1006) as 1000, and survives a socket already closed", async () => {
 		const pairs = workers()
-		await cfWebSocket().upgrade(request(), {}, {})
+		await workersWebSocket().upgrade(request(), {}, {})
 		const server = (pairs[0] as { server: PairSocket }).server
 		server.dispatchEvent(Object.assign(new Event("close"), { code: 1005, reason: "" }))
 		server.close = () => {
@@ -131,7 +131,7 @@ describe("cfWebSocket: events from the runtime", () => {
 	it("closes 1009 on a message over maxPayload, and the handler never sees it", async () => {
 		const pairs = workers()
 		const { handler, seen } = recordingHandler()
-		await cfWebSocket({ maxPayload: 4 }).upgrade(request(), {}, handler)
+		await workersWebSocket({ maxPayload: 4 }).upgrade(request(), {}, handler)
 		const server = (pairs[0] as { server: PairSocket }).server
 		server.dispatchEvent(Object.assign(new Event("message"), { data: "12345" }))
 		await settle()
@@ -139,7 +139,7 @@ describe("cfWebSocket: events from the runtime", () => {
 	})
 
 	it("validates its options when created", () => {
-		expect(() => cfWebSocket({ maxPayload: 0 })).toThrow("maxPayload must be positive")
-		expect(cfWebSocket().options?.maxPayload).toBe(1024 * 1024)
+		expect(() => workersWebSocket({ maxPayload: 0 })).toThrow("maxPayload must be positive")
+		expect(workersWebSocket().options?.maxPayload).toBe(1024 * 1024)
 	})
 })

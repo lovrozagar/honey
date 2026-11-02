@@ -36,7 +36,7 @@ export default defineConfig({
  * which exports the object class itself: honey's build passes the entry's named exports on).
  */
 function webServer() {
-	const bundle = `../apps/${app}/dist/cloudflare/index.js`
+	const bundle = `../apps/${app}/dist/workers/index.js`
 	const web = WEB_ONLY.has(app)
 	/* dev: honey-source first, then wrangler's defaults; prod: nothing resolves, the bundle is already built */
 	const env: Record<string, string> = isDev

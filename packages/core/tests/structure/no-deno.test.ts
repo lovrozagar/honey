@@ -51,7 +51,7 @@ describe("Deno is gone (H15)", () => {
 	})
 })
 
-describe("node, bun and cloudflare detection still resolves", () => {
+describe("node, bun and workers detection still resolves", () => {
 	it("detects node from process.versions", () => {
 		expect(detectRuntime({ process: { versions: { node: "22.0.0" } } })).toBe("node")
 	})
@@ -60,8 +60,8 @@ describe("node, bun and cloudflare detection still resolves", () => {
 		expect(detectRuntime({ Bun: {} })).toBe("bun")
 	})
 
-	it("detects cloudflare from the workers user agent", () => {
-		expect(detectRuntime({ navigator: { userAgent: "Cloudflare-Workers" } })).toBe("cloudflare")
+	it("detects workers from the workers user agent", () => {
+		expect(detectRuntime({ navigator: { userAgent: "Cloudflare-Workers" } })).toBe("workers")
 	})
 
 	it("a Deno global no longer selects a runtime", () => {

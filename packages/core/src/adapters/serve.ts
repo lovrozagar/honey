@@ -66,7 +66,7 @@ function urlOf(hostname: string, port: number): string {
  */
 export async function serve<TEnv>(app: FetchApp<TEnv>, options: ServeOptions<TEnv> = {}): Promise<ServeHandle> {
 	const runtime = detectRuntime()
-	if (runtime === "cloudflare") {
+	if (runtime === "workers") {
 		throw new Error("serve() does not run on Cloudflare Workers: export the app instead (`export default app`)")
 	}
 	const settings = {

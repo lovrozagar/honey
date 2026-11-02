@@ -118,7 +118,7 @@ function outcomesOf(report: { suites?: Suite[] }): Outcomes {
 /* the deploy target each env's prod bundle is built for, and the runtime that builds it (cf builds on bun) */
 const PROD_BUILD: Record<EnvName, { runtime: "bun" | "node"; target: string }> = {
 	bun: { runtime: "bun", target: "bun" },
-	cf: { runtime: "bun", target: "cloudflare" },
+	cf: { runtime: "bun", target: "workers" },
 	node: { runtime: "node", target: "node" },
 }
 

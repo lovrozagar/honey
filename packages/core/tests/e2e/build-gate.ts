@@ -20,7 +20,7 @@ import type { RuntimeId } from "./builds.ts"
 /**
  * One build's hang guard, in ms, per runtime that runs `vite build`. Bit 19 j2's method (worst local median x CI's
  * factor over this machine x the runtime's spread) with the factor of CI's SLOW runner class, 3.9 (surface x
- * cloudflare: 1.42 s here, 5.5 s in CI run 40754723329), not j2's 1.91 (one fast-class run):
+ * workers: 1.42 s here, 5.5 s in CI run 40754723329), not j2's 1.91 (one fast-class run):
  * - bun 1.3.11: worst median 1.44 s (surface x cloudflare) x 3.9 x 1.33 = 7.5 s -> 8 s.
  * - Node: worst median 2.47 s (surface x bun on Node 22; 2.18 s on 26.12.1; 3 builds of every cell under the heavy
  *   lock) x 3.9 x 1.28 (surface x cloudflare's cold first build over its median, 2771/2168 ms on Node 26.12.1) =
@@ -32,8 +32,8 @@ export const HANG_GUARD_MS: Record<RuntimeId, number> = { bun: 8_000, node: 13_0
 
 /**
  * App builds per cell, judged on their median: one build is one sample against a median of references, so one
- * slow build read as a regression. CI run 40877110861's build (bun) job built defaults×cloudflare once in 2,949 ms
- * (ratio 21.21, over its 20.98 ceiling) where compose×cloudflare and gateway×cloudflare, which track it within a few %,
+ * slow build read as a regression. CI run 40877110861's build (bun) job built defaults×workers once in 2,949 ms
+ * (ratio 21.21, over its 20.98 ceiling) where compose×workers and gateway×workers, which track it within a few %,
  * took 2,472 and 2,501, and its own ×bun and ×node cells read 17.55 and 16.39. Three builds pass one such spike and
  * fail two; the cost is two more builds a cell, about +95 s a build job on CI.
  */
@@ -300,7 +300,7 @@ const within = (value: number, range: readonly number[]) => value >= Math.min(..
  * and each group weighs alike in a centre, so a shift stays visible when the groups' class mixes differ (a centre
  * over all samples sits on whichever group has more of that class and hides it). Simulated on the record runs'
  * class layouts with 4% noise (cfb shift-cause.md), shifted with no shift / caught at +10%: Bun ×bun 3% / 98%,
- * ×cloudflare 6% / 99%, a mix of fast 2 slow 8 against fast 8 slow 2 8% / 97%. Judged class by class instead,
+ * ×workers 6% / 99%, a mix of fast 2 slow 8 against fast 8 slow 2 8% / 97%. Judged class by class instead,
  * Bun's 1-4 samples a class gave ranges too narrow to hold one distribution: 56%, 79% and 80% shifted with no shift.
  * A Node job's class is `unclassified`, one class, so Node compares its plain ratios. Groups with no class in common
  * cannot be shown to agree.

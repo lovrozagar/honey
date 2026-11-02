@@ -1,5 +1,5 @@
 /**
- * `honey init`: a new project's app, server and Vite config, and with `--cf` a Worker and its wrangler.jsonc. An
+ * `honey init`: a new project's app, server and Vite config, and with `--workers` a Worker and its wrangler.jsonc. An
  * existing file is refused unless `--force`; an existing package.json keeps its own scripts and `type` unless
  * `--force`, each kept value reported. Lines go to `out` (the CLI's stdout): core prints only through it.
  */
@@ -44,10 +44,10 @@ export default {
 }
 `
 
-const WORKER_TS = `import { cfWebSocket } from "@lovrozagar/honey/ws/cloudflare"
+const WORKER_TS = `import { workersWebSocket } from "@lovrozagar/honey/ws/workers"
 import { app } from "./app.ts"
 
-app.wsAdapter(cfWebSocket())
+app.wsAdapter(workersWebSocket())
 
 export default {
 	fetch: (...args: Parameters<typeof app.fetch>) => app.fetch(...args),
@@ -66,7 +66,7 @@ export function runInit(cwd: string, flags: InitFlags, out: (line: string) => vo
 		"src/server.ts": SERVER_TS,
 		"vite.config.ts": VITE_CONFIG_TS,
 	}
-	if (flags.cf) {
+	if (flags.workers) {
 		files["src/worker.ts"] = WORKER_TS
 		files["wrangler.jsonc"] = wranglerJsonc(packageNameOf(cwd))
 	}

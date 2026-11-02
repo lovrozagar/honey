@@ -7,7 +7,7 @@
 				"catches": "+20%",
 				"ceiling": 1.345
 			},
-			"compose×cloudflare": {
+			"compose×workers": {
 				"baseline": 1.16,
 				"byClass": {},
 				"catches": "+22%",
@@ -25,7 +25,7 @@
 				"catches": "+22%",
 				"ceiling": 1.304
 			},
-			"defaults×cloudflare": {
+			"defaults×workers": {
 				"baseline": 1.11,
 				"byClass": {},
 				"catches": "+24%",
@@ -43,7 +43,7 @@
 				"catches": "+23%",
 				"ceiling": 1.354
 			},
-			"gateway×cloudflare": {
+			"gateway×workers": {
 				"baseline": 1.135,
 				"byClass": {},
 				"catches": "+22%",
@@ -61,7 +61,7 @@
 				"catches": "+21%",
 				"ceiling": 1.36
 			},
-			"kitchen×cloudflare": {
+			"kitchen×workers": {
 				"baseline": 1.16,
 				"byClass": {},
 				"catches": "+20%",
@@ -79,7 +79,7 @@
 				"catches": "+15%",
 				"ceiling": 0.253
 			},
-			"mcp×cloudflare": {
+			"mcp×workers": {
 				"baseline": 0.23,
 				"byClass": {},
 				"catches": "+15%",
@@ -97,7 +97,7 @@
 				"catches": "+19%",
 				"ceiling": 1.446
 			},
-			"surface×cloudflare": {
+			"surface×workers": {
 				"baseline": 1.245,
 				"byClass": {},
 				"catches": "+22%",
@@ -117,7 +117,7 @@
 				"catches": "+29%",
 				"ceiling": 2.309
 			},
-			"compose×cloudflare": {
+			"compose×workers": {
 				"baseline": 1.795,
 				"byClass": {},
 				"catches": "+32%",
@@ -135,7 +135,7 @@
 				"catches": "+31%",
 				"ceiling": 2.339
 			},
-			"defaults×cloudflare": {
+			"defaults×workers": {
 				"baseline": 1.795,
 				"byClass": {},
 				"catches": "+32%",
@@ -153,7 +153,7 @@
 				"catches": "+31%",
 				"ceiling": 2.388
 			},
-			"gateway×cloudflare": {
+			"gateway×workers": {
 				"baseline": 1.815,
 				"byClass": {},
 				"catches": "+35%",
@@ -171,7 +171,7 @@
 				"catches": "+37%",
 				"ceiling": 2.556
 			},
-			"kitchen×cloudflare": {
+			"kitchen×workers": {
 				"baseline": 1.9,
 				"byClass": {},
 				"catches": "+40%",
@@ -189,7 +189,7 @@
 				"catches": "+46%",
 				"ceiling": 1.447
 			},
-			"mcp×cloudflare": {
+			"mcp×workers": {
 				"baseline": 1.005,
 				"byClass": {},
 				"catches": "+42%",
@@ -207,7 +207,7 @@
 				"catches": "+41%",
 				"ceiling": 2.7
 			},
-			"surface×cloudflare": {
+			"surface×workers": {
 				"baseline": 1.905,
 				"byClass": {},
 				"catches": "+40%",

@@ -861,6 +861,19 @@ serveOpenApi(app, { title: "Shop", version: "1.0.0", docs: scalar })
 
 Swagger UI is `import { swagger } from "@lovrozagar/honey/openapi/swagger"`, then `docs: swagger`.
 
+## Names that said `cloudflare` say `workers`
+
+The runtime is named for the product. Nothing else changed.
+
+| 0.7                                           | 1.0                                        |
+| --------------------------------------------- | ------------------------------------------ |
+| `@lovrozagar/honey/ws/cloudflare`             | `@lovrozagar/honey/ws/workers`             |
+| `cfWebSocket()`                               | `workersWebSocket()`                       |
+| `createBuildPlugin({ target: "cloudflare" })` | `createBuildPlugin({ target: "workers" })` |
+| `detectRuntime()` answering `"cloudflare"`    | `detectRuntime()` answering `"workers"`    |
+| `honey init --cf`, `honey init --cloudflare`  | `honey init --workers`                     |
+| `runtime: "cloudflare"` in the request log    | `runtime: "workers"`                       |
+
 ## `app.ws(path)` becomes `ws(app, path)`
 
 `import { ws } from "@lovrozagar/honey/ws"`, the same shape as `realtime(app, path)`. It takes any handle `.ws()` was

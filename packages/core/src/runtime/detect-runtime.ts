@@ -1,5 +1,5 @@
 /** The runtimes honey serves on. Cloudflare Workers is detected so `serve()` can say to export the app instead. */
-export type ServeRuntime = "bun" | "cloudflare" | "node"
+export type ServeRuntime = "bun" | "node" | "workers"
 
 /** The slice of the global object `detectRuntime` inspects. */
 type RuntimeGlobals = {
@@ -24,7 +24,7 @@ type RuntimeGlobals = {
 export function detectRuntime(g: RuntimeGlobals = globalThis): ServeRuntime {
 	if (g.Bun !== undefined) return "bun"
 	const agent = g.navigator?.userAgent ?? ""
-	if (agent.startsWith("Cloudflare-Workers") || agent.startsWith("workerd")) return "cloudflare"
+	if (agent.startsWith("Cloudflare-Workers") || agent.startsWith("workerd")) return "workers"
 	if (g.process?.versions?.node !== undefined) return "node"
 	throw new Error("serve() could not detect the runtime: expected Bun, Node, or Cloudflare Workers")
 }

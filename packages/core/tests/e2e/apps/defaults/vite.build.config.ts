@@ -3,7 +3,7 @@ import { defaultClientConditions, defaultServerConditions } from "vite"
 import base from "./vite.config.ts"
 
 /** Deploy target, set by packages/core/tests/e2e/run-build.ts. Defaults to node for a bare `vite build`. */
-const target = (process.env.HONEY_BUILD_TARGET ?? "node") as "bun" | "cloudflare" | "node"
+const target = (process.env.HONEY_BUILD_TARGET ?? "node") as "bun" | "workers" | "node"
 
 /* the app's own config supplies honey() codegen — the build goes through the real path */
 export default {

@@ -6,7 +6,7 @@
  */
 
 export const USAGE = `usage: honey generate [options]
-       honey init [--cf] [--force]
+       honey init [--workers] [--force]
 
 generate options:
   --config <path>      the Vite config holding honey() (default: vite.config.{ts,mts,js,mjs})
@@ -94,14 +94,14 @@ export function parseGenerateArgs(argv: readonly string[]): CliFlags {
 	return flags as CliFlags
 }
 
-/** `honey init`'s flags: `--cloudflare` is `--cf`. */
-export type InitFlags = { cf: boolean; force: boolean }
+/** `honey init`'s flags. */
+export type InitFlags = { force: boolean; workers: boolean }
 
 /** `argv` after `init` as its flags, or a usage error. */
 export function parseInitFlags(argv: readonly string[]): InitFlags {
-	const flags: InitFlags = { cf: false, force: false }
+	const flags: InitFlags = { force: false, workers: false }
 	for (const arg of argv) {
-		if (arg === "--cf" || arg === "--cloudflare") flags.cf = true
+		if (arg === "--workers") flags.workers = true
 		else if (arg === "--force") flags.force = true
 		else if (arg.startsWith("-")) throw new UsageError(`unknown option ${arg}`)
 		else throw new UsageError(`unexpected argument ${JSON.stringify(arg)}`)

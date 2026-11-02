@@ -1,7 +1,7 @@
 /**
  * No process of a Bun build replaces `Error.prepareStackTrace` (bit 20 k-fix's class, fixture/stack-hook-trap.ts says
  * why it reds a build). One real cold `vite build` of the defaults e2e app for Cloudflare, the command run-build.ts's
- * defaults×cloudflare cell runs, with the trap preloaded into Vite and the honey generate child the plugin starts. Its
+ * defaults×workers cell runs, with the trap preloaded into Vite and the honey generate child the plugin starts. Its
  * TMPDIR (Node's compile cache, any jiti cache) and Bun's transpiler cache are new and empty; Vite writes the bundled
  * config anew per build under a unique name. Defaults is the smallest app whose build reaches both processes.
  *
@@ -19,8 +19,8 @@ import { SPAWN_TIMEOUT } from "../fixture/spawn-timeout.ts"
 
 const TRAP = join(import.meta.dirname, "fixture", "stack-hook-trap.ts")
 function defaultsCell(): BuildSpec {
-	const found = BUILD_SPECS.find((candidate) => candidate.id === "defaults×cloudflare")
-	if (found === undefined) throw new Error("builds.ts has no defaults×cloudflare cell")
+	const found = BUILD_SPECS.find((candidate) => candidate.id === "defaults×workers")
+	if (found === undefined) throw new Error("builds.ts has no defaults×workers cell")
 	return found
 }
 const spec = defaultsCell()
@@ -53,7 +53,7 @@ function coldBuild(bun: string, version: string) {
 			...process.env,
 			BUN_OPTIONS: `--conditions=honey-source --preload ${TRAP}`,
 			BUN_RUNTIME_TRANSPILER_CACHE_PATH: join(dir, "transpiler"),
-			HONEY_BUILD_TARGET: "cloudflare",
+			HONEY_BUILD_TARGET: "workers",
 			HONEY_STACK_HOOK_LOG: log,
 			NODE_ENV: "production",
 			NODE_OPTIONS: "--conditions=honey-source",

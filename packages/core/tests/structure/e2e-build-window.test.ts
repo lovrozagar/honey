@@ -12,17 +12,17 @@ import { REFERENCE_WORK } from "../e2e/reference/vite.config.ts"
 /* node 22's ceilings at 5f2942e (blueprint/baselines/build.json), the ones both jobs were judged against */
 const CEILINGS: Record<string, [baseline: number, ceiling: number]> = {
 	"compose×bun": [25.52, 28.97],
-	"compose×cloudflare": [25.66, 28.74],
+	"compose×workers": [25.66, 28.74],
 	"defaults×bun": [25.27, 29.05],
-	"defaults×cloudflare": [25.2, 28.41],
+	"defaults×workers": [25.2, 28.41],
 	"gateway×bun": [26.23, 29.44],
-	"gateway×cloudflare": [25.84, 29.02],
+	"gateway×workers": [25.84, 29.02],
 	"kitchen×bun": [26.62, 30.84],
-	"kitchen×cloudflare": [26.46, 29.82],
+	"kitchen×workers": [26.46, 29.82],
 	"mcp×bun": [14.2, 16.35],
-	"mcp×cloudflare": [14.22, 16.7],
+	"mcp×workers": [14.22, 16.7],
 	"surface×bun": [27.31, 31.47],
-	"surface×cloudflare": [26.95, 30.6],
+	"surface×workers": [26.95, 30.6],
 }
 const APPS = ["compose", "defaults", "gateway", "kitchen", "mcp", "surface"] as const
 
@@ -81,11 +81,11 @@ async function redCells(runner: ReturnType<typeof fakeRunner>, target: string, m
 }
 
 /*
- * 40965667478's build (node) ×cloudflare cells: each build's median there, surface×cloudflare's at its other runs'
+ * 40965667478's build (node) ×workers cells: each build's median there, surface×workers's at its other runs'
  * ~6,500 ms (6,501, 6,479, 6,587), and the reference at those runs' 230 ms
  */
 const SLOWED = { compose: 6_041, defaults: 6_015, gateway: 6_148, kitchen: 6_364, mcp: 3_454, surface: 6_500 }
-/* the runner turns 14% slower when surface×cloudflare starts on today's order: 7,446 / 6,500 = 1.146 in that job */
+/* the runner turns 14% slower when surface×workers starts on today's order: 7,446 / 6,500 = 1.146 in that job */
 const SLOW_AT = 6 * 230 + 3 * (6_041 + 6_015 + 6_148 + 6_364 + 3_454)
 
 /* 40969532154's build (node) ×bun cells, and the reference at the other runs' low end, 164 ms (that job read 149) */
@@ -116,9 +116,9 @@ describe("the e2e build gate's reference window", () => {
 		expect(runner.order.join("")).toBe("RRBRBRBRRBRBRBR")
 	})
 
-	it("passes a runner slowing 14% partway through the job (CI 40965667478, surface×cloudflare red at 31.87)", async () => {
+	it("passes a runner slowing 14% partway through the job (CI 40965667478, surface×workers red at 31.87)", async () => {
 		const runner = fakeRunner({ referenceMs: 230, speed: (now) => (now >= SLOW_AT ? 1.14 : 1) })
-		expect(await redCells(runner, "cloudflare", SLOWED)).toEqual([])
+		expect(await redCells(runner, "workers", SLOWED)).toEqual([])
 	})
 
 	it("passes a reference that reads 10% fast once (CI 40969532154, mcp×bun red at 16.54)", async () => {

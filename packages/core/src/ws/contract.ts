@@ -52,7 +52,7 @@ export type WSHandler<TCtx = unknown> = {
 
 /**
  * What a runtime adapter provides: it upgrades a request to a WebSocket and wires the socket to a handler. Use
- * `nodeWebSocket()`, `bunWebSocket()` or `cfWebSocket()`.
+ * `nodeWebSocket()`, `bunWebSocket()` or `workersWebSocket()`.
  */
 export type WSAdapter = {
 	/**

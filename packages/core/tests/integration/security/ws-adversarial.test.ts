@@ -25,9 +25,9 @@ const { honey } = (await import(
 const { WSContextImpl } = (await import(
 	resolvePath(REPO, "packages/core/src/ws/contract.ts")
 )) as typeof import("../../../src/ws/contract.ts")
-const { cfWebSocket } = (await import(
-	resolvePath(REPO, "packages/core/src/ws/cloudflare.ts")
-)) as typeof import("../../../src/ws/cloudflare.ts")
+const { workersWebSocket } = (await import(
+	resolvePath(REPO, "packages/core/src/ws/workers.ts")
+)) as typeof import("../../../src/ws/workers.ts")
 const { ws } = (await import(
 	resolvePath(REPO, "packages/core/src/ws/route.ts")
 )) as typeof import("../../../src/ws/route.ts")
@@ -141,7 +141,7 @@ describe("v1 adversarial: an oversized frame", () => {
 		vi.stubGlobal("WebSocketPair", function WebSocketPair() {
 			return [new EventTarget(), server]
 		})
-		const app = honey<{}>().wsAdapter(cfWebSocket({ maxPayload: 1024 }))
+		const app = honey<{}>().wsAdapter(workersWebSocket({ maxPayload: 1024 }))
 		const seen: unknown[] = []
 		ws(app, "/live").handler({ onMessage: (_ctx, _ws, data) => void seen.push(data) })
 		await app.fetch(handshake("/live"), {})

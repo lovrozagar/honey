@@ -13,7 +13,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import { WebSocket as WsClient } from "ws"
 import { type HoneyServer, serve } from "../../src/adapters/node/serve.ts"
 import { honey } from "../../src/routing/app.ts"
-import { cfWebSocket } from "../../src/ws/cloudflare.ts"
+import { workersWebSocket } from "../../src/ws/workers.ts"
 import type { WSAdapter } from "../../src/ws/contract.ts"
 import { nodeWebSocket } from "../../src/ws/node.ts"
 import { ws } from "../../src/ws/route.ts"
@@ -183,7 +183,7 @@ class PairSocket extends EventTarget {
 	}
 }
 
-/** A scenario through cfWebSocket over a stubbed WebSocketPair, as Workers would run it. */
+/** A scenario through workersWebSocket over a stubbed WebSocketPair, as Workers would run it. */
 async function overWorkers(scenario: Scenario, expected: Outcome): Promise<Outcome> {
 	const serverSides: PairSocket[] = []
 	vi.stubGlobal("WebSocketPair", function WebSocketPair() {
@@ -191,7 +191,7 @@ async function overWorkers(scenario: Scenario, expected: Outcome): Promise<Outco
 		serverSides.push(server)
 		return [new PairSocket(), server]
 	})
-	const app = scenarioApp(honey, ws, cfWebSocket({ maxPayload: 1024 }))
+	const app = scenarioApp(honey, ws, workersWebSocket({ maxPayload: 1024 }))
 	const headers: Record<string, string> = { connection: "Upgrade", upgrade: "websocket", ...scenario.headers }
 	if (scenario.protocols) headers["sec-websocket-protocol"] = scenario.protocols.join(", ")
 	const res = await app.fetch(new Request(`https://app.example.com${scenario.path}`, { headers }), {})

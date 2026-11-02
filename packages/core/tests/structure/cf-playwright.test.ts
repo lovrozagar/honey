@@ -43,7 +43,7 @@ describe("the cf e2e host's Playwright config", () => {
 		const { use, webServer } = await configUnder({ TEST_MODE: "prod" })
 		expect([use?.baseURL, webServer?.command, webServer?.env]).toEqual([
 			"http://localhost:4102",
-			"bunx wrangler dev ../apps/kitchen/dist/cloudflare/index.js --config wrangler.jsonc --no-bundle --port 4102 --ip 0.0.0.0",
+			"bunx wrangler dev ../apps/kitchen/dist/workers/index.js --config wrangler.jsonc --no-bundle --port 4102 --ip 0.0.0.0",
 			{ PORT: "4102" },
 		])
 	})
@@ -55,7 +55,7 @@ describe("the cf e2e host's Playwright config", () => {
 		expect([dev?.command, dev?.env?.WRANGLER_BUILD_CONDITIONS, prod?.command, prod?.env]).toEqual([
 			"bunx wrangler dev --config wrangler.mcp.jsonc --port 4102 --ip 0.0.0.0",
 			"honey-source,workerd,worker,browser",
-			"bunx wrangler dev ../apps/mcp/dist/cloudflare/index.js --config wrangler.web.jsonc --no-bundle --port 4102 --ip 0.0.0.0",
+			"bunx wrangler dev ../apps/mcp/dist/workers/index.js --config wrangler.web.jsonc --no-bundle --port 4102 --ip 0.0.0.0",
 			{ PORT: "4102" },
 		])
 	})

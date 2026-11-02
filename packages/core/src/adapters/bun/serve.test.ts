@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import { createMiddleware } from "../../middleware/middleware.ts"
 import { honey } from "../../routing/app.ts"
 import { createLogger } from "../../telemetry/logger.ts"
-import { cfWebSocket } from "../../ws/cloudflare.ts"
+import { workersWebSocket } from "../../ws/workers.ts"
 import { bunWebSocket } from "../../ws/bun.ts"
 import { serve } from "./serve.ts"
 import { ws } from "../../ws/route.ts"
@@ -133,7 +133,7 @@ describe("serve on Bun: WebSockets", () => {
 		const own = bunWebSocket({ maxPayload: 10 })
 		serve(honey<{}>().wsAdapter(own), options)
 		expect(calls.options?.websocket).toBe(own.websocket)
-		expect(() => serve(honey<{}>().wsAdapter(cfWebSocket()), options)).toThrow(
+		expect(() => serve(honey<{}>().wsAdapter(workersWebSocket()), options)).toThrow(
 			"serve() on Bun needs a bunWebSocket() adapter, but app.wsAdapter() was given another",
 		)
 	})

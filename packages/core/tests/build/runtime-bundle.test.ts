@@ -262,10 +262,10 @@ describe("the runtime bundle of an installed core (bit 19 i)", () => {
 				'import { honey } from "@lovrozagar/honey"',
 				'import { serveOpenApi } from "@lovrozagar/honey/openapi"',
 				'import { realtime } from "@lovrozagar/honey/realtime"',
-				'import { cfWebSocket } from "@lovrozagar/honey/ws/cloudflare"',
+				'import { workersWebSocket } from "@lovrozagar/honey/ws/workers"',
 				"",
 				"export const app = serveOpenApi(",
-				'\thoney().wsAdapter(cfWebSocket()).get("/health").handler((ctx) => ctx.res.text("ok", "ok")),',
+				'\thoney().wsAdapter(workersWebSocket()).get("/health").handler((ctx) => ctx.res.text("ok", "ok")),',
 				'\t{ title: "Worker", version: "1.0.0" },',
 				")",
 				'realtime(app, "/live", { handler: () => {} })',
@@ -281,10 +281,7 @@ describe("the runtime bundle of an installed core (bit 19 i)", () => {
 			configFile: false,
 			logLevel: "error",
 			plugins: [
-				createBuildPlugin(
-					{ minify: false, outDir, target: "cloudflare" },
-					{ entry: "src/worker-app.ts", export: "app" },
-				),
+				createBuildPlugin({ minify: false, outDir, target: "workers" }, { entry: "src/worker-app.ts", export: "app" }),
 			],
 			root: full,
 		})

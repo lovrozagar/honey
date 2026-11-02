@@ -249,10 +249,10 @@
 			"types": "./dist/ws/bun.d.ts",
 			"default": "./dist/ws/bun.js"
 		},
-		"./ws/cloudflare": {
-			"honey-source": "./src/ws/cloudflare.ts",
-			"types": "./dist/ws/cloudflare.d.ts",
-			"default": "./dist/ws/cloudflare.js"
+		"./ws/workers": {
+			"honey-source": "./src/ws/workers.ts",
+			"types": "./dist/ws/workers.d.ts",
+			"default": "./dist/ws/workers.js"
 		},
 		"./ws/node": {
 			"honey-source": "./src/ws/node.ts",

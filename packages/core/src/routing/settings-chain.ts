@@ -158,7 +158,7 @@ export abstract class SettingsChain<TEnv> {
 	}
 
 	/**
-	 * The runtime's WebSocket adapter, which ws routes upgrade through: `cfWebSocket()` on
+	 * The runtime's WebSocket adapter, which ws routes upgrade through: `workersWebSocket()` on
 	 * Workers. `serve(app)` sets the runtime's own on Node and Bun when none is set; on Bun, set
 	 * it before `serve()`.
 	 */

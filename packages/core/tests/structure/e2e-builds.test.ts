@@ -11,7 +11,7 @@ import { BUILD_SPECS } from "../e2e/builds.ts"
 import { COMPLETE } from "./check-tree.ts"
 
 /*
- * surface×cloudflare on bun 1.3.11 on this machine, under the heavy lock (bit 21 cfb, cfb-cause.md): its honey
+ * surface×workers on bun 1.3.11 on this machine, under the heavy lock (bit 21 cfb, cfb-cause.md): its honey
  * generate child 1286 ms and its bundle 135 ms (medians of 9), the honey-free reference 96 ms (median of 30)
  */
 const LOCAL = { bundle: 135, generate: 1286, reference: 96 }
@@ -21,7 +21,7 @@ const PROFILES = { fast: 1.9, slow: 3.9 } as const
 const SPREADS = [1, 1.02, 1.16] as const
 
 const KEY = "bun 1.3"
-const CELL = "surface×cloudflare"
+const CELL = "surface×workers"
 
 /** One record-mode job on a runner `factor` times this machine, its app build `spread` over its median. */
 function recordJob(
@@ -156,7 +156,7 @@ describe("the e2e build gate's record lines", () => {
 		const log = [
 			`e2e (cf-workers prod)\tRun bun run test:e2e:cf:prod\t2026-10-28T19:30:45.9Z ${gate.ratioLine(KEY, CELL, 15.04, [5_512.4, 5_498, 5_620], 366.6)}`,
 			gate.referenceLine(KEY, CELL, [366.6, 360, 371, 368]),
-			"RATIO build bun@1.3 defaults×cloudflare 17.84 ms=2480 ref=139" /* a k=1 record run's line, before builds= */,
+			"RATIO build bun@1.3 defaults×workers 17.84 ms=2480 ref=139" /* a k=1 record run's line, before builds= */,
 			"RATIO hotpath body 1.2",
 		].join("\n")
 		expect([
@@ -168,11 +168,11 @@ describe("the e2e build gate's record lines", () => {
 		]).toEqual([
 			[
 				{ builds: [5_512, 5_498, 5_620], cell: CELL, key: KEY, ms: 5_512, ratio: 15.04, referenceMs: 367 },
-				{ cell: "defaults×cloudflare", key: KEY, ms: 2_480, ratio: 17.84, referenceMs: 139 },
+				{ cell: "defaults×workers", key: KEY, ms: 2_480, ratio: 17.84, referenceMs: 139 },
 			],
 			[
-				"RATIO build bun@1.3 surface×cloudflare 15.04 ms=5512 ref=367 builds=5512,5498,5620",
-				"REFERENCE build bun@1.3 surface×cloudflare 367 367,360,371,368",
+				"RATIO build bun@1.3 surface×workers 15.04 ms=5512 ref=367 builds=5512,5498,5620",
+				"REFERENCE build bun@1.3 surface×workers 367 367,360,371,368",
 			],
 		])
 	})
@@ -214,8 +214,8 @@ describe("the e2e build gate's ceilings", () => {
 
 /*
  * Record runs across two code versions (the by-commit derive): six runs at an older commit, six at the newest, each
- * a Bun job (classed by its surface build) and a Node job. surface×cloudflare and surface×node carry the same ratios'
- * spread on both; mcp×cloudflare moved from ~3.4 to ~4.65 (a changed app), so its groups' ranges do not overlap.
+ * a Bun job (classed by its surface build) and a Node job. surface×workers and surface×node carry the same ratios'
+ * spread on both; mcp×workers moved from ~3.4 to ~4.65 (a changed app), so its groups' ranges do not overlap.
  */
 type Version = { commit: string; created: string }
 /** Six runs at one commit: each run's Bun-job runner class and each cell's ratio, run by run. */
@@ -260,7 +260,7 @@ function commitRun(
 	})
 	const node = { cell: "surface×node", key: "node 22", ms: 2_100, ratio: ratios.node, referenceMs: 77 }
 	return [
-		{ ...version, job: "build (bun)", ratios: [bun(CELL, ratios.surface), bun("mcp×cloudflare", ratios.mcp)], run },
+		{ ...version, job: "build (bun)", ratios: [bun(CELL, ratios.surface), bun("mcp×workers", ratios.mcp)], run },
 		{ ...version, job: "build (node)", ratios: [node], run },
 	]
 }
@@ -295,8 +295,8 @@ describe("the e2e build gate's derive across commits", () => {
 	})
 
 	it("derives a shifted cell from the newest commit's runs alone", () => {
-		expect(row("mcp×cloudflare")).toEqual({
-			cell: "mcp×cloudflare",
+		expect(row("mcp×workers")).toEqual({
+			cell: "mcp×workers",
 			ceiling: { baseline: 4.65, byClass: { fast: 4.55, slow: 4.7 }, catches: "+14%", ceiling: 5.28 },
 			decision: "new-only",
 			groups: [
@@ -333,13 +333,8 @@ describe("the e2e build gate's derive across commits: the runner classes it asks
 			...commitRuns(NEW, 7, RUNS.new, ["slow", "slow", "slow", "slow", "slow", "slow"]),
 		])
 		const of = (cell: string) => slowOnly.find((each) => each.cell === cell)
-		expect([
-			of("mcp×cloudflare")?.refused,
-			of("mcp×cloudflare")?.ceiling,
-			of(CELL)?.decision,
-			of(CELL)?.refused,
-		]).toEqual([
-			`${KEY} mcp×cloudflare: new-only from ${NEW.commit}: 6 runs, no fast Bun job`,
+		expect([of("mcp×workers")?.refused, of("mcp×workers")?.ceiling, of(CELL)?.decision, of(CELL)?.refused]).toEqual([
+			`${KEY} mcp×workers: new-only from ${NEW.commit}: 6 runs, no fast Bun job`,
 			undefined,
 			"pooled",
 			undefined,
@@ -361,7 +356,7 @@ const CI_SAMPLES: Record<string, Record<string, Partial<Record<"fast" | "middle"
 		},
 		"7731b1f": { middle: [20.04, 19.78, 19.95], slow: [20.01, 20.2, 18.95, 19.57, 20.72, 21.18, 20.26] },
 	},
-	"surface×cloudflare": {
+	"surface×workers": {
 		"51fe6c3": {
 			fast: [18.91, 18.81],
 			middle: [20.26, 19.54, 19.99, 20.15],
@@ -405,10 +400,10 @@ const CONFOUNDED: Record<string, Partial<Record<"fast" | "slow", number[]>>> = {
 
 describe("the e2e build gate's derive across commits, on CI's own samples", () => {
 	it("pools surface's Bun cells across 7731b1f and 51fe6c3: the classes both carry, compared as one", () => {
-		const decided = ["surface×bun", "surface×cloudflare"].map((cell) => gate.deriveByCommit(ciJobs(cell))[0])
+		const decided = ["surface×bun", "surface×workers"].map((cell) => gate.deriveByCommit(ciJobs(cell))[0])
 		expect(decided.map((each) => [each?.cell, each?.decision, each?.n])).toEqual([
 			["surface×bun", "pooled", 22],
-			["surface×cloudflare", "pooled", 22],
+			["surface×workers", "pooled", 22],
 		])
 	})
 
