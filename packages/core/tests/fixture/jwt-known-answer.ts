@@ -1,0 +1,67 @@
+/* Tokens signed by jose 6.2.12, so the WebCrypto verifier is held to what jose produced.
+   Public keys only; the private halves were discarded. */
+const KNOWN_ANSWER = {
+	keys: {
+		ES256: {
+			crv: "P-256",
+			kty: "EC",
+			x: "OE_mgefU9fnWRqUlT61QTMexMfOagvSZPt5s78UJt04",
+			y: "0gepgPnhXU3PBY3wIr9H-E9gOTQTzBUyp858721cEb8",
+		},
+		ES384: {
+			crv: "P-384",
+			kty: "EC",
+			x: "9Yc6QzNEBvMP37N71xs2_vRfu8d0brRnCgMZbzlvIfNa279ofeG7c0J9ONTXjrY_",
+			y: "duk-gyfnKuitj8j8unJWIJTZp2-DqGzbg2xFq7GFCT2vYXT71KxH9Hifb_GrvVQj",
+		},
+		ES512: {
+			crv: "P-521",
+			kty: "EC",
+			x: "ATNCHodTKfopi99JlkHkx4DnmcYfVoK-3btNzCojITi0wlqkQ-T9L4pL6RZ0eQN-QfB5FH0H7mpSoZ-pFUe1G_Lr",
+			y: "AesU-QWXruFh4tu-l-TrH2qETfzC3aOvOkE2qIwE6f8OK2KSBv1piVvM7l78b-XsqLLAZ8GvUd4GpqHuUXBcAD3v",
+		},
+		EdDSA: {
+			crv: "Ed25519",
+			kty: "OKP",
+			x: "v1Lt5j8M0057B1m2yHbmqda5QQDS48RwR1-qXZ9hHVI",
+		},
+		RSA: {
+			e: "AQAB",
+			kty: "RSA",
+			n: "0IKH1Oyt0YfYqrs3szsMs6QmMBYzpsHxarMuvsWsCOPIPmtCNwSohM-UuHbY1WifO1Uwt1prF4PTul6dmIvVk2M4Yb9T-B7Z4pWOB9im79zxvfHp7CuloDHdG6awhCwEbyNA17XzpTTbdT8RsbUQW02G_qzry7SRNKdGjCuxmNtNIJtGJc4-ueE0mrAz4eaXK_OC2na4hgitkRc3dHMzTKsVtoQ-SfK2IXqkW94gdyK2wkWeqrcpkzC24xfCjbrLi59JBd1G5-sSWCZnCHC0qxSHfQU5NnXZe9Clz4b18wjVe8X25ZS6VPo2K7UrlLc-lVa6i5XBCqw7Qk1C5RiLdQ",
+		},
+	},
+	payload: {
+		exp: 4102444800,
+		iat: 1700000000,
+		iss: "https://issuer.test",
+		name: "Željko",
+		sub: "user-1",
+	},
+	tokens: {
+		ES256:
+			"eyJhbGciOiJFUzI1NiIsImtpZCI6ImsxIn0.eyJleHAiOjQxMDI0NDQ4MDAsImlhdCI6MTcwMDAwMDAwMCwiaXNzIjoiaHR0cHM6Ly9pc3N1ZXIudGVzdCIsIm5hbWUiOiLFvWVsamtvIiwic3ViIjoidXNlci0xIn0.B80qGg6YF0iyajWBludT1ExTD22h3xV1acwRofhzaBxc6fO7-oYEtnNHXJr7i73KDbitr8CdXha0BEJLGyuSoQ",
+		ES384:
+			"eyJhbGciOiJFUzM4NCIsImtpZCI6ImsxIn0.eyJleHAiOjQxMDI0NDQ4MDAsImlhdCI6MTcwMDAwMDAwMCwiaXNzIjoiaHR0cHM6Ly9pc3N1ZXIudGVzdCIsIm5hbWUiOiLFvWVsamtvIiwic3ViIjoidXNlci0xIn0.M9k3rz7KBZ6EJxfHY7iah_J93PmqfgGiM9w5QVPbnjznAgPgUkyZ6Y8LpmYpFhIesBeDMZ98lXkygzMr0bvB6SGg0pfK_3cExp5J4e_7t8QNtxIdOa1ukOk3p0r6Gg5v",
+		ES512:
+			"eyJhbGciOiJFUzUxMiIsImtpZCI6ImsxIn0.eyJleHAiOjQxMDI0NDQ4MDAsImlhdCI6MTcwMDAwMDAwMCwiaXNzIjoiaHR0cHM6Ly9pc3N1ZXIudGVzdCIsIm5hbWUiOiLFvWVsamtvIiwic3ViIjoidXNlci0xIn0.AAQdE_kJYLioq_MKKCO4FpLuqCQ1C647VSf1BKOl0j6OEFSKTwjBkjU1OEmkLlIkL7-owfJtlR1BTALjw8Cas2B-ARxdB37uvltYwMSTzhKP016edOAHoZI1jEUdBCrmnRFm1-GyavFiTnOzsAya8PdZEPQOrjekMxMXn63IB4YDcQIS",
+		EdDSA:
+			"eyJhbGciOiJFZERTQSIsImtpZCI6ImsxIn0.eyJleHAiOjQxMDI0NDQ4MDAsImlhdCI6MTcwMDAwMDAwMCwiaXNzIjoiaHR0cHM6Ly9pc3N1ZXIudGVzdCIsIm5hbWUiOiLFvWVsamtvIiwic3ViIjoidXNlci0xIn0.Bkd06PNjhi3cT0ABSu3fn-BsWcrxr8Oi7d-Ru31wQe7KarkPwPcaukfpNa_e8qyNtq-DN7Rse0O7GJ2EfIcoBA",
+		HS256:
+			"eyJhbGciOiJIUzI1NiJ9.eyJleHAiOjQxMDI0NDQ4MDAsImlhdCI6MTcwMDAwMDAwMCwiaXNzIjoiaHR0cHM6Ly9pc3N1ZXIudGVzdCIsIm5hbWUiOiLFvWVsamtvIiwic3ViIjoidXNlci0xIn0._SUasEWf9BYQorDChvAdnFi2AKclDeH8CO515Sv0juo",
+		PS256:
+			"eyJhbGciOiJQUzI1NiIsImtpZCI6ImsxIn0.eyJleHAiOjQxMDI0NDQ4MDAsImlhdCI6MTcwMDAwMDAwMCwiaXNzIjoiaHR0cHM6Ly9pc3N1ZXIudGVzdCIsIm5hbWUiOiLFvWVsamtvIiwic3ViIjoidXNlci0xIn0.dS2t2oERmeIVb5YF2N68NXE7HXS6DIjsOFmCJ3_6alfWrfOt9AJQMcqf5E1F1b76rX0DZQ-P3LMbbOAnRtX4GBWQ8ZyUb1xpH_GczIV6IVZm2lpluAWUgaTGZl-PCW8OlNZVK7XxN4lUg0oYM6-q6DMW67VNpVDh5bm6v0H_dQ0ZX4SfxMemn09rbg3hOKpyGqviF8YERAsGAHuKg3TMvmBfk82bD2BCtQzrqtGlxByr8I01vgHiir6O3Hjed8KL4LezzqgWHzhOQXMkPYQT1YBy6HsSouBz-xacmfbAIei9CwfdGW74pedLuYuLtcbiNl8YzDBY95Pd4XtphWkgWA",
+		PS384:
+			"eyJhbGciOiJQUzM4NCIsImtpZCI6ImsxIn0.eyJleHAiOjQxMDI0NDQ4MDAsImlhdCI6MTcwMDAwMDAwMCwiaXNzIjoiaHR0cHM6Ly9pc3N1ZXIudGVzdCIsIm5hbWUiOiLFvWVsamtvIiwic3ViIjoidXNlci0xIn0.yZ-A_s3zQ-iwLyBONe_A4CbqHb3e6cjsvK3bGMeImlVgaZnfX2TsksZsogVpUmHXDVeZdHwB9gGFioXnZGqkEx3jJoX3kOt6paFMTiuD_Ppo0huqzmvgF_E60pUQ9DGT3CrZS2KE1Rz5M40t5RfKNxZe-PD8plgWasw3UbLbUJ4JSRAomaLcWWO4KhGCgzRAWQRpH6DhGr8ZKGx8Rgj9X1xe-_0xi8xSs8QjvySRPks_sfyHXyHXXRSdbAiUe07wbmHFAgcSOkdXkezRZFQmV9Aj8uAP8rJ8UI4LnOaMavZUhFMjMuQUOVzedxffl_xARipG_KVuBMt3NoDjWOU7CA",
+		PS512:
+			"eyJhbGciOiJQUzUxMiIsImtpZCI6ImsxIn0.eyJleHAiOjQxMDI0NDQ4MDAsImlhdCI6MTcwMDAwMDAwMCwiaXNzIjoiaHR0cHM6Ly9pc3N1ZXIudGVzdCIsIm5hbWUiOiLFvWVsamtvIiwic3ViIjoidXNlci0xIn0.rlkroNCP4CMZQAcF2gJEvXRSzhiix_9sau9KQ5XM46tIocLv_Rw1gbBhXvwBe1Yj8pRPNpv-rwmQe-AA6IK8TG3lqi5_wUJSjt8rto-Q0Qey8tq8nvi_koY4OyKtwwVOyktqBEX0Oy_3ktpDIG_su7VJQ0e2acm1RbMgUhuwwqC82aPFsThF0qZ-ODVHSbKIE_X0J6-y48uKASLh8xAhLDv4b5U0PAHyvBbV1C67EpA3kF7ytp7XHU65wcsNW5cvr5_4l49sgtvDhAXfcOaHQsk09mYF5dNKw_uuAScUCmESJl6vOvMdM_YkqD9qcddfkclcMJ0aF7x3-tSFIqJLRw",
+		RS256:
+			"eyJhbGciOiJSUzI1NiIsImtpZCI6ImsxIn0.eyJleHAiOjQxMDI0NDQ4MDAsImlhdCI6MTcwMDAwMDAwMCwiaXNzIjoiaHR0cHM6Ly9pc3N1ZXIudGVzdCIsIm5hbWUiOiLFvWVsamtvIiwic3ViIjoidXNlci0xIn0.Alhch_avbtEhmRUDacQkjp-KQzVKXDDLMHGdOtUVJpsLsv4R8hQsUZTrxPLewDvK5hsUuhMqWqpMyGd4uCtw7IDDpS5vBHfofPEjLAsWJu5FrGmE5UE5zeLkr0Asud86CUXiK2rw25euMA7-C9_3zws05ygDruSZdUTfG86Ws6eXoe8QCSpY6ovx4g43HDywgq95y2E_gf5eoK8Km9386j8A505tHrbgolNXUFpWvyTTMFRTp7a04vGnnP2xKU-n2q3maHQHRtnvvzPYbBHpMP8JJAMjhdwu9nerNdIMWDK26GwZKDvQ3-EYYRwiqup25bBateQN0GcGmooEvQ73uQ",
+		RS384:
+			"eyJhbGciOiJSUzM4NCIsImtpZCI6ImsxIn0.eyJleHAiOjQxMDI0NDQ4MDAsImlhdCI6MTcwMDAwMDAwMCwiaXNzIjoiaHR0cHM6Ly9pc3N1ZXIudGVzdCIsIm5hbWUiOiLFvWVsamtvIiwic3ViIjoidXNlci0xIn0.T6j8sMlKMfYmFkQYjPf7L9jl7yNqfknhzp1Pm8hIFd5MpJlC8OcfM4_anqz4KQYQI0hlyzCzVyD4jhE1uL74lHYlCFEAEQp9zZaYqqH9AJJ760C6ajN4hXb4RMZ7Nvf8oEvolYc9cKtwEZ4hCDPUEYurauphUy8Ac2wn5X0dy9UtonZQcA2l_ODURjEnteiEeDRPoiGQj3-SiVBkOUCIkzl7Mt0vpGZZxwaKMieWFzlQwdRa5Fy6pu5AkefJXqsUF8rlCxoHsjiUV1JD6Pf985IHC1AuBWFbHJ6IKNSkK6BpkEtEqnLG-2rZQ-vI5pGC6XUVOOWAoGBb5xNDlqx3gQ",
+		RS512:
+			"eyJhbGciOiJSUzUxMiIsImtpZCI6ImsxIn0.eyJleHAiOjQxMDI0NDQ4MDAsImlhdCI6MTcwMDAwMDAwMCwiaXNzIjoiaHR0cHM6Ly9pc3N1ZXIudGVzdCIsIm5hbWUiOiLFvWVsamtvIiwic3ViIjoidXNlci0xIn0.qN5bDvH5uBI0wpuLMJ7DwaU74YQZx8HC6TxPAYnyTK_WhevuhNTpOlyWqQMV2AZaLRkIhHzRVx5yC6r_79VM-UIADuz4clcVQ5DBLSj_2C7NJqgml_CfPExfhLtXoldAsSOxKRu3BJ6rdVzpSzY6tJDJrjoI3c4E8EzOsRdYqdAA7lnlTeJTdn8CO_8iccHfcWWpnwZIjGnoY6ri2R_g9hZ4KeR-2QXPYybxDjr5Hnw5rmIzKKfbz8-s_FRZLcylG9cg4yVRFWXcD3q0lSU7fbgC8jmRW4NEbcAx-X2MSAtQwFPZDFXLlIEj7Q0vkaubiVrAOrEYitaP7s_5_IYxvQ",
+	},
+} as const
+
+export { KNOWN_ANSWER }

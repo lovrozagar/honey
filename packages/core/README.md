@@ -499,25 +499,26 @@ const app = honey()
 app.get("/report").handler((ctx) => ctx.res.text("ok", "row\n".repeat(5000)))
 ```
 
-| Middleware                | From                               | What it does                                               |
-| ------------------------- | ---------------------------------- | ---------------------------------------------------------- |
-| `cors(options)`           | `@lovrozagar/honey/cors`           | the CORS headers and the preflight answer                  |
-| `secureHeaders(options?)` | `@lovrozagar/honey/secure-headers` | CSP, HSTS and the rest of the hardening headers            |
-| `csrf(options?)`          | `@lovrozagar/honey/csrf`           | refuses a cross-origin unsafe method                       |
-| `rateLimit(options)`      | `@lovrozagar/honey/rate-limit`     | a window per key, with `memoryStore()` or one of your own  |
-| `compress(options?)`      | `@lovrozagar/honey/compress`       | gzip or brotli over a threshold                            |
-| `cacheControl(options)`   | `@lovrozagar/honey/cache-control`  | the `Cache-Control` header, and `httpDate`                 |
-| `etag(options?)`          | `@lovrozagar/honey/etag`           | an entity tag, 304 on a conditional GET, and `notModified` |
-| `prettyJson(options?)`    | `@lovrozagar/honey/pretty-json`    | indents a JSON body when the query asks                    |
-| `requestId(options?)`     | `@lovrozagar/honey/request-id`     | one id per request, on the response and in the log         |
-| `timeout(options)`        | `@lovrozagar/honey/timeout`        | a deadline per request                                     |
-| `bodyLimit(options)`      | `@lovrozagar/honey/body-limit`     | refuses a body over a size                                 |
-| `ipRestrict(options)`     | `@lovrozagar/honey/ip-restrict`    | an allow or deny list over `ctx.ip`                        |
-| `ipAllowed(ip, lists)`    | `@lovrozagar/honey/ip-restrict`    | the same check for lists read per request                  |
-| `serverTiming()`          | `@lovrozagar/honey/server-timing`  | `Server-Timing`, and `ctx.timing` to add to it             |
-| `poweredBy(options?)`     | `@lovrozagar/honey/powered-by`     | the `X-Powered-By` header                                  |
-| `staticFiles(options)`    | `@lovrozagar/honey/static`         | serves files under a prefix                                |
-| `curlLogger(options?)`    | `@lovrozagar/honey/curl-logger`    | logs each request as the command that would repeat it      |
+| Middleware                      | From                                | What it does                                                                              |
+| ------------------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------- |
+| `cors(options)`                 | `@lovrozagar/honey/cors`            | the CORS headers and the preflight answer                                                 |
+| `secureHeaders(options?)`       | `@lovrozagar/honey/secure-headers`  | CSP, HSTS and the rest of the hardening headers                                           |
+| `csrf(options?)`                | `@lovrozagar/honey/csrf`            | refuses a cross-origin unsafe method                                                      |
+| `rateLimit(options)`            | `@lovrozagar/honey/rate-limit`      | a window per key, with `memoryStore()` or one of your own                                 |
+| `compress(options?)`            | `@lovrozagar/honey/compress`        | gzip or brotli over a threshold                                                           |
+| `cacheControl(options)`         | `@lovrozagar/honey/cache-control`   | the `Cache-Control` header, and `httpDate`                                                |
+| `etag(options?)`                | `@lovrozagar/honey/etag`            | an entity tag, 304 on a conditional GET, and `notModified`                                |
+| `prettyJson(options?)`          | `@lovrozagar/honey/pretty-json`     | indents a JSON body when the query asks                                                   |
+| `requestId(options?)`           | `@lovrozagar/honey/request-id`      | one id per request, on the response and in the log                                        |
+| `timeout(options)`              | `@lovrozagar/honey/timeout`         | a deadline per request                                                                    |
+| `bodyLimit(options)`            | `@lovrozagar/honey/body-limit`      | refuses a body over a size                                                                |
+| `ipRestrict(options)`           | `@lovrozagar/honey/jwt`             | `signJwt`, `verifyJwt`, `remoteJwks`, `decodeJwtPayload`, `importPkcs8`, `isJwsAlgorithm` |
+| `@lovrozagar/honey/ip-restrict` | an allow or deny list over `ctx.ip` |
+| `ipAllowed(ip, lists)`          | `@lovrozagar/honey/ip-restrict`     | the same check for lists read per request                                                 |
+| `serverTiming()`                | `@lovrozagar/honey/server-timing`   | `Server-Timing`, and `ctx.timing` to add to it                                            |
+| `poweredBy(options?)`           | `@lovrozagar/honey/powered-by`      | the `X-Powered-By` header                                                                 |
+| `staticFiles(options)`          | `@lovrozagar/honey/static`          | serves files under a prefix                                                               |
+| `curlLogger(options?)`          | `@lovrozagar/honey/curl-logger`     | logs each request as the command that would repeat it                                     |
 
 Full reference: [middleware](https://github.com/lovrozagar/honey/blob/main/docs/middleware.md),
 [rate limiting](https://github.com/lovrozagar/honey/blob/main/docs/capabilities/rate-limit.md) and

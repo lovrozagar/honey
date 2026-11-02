@@ -99,6 +99,11 @@
 			"types": "./dist/input/input.d.ts",
 			"default": "./dist/input/input.js"
 		},
+		"./jwt": {
+			"honey-source": "./src/security/jwt.ts",
+			"types": "./dist/security/jwt.d.ts",
+			"default": "./dist/security/jwt.js"
+		},
 		"./ip-restrict": {
 			"honey-source": "./src/middleware/ip-restrict.ts",
 			"types": "./dist/middleware/ip-restrict.d.ts",

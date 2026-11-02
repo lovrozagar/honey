@@ -9,6 +9,7 @@ import type { CompiledChain } from "../../src/middleware/middleware.ts"
 import type { StaticConfig } from "../../src/response/static.ts"
 import type { IpLists, IpRestrictOptions } from "../../src/middleware/ip-restrict.ts"
 import type { MemoryStoreOptions, RateLimitOptions } from "../../src/middleware/rate-limit.ts"
+import type { JwtVerifyResult, VerifyJwtOptions } from "../../src/security/jwt.ts"
 import type { SSEEvent, SSEOptions, SSEStream } from "../../src/response/sse.ts"
 import { type ProducerOptions, type ProducerSink, producerStream } from "../../src/streaming/producer-stream.ts"
 import type { JsonSchema, jsonSchemaOf } from "../../src/schema/to-json-schema.ts"
@@ -94,6 +95,21 @@ export function textIpRestrict(options: IpRestrictOptions): Mw {
 export function textIpAllowed(ip: string | null, lists: IpLists): boolean {
 	const named = (list: readonly string[] | null | undefined) => list?.includes(ip ?? "") ?? false
 	return !named(lists.deny) && (!lists.allow?.length || named(lists.allow))
+}
+
+export type VerifyJwt = (token: string, options: VerifyJwtOptions) => Promise<JwtVerifyResult>
+
+/** verifyJwt that takes the algorithm from the token and a public key's text as its HMAC secret. */
+export function confusedVerifyJwt(real: VerifyJwt): VerifyJwt {
+	return (token, options) =>
+		options.jwk === undefined
+			? real(token, options)
+			: real(token, { algorithms: ["HS256"], clockToleranceSeconds: 0, secret: JSON.stringify(options.jwk) })
+}
+
+/** verifyJwt that lets a token with no exp through. */
+export function expOptionalVerifyJwt(real: VerifyJwt): VerifyJwt {
+	return (token, options) => real(token, { ...options, requireExp: false })
 }
 
 export type IpRestrict = (options: IpRestrictOptions) => Mw

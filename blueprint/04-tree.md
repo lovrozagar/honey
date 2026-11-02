@@ -21,7 +21,7 @@ packages/core/
     schema/         standard-schema → JSON Schema (zod/valibot/arktype/yup/effect), slots/hoist/dedup, canonicalize, resolve-refs, sanitize-spec (split from v0 codegen.ts)
     meta/           meta-spec, meta-spec-merge, meta-spec-validate
     trust/          trust (+ ctx.trustsForwarded seam), ip, client-info
-    security/       crypto
+    security/       crypto, jws, jwks, jwt
     i18n/           i18n, slot, dict
     observability/  curl-logger, request-to-curl
     adapters/

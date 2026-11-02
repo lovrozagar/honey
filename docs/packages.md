@@ -37,6 +37,7 @@ generator.
 | `@lovrozagar/honey/csrf`            | `csrf`                                                                                                                                  |
 | `@lovrozagar/honey/body-limit`      | `bodyLimit`                                                                                                                             |
 | `@lovrozagar/honey/timeout`         | `timeout`                                                                                                                               |
+| `@lovrozagar/honey/jwt`             | `signJwt`, `verifyJwt`, `remoteJwks`, `decodeJwtPayload`, `importPkcs8`, `isJwsAlgorithm`                                               |
 | `@lovrozagar/honey/ip-restrict`     | `ipRestrict`, `ipAllowed`, `isIpRule`                                                                                                   |
 | `@lovrozagar/honey/request-id`      | `requestId`                                                                                                                             |
 | `@lovrozagar/honey/secure-headers`  | `secureHeaders`                                                                                                                         |

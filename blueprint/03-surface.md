@@ -26,6 +26,7 @@ Every public export of both packages, tagged **KEEP** (re-homed and split, behav
 | `./i18n` | KEEP | |
 | `./input` | MODIFY [A1] | `.input({ binary })` raw-body slot with declared content-type |
 | `./ip-restrict` | KEEP | |
+| `./jwt` | NEW | |
 | `./logger` | KEEP | the only `console` owner |
 | `./node` | KEEP | Node adapter |
 | `./openapi`, `./openapi/scalar`, `./openapi/swagger` | MODIFY [B1,B2,B3] | configurable `servers` + variables, `tags`/`externalDocs`, `webhooks` |

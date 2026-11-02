@@ -1088,3 +1088,8 @@ tests/fixture/spawn-timeout.ts	core	test	21	bit 21 ci-f: core's SPAWN_TIMEOUT = 
 #   adversarial/bizarre/broken-world/production-weird -> security or the owning feature). Every case is accounted by feature;
 #   its v1 home is a ported test tagged // v0: <id> (or a retire reason) by the owning bit — not a moved v0 file.
 tests/structure/workers-naming.test.ts	core	test	21	the workers runtime is named for the product in subpaths, detection and the adapter; platform spellings stay	—
+src/security/jws.ts	core	src	21	the JWS layer under ./jwt: algorithms, base64url, keys per call	jwt.ts
+src/security/jwks.ts	core	src	21	remoteJwks: an issuer's keys, single flight, cooldown, bounded stale	jwt.ts
+src/security/jwt.ts	core	src	21	signJwt, verifyJwt and the claim rules on WebCrypto alone	jwt.ts
+tests/fixture/jwt-known-answer.ts	core	test	21	tokens jose signed, public keys only	jwt.ts
+tests/integration/security/jwt-adversarial.test.ts	core	test	21	algorithm confusion and a token with no exp, rerun by the mutation harness	jwt.ts
