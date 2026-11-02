@@ -112,7 +112,8 @@ describe("the runtime bundle of an installed core (bit 19 i)", () => {
 			 * is an import, so routing/ws-builder, ws/origin, ws/session and ws/shared stay out until it is called.
 			 * rc.5 added 59 bytes (26,186 to 26,245) so a context reached through a prototype chain or a proxy reads
 			 * its original's private state: the SELF field, read once in each of the context's nine accessors.
-			 * Locked at 26,300.
+			 * Locked at 26,300. The generated tree's body gate added 58 bytes (26,237 to 26,295): every leaf
+			 * carries its declared body as data, and a delegated leaf checks it.
 			 */
 			const gzipped = gzipSync(js, { level: 9 }).length
 			const builtBy = run(BUN as string, ["--version"], full).out.trim()
@@ -241,6 +242,7 @@ describe("the runtime bundle of an installed core (bit 19 i)", () => {
 			 * openapi/served and openapi/static. Measured 27,478 bytes gzipped (level 9, the pinned bun
 			 * --minify), locked at the next 100. The minimal bundle is 26,245 of that, so serving a document the
 			 * app did not generate costs 1,233 bytes: the two modules, and nothing of the generator or a page.
+			 * The generated tree's body gate added its 58 bytes here too (27,480 to 27,538), locked at 27,600.
 			 */
 			const gzipped = gzipSync(bunBundle("static-doc", served), { level: 9 }).length
 			expect(
@@ -248,7 +250,7 @@ describe("the runtime bundle of an installed core (bit 19 i)", () => {
 					routeModules("static-doc", served, [...GENERATOR, ...PAGES]),
 					routeModules("static-page", withPage, [...GENERATOR, ...PAGES]),
 					routeModules("generated-doc", generated, PAGES),
-					gzipped < 27_500,
+					gzipped < 27_600,
 				],
 				`${gzipped} bytes gzipped`,
 			).toEqual([[], ["openapi/scalar"], [], true])

@@ -136,7 +136,7 @@ const PASS = {
 function proxied() {
 	const reached: string[] = []
 	const tree = treeOf([
-		["POST", "/items", { iv: { json: PASS } }],
+		["POST", "/items", { bd: "json", iv: { json: PASS } }],
 		["POST", "/items/:id/restore", { iv: { params: PASS } }],
 		["GET", "/items"],
 	])
@@ -199,7 +199,7 @@ describe("delegation: a leaf's declared body media type is checked before anythi
 describe("delegation: a binary body, and what is never delegated", () => {
 	it("checks a declared binary type, and leaves a WebSocket leaf to no catch-all", async () => {
 		const root = createNode()
-		const routes: Record<string, RouteEntry> = { [insertRoute(root, "PUT", "/files")]: { iv: { binary: "image/png" } } }
+		const routes: Record<string, RouteEntry> = { [insertRoute(root, "PUT", "/files")]: { bd: ["image/png"] } }
 		routes[insertWsRoute(root, "/live")] = {}
 		const app = gateway({ meta: {}, root, routes, v: 2 })
 		const put = (type: string) => call(app, "/files", { body: "x", headers: { "content-type": type }, method: "PUT" })

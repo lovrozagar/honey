@@ -2,12 +2,12 @@
  * Delegation: a leaf of a loaded route tree that no route of this app serves goes to the app's
  * catch-all (a root wildcard it registered outside the tree), as a gateway forwards its services'
  * routes. The leaf keeps its identity: its id, pattern, params, meta, error keys and the scopes
- * covering its path. Its declared body media type is checked first, from the kind a generated tree
- * carries as data or the schemas a live snapshot holds, and its body is left unread.
+ * covering its path. Its declared body media type is checked first, from the kind every tree leaf
+ * carries as data, and its body is left unread.
  */
 import { binaryRanges, binaryType } from "../input/binary.ts"
 import type { RuntimeMiddleware } from "../middleware/middleware.ts"
-import { assertRequestContentType, type DeclaredBody, declaredBody } from "../validation/content-type.ts"
+import { assertRequestContentType, type DeclaredBody } from "../validation/content-type.ts"
 import { parsePattern, type RouteId, splitRouteId } from "./pattern.ts"
 import type { HoneyGraph, RouteHandler } from "./register.ts"
 import type { RouteEntry } from "./tree.ts"
@@ -21,10 +21,9 @@ function catchAllFor(g: HoneyGraph, method: string): RouteHandler | undefined {
 /** Middleware refusing a request whose media type the declared body does not take, before anything reads it. */
 function bodyGate(body: DeclaredBody, method: string, pattern: string): RuntimeMiddleware {
 	const ranges = typeof body === "string" ? null : binaryRanges(body, method, pattern)
-	const schemas = { [body === "json" ? "json" : "form"]: true }
 	return (ctx, next) => {
 		const contentType = (ctx as { req: Request }).req.headers.get("content-type")
-		if (ranges === null) assertRequestContentType(schemas, contentType)
+		if (ranges === null) assertRequestContentType({ [body as string]: true }, contentType)
 		else binaryType(ranges, contentType)
 		return next()
 	}
@@ -33,8 +32,7 @@ function bodyGate(body: DeclaredBody, method: string, pattern: string): RuntimeM
 /** The record a leaf serves through `catchAll`: the catch-all's chain and handler, under the leaf's identity and data. */
 function delegated(id: RouteId, entry: RouteEntry, catchAll: RouteHandler): RouteHandler {
 	const { method, pattern } = splitRouteId(id)
-	const body = entry.bd ?? declaredBody(entry.iv)
-	const gate = body === null ? null : bodyGate(body, method, pattern)
+	const gate = entry.bd === undefined ? null : bodyGate(entry.bd, method, pattern)
 	return {
 		...catchAll,
 		cm: gate === null ? catchAll.cm : [gate, ...catchAll.cm],
