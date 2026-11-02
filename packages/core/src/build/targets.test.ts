@@ -82,7 +82,7 @@ describe("the build plugin's identity and virtual entry (bit 19 h2)", () => {
 
 	it("refuses a target it does not build (H15)", () => {
 		const refused = (target: string) => () => createBuildPlugin({ target: target as BuildTarget }, APP)
-		expect(refused("lambda")).toThrow('honey build: unknown target "lambda"; expected node, bun or cloudflare')
+		expect(refused("lambda")).toThrow('honey build: unknown target "lambda"; expected node, bun or workers')
 		expect(refused("toString")).toThrow('unknown target "toString"')
 	})
 })
