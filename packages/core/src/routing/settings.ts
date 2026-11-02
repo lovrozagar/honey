@@ -21,21 +21,38 @@ import type { TapFn } from "./tap.ts"
 export type ErrorFactories = Readonly<Record<string, (...args: never[]) => unknown>>
 
 /** What the error and miss hooks receive. */
-export type ErrorCtx<TEnv> = { env: TEnv; jsonFromError: (err: HoneyError) => Response; req: Request }
+export type ErrorCtx<TEnv> = {
+	/** The environment bindings of the request. */ env: TEnv
+	/** Builds the answer for a `HoneyError`: the app's format and formatters apply, `errorI18n` does not. */ jsonFromError: (
+		err: HoneyError,
+	) => Response
+	/** The incoming request. */ req: Request
+}
 
 /** What `resolveLocale` reads the request's locale from. */
 export type ResolveLocaleCtx<TEnv> = {
+	/** The request's cookies by name. */
 	readonly cookies: Readonly<Record<string, string>>
+	/** The environment bindings of the request. */
 	readonly env: TEnv
+	/** The request's headers, with lowercased names. */
 	readonly headers: Readonly<Record<string, string>>
+	/** The matched route's path params; empty when no route matched. */
 	readonly params: Readonly<Record<string, string>>
+	/** The incoming request. */
 	readonly req: Request
+	/** The query: the first value of each key. */
 	readonly search: Readonly<Record<string, string>>
 }
 
 /** `app.errorI18n`, built by `errorI18n()` from `@lovrozagar/honey/i18n`; `translate` answers a copy. */
 export type ErrorI18n<TEnv = unknown> = {
+	/** Picks the locale for an error answer. If it throws, the failure is logged and the error goes out untranslated. */
 	readonly resolveLocale: (ctx: ResolveLocaleCtx<TEnv>) => MaybePromise<string>
+	/**
+	 * Returns `error` in `locale`: a copy with its message and field paths translated, or `error` itself when nothing
+	 * translates. If it throws, the failure is logged and the error goes out untranslated.
+	 */
 	translate(error: HoneyError, locale: string): HoneyError
 }
 
@@ -45,22 +62,38 @@ export type OnErrorFn<TEnv> = (
 	ctx: ErrorCtx<TEnv>,
 ) => MaybePromise<HoneyError | Response | undefined | void>
 
-export type OnMethodNotAllowedFn<TEnv> = (ctx: ErrorCtx<TEnv> & { allowed: string[] }) => MaybePromise<Response>
+/** Answers a request whose path exists but not for its method. Honey adds `Allow` to what it returns. */
+export type OnMethodNotAllowedFn<TEnv> = (
+	ctx: ErrorCtx<TEnv> & { /** The methods the path serves. */ allowed: string[] },
+) => MaybePromise<Response>
 
+/** Answers a request that matches no route. */
 export type OnNotFoundFn<TEnv> = (ctx: ErrorCtx<TEnv>) => MaybePromise<Response>
 
 /** The request log's options: `skip` answers true for a line not to write. */
-export type RequestLogOptions = { readonly skip?: (entry: RequestLogEntry) => boolean }
+export type RequestLogOptions = {
+	/** Returns `true` to leave a request out of the log. */ readonly skip?: (entry: RequestLogEntry) => boolean
+}
 
+/** The configuration one app holds, shared by every handle derived from it. */
 export type AppSettings<TEnv = unknown> = {
+	/** Shapes the body of an error `defineErrors` gave a payload schema; `null` sends the payload unchanged. */
 	customErrorFormatter: CustomErrorFormatter | null
 	/** the body schema of schema errors, for the OpenAPI document */
 	customErrorSchema: StandardSchemaLike | null
+	/** The error key an undeclared or unknown throw becomes on routes without a boundary; `null` for a 500. */
 	defaultBoundaryKey: string | null
+	/** Error keys every route of the app declares. */
 	defaultErrorKeys: Set<string>
+	/**
+	 * Whether an encoded `/` or `\` in a request path is decoded into a param (`"allow"`) or answered with 400 (`"reject"`, the default).
+	 */
 	encodedSlashes: "allow" | "reject"
+	/** The app's error factory; `null` until `errorFactory()` is called. */
 	errorFactory: ErrorFactories | null
+	/** Wire format of error answers: honey's envelope (the default) or RFC 9457 Problem Details. */
 	errorFormat: ErrorFormat
+	/** Shapes the body of every error without a payload schema; the default returns honey's body unchanged. */
 	errorFormatter: ErrorFormatter
 	/** translates the answer to an unhandled throw and to an onError HoneyError; `null`: off */
 	errorI18n: ErrorI18n<TEnv> | null
@@ -72,17 +105,25 @@ export type AppSettings<TEnv = unknown> = {
 	readonly metaSpec: MetaSpecSource
 	/** whether `.output()` routes check what they answer: resolved per route at finalize */
 	outputValidation: OutputValidationMode
+	/** Hook that maps a thrown value before it is answered; `null` for none. */
 	onError: OnErrorFn<TEnv> | null
+	/** Hook that answers a 405; `null` keeps the default answer. */
 	onMethodNotAllowed: OnMethodNotAllowedFn<TEnv> | null
+	/** Hook that answers a 404; `null` keeps the default answer. */
 	onNotFound: OnNotFoundFn<TEnv> | null
 	/** one info line per request after its body ends; `null`: off */
 	requestLog: RequestLogOptions | null
 	/** spans per request and the error reporter; `null`: off, at the cost of one check */
 	telemetry: Telemetry | null
+	/** URL path prefix removed before routing; `null` for none. */
 	stripPrefix: string | null
 	/** `app.tap()` handlers by key; `null` until one is registered */
 	taps: Map<string, TapFn<TEnv>> | null
+	/**
+	 * How a trailing slash is treated: 308 redirect to the form without it (`"strip"`) or with it (`"enforce"`), or serve both (`"ignore"`, the default).
+	 */
 	trailingSlash: "enforce" | "ignore" | "strip"
+	/** The runtime's WebSocket adapter; `null` until `app.wsAdapter()` or, on Node and Bun, `serve()` sets it. */
 	wsAdapter: WSAdapter | null
 }
 

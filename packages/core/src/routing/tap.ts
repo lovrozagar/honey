@@ -14,17 +14,27 @@ import type { AppSettings } from "./settings.ts"
 
 /** What a tap handler sees: the request, never `res` or `tap`, so it can neither answer nor recurse. */
 export type TapContext<TEnv = unknown> = {
+	/** Keeps a promise running past the response: `waitUntil` on Workers; elsewhere a rejection goes to the request's logger. */
 	readonly background: (promise: Promise<unknown>) => void
+	/** The environment bindings of the request. */
 	readonly env: TEnv
+	/** The request's headers, with lowercased names. */
 	readonly headers: Record<string, string>
+	/** The route's meta; empty when it set none. */
 	readonly meta: Record<string, unknown>
+	/** The matched route's path params. */
 	readonly params: Record<string, string>
+	/** The normalized request path, without the query or the app's `stripPrefix`. */
 	readonly path: string
+	/** The incoming request. */
 	readonly req: Request
+	/** The route's path pattern, such as `/users/:id`. */
 	readonly routePattern: string
+	/** The query: the first value of each key. */
 	readonly search: Record<string, string>
 }
 
+/** A registered tap: called with the request context and either the route's meta value for its key or what `ctx.tap()` passed. */
 export type TapFn<TEnv = unknown> = (ctx: TapContext<TEnv>, payload: never) => unknown
 
 /** `app.tap(key, handler)`'s handler: the payload is the declared one for `key` (`.taps<T>()`), else unknown. */
@@ -35,8 +45,20 @@ export type TapHandler<TEnv, TTaps, TKey extends string> = (
 
 /** `ctx.tap()` as a handler sees it: the declared keys and their payloads, or any key without `.taps<T>()`. */
 export type TapMethod<TTaps> = [keyof TTaps] extends [never]
-	? { tap(key: string, payload: unknown): void }
-	: { tap<const TKey extends keyof TTaps & string>(key: TKey, payload: TTaps[TKey]): void }
+	? {
+			/** Queues a tap for `key`, fired after the response if the handler's answer goes out; a key no `app.tap` handles is ignored. */ tap(
+				key: string,
+				payload: unknown,
+			): void
+		}
+	: {
+			/** Queues a tap for a declared key, fired after the response if the handler's answer goes out; a key no `app.tap` handles is ignored. */ tap<
+				const TKey extends keyof TTaps & string,
+			>(
+				key: TKey,
+				payload: TTaps[TKey],
+			): void
+		}
 
 type Taps = ReadonlyMap<string, TapFn>
 

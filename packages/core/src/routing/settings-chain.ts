@@ -26,6 +26,7 @@ import type { TapFn, TapHandler } from "./tap.ts"
 export abstract class SettingsChain<TEnv> {
 	protected readonly settings: AppSettings<TEnv>
 
+	/** Takes the settings object shared by every handle of one app. */
 	constructor(settings: AppSettings<TEnv>) {
 		this.settings = settings
 	}
@@ -33,7 +34,11 @@ export abstract class SettingsChain<TEnv> {
 	/** Recompile what the app serves on its next request: a setting finalize reads changed. */
 	protected abstract invalidate(): void
 
-	/** A tap fired after a route's handler answered, in the background (see routing/tap.ts). */
+	/**
+	 * Register the hook for `key`. It runs in the background after a route's handler answered: once if the route's meta
+	 * sets `key`, and once per `ctx.tap(key, payload)`. Nothing fires on an error answer, a 404 or 405, an answer from
+	 * middleware, or a WebSocket upgrade. A throw is logged as a warning.
+	 */
 	tap<const TKey extends string>(
 		key: TKey,
 		handler: TapHandler<TEnv, this extends { readonly $taps: infer T } ? T : {}, TKey>,
@@ -77,7 +82,10 @@ export abstract class SettingsChain<TEnv> {
 	 * The policy that maps route meta and schema metadata into the OpenAPI document. Declared once;
 	 * a mounted sub-app's is merged under it when a document is built, whichever came first.
 	 */
-	metaSpec<TThis extends { readonly $meta: unknown }>(this: TThis, config: HoneyMetaSpec<TThis["$meta"]>): TThis {
+	metaSpec<TThis extends { /** The app's route meta type. */ readonly $meta: unknown }>(
+		this: TThis,
+		config: HoneyMetaSpec<TThis["$meta"]>,
+	): TThis {
 		const source = (this as unknown as SettingsChain<TEnv>).settings.metaSpec
 		if (source.declared !== null) throw new Error("metaSpec() was already called on this app")
 		source.declared = config as MetaSpecConfig
@@ -125,16 +133,25 @@ export abstract class SettingsChain<TEnv> {
 		return this
 	}
 
+	/**
+	 * Sets the hook that sees each thrown value before it is answered: return a `HoneyError` to replace it, a `Response`
+	 * to answer, or nothing for honey's own answer. A throw from the hook is logged and gets honey's own answer too.
+	 */
 	onError(handler: OnErrorFn<TEnv>): this {
 		this.settings.onError = handler
 		return this
 	}
 
+	/**
+	 * Sets the hook that answers a request whose path exists but not for its method; `allowed` lists the methods that do,
+	 * and honey adds the `Allow` header to what it returns.
+	 */
 	onMethodNotAllowed(handler: OnMethodNotAllowedFn<TEnv>): this {
 		this.settings.onMethodNotAllowed = handler
 		return this
 	}
 
+	/** Sets the hook that answers a request that matches no route; without it, honey answers its `not_found` error. */
 	onNotFound(handler: OnNotFoundFn<TEnv>): this {
 		this.settings.onNotFound = handler
 		return this
@@ -156,11 +173,18 @@ export abstract class SettingsChain<TEnv> {
 		return this
 	}
 
-	/** Shape every standard error body; with a schema, the body type is the schema's output. */
+	/**
+	 * Shape the body of every error without a payload schema: `fn` returns the schema's output type, and `schema` describes
+	 * the body in the OpenAPI document.
+	 */
 	defaultErrorFormatter<TSchema extends StandardSchemaLike>(
 		schema: TSchema,
 		fn: (error: HoneyError) => InferOutput<TSchema>,
 	): this
+	/**
+	 * Shape the body of every error without a payload schema: `fn` gets the error and honey's default body and returns the
+	 * body to send. If it throws, the failure is logged and the default body goes out.
+	 */
 	defaultErrorFormatter(fn: ErrorFormatter): this
 	defaultErrorFormatter(schemaOrFn: ErrorFormatter | StandardSchemaLike, fn?: (error: HoneyError) => unknown): this {
 		if (typeof schemaOrFn === "function") {
@@ -174,11 +198,18 @@ export abstract class SettingsChain<TEnv> {
 		return this
 	}
 
-	/** Shape every schema error body; with a schema, the body type is the schema's output. */
+	/**
+	 * Shape the body of every error `defineErrors` gave a payload schema: `fn` returns the schema's output type, and
+	 * `schema` describes the body in the OpenAPI document.
+	 */
 	customErrorFormatter<TSchema extends StandardSchemaLike>(
 		schema: TSchema,
 		fn: (error: HoneyError, data: Record<string, unknown>) => InferOutput<TSchema>,
 	): this
+	/**
+	 * Shape the body of every error `defineErrors` gave a payload schema: `fn` gets the error and its payload and returns
+	 * the body to send. If it throws, the failure is logged and the payload goes out.
+	 */
 	customErrorFormatter(fn: CustomErrorFormatter): this
 	customErrorFormatter(
 		schemaOrFn: CustomErrorFormatter | StandardSchemaLike,

@@ -5,6 +5,10 @@
  */
 import type { RouteId, Segment } from "./pattern.ts"
 
+/**
+ * One route as an app's route table holds it: its id, pattern and meta. Each app keeps its own copy, so two apps that
+ * load the same tree never share a record.
+ */
 export type RouteRecord = {
 	/** route identity: `METHOD /canonical/pattern` */
 	readonly id: RouteId

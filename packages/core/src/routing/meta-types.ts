@@ -15,7 +15,7 @@ export type WithChainMeta<TMeta, TValues> = InitAccMeta<TMeta> & { readonly [CHA
 /**
  * What a route under this handle must still pass to `.meta()`: the handle's meta with the keys chain
  * `.meta(values)` already supplied turned optional. A key no chain value sets stays as declared, so a required one
- * is still required (bit 22 a) — the chain's defaults are a default, not a licence to drop the declaration.
+ * is still required: the chain's values are defaults, not a way to drop the declaration.
  */
 export type ChainSupplied<TAccMeta> = [TAccMeta] extends [never]
 	? {}
@@ -34,6 +34,7 @@ export type DeclaredMeta<TMeta> = [TMeta] extends [never]
 /** Route meta as it is recorded: without the chain-meta key. */
 export type RouteMeta<TAccMeta> = Omit<TAccMeta, typeof CHAIN_META>
 
+/** Whether the meta marks the route internal (`internal: true`). */
 type IsInternal<T> = [T] extends [{ internal: true }] ? true : false
 
 /** A route whose meta, its own or its chain's, is `{ internal: true }` is left out of `$routes`. */

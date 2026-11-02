@@ -72,7 +72,7 @@
 			"rules": {
 				"complexity": ["error", 15],
 				"max-depth": ["error", 4],
-				"max-lines": ["error", { "max": 300, "skipComments": true }],
+				"max-lines": ["error", { "max": 300, "skipBlankLines": true, "skipComments": true }],
 				"max-lines-per-function": ["error", 60],
 				"max-params": ["error", 4],
 				"vitest/expect-expect": "error",
@@ -84,7 +84,8 @@
 				"honey/no-header-mode": "error",
 				"honey/no-module-side-effects": "error",
 				"honey/no-module-state": "error",
-				"honey/no-v8-ignore": "error"
+				"honey/no-v8-ignore": "error",
+				"honey/public-jsdoc": "error"
 			}
 		},
 		{
@@ -118,7 +119,7 @@
 				"bench/src/significance.test.ts"
 			],
 			"rules": {
-				"max-lines": ["error", { "max": 500, "skipComments": true }]
+				"max-lines": ["error", { "max": 500, "skipBlankLines": true, "skipComments": true }]
 			}
 		}
 	]

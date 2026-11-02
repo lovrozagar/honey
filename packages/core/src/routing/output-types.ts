@@ -24,8 +24,12 @@ export type RedirectStatuses = { readonly [K in StatusKey]?: true }
  * answer (`redirect`), and the headers each status carries (`headers`).
  */
 export type OutputSchemas = {
+	/** The status keys this media type answers with, each with a body schema or `true`. */
 	readonly [mediaType: `${string}/${string}`]: StatusSchemas
-} & { readonly headers?: HeaderSchemas; readonly redirect?: RedirectStatuses }
+} & {
+	/** The schema of the headers each status carries, by status key; that status's helper then requires them. */ readonly headers?: HeaderSchemas
+	/** Redirect statuses the route may answer with, recorded for the generators; `ctx.res.redirect` stays unnarrowed. */ readonly redirect?: RedirectStatuses
+}
 
 /**
  * `TOutput` with every key under a media type, `headers` or `redirect` that names no status, and every outer key
@@ -40,11 +44,17 @@ export type KnownStatusKeys<TOutput> = {
 
 /** The helper each media type is answered with. */
 type HelperOf = {
+	/** The `ctx.res` method that answers `application/json`. */
 	"application/json": "json"
+	/** The `ctx.res` method that answers `application/xml`. */
 	"application/xml": "xml"
+	/** The `ctx.res` method that answers `text/csv`. */
 	"text/csv": "csv"
+	/** The `ctx.res` method that answers `text/event-stream`. */
 	"text/event-stream": "sse"
+	/** The `ctx.res` method that answers `text/html`. */
 	"text/html": "html"
+	/** The `ctx.res` method that answers `text/plain`. */
 	"text/plain": "text"
 }
 
@@ -72,7 +82,12 @@ type HeadersOf<TOutput, K> = TOutput extends { readonly headers?: infer H }
 /** The headers status `K` must carry in its options: its declared ones, others beside them. */
 type HeaderOpt<TOutput, K> = [HeadersOf<TOutput, K>] extends [never]
 	? {}
-	: { headers: InferInput<HeadersOf<TOutput, K>> & Record<string, string> }
+	: {
+			/** Headers for the response: the declared ones are required, others are allowed. */ headers: InferInput<
+				HeadersOf<TOutput, K>
+			> &
+				Record<string, string>
+		}
 
 /** The options for status `K`: required when it declares headers, optional otherwise. */
 type OptsFor<TOutput, K, TExtra = {}> = [HeadersOf<TOutput, K>] extends [never]
@@ -94,13 +109,22 @@ type Narrowed<TOutput, CT extends keyof HelperOf, TText extends boolean> = CT ex
 type BinaryCall<TOutput> = (<CT extends BinaryTypes<TOutput>, K extends keyof TOutput[CT] & StatusKey>(
 	statusKey: K,
 	body: BinaryBody,
-	opts: ResponseOptions & HeaderOpt<TOutput, K> & { contentType: CT },
+	opts: ResponseOptions &
+		HeaderOpt<TOutput, K> & {
+			/** The media type of the body, one the route declares; only `application/octet-stream` may be left out. */ contentType: CT
+		},
 ) => TypedResponse<CT, K>) &
 	("application/octet-stream" extends keyof TOutput
 		? <K extends keyof TOutput["application/octet-stream"] & StatusKey>(
 				statusKey: K,
 				body: BinaryBody,
-				...opts: OptsFor<TOutput, K, { contentType?: "application/octet-stream" }>
+				...opts: OptsFor<
+					TOutput,
+					K,
+					{
+						/** The media type of the body; left out, it is `application/octet-stream`. */ contentType?: "application/octet-stream"
+					}
+				>
 			) => TypedResponse<"application/octet-stream", K>
 		: unknown)
 
@@ -112,9 +136,15 @@ type OutputRes<TOutput> = UniversalRes &
 	Narrowed<TOutput, "application/xml", true> &
 	Narrowed<TOutput, "text/csv", true> &
 	("text/event-stream" extends keyof TOutput ? Pick<HoneyRes, "sse"> : {}) &
-	([BinaryTypes<TOutput>] extends [never] ? {} : { binary: BinaryCall<TOutput> })
+	([BinaryTypes<TOutput>] extends [never]
+		? {}
+		: {
+				/** Answers with a binary body; available when the route declares a media type no other helper answers, such as `image/png`. */ binary: BinaryCall<TOutput>
+			})
 
 /** `TCtx` with ctx.res narrowed to `TOutput`; a route without `.output()` keeps the whole HoneyRes. */
 export type ApplyOutput<TCtx, TOutput> = [TOutput] extends [never]
 	? TCtx
-	: Omit<TCtx, "res"> & { readonly res: OutputRes<TOutput> }
+	: Omit<TCtx, "res"> & {
+			/** The context's `res`, narrowed to the route's declared output. */ readonly res: OutputRes<TOutput>
+		}

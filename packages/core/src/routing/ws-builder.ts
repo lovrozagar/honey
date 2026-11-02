@@ -19,20 +19,36 @@ import type { ErrorFactories } from "./settings.ts"
 import type { ParamsFromPath } from "./types.ts"
 
 /** The ctx a ws route's callbacks receive: the chain's ctx with the route's params. */
-export type WSRouteCtx<TCtx, TPath extends string> = TCtx & { readonly params: ParamsFromPath<TPath> }
+export type WSRouteCtx<TCtx, TPath extends string> = TCtx & {
+	/** The matched route's path params, typed from its pattern. */ readonly params: ParamsFromPath<TPath>
+}
 
+/** What a WebSocket route builder carries at runtime. */
 type WSBuilderState = {
+	/** Error keys the route declares itself. */
 	readonly errorKeys: ReadonlySet<string>
+	/** The factory `.errors(factory, ...keys)` named. */
 	readonly errorSource: ErrorFactories | null
+	/** The app graph the route registers into. */
 	readonly graph: HoneyGraph
 	/** `.input()`: the schemas as written (for documentation) and the step they compile to */
-	readonly input: { readonly schemas: NonBodyInput; readonly step: InputStep } | null
+	readonly input: {
+		/** The schemas as written, kept for documentation. */ readonly schemas: NonBodyInput
+		/** The compiled validation step run on the upgrade request. */ readonly step: InputStep
+	} | null
+	/** Explicit meta: chain `.meta()` overlaid by route `.meta()`. */
 	readonly meta: Readonly<Record<string, unknown>> | null
+	/** Route-level middleware, run after the chain and the scopes. */
 	readonly middlewares: readonly RuntimeMiddleware[]
+	/** The origins allowed to upgrade; `null`: same origin, or any origin without `Cookie` or `Authorization`. */
 	readonly origins: WSOriginPolicy | null
+	/** The handle `.handler()` returns. */
 	readonly parent: unknown
+	/** The route's canonical full pattern. */
 	readonly path: string
+	/** The graph's entry for this builder: `.handler()` removes it, and one left at finalize is an error. */
 	readonly pending: PendingRoute
+	/** What the route takes from the handle that started it: base path, chain, context values and meta. */
 	readonly view: HandleView
 }
 
@@ -67,9 +83,13 @@ export type WsMeta<TMeta = never> = Omit<Partial<DefaultMeta>, HttpOnlyMeta> & {
 	readonly [K in HttpOnlyMeta]?: never
 } & ([TMeta] extends [never] ? {} : TMeta)
 
+/**
+ * Builds a WebSocket route: declare errors, input, meta, origins and middleware, then register it with `.handler()`.
+ */
 export class WSRouteBuilder<TCtx, TPath extends string, TParent> {
 	readonly #s: WSBuilderState
 
+	/** Takes the builder state; `ws(app, path)` creates builders for you. */
 	constructor(state: WSBuilderState) {
 		this.#s = state
 	}
@@ -78,11 +98,20 @@ export class WSRouteBuilder<TCtx, TPath extends string, TParent> {
 		return new WSRouteBuilder<C, TPath, TParent>({ ...this.#s, ...changes })
 	}
 
-	/** Declare the error keys this route may throw, from a factory or the app's. */
+	/**
+	 * Declare error keys this route may throw, built from `factory` instead of the app's.
+	 * With any key declared, `ctx.errors` holds only declared keys, and a thrown `HoneyError` with another key
+	 * (honey's own keys excepted) answers as the boundary error, or a 500.
+	 */
 	errors(
 		factory: Record<string, (...args: never[]) => unknown>,
 		...keys: string[]
 	): WSRouteBuilder<TCtx, TPath, TParent>
+	/**
+	 * Declare keys of the app's error factory that this route may throw.
+	 * With any key declared, `ctx.errors` holds only declared keys, and a thrown `HoneyError` with another key
+	 * (honey's own keys excepted) answers as the boundary error, or a 500.
+	 */
 	errors(...keys: string[]): WSRouteBuilder<TCtx, TPath, TParent>
 	errors(...args: unknown[]): WSRouteBuilder<TCtx, TPath, TParent> {
 		const named = typeof args[0] === "object" && args[0] !== null ? (args[0] as ErrorFactories) : null
@@ -93,12 +122,19 @@ export class WSRouteBuilder<TCtx, TPath extends string, TParent> {
 	/** Validate the upgrade request's params, search, headers and cookies onto ctx.input. */
 	input<const TSchemas extends NonBodyInput>(
 		schemas: TSchemas,
-	): WSRouteBuilder<TCtx & { readonly input: InferInputMap<TSchemas> }, TPath, TParent> {
+	): WSRouteBuilder<
+		TCtx & {
+			/** Validated params, search, headers and cookies of the upgrade request. */ readonly input: InferInputMap<TSchemas>
+		},
+		TPath,
+		TParent
+	> {
 		return this.#next<TCtx & { readonly input: InferInputMap<TSchemas> }>({
 			input: { schemas, step: compileInput(schemas, ["GET"], this.#s.path) },
 		})
 	}
 
+	/** Set the route's meta, merged over the chain's. `deprecated`, `invalidate`, `mcp` and `security` are type errors. */
 	meta<TRouteMeta extends WsMeta<TParent extends { readonly $meta: infer TMeta } ? TMeta : never>>(
 		meta: TRouteMeta,
 	): WSRouteBuilder<TCtx, TPath, TParent> {

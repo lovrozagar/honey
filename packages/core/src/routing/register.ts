@@ -48,6 +48,7 @@ export type RouteHandler = RouteRecord & {
 	readonly dk: ReadonlySet<string>
 	/** the factory `.errors(factory, ...keys)` named; its keys come from it, not the app's */
 	readonly ef: ErrorFactories | null
+	/** The route's handler, called after its middleware and `.input()` step; on a WebSocket route, the upgrade. */
 	readonly fn: (ctx: object) => MaybePromise<Response>
 	/** the compiled `.input()` step, run after the middleware and before `fn`; `null` without `.input()` */
 	readonly in: InputStep | null
@@ -69,21 +70,32 @@ export type RouteHandler = RouteRecord & {
 export type RouteSource = Omit<RouteHandler, "id" | "mt" | "rp" | "sg">
 
 /** One `app.use(mw)`: the handle it returns has to register a route, or `mw` runs nowhere. */
-export type ChainNode = { readonly mw: RuntimeMiddleware; readonly parent: ChainNode | null; used: boolean }
+export type ChainNode = {
+	/** The middleware this `use(mw)` call added. */ readonly mw: RuntimeMiddleware
+	/** The node this one chains onto, or `null` at the root. */ readonly parent: ChainNode | null
+	/** Whether a route has been registered, mounted or served through this chain. */ used: boolean
+}
 
 /** A route builder still waiting for `.handler()`, reported at finalize. */
-export type PendingRoute = { readonly id: string }
+export type PendingRoute = {
+	/** The route's methods (comma-separated when several) and full path, as the finalize error names them. */ readonly id: string
+}
 
 /** One path-scoped `use(path, mw)`. */
 export type ScopedEntry = {
 	/** the middleware behind a request-path check, for routes the scope covers only partly */
 	readonly guard: RuntimeMiddleware
+	/** The middleware as registered, for routes the scope covers entirely. */
 	readonly mw: RuntimeMiddleware
 	/** canonical full-path pattern, rebased against the handle's basePath */
 	readonly prefix: string
+	/** The scope prefix, parsed. */
 	readonly segs: readonly Segment[]
 }
 
+/**
+ * Everything one app registers: its routes, middleware chains, scopes and settings. Handles derived from one app share it.
+ */
 export type HoneyGraph = {
 	/** root wildcards a loaded app registered outside its tree: what its unserved leaves delegate to */
 	readonly catchAll: Map<RouteId, RouteHandler>
@@ -91,18 +103,23 @@ export type HoneyGraph = {
 	readonly chains: ChainNode[]
 	/** bumped by every registration; finalize re-runs when it moves */
 	epoch: number
+	/** The compiled routing table of the last finalize; reused while `epoch` is unchanged. */
 	final: FinalTable | null
 	/** the error boundary and miss answer dispatch compiles into every chain, created once */
 	hooks: FinalizeHooks | null
+	/** Route builders still waiting for `.handler()`. */
 	readonly pending: Set<PendingRoute>
 	/** the route data of the tree `routeTree()` loaded; `null` while the app builds its own tree */
 	loaded: Readonly<Record<RouteId, RouteEntry>> | null
+	/** The routes this app runs, by route id: registered, mounted, or carried by a loaded tree. */
 	readonly records: Map<RouteId, RouteHandler>
+	/** The router tree: built as routes register, or the tree `routeTree()` loaded. */
 	root: TreeNode
 	/** path-scoped middleware, in registration order */
 	readonly scoped: ScopedEntry[]
 	/** chains of the handles that served a request: what 404 and 405 run when there are no routes */
 	readonly served: Set<readonly RuntimeMiddleware[]>
+	/** The app's settings, shared by every handle. */
 	readonly settings: AppSettings<unknown>
 	/** routes a loaded app registered that its tree lacks: the tree is stale, said at finalize */
 	readonly unexpected: RouteId[]
@@ -110,9 +127,13 @@ export type HoneyGraph = {
 
 /** What one handle contributes to the routes registered or mounted through it. */
 export type HandleView = {
+	/** The path prefix the handle's routes register under. */
 	readonly basePath: string
+	/** The middleware the handle's routes run first, in order. */
 	readonly chain: readonly RuntimeMiddleware[]
+	/** Meta set on the handle with `.meta(values)`, applied to every route it registers. */
 	readonly chainMeta: Readonly<Record<string, unknown>> | null
+	/** Values set on the handle with `.context()`, copied onto each request context. */
 	readonly contextValues: Readonly<Record<string, unknown>> | null
 	/** the `use(mw)` call that created this chain; `null` on the root handle */
 	readonly node: ChainNode | null
@@ -160,7 +181,6 @@ export function addChain(g: HoneyGraph, parent: ChainNode | null, mw: RuntimeMid
 	return node
 }
 
-/** Register one route at every leaf its pattern occupies (an optional last param places two). */
 /** Throw the duplicate-route error when `g` already has a route at `method` and `segments`. */
 export function assertRouteFree(g: HoneyGraph, method: string, segments: readonly Segment[]): RouteId {
 	const id = routeId(method, canonical(segments))
@@ -175,6 +195,7 @@ export function isServed(r: { readonly xm: Readonly<Record<string, unknown>> | n
 	return (r.xm as { [SERVED]?: unknown } | null)?.[SERVED] === true
 }
 
+/** Register one route at every leaf its pattern occupies (an optional last param places two). */
 export function addRoute(g: HoneyGraph, method: string, segments: readonly Segment[], source: RouteSource): RouteId {
 	const id = assertRouteFree(g, method, segments)
 	const record = { ...source, id, mt: null, rp: canonical(segments), sg: segments }

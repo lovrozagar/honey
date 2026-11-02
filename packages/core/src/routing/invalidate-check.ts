@@ -14,6 +14,7 @@
 /** How a missing `invalidate` is reported. Default `"warn"`. */
 export type InvalidateCheckLevel = "error" | "off" | "warn"
 
+/** How a mutation without `invalidate` is checked: a level alone, or an object that also names an entity key. */
 export type InvalidateCheckConfig =
 	| {
 			/**
@@ -22,6 +23,7 @@ export type InvalidateCheckConfig =
 			 * key's name; the app says which one it uses.
 			 */
 			entityKey?: string
+			/** How a missing `invalidate` is reported; default `"warn"`. */
 			level?: InvalidateCheckLevel
 	  }
 	| InvalidateCheckLevel

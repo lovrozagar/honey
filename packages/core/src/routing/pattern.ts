@@ -14,9 +14,23 @@
  */
 import { encodeSegment } from "./request-path.ts"
 
-export type StaticSegment = { readonly k: "static"; readonly v: string }
-export type ParamSegment = { readonly k: "param"; readonly n: string; readonly o: boolean }
-export type WildcardSegment = { readonly k: "wildcard"; readonly n: string }
+/** A literal path segment, such as `users` in `/users/:id`. */
+export type StaticSegment = {
+	/** Discriminant of the `Segment` union. */ readonly k: "static"
+	/** The segment's text, percent-encoded as in a request path. */ readonly v: string
+}
+/** A named path param, such as `:id`; optional when it ends in `?`. */
+export type ParamSegment = {
+	/** Discriminant of the `Segment` union. */ readonly k: "param"
+	/** The param's name, without the `:` or `?`. */ readonly n: string
+	/** Whether the param may be absent; only the last segment can be optional. */ readonly o: boolean
+}
+/** A trailing wildcard (`*` or `*name`) that matches the rest of the path, which may be empty. */
+export type WildcardSegment = {
+	/** Discriminant of the `Segment` union. */ readonly k: "wildcard"
+	/** The wildcard's name, `*` when it has none. */ readonly n: string
+}
+/** One parsed piece of a route pattern: a literal, a param or a wildcard. */
 export type Segment = ParamSegment | StaticSegment | WildcardSegment
 
 /** `METHOD /canonical/pattern`: the stable identity of a route across apps, trees and codegen. */

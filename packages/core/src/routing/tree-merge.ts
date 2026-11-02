@@ -15,6 +15,7 @@ import {
 	type TreeNode,
 } from "./tree.ts"
 
+/** A route tree, or a tree paired with meta laid over the meta of each of its routes. */
 type TreeInput = RouteTree | [RouteTree, Record<string, unknown>]
 
 function mergeMethodMap(target: Record<string, RouteId>, source: Record<string, RouteId>, path: string): void {

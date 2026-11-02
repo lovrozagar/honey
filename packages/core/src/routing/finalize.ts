@@ -41,10 +41,13 @@ export type Plan = {
 	readonly cv: Readonly<Record<string, unknown>> | null
 	/** the route's middleware as registered, untraced: what a document reads their names and error factories off */
 	readonly mw: readonly RuntimeMiddleware[]
+	/** How a throw from this route's chain becomes a response: declared error keys and the boundary. */
 	readonly policy: ErrorPolicy
 	/** what a CORS preflight for this route runs: the chain without the handler, compiled on first use */
 	pf: CompiledChain | null
+	/** The middleware `pf` compiles: the route's chain, traced when the app has telemetry. */
 	readonly pfChain: readonly RuntimeMiddleware[]
+	/** What the request context reads from the route: its id, pattern, meta and error factories. */
 	readonly route: RouteInfo
 	/** chain + handler; never rejects */
 	readonly run: CompiledChain
@@ -52,7 +55,9 @@ export type Plan = {
 
 /** What dispatch compiles into every chain: the error boundary and the 404/405 answer. */
 export type FinalizeHooks = {
+	/** Turns a value thrown inside a chain into the response the app answers with. */
 	readonly convert: ChainErrorConverter
+	/** The 404 or 405 answer, run as a chain's final step. */
 	readonly miss: (ctx: object) => MaybePromise<Response>
 	/** the fixed 404, for a miss whose chain runs nothing */
 	readonly notFound: (nodeOut: boolean) => Response
@@ -60,9 +65,13 @@ export type FinalizeHooks = {
 
 /** What one graph serves. */
 export type FinalTable = {
+	/** The graph's epoch this table was compiled at; a registration or settings change moves it and makes the table stale. */
 	readonly epoch: number
+	/** The plan a 404 or 405 runs when no route answers the request. */
 	readonly miss: Plan
+	/** Builds the fixed 404 for a miss whose chain runs nothing, or `null` when middleware must run first. */
 	readonly notFound: ((nodeOut: boolean) => Response) | null
+	/** Every route's plan, by route id. */
 	readonly plans: ReadonlyMap<RouteId, Plan>
 	/** method → path → plan, for patterns without params or wildcards */
 	readonly statics: Readonly<Record<string, Readonly<Record<string, Plan>>>>

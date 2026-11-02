@@ -8,15 +8,16 @@ import type { OutputSchemas } from "./output-types.ts"
 import type { RouteRecord } from "./record.ts"
 import type { HttpMethod } from "./types.ts"
 
+/** One path position in the router tree: the routes served exactly here and the children that continue the path. */
 export type TreeNode = {
 	/** dynamic param child: { n: param name, c: child subtree } */
-	d: { c: TreeNode; n: string } | null
+	d: { /** The subtree below the param. */ c: TreeNode; /** The param's name. */ n: string } | null
 	/** method → route id at this exact path */
 	m: Record<string, RouteId> | null
 	/** static children: literal path segment → child subtree (null-prototype) */
 	s: Record<string, TreeNode>
 	/** wildcard: { n: wildcard name, m: method → route id } */
-	w: { m: Record<string, RouteId>; n: string } | null
+	w: { /** Wildcard route ids by method. */ m: Record<string, RouteId>; /** The wildcard's name. */ n: string } | null
 	/** websocket route id for this path */
 	ws: RouteId | null
 }
@@ -41,15 +42,26 @@ export type RouteEntry = {
 	out?: OutputSchemas | null
 }
 
+/** One route's entry in `RouteTree.meta`. Declared empty, so any object fits. */
 export interface RouteMeta {}
 
 /** Format of route trees: topology + per-route data. */
 export const ROUTE_TREE_VERSION = 2
 
+/**
+ * A router tree and the data of the routes it holds, as `toRouteTree()` returns and generated route files carry.
+ */
 export type RouteTree = {
+	/** Route meta by route id, as generated files write it; `toRouteTree()` leaves it empty. Serving reads `mt` instead. */
 	meta: Record<string, RouteMeta>
+	/** The root of the router topology. */
 	root: TreeNode
+	/** Each route's descriptive data, by route id. */
 	routes: Record<RouteId, RouteEntry>
+	/**
+	 * The tree format version, `ROUTE_TREE_VERSION` on every tree honey writes. Code generation refuses any other;
+	 * `routeTree()` does not read it.
+	 */
 	v?: number
 }
 
@@ -58,6 +70,7 @@ export function dict<T>(): Record<string, T> {
 	return Object.create(null) as Record<string, T>
 }
 
+/** A new node that routes nothing, with a null-prototype `s` map. */
 export function createNode(): TreeNode {
 	return { d: null, m: null, s: dict<TreeNode>(), w: null, ws: null }
 }
@@ -232,7 +245,11 @@ function wellFormed(node: TreeNode): boolean {
 }
 
 /** Reject a tree whose leaves are not route ids: a `routes.gen.ts` written by an older honey holds handler objects there. */
-export function assertTreeFormat(tree: { root?: unknown; routes?: unknown; v?: unknown }): void {
+export function assertTreeFormat(tree: {
+	/** The tree's root node. */ root?: unknown
+	/** The tree's route data by id. */ routes?: unknown
+	/** The tree format version; not checked here. */ v?: unknown
+}): void {
 	if (!isObject(tree) || !isObject(tree.root) || !isObject(tree.routes)) throw new Error(STALE)
 	if (!wellFormed(tree.root as TreeNode)) throw new Error(STALE)
 }

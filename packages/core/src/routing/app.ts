@@ -27,6 +27,11 @@ import type { HttpMethod, MergePath, PrefixRoutes } from "./types.ts"
 
 export { GRAPH } from "./register.ts"
 
+/**
+ * An app handle. Start a route with `get`, `post` or another method call and register it with `.handler()`, mount
+ * sub-apps with `route`, and serve through `fetch`. `use()`, `basePath()`, `context()` and `meta(values)` return a new
+ * handle on the same app and leave this one unchanged. Create an app with `honey()`.
+ */
 export class Honey<
 	TEnv,
 	TCtx = HoneyContext<TEnv>,
@@ -38,17 +43,25 @@ export class Honey<
 	TTaps extends Record<string, unknown> = {},
 	TScopedMw extends readonly ScopedMwEntry[] = [],
 > extends RouteTreeChain<TEnv> {
+	/** The handle's base path; `/` until `basePath()` sets one. Type only. */
 	declare readonly $basePath: TBasePath
+	/** The ctx type routes of this app start from. Type only. */
 	declare readonly $ctx: TCtx
+	/** The env type given to `honey<TEnv>()`. Type only. */
 	declare readonly $env: TEnv
+	/** The type of the factory set with `errorFactory()`; `never` until then. Type only. */
 	declare readonly $errorFactory: TErrorFactory
+	/** The route meta type declared with `meta<T>()`; `never` until then. Type only. */
 	declare readonly $meta: TMeta
+	/** The routes registered so far, by path and method, without `internal` ones. Type only; the generated client reads it. */
 	declare readonly $routes: TRoutes
+	/** The declared tap payloads. Type only. */
 	declare readonly $taps: TTaps
 	readonly #graph: HoneyGraph
 	/** this handle's view: read-only, reached through a symbol the package does not export */
 	readonly [VIEW]: HandleView
 
+	/** Without arguments, starts a new app, as `honey()` does; the arguments are for the handles honey derives itself. */
 	constructor(graph: HoneyGraph = createGraph(), view: HandleView = ROOT_VIEW) {
 		super(graph.settings as AppSettings<TEnv>)
 		this.#graph = graph
@@ -64,6 +77,7 @@ export class Honey<
 		return new Honey<TEnv>(this.#graph, { ...this[VIEW], ...changes }) as never
 	}
 
+	/** A new handle whose routes register under `prefix`, joined to the current base path. */
 	basePath<P extends string>(
 		prefix: P,
 	): Honey<TEnv, TCtx, TRoutes, TMeta, TErrorFactory, TDefaultErrors, MergePath<TBasePath, P>, TTaps, TScopedMw> {
@@ -172,7 +186,13 @@ export class Honey<
 		TDefaultErrors,
 		TBasePath,
 		TTaps,
-		readonly [...TScopedMw, { readonly adds: TAdds; readonly path: MergePath<TBasePath, TPath> }]
+		readonly [
+			...TScopedMw,
+			{
+				/** The properties the middleware adds to the ctx. */ readonly adds: TAdds
+				/** The path the middleware is scoped to, under the base path. */ readonly path: MergePath<TBasePath, TPath>
+			},
+		]
 	>
 	use(pathOrMw: string | MiddlewareFn<never, unknown>, scopedMw?: MiddlewareFn<never, unknown>): unknown {
 		if (typeof pathOrMw === "string") {
@@ -200,6 +220,10 @@ export class Honey<
 		TTaps,
 		TScopedMw
 	>
+	/**
+	 * Mount a sub-app under this handle's basePath joined with `prefix`: this handle's chain runs before the sub's; the
+	 * sub's own basePath stays part of each path. Throws a `TypeError` when `sub` is not an app.
+	 */
 	route<
 		const TPrefix extends string,
 		TSubRoutes,
@@ -251,27 +275,38 @@ export class Honey<
 		return this.#builder(first, path, rest) as never
 	}
 
+	/** Start a route at `path`, under this handle's base path, for every method with no route of its own there; `.handler()` registers it. */
 	all<const TPath extends string>(path: TPath): StartOf<this, TPath, "ALL"> {
 		return this.#builder("ALL", path) as never
 	}
+	/** Start a `DELETE` route at `path`, under this handle's base path; `.handler()` registers it. */
 	delete<const TPath extends string>(path: TPath): StartOf<this, TPath, "DELETE"> {
 		return this.#builder("DELETE", path) as never
 	}
+	/**
+	 * Start a `GET` route at `path`, under this handle's base path; `.handler()` registers it. It also answers HEAD
+	 * requests, without the body, when the path has no `HEAD` route.
+	 */
 	get<const TPath extends string>(path: TPath): StartOf<this, TPath, "GET"> {
 		return this.#builder("GET", path) as never
 	}
+	/** Start a `HEAD` route at `path`, under this handle's base path; `.handler()` registers it. It takes over HEAD from a `GET` route. */
 	head<const TPath extends string>(path: TPath): StartOf<this, TPath, "HEAD"> {
 		return this.#builder("HEAD", path) as never
 	}
+	/** Start an `OPTIONS` route at `path`, under this handle's base path; `.handler()` registers it. */
 	options<const TPath extends string>(path: TPath): StartOf<this, TPath, "OPTIONS"> {
 		return this.#builder("OPTIONS", path) as never
 	}
+	/** Start a `PATCH` route at `path`, under this handle's base path; `.handler()` registers it. */
 	patch<const TPath extends string>(path: TPath): StartOf<this, TPath, "PATCH"> {
 		return this.#builder("PATCH", path) as never
 	}
+	/** Start a `POST` route at `path`, under this handle's base path; `.handler()` registers it. */
 	post<const TPath extends string>(path: TPath): StartOf<this, TPath, "POST"> {
 		return this.#builder("POST", path) as never
 	}
+	/** Start a `PUT` route at `path`, under this handle's base path; `.handler()` registers it. */
 	put<const TPath extends string>(path: TPath): StartOf<this, TPath, "PUT"> {
 		return this.#builder("PUT", path) as never
 	}
