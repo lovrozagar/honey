@@ -4,7 +4,8 @@ The requests your API sends out are part of its contract too. Declare the events
 `@lovrozagar/honey/webhook`, each type with the schema of its `data`, and pass the contract as `webhooks` when you
 serve the document. Each event appears under OpenAPI 3.1's `webhooks` as one
 [Standard Webhooks](https://www.standardwebhooks.com) delivery: a POST of `{ type, timestamp, data }` with the
-`webhook-id`, `webhook-timestamp` and `webhook-signature` headers. The generated SDKs carry no webhook code yet.
+`webhook-id`, `webhook-timestamp` and `webhook-signature` headers. A TypeScript SDK generated from that document
+verifies a delivery into a typed event; the other languages' SDKs follow.
 
 ## Example
 
@@ -40,3 +41,40 @@ the same, and each attempt is signed when it is sent, so a retry hours later sti
 window. `data` is typed as the schema's output, what the document states, and no schema runs when you sign.
 
 For a body outside a contract, [`signWebhook`](../crypto.md#signing-a-webhook) signs it to the same scheme.
+
+## Receiving
+
+A TypeScript SDK generated from a document with these events writes `<stem>.webhooks.gen.ts`, which exports
+`verifyWebhook(body, headers, secret)`. Pass
+the raw body, before any parse, and the request's headers. It checks a `v1` signature on WebCrypto, in constant time,
+under the secret or, while you rotate, under either of two. It refuses a timestamp more than five minutes from now in
+either direction. It returns the event: check `known` first, then switch on `type`, and `data` is typed by the event.
+An event type your SDK predates comes back with `known: false` and its data as sent, so a newer API never breaks an
+older receiver. A forged, tampered, stale or malformed delivery throws `WebhookVerificationError`, and a secret that
+is not a `whsec_` key throws `TypeError`. Import them from that file, not the SDK's index: it holds the whole verifier and
+imports nothing else, so a receiver bundles no client and needs no credentials.
+
+```ts sdk
+import { verifyWebhook, WebhookVerificationError } from "./shop.webhooks.gen"
+
+export async function receive(request: Request): Promise<Response> {
+	try {
+		const event = await verifyWebhook(
+			await request.text(),
+			request.headers,
+			"whsec_a2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2s=",
+		)
+		if (!event.known) return new Response(null, { status: 204 })
+		switch (event.type) {
+			case "order.shipped":
+				console.log(event.data.orderId, event.data.shippedAt)
+				return new Response(null, { status: 204 })
+		}
+	} catch (e) {
+		if (e instanceof WebhookVerificationError) return new Response(null, { status: 401 })
+		throw e
+	}
+}
+```
+
+Tested by: `emit/ts/webhooks.test.ts`, `emit/ts/runtime-features.test.ts`, kitchen's `tests/e2e/webhook.test.ts`

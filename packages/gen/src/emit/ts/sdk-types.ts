@@ -13,6 +13,7 @@ import { irToTs, type TypeOptions } from "../shared/type-emitter.ts"
 import { runtimeFeatures } from "./http.ts"
 import { importText, RESERVED, shared } from "./sdk-types-preamble.ts"
 import { memberTree } from "./service-map.ts"
+import { webhookTypeNames, webhookTypesText } from "./webhooks.ts"
 
 /** One field of an input object: required or not, by whether any of its members is. */
 type Part = { field: string; required: boolean; type: string }
@@ -194,13 +195,13 @@ function configText(name: string, server: string | undefined): string {
 /** The `${stem}.types.gen.ts` text of `ir` for the SDK `name`, importing the runtime module `runtime`. */
 export function sdkTypesText(ir: IR, name: string, runtime: string): string {
 	const model = sdkModel(ir)
-	const own = [name, `${name}Config`, `${name}Operations`, `${name}Safe`]
+	const own = [name, `${name}Config`, `${name}Operations`, `${name}Safe`, ...webhookTypeNames(ir)]
 	const types: TypeOptions = { refName: componentNames(ir, [...RESERVED, ...own]) }
 	const ctx: Context = { ops: model.opsById, resolve: model.resolve, types }
 	const schemas = model.schemaNames.map(
 		(schema) => `export type ${types.refName?.(schema)} = ${irToTs(ir.schemas[schema] as IRSchema, types)}`,
 	)
-	const body = `${schemas.length === 0 ? "" : `${schemas.join("\n")}\n\n`}${shared(runtimeFeatures(ir))}
+	const body = `${schemas.length === 0 ? "" : `${schemas.join("\n")}\n\n`}${webhookTypesText(ir, types)}${shared(runtimeFeatures(ir))}
 ${configText(name, ir.servers[0])}
 
 /** Every operation of the SDK, by its member path. */

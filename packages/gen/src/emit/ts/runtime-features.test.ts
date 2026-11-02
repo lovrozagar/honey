@@ -1,7 +1,8 @@
 /**
  * A generated SDK ships only the runtime its operations use: no SSE code without an event stream, no WebSocket code
  * without a WebSocket or realtime operation, no realtime code without a realtime one. The app client, which cannot
- * know its routes' transports, ships the whole runtime.
+ * know its routes' transports, ships the whole runtime. Webhook verification is no part of the runtime: a document
+ * with Standard Webhooks events gets it in a file of its own, which imports nothing a receiver would bundle.
  */
 import { spawnSync } from "node:child_process"
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
@@ -24,7 +25,38 @@ const EVENTS = { "/events": { get: { operationId: "events", responses: SSE_OK } 
 const SOCKET = { "/socket": { get: { operationId: "socket", responses: {}, "x-websocket": true } } }
 const FEED = { "/feed": { get: { operationId: "feed", responses: {}, "x-realtime": true } } }
 
-const doc = (paths: Record<string, unknown>) => ({ info: { title: "T", version: "1" }, openapi: "3.1.0", paths })
+const doc = (paths: Record<string, unknown>, webhooks?: Record<string, unknown>) => ({
+	info: { title: "T", version: "1" },
+	openapi: "3.1.0",
+	paths,
+	...(webhooks && { webhooks }),
+})
+
+/** A Standard Webhooks event `type` whose data is `{ [field]: string }`, as core documents it. */
+const event = (type: string, field: string) => ({
+	post: {
+		"x-honey-webhook": "standard-webhooks",
+		requestBody: {
+			content: {
+				"application/json": {
+					schema: {
+						properties: {
+							data: { properties: { [field]: { type: "string" } }, required: [field], type: "object" },
+							timestamp: { format: "date-time", type: "string" },
+							type: { const: type },
+						},
+						required: ["type", "timestamp", "data"],
+						type: "object",
+					},
+				},
+			},
+			required: true,
+		},
+		responses: { "2XX": { description: "Received" } },
+	},
+})
+const UNMARKED = { ping: { post: { responses: { 200: { description: "ok" } } } } }
+const EVENTS_HOOKS = { "order.paid": event("order.paid", "orderId"), "user.created": event("user.created", "email") }
 
 type Mix = { readonly realtime: boolean; readonly sse: boolean; readonly ws: boolean }
 
@@ -124,6 +156,57 @@ describe("the runtime a generated SDK ships", () => {
 		const Api = sdk.Api as new (config: object) => { health(): Promise<unknown> }
 		expect(await new Api({ baseURL: "https://api.test", fetch }).health()).toEqual({ ok: true })
 		expect(calls.map((request) => `${request.method} ${request.url}`)).toEqual(["GET https://api.test/health"])
+	})
+})
+
+/** A receiver that narrows on `known`, then on `type`, every declared event handled or `never` fails to compile. */
+const RECEIVER = `import { verifyWebhook, WebhookVerificationError } from "./api.webhooks.gen"
+
+export async function receive(request: Request, secret: string): Promise<Response> {
+	try {
+		const event = await verifyWebhook(await request.text(), request.headers, secret)
+		if (!event.known) return new Response(null, { status: 204 })
+		switch (event.type) {
+			case "order.paid":
+				return Response.json({ order: event.data.orderId.toUpperCase() })
+			case "user.created":
+				return Response.json({ email: event.data.email.toLowerCase() })
+			default: {
+				const unhandled: never = event
+				return unhandled
+			}
+		}
+	} catch (e) {
+		if (e instanceof WebhookVerificationError) return new Response(null, { status: 401 })
+		throw e
+	}
+}
+`
+
+describe("a receiver of the SDK's webhook events", () => {
+	it("gets a webhooks file of its own, the runtime and the index left as they are without events", () => {
+		const plain = sdkFiles(doc(HEALTH, UNMARKED))
+		const events = sdkFiles(doc(HEALTH, EVENTS_HOOKS))
+		const imports = [...(events.files["api.webhooks.gen.ts"] ?? "").matchAll(/^import .*$/gm)].map((m) => m[0])
+		expect([
+			events.runtime === plain.runtime,
+			events.index === plain.index,
+			"api.webhooks.gen.ts" in plain.files,
+			imports,
+		]).toEqual([true, true, false, ['import type { WebhookEvent } from "./api.types.gen"']])
+	})
+
+	it("narrows each declared event's data under every strictness flag", { timeout: SPAWN_TIMEOUT }, () => {
+		expect(typeErrors({ ...sdkFiles(doc(HEALTH, EVENTS_HOOKS)).files, "receiver.ts": RECEIVER })).toEqual([])
+	})
+
+	it("fails to compile once the document declares an event it does not handle", { timeout: SPAWN_TIMEOUT }, () => {
+		const grown = doc(HEALTH, { ...EVENTS_HOOKS, "user.deleted": event("user.deleted", "reason") })
+		const errors = typeErrors({ ...sdkFiles(grown).files, "receiver.ts": RECEIVER })
+		expect(errors).toHaveLength(1)
+		expect(errors[0]).toMatch(
+			/^receiver\.ts\(\d+,\d+\): error TS2322: Type 'UserDeletedWebhookEvent' is not assignable to type 'never'/,
+		)
 	})
 })
 

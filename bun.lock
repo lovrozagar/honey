@@ -146,6 +146,7 @@
         "zod": "catalog:",
       },
       "devDependencies": {
+        "@lovrozagar/honey-clients": "workspace:*",
         "@playwright/test": "catalog:",
         "typescript": "catalog:",
       },
@@ -250,6 +251,7 @@
         "@types/node": "catalog:",
         "@vitest/coverage-v8": "4.1.10",
         "oxfmt": "0.63.0",
+        "standardwebhooks": "1.1.1",
         "ts-morph": "catalog:",
         "typescript": "catalog:",
         "vitest": "catalog:",

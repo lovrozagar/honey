@@ -34,6 +34,7 @@ import {
 	RUST_KEEP_CROSS_ORIGIN_HEADERS,
 	RUST_LEAKY_LOG,
 	RUST_RAW_PATH_PARAMS,
+	SIGNATURE_VALUE_COMPARE,
 } from "../security/mutants.ts"
 
 /** A language toolchain a guard's cases compile with. */
@@ -93,6 +94,14 @@ export const GUARDS: readonly Guard[] = [
 		catches: "a cross-origin redirect hop that keeps the auth header, cookies and configured headers (H18.10)",
 		disable: (original) => ({ runtimeSource: patchedRuntime(runtime(original), KEEP_CROSS_ORIGIN_HEADERS) }),
 		id: "ts-cross-origin-auth",
+		module: "packages/gen/src/emit/ts/http.ts",
+	},
+	{
+		catches: "a webhook verify that compares the signature by value, a timing oracle on it (H18.9)",
+		disable: (original) => ({
+			webhookSource: patchedRuntime(original.webhookSource as () => string, SIGNATURE_VALUE_COMPARE),
+		}),
+		id: "ts-webhook-ct-verify",
 		module: "packages/gen/src/emit/ts/http.ts",
 	},
 	{

@@ -2,7 +2,8 @@
  * The docs' TypeScript SDK code compiles against an SDK generated from the docs' API (bit 20): every `ts sdk` block
  * on a docs page and docs/examples/ts/example.ts, each importing the client from `./kitchen`, type-checked by tsc
  * beside the generated files. A realtime block imports from `./live`, an SDK whose document has an `x-realtime`
- * operation, since an SDK ships the realtime helpers only then (plan 32).
+ * operation, since an SDK ships the realtime helpers only then (plan 32). A webhook receiver block imports from
+ * `./shop.webhooks.gen` of the Shop SDK, whose document declares the Standard Webhooks event the webhooks page sends (plan 36).
  */
 import { spawnSync } from "node:child_process"
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
@@ -36,6 +37,41 @@ const LIVE = {
 	paths: { "/feed": { get: { operationId: "feed", responses: {}, "x-realtime": true } } },
 }
 
+/** The API the webhook receiver blocks verify: the `order.shipped` event of docs/capabilities/webhooks.md. */
+const SHOP = {
+	info: { title: "Shop", version: "1" },
+	openapi: "3.1.0",
+	paths: {},
+	webhooks: {
+		"order.shipped": {
+			post: {
+				"x-honey-webhook": "standard-webhooks",
+				requestBody: {
+					content: {
+						"application/json": {
+							schema: {
+								properties: {
+									data: {
+										properties: { orderId: { type: "string" }, shippedAt: { type: "string" } },
+										required: ["orderId", "shippedAt"],
+										type: "object",
+									},
+									timestamp: { format: "date-time", type: "string" },
+									type: { const: "order.shipped" },
+								},
+								required: ["type", "timestamp", "data"],
+								type: "object",
+							},
+						},
+					},
+					required: true,
+				},
+				responses: { "2XX": { description: "Received" } },
+			},
+		},
+	},
+}
+
 /** tsc's errors for `sources` (name → code, each a module beside the generated SDK), by source and line. */
 export function sdkTypeErrors(sources: Readonly<Record<string, string>>, dir: string): string[] {
 	for (const [path, text] of Object.entries(generateSdk(docsDocument(), { name: "Kitchen" }).files))
@@ -44,6 +80,8 @@ export function sdkTypeErrors(sources: Readonly<Record<string, string>>, dir: st
 	for (const [path, text] of Object.entries(generateSdk(LIVE, { name: "Live" }).files))
 		writeFileSync(join(dir, path), text)
 	writeFileSync(join(dir, "live.ts"), 'export * from "./live.index.gen"\n')
+	for (const [path, text] of Object.entries(generateSdk(SHOP, { name: "Shop" }).files))
+		writeFileSync(join(dir, path), text)
 	for (const [name, code] of Object.entries(sources)) writeFileSync(join(dir, name), `${code}export {}\n`)
 	writeFileSync(join(dir, "tsconfig.json"), JSON.stringify({ compilerOptions: OPTIONS, files: Object.keys(sources) }))
 	const out = spawnSync("node", [TSC, "-p", "tsconfig.json"], { cwd: dir, encoding: "utf8" }).stdout

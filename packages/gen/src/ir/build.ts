@@ -7,7 +7,15 @@ import { compareCodeUnits, pascalWords } from "../emit/shared/lang.ts"
 import { type IR, type IRAuth, type IRInfo, type IROperation, type IRSchema, type IRWebhook } from "./model.ts"
 import { schemaToIR } from "./schema.ts"
 import { buildResourceTree } from "./resource-tree.ts"
-import { type Components, extensionsOf, paramsOf, parseOpenApiPath, requestBodies, responsesOf } from "./slots.ts"
+import {
+	type Components,
+	eventOf,
+	extensionsOf,
+	paramsOf,
+	parseOpenApiPath,
+	requestBodies,
+	responsesOf,
+} from "./slots.ts"
 
 type Json = Record<string, unknown>
 
@@ -106,7 +114,7 @@ function infoOf(doc: OpenApiDocument): IRInfo {
 	)
 }
 
-/** Each webhook by name, in code-unit order: its method, JSON payload, text and signature. */
+/** Each webhook by name, in code-unit order: its method, JSON payload, text and Standard Webhooks event. */
 function webhooksOf(doc: OpenApiDocument): IRWebhook[] {
 	const components = (doc.components ?? {}) as Components
 	return Object.keys(doc.webhooks ?? {})
@@ -117,7 +125,9 @@ function webhooksOf(doc: OpenApiDocument): IRWebhook[] {
 				const op = item[method] as Json
 				const json = requestBodies(op, components).find((b) => b.kind === "raw" && b.contentType === "application/json")
 				const webhook: IRWebhook = { method: method.toUpperCase(), name }
+				const event = eventOf(name, op, components)
 				if (json?.kind === "raw") webhook.body = json.schema
+				if (event !== undefined) webhook.event = event
 				if (typeof op.description === "string") webhook.description = op.description
 				if (typeof op.summary === "string") webhook.summary = op.summary
 				return webhook

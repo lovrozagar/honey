@@ -11,6 +11,8 @@ import { realtime } from "@lovrozagar/honey/realtime"
 import { ws } from "@lovrozagar/honey/ws"
 import { requestId } from "@lovrozagar/honey/request-id"
 import * as z from "zod"
+import { events } from "./events.ts"
+import { WEBHOOK_SECRET } from "./webhook-secret.ts"
 
 /* ---- types ---- */
 type Env = Record<string, unknown>
@@ -275,6 +277,23 @@ export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
 		.handler((ctx) =>
 			ctx.res.json("ok", { bundle: (import.meta as { env?: { HONEY_BUNDLE?: boolean } }).env?.HONEY_BUNDLE === true }),
 		)
+
+	/* one delivery of a declared event, signed through the contract at `at` (unix seconds) for the e2e receiver to
+	   verify; a fixed moment without it, so the route-tree differential sees one answer */
+	corsed
+		.get("/webhook-sample")
+		.meta({ internal: true })
+		.input({ search: z.object({ at: z.coerce.number().int().positive().optional() }) })
+		.handler(async (ctx) => {
+			const options = {
+				id: "msg_1",
+				occurredAt: new Date("2027-01-15T08:00:00.000Z"),
+				secrets: WEBHOOK_SECRET,
+				timestamp: ctx.input.search.at ?? 1_800_000_000,
+			}
+			const signed = await events.sign("order.paid", { amount: 4200, orderId: "ord_1" }, options)
+			return ctx.res.json("ok", signed)
+		})
 
 	/* ---- boundary test routes ---- */
 

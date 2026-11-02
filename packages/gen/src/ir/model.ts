@@ -137,10 +137,14 @@ export type IRAuth = { headerName: string; prefix: string }
 
 export type IRInfo = { title?: string; description?: string; version?: string }
 
-/** A request the API sends a subscriber, `body` its JSON payload's schema. */
+/** A Standard Webhooks event: its `type` and its `data`'s schema. */
+export type IRWebhookEvent = { type: string; data: IRSchema }
+
+/** A request the API sends a subscriber, `body` its JSON payload's schema, `event` when it is a Standard Webhooks one. */
 export type IRWebhook = Pick<IROperation, "description" | "method" | "summary"> & {
 	name: string
 	body?: IRSchema
+	event?: IRWebhookEvent
 }
 
 export type IR = {

@@ -3,7 +3,8 @@
  * here and nowhere else, joined into one module in dependency order with their imports of each
  * other dropped. An SDK ships only the transports its operations use: the event-stream modules for an
  * SSE or realtime API, the WebSocket ones for a WebSocket or realtime API, the realtime ones for a
- * realtime API, and only the app client ships its own `createClient`. Both fronts emit it verbatim, so a test that runs the emitted client runs this text.
+ * realtime API, and only the app client ships its own `createClient`. The webhook verifier is no part of it: it ships
+ * in its own file (`webhookSource`), so a receiver bundles nothing else. Both fronts emit it verbatim, so a test that runs the emitted client runs this text.
  */
 import { readFileSync } from "node:fs"
 import type { IR } from "../../ir/model.ts"
@@ -78,6 +79,11 @@ const SIBLING_IMPORT = /^import\s+(?:type\s+)?\{[^}]*\}\s+from\s+"\.\/[\w-]+\.ts
 function moduleSource(name: string): string {
 	const text = readFileSync(new URL(`../../runtime/ts/${name}.ts`, import.meta.url), "utf8")
 	return text.replace(SIBLING_IMPORT, "").trim()
+}
+
+/** The Standard Webhooks verifier, verbatim: it imports nothing, so the webhooks file that carries it stands alone. */
+export function webhookSource(): string {
+	return moduleSource("webhook")
 }
 
 /** The runtime as one module, with `features`' transports: what `runtime.gen.ts` holds. */

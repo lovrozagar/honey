@@ -52,6 +52,15 @@ export async function emittedSdk(
 	return { ...(await load(files, `${stem}.index.gen.ts`)), files }
 }
 
+/** The webhooks file the SDK emits for `document`, imported alone: the one import a receiver makes. */
+export async function emittedWebhooks(
+	document: Record<string, unknown>,
+	options: SdkOptions = { name: "TestSDK" },
+): Promise<Record<string, unknown> & { files: Readonly<Record<string, string>> }> {
+	const { files, stem } = generateSdk(document, options)
+	return { ...(await load(files, `${stem}.webhooks.gen.ts`)), files }
+}
+
 /**
  * The TanStack Query adapter the SDK emits under `tanstackQuery`, imported from its own file: the index
  * never re-exports it, so this is the only way in, and it is the text a consumer compiles.

@@ -113,7 +113,7 @@ const { generateSdk } = (await import(
 const { generateTypes } = (await import(
 	resolve(REPO, "packages/gen/src/emit/ts/type-gen.ts")
 )) as typeof import("../../src/emit/ts/type-gen.ts")
-const { emittedApp, emittedRouteTree, recordingFetch } = (await import(
+const { emittedApp, emittedRouteTree, emittedWebhooks, recordingFetch } = (await import(
 	resolve(REPO, "packages/gen/src/emit/ts/__fixtures__/emitted.ts")
 )) as typeof import("../../src/emit/ts/__fixtures__/emitted.ts")
 const { honeyDoc } = (await import(
@@ -160,6 +160,55 @@ describe("gen adversarial: the TS SDK emitter", () => {
 		const doc = docOf({ "/a": { get: { operationId: "a", responses: OK } } })
 		expect(() => generateSdk(doc, { name: "My SDK" })).toThrow(/identifier/)
 		expect(() => generateSdk(doc, { name: "SDK", stem: '../x"' })).toThrow(/file name/)
+	})
+})
+
+/** A document declaring the Standard Webhooks event `type`, its data an empty object. */
+const webhookDoc = (type: string) => ({
+	...docOf({ "/a": { get: { operationId: "a", responses: OK } } }),
+	webhooks: {
+		[type]: {
+			post: {
+				"x-honey-webhook": "standard-webhooks",
+				requestBody: {
+					content: {
+						"application/json": {
+							schema: {
+								properties: {
+									data: { type: "object" },
+									timestamp: { format: "date-time", type: "string" },
+									type: { const: type },
+								},
+								required: ["type", "timestamp", "data"],
+								type: "object",
+							},
+						},
+					},
+				},
+				responses: { "2XX": { description: "Received" } },
+			},
+		},
+	},
+})
+
+describe("gen adversarial: the TS SDK's webhook verifier", () => {
+	it("checks a signature only through WebCrypto's verify, never by comparing signature text (H18.9)", () => {
+		const runtime = generateSdk(webhookDoc("order.paid"), { name: "SDK", stem: "sdk" }).files["sdk.webhooks.gen.ts"]
+		expect([
+			/crypto\.subtle\.verify\("HMAC"/.test(runtime ?? ""),
+			/\bsubtle\.sign\(|===\s*btoa\(/.test(runtime ?? ""),
+		]).toEqual([true, false])
+	})
+
+	it("keeps an event type that reads as code a string in its docs, its types and its set of known types", async () => {
+		const type = 'x"]); globalThis.injected = 1; //*/ globalThis.injected = 2; /*\u2028'
+		const sdk = await emittedWebhooks(webhookDoc(type), { name: "SDK", stem: "sdk" })
+		const types = sdk.files["sdk.types.gen.ts"] ?? ""
+		expect([syntaxErrors(types), typeof sdk.verifyWebhook, (globalThis as { injected?: unknown }).injected]).toEqual([
+			[],
+			"function",
+			undefined,
+		])
 	})
 })
 

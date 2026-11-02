@@ -74,6 +74,16 @@ export const LEAKY_LOG = [
 	],
 ] as const
 
+/* a TS webhook verify that signs and compares the base64 text with ===, stopping at the first differing character:
+   a timing oracle on the signature (H18.9), where WebCrypto's verify compares in constant time */
+export const SIGNATURE_VALUE_COMPARE = [
+	['false, ["verify"])', 'false, ["sign", "verify"])'],
+	[
+		'if (await crypto.subtle.verify("HMAC", key, signature, content)) {',
+		'if (btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.sign("HMAC", key, content)))) === btoa(String.fromCharCode(...signature))) {',
+	],
+] as const
+
 /* a Go cross-origin hop that keeps every header: the strip loop deletes nothing (the same-origin refusal stays) */
 export const GO_KEEP_CROSS_ORIGIN_HEADERS = [
 	["redirect.go", "\t\t\tdelete(req.Header, name)\n", "\t\t\tcontinue\n"],

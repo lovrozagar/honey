@@ -823,8 +823,12 @@ describe("the C# runtime within its byte budget (bit 15, G14)", () => {
  * sdk.ts's CallInput, OperationFn and OperationCall types with the entry's `call` and its comment, and the three
  * adapters' signatures, WsInput and doc comments, +1,027. Left in core: #prepare's Accept and Last-Event-ID for the
  * `stream` kind, a few lines inside the one request builder every hook sees.
+ * Plan 36, +5,433 B to 132,145, all in the new webhook.ts, which ships only in an SDK whose document declares
+ * Standard Webhooks events, and there in its own webhooks file, outside runtime.gen.ts: WebhookVerificationError, verifyStandardWebhook (headers read in any case, the five
+ * minute window, every v1 signature checked by subtle.verify under every key) and the envelope parse, with their
+ * docs. Nothing else moved: an SDK without events ships byte-identical runtime text.
  */
-const TS_RUNTIME_BYTES = 126_712
+const TS_RUNTIME_BYTES = 132_145
 
 describe("the TS runtime within its byte budget (bit 11, G14)", () => {
 	it(
@@ -834,7 +838,7 @@ describe("the TS runtime within its byte budget (bit 11, G14)", () => {
 			const { bytes, names, others } = runtimeBytes(runtimeDir("ts"), ".ts")
 			expect({ bytes, names, others }).toEqual({
 				bytes: TS_RUNTIME_BYTES,
-				names: RUNTIME_MODULES.map((name) => `${name}.ts`).sort(),
+				names: [...RUNTIME_MODULES, "webhook"].map((name) => `${name}.ts`).sort(),
 				others: [],
 			})
 		},

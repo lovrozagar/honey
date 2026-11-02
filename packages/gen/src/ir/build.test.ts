@@ -241,3 +241,80 @@ describe("toIR: the SDK emitters' fixture documents", () => {
 		])
 	})
 })
+
+/** A Standard Webhooks event `type` as core documents it: the marker and the `{ type, timestamp, data }` envelope. */
+const marked = (type: string, data: Json, envelope: Json = {}) => ({
+	post: {
+		"x-honey-webhook": "standard-webhooks",
+		requestBody: {
+			content: {
+				"application/json": {
+					schema: {
+						properties: { data, timestamp: { format: "date-time", type: "string" }, type: { const: type } },
+						required: ["type", "timestamp", "data"],
+						type: "object",
+						...envelope,
+					},
+				},
+			},
+			required: true,
+		},
+		responses: { "2XX": { description: "Received" } },
+	},
+})
+
+const BATCH = { properties: { rows: { type: "integer" } }, required: ["rows"], type: "object" }
+
+describe("toIR: Standard Webhooks events", () => {
+	it("reads a marked webhook's event type and data, the envelope inline or a component; an unmarked one has none", () => {
+		const ir = toIR({
+			...withWebhooks({
+				"batch.complete": marked("batch.complete", BATCH),
+				"batch.failed": marked("batch.failed", { $ref: "#/components/schemas/Batch" }),
+				plain: posted(),
+			}),
+			components: { schemas: { Batch: BATCH } },
+		} as OpenApiDocument)
+		expect(ir.webhooks.map((w) => [w.name, w.event])).toEqual([
+			[
+				"batch.complete",
+				{
+					data: {
+						fields: [{ name: "rows", required: true, schema: { kind: "scalar", type: "integer" } }],
+						kind: "object",
+					},
+					type: "batch.complete",
+				},
+			],
+			["batch.failed", { data: { kind: "ref", name: "Batch" }, type: "batch.failed" }],
+			["plain", undefined],
+		])
+	})
+
+	it("reads an envelope behind a component reference", () => {
+		const envelope = marked("ping", { type: "object" }).post.requestBody.content["application/json"].schema
+		const hook = marked("ping", {})
+		hook.post.requestBody.content["application/json"].schema = { $ref: "#/components/schemas/PingEvent" } as never
+		const ir = toIR({
+			...withWebhooks({ ping: hook }),
+			components: { schemas: { PingEvent: envelope } },
+		} as OpenApiDocument)
+		expect(ir.webhooks[0]?.event).toEqual({ data: { fields: [], kind: "object" }, type: "ping" })
+	})
+
+	it("refuses a marked webhook it could not verify into a typed event, naming it", () => {
+		const read = (hook: Json) => () => toIR(withWebhooks({ "batch.complete": hook }))
+		expect(read(marked("batch.failed", BATCH))).toThrow(
+			'x-honey-webhook on webhook "batch.complete": the envelope\'s type const is "batch.failed", not the webhook\'s name',
+		)
+		expect(read(marked("batch.complete", BATCH, { properties: { type: { const: "batch.complete" } } }))).toThrow(
+			'x-honey-webhook on webhook "batch.complete": the body is not a { type, timestamp, data } envelope',
+		)
+		expect(read({ post: { "x-honey-webhook": "standard-webhooks", responses: {} } })).toThrow(
+			'x-honey-webhook on webhook "batch.complete": the body is not a { type, timestamp, data } envelope',
+		)
+		expect(read({ post: { ...marked("batch.complete", BATCH).post, "x-honey-webhook": "other" } })).toThrow(
+			'x-honey-webhook on webhook "batch.complete": "other" is not standard-webhooks',
+		)
+	})
+})

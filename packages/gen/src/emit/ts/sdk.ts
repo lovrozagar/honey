@@ -1,7 +1,8 @@
 /**
  * The TypeScript SDK front (F1): `new <Name>(config)` over the vendored runtime. Five files under
  * one stem: the class, the service map it dispatches by, the types it merges with, the runtime
- * verbatim, and the index a consumer imports. Read from the IR alone (H2).
+ * verbatim, and the index a consumer imports; a sixth for a document with Standard Webhooks events,
+ * `verifyWebhook` on its own so a receiver imports nothing else. Read from the IR alone (H2).
  */
 import { type OpenApiDocument, toIR } from "../../ir/build.ts"
 import type { IRAuth } from "../../ir/model.ts"
@@ -12,6 +13,7 @@ import { runtimeFeatures, runtimeSource, type TsRuntimeFeatures } from "./http.t
 import { sdkTypesText } from "./sdk-types.ts"
 import { tanstackQueryText } from "./tanstack-query.ts"
 import { memberTree, serviceMapText } from "./service-map.ts"
+import { webhooksText } from "./webhooks.ts"
 
 export { sdkMemberPaths, serviceMapOf } from "./service-map.ts"
 
@@ -165,6 +167,7 @@ export function generateSdk(document: Record<string, unknown>, options: SdkOptio
 		[`${stem}.runtime.gen.ts`]: runtimeSource(features),
 		[`${stem}.types.gen.ts`]: sdkTypesText(ir, name, runtime),
 	}
+	if (ir.webhooks.some((webhook) => webhook.event)) files[`${stem}.webhooks.gen.ts`] = webhooksText(ir, stem)
 	/* the index never names it: its text must not vary by option, and it must never name query-core */
 	if (options.tanstackQuery === true) files[`${stem}.tanstack-query.gen.ts`] = tanstackQueryText(ir, name, stem)
 	return { files, notices, stem }

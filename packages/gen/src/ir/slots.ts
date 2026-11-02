@@ -1,8 +1,8 @@
 /**
  * One operation's slots in the IR: its parameters by where they travel, its request bodies in
  * preference order, its responses by status, and the honey extensions it carries (realtime, SSE,
- * websocket, invalidation…), and for a webhook, how it is signed. Component `$ref`s on parameters,
- * bodies and responses are followed.
+ * websocket, invalidation…), and for a Standard Webhooks event, its type and data. Component `$ref`s on
+ * parameters, bodies, responses and an event's envelope are followed.
  */
 import {
 	type IRBody,
@@ -11,6 +11,7 @@ import {
 	type IROperationExtensions,
 	type IRParam,
 	type IRResponse,
+	type IRWebhookEvent,
 } from "./model.ts"
 import { schemaToIR } from "./schema.ts"
 
@@ -235,4 +236,29 @@ function declaredErrors(raw: unknown): IROperationExtensions["errors"] {
 			schema !== null && typeof schema === "object" ? { schema: schemaToIR(schema as Json), status } : { status }
 	}
 	return Object.keys(out).length > 0 ? out : undefined
+}
+
+/**
+ * The Standard Webhooks event the webhook `name` declares through `x-honey-webhook`, from its JSON
+ * body's `{ type, timestamp, data }` envelope; none when unmarked. gen reads documents it did not
+ * write: a marked webhook it could not verify into a typed event is refused, never emitted half.
+ */
+export function eventOf(name: string, op: Json, components: Components): IRWebhookEvent | undefined {
+	const marker = op["x-honey-webhook"]
+	if (marker === undefined) return undefined
+	const refuse = (reason: string) => new Error(`x-honey-webhook on webhook ${JSON.stringify(name)}: ${reason}`)
+	if (marker !== "standard-webhooks") throw refuse(`${JSON.stringify(marker)} is not standard-webhooks`)
+	const content = deref(op.requestBody, components)?.content as Json | undefined
+	const envelope = deref((content?.["application/json"] as Json | undefined)?.schema, components)
+	const properties = (envelope?.properties ?? {}) as Json
+	const required = Array.isArray(envelope?.required) ? envelope.required : []
+	const type = (properties.type as Json | undefined)?.const
+	if (
+		typeof type !== "string" ||
+		properties.data === undefined ||
+		!["type", "timestamp", "data"].every((key) => required.includes(key))
+	)
+		throw refuse("the body is not a { type, timestamp, data } envelope")
+	if (type !== name) throw refuse(`the envelope's type const is ${JSON.stringify(type)}, not the webhook's name`)
+	return { data: schemaToIR(properties.data as Json), type }
 }

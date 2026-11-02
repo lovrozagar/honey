@@ -7,7 +7,7 @@
 		".": "./src/app.ts"
 	},
 	"scripts": {
-		"generate": "BUN_OPTIONS=--conditions=honey-source honey generate",
+		"generate": "BUN_OPTIONS=--conditions=honey-source honey generate && bun --conditions=honey-source honey-clients generate --app src/gen-app.ts --target ts --ts-name Kitchen --out src/_gen/sdk",
 		"test": "bun test --conditions=honey-source tests/smoke.test.ts",
 		"type:check": "tsc --noEmit"
 	},
@@ -16,6 +16,7 @@
 		"zod": "catalog:"
 	},
 	"devDependencies": {
+		"@lovrozagar/honey-clients": "workspace:*",
 		"@playwright/test": "catalog:",
 		"typescript": "catalog:"
 	}
