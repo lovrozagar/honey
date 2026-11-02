@@ -8,11 +8,17 @@
 import { serve } from "../adapters/serve.ts"
 import { PEER_ADDRESS } from "../context/peer.ts"
 
-type FetchApp<TEnv> = { fetch(request: Request, env: TEnv): Response | Promise<Response> }
+/** Anything with a `fetch` handler, such as a honey app. */
+type FetchApp<TEnv> = {
+	/** Answers `request`, with `env` as the app's environment. */
+	fetch(request: Request, env: TEnv): Response | Promise<Response>
+}
 
+/** Per-request options for a `TestClient` call. */
 export type TestRequestOptions = {
 	/** Sent as `multipart/form-data`, one field per entry. */
 	form?: Record<string, string>
+	/** Request headers. A `cookie` header is joined with the jar's cookies when `cookies` is on. */
 	headers?: Record<string, string>
 	/** The peer address the request comes from, as a server adapter would report it (`ctx.ip`). In process only. */
 	ip?: string
@@ -22,6 +28,7 @@ export type TestRequestOptions = {
 	search?: Record<string, string>
 }
 
+/** Options for `testClient`. */
 export type TestClientOptions<TEnv> = {
 	/** Keep each response's `Set-Cookie` and send the cookies on later requests. Default off. */
 	cookies?: boolean
@@ -36,13 +43,24 @@ export type TestClientOptions<TEnv> = {
 	transport?: "fetch" | "serve"
 }
 
+/**
+ * A client for an app under test. Each request method resolves to the raw `Response` and follows no redirect. A
+ * `path` is resolved against the app's origin, `http://localhost` in process.
+ */
 export type TestClient = {
+	/** Sends a `DELETE` request. */
 	delete(path: string, options?: TestRequestOptions): Promise<Response>
+	/** Sends a `GET` request. */
 	get(path: string, options?: TestRequestOptions): Promise<Response>
+	/** Sends a `HEAD` request. */
 	head(path: string, options?: TestRequestOptions): Promise<Response>
+	/** Sends an `OPTIONS` request. */
 	options(path: string, options?: TestRequestOptions): Promise<Response>
+	/** Sends a `PATCH` request. */
 	patch(path: string, options?: TestRequestOptions): Promise<Response>
+	/** Sends a `POST` request. */
 	post(path: string, options?: TestRequestOptions): Promise<Response>
+	/** Sends a `PUT` request. */
 	put(path: string, options?: TestRequestOptions): Promise<Response>
 	/** Any method, a custom one included. */
 	request(method: string, path: string, options?: TestRequestOptions): Promise<Response>
@@ -88,6 +106,7 @@ function parseSetCookie(line: string, now: number): { expired: boolean; name: st
 	return { expired, name, value: pair.slice(eq + 1).trim() }
 }
 
+/** A test client for `app`; see `TestClientOptions` for the cookie jar, peer address and transport. */
 export function testClient<TEnv>(app: FetchApp<TEnv>, options: TestClientOptions<TEnv>): TestClient {
 	const jar = new Map<string, string>()
 	let server: ReturnType<typeof serve> | null = null

@@ -12,40 +12,69 @@ import type { RemoteContext } from "./traceparent.ts"
 
 /** OpenTelemetry's `TraceState`, as its spans carry one. */
 type OtelTraceState = {
+	/** The value stored under `key`, or `undefined`. */
 	get(key: string): string | undefined
+	/** The state as a `tracestate` header value. */
 	serialize(): string
+	/** A new state with `key` set and moved to the front. */
 	set(key: string, value: string): OtelTraceState
+	/** A new state without `key`. */
 	unset(key: string): OtelTraceState
 }
 
+/** OpenTelemetry's `SpanContext`, the part the adapter reads and builds. */
 type OtelSpanContext = {
+	/** `true` for a span context that came from another process. */
 	readonly isRemote?: boolean
+	/** The span id: 16 lowercase hex characters. */
 	readonly spanId: string
+	/** The trace flags byte; the lowest-order flag marks the trace as sampled. */
 	readonly traceFlags: number
+	/** The trace id: 32 lowercase hex characters. */
 	readonly traceId: string
+	/** The `tracestate`, when the span context carries one. */
 	readonly traceState?: OtelTraceState
 }
 
+/** OpenTelemetry's span options, the part the adapter passes to `startSpan`. */
 type OtelSpanOptions = {
+	/** Attributes set on the span when it starts. */
 	readonly attributes?: Attributes
+	/** OpenTelemetry's `SpanKind` number: 0 internal, 1 server, 2 client. */
 	readonly kind?: number
-	readonly links?: { readonly context: OtelSpanContext }[]
+	/** Spans this one is linked to without being their child. */
+	readonly links?: {
+		/** The linked span's context. */
+		readonly context: OtelSpanContext
+	}[]
 }
 
 /** The part of `@opentelemetry/api` the adapter uses: pass the module itself. */
 export type OtelApi = {
+	/** OpenTelemetry's context API. */
 	readonly context: {
+		/** The ambient context. */
 		active(): unknown
+		/** Runs `fn` with `context` as the ambient context. */
 		with<T>(context: unknown, fn: () => T): T
 	}
+	/** OpenTelemetry's trace API. */
 	readonly trace: {
+		/** A copy of `context` with no active span. */
 		deleteSpan(context: unknown): unknown
-		getTracer(name: string): { startSpan(name: string, options?: OtelSpanOptions, context?: unknown): Span }
+		/** The tracer named `name`. */
+		getTracer(name: string): {
+			/** Starts a span named `name` as a child of the active span in `context`; with none there, it starts a new trace. */
+			startSpan(name: string, options?: OtelSpanOptions, context?: unknown): Span
+		}
+		/** A copy of `context` with `span` as its active span. */
 		setSpan(context: unknown, span: Span): unknown
+		/** A copy of `context` whose active span is the remote one `spanContext` describes, so a span started under it joins that trace. */
 		setSpanContext(context: unknown, spanContext: OtelSpanContext): unknown
 	}
 }
 
+/** Options for `otelAdapter`. */
 export type OtelAdapterOptions = {
 	/** fire-and-forget error reporting: never awaited, never shapes the answer */
 	onError?: (report: TelemetryErrorReport) => unknown
@@ -103,6 +132,7 @@ function isSpan(parent: RemoteContext | Span): parent is Span {
 	return typeof (parent as Partial<Span>).spanContext === "function"
 }
 
+/** The `Telemetry` for `app.telemetry()`, built over the OpenTelemetry API module `api`. Its tracer is named `@lovrozagar/honey`. */
 export function otelAdapter(api: OtelApi, options: OtelAdapterOptions = {}): Telemetry {
 	const otel = api.trace.getTracer("@lovrozagar/honey")
 	const tracer: Tracer = {

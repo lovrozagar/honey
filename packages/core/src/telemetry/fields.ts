@@ -7,15 +7,19 @@
 export type RequestLogEntry = {
 	/** body bytes sent, when the body was counted */
 	readonly bytes?: number
+	/** Milliseconds from the request's arrival until its response body ended or was cancelled, rounded to the microsecond. */
 	readonly durationMs: number
 	/** what the body is: json, text, binary, stream, sse, generate or empty */
 	readonly kind: string
+	/** The HTTP method. */
 	readonly method: string
 	/** without its query */
 	readonly path: string
+	/** The response's `x-request-id` header, when it has one. */
 	readonly requestId?: string
 	/** the route that served it; empty for a request no route served */
 	readonly routeId: string
+	/** The runtime the app is running on, `bun`, `cloudflare`, `node`, or `unknown`. */
 	readonly runtime: string
 	/** the status sent, or "aborted" when the client left before the body ended */
 	readonly status: number | "aborted"

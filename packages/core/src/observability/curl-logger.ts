@@ -16,22 +16,33 @@ import { isSensitiveHeader } from "../telemetry/fields.ts"
 import type { Logger } from "../telemetry/logger.ts"
 import { shellQuote } from "./request-to-curl.ts"
 
+/** Why a log record has no body: body logging is off, the request has none, its type is not allowed, it is too large, or it could not be read. */
 export type BodyOmittedReason = "content-type" | "disabled" | "missing" | "read-error" | "too-large"
 
+/** One logged request: the command and what is known about the exchange. */
 export type CurlLogData = {
+	/** Whether the command carries the request body. */
 	bodyIncluded: boolean
+	/** Why the body is not in the command; `null` when it is. */
 	bodyOmittedReason: BodyOmittedReason | null
+	/** The redacted `curl` command. */
 	curl: string
+	/** Milliseconds from this middleware's start until the rest of the chain returned; a body still streaming is not counted. */
 	duration: number
+	/** The HTTP method. */
 	method: string
+	/** The normalized request path, without the query. */
 	path: string
+	/** `ctx.requestId`, which the `requestId` middleware sets; `null` without it. */
 	requestId: string | null
+	/** The response's HTTP status; a failed request is logged with its error status. */
 	status: number
 }
 
 /** What `skip` sees: everything known before the command is built. */
 export type CurlSkipData = Pick<CurlLogData, "duration" | "method" | "path" | "requestId" | "status">
 
+/** Which request bodies `curlLogger` includes in the command. */
 export type CurlLoggerBodyOptions = {
 	/** Content types whose body is logged: an entry ending in `/` takes the whole family. */
 	allowContentTypes?: readonly string[]
@@ -39,9 +50,15 @@ export type CurlLoggerBodyOptions = {
 	maxBytes?: number
 }
 
+/** Returns the value to log for a header or query parameter, or `null` to leave it out. */
 type Redact = (name: string, value: string) => string | null
 
+/** Options for `curlLogger`. */
 export type CurlLoggerOptions = {
+	/**
+	 * Include the request body: `true` for the defaults (up to 16 KiB of JSON, URL-encoded form, XML or `text/` types),
+	 * or an object to set them. Default off.
+	 */
 	body?: boolean | CurlLoggerBodyOptions
 	/** Take each record instead of the app's logger. */
 	log?: ((data: CurlLogData) => void) | undefined
@@ -185,8 +202,21 @@ export async function buildCurlLogData(
 	}
 }
 
-type CurlCtx = { readonly log: Logger; readonly path: string; readonly req: Request }
+/** The parts of the request context `curlLogger` reads. */
+type CurlCtx = {
+	/** The logger a record goes to unless the `log` option is set; a failing hook or sink is always reported here. */
+	readonly log: Logger
+	/** The normalized request path, without the query. */
+	readonly path: string
+	/** The request, cloned before the handler runs when the body is logged. */
+	readonly req: Request
+}
 
+/**
+ * Middleware that logs each request, failed ones included, as a redacted `curl` command once its response is known:
+ * to the `log` option when set, else at `info` on `ctx.log`. A hook or sink that throws is logged as
+ * `curlLogger failed` and leaves the response alone.
+ */
 export function curlLogger(options: CurlLoggerOptions = {}): MiddlewareFn<CurlCtx> {
 	const redact = redactorsOf(options)
 	return namedMiddleware("curlLogger", async (ctx, next) => {

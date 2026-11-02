@@ -16,7 +16,9 @@ import type { InboundTrust } from "../middleware/request-id.ts"
 import type { AppSettings } from "../routing/settings.ts"
 import { formatTraceparent, type RemoteContext, type TraceIds } from "./traceparent.ts"
 
+/** A value a span attribute can hold: a single primitive, never OpenTelemetry's array form. */
 export type AttributeValue = boolean | number | string
+/** Span attributes by name, such as `http.route`. */
 export type Attributes = Readonly<Record<string, AttributeValue>>
 
 /**
@@ -25,24 +27,52 @@ export type Attributes = Readonly<Record<string, AttributeValue>>
  * way in, not entries a vendor SDK added to the span afterwards.
  */
 export type Span = {
+	/** Records a named event on the span. */
 	addEvent(name: string, attributes?: Attributes): unknown
+	/** Ends the span, once its work has settled and its final attributes are set. */
 	end(): void
+	/** Whether the span records. Honey asks this of the root span alone: when it is `false`, no span is built below it. */
 	isRecording(): boolean
+	/** Sets the attribute `key`, such as `http.route`, on the span. */
 	setAttribute(key: string, value: AttributeValue): unknown
-	setStatus(status: { code: number; message?: string }): unknown
-	spanContext(): { readonly spanId: string; readonly traceFlags: number; readonly traceId: string }
+	/** Sets the span's status; honey passes OpenTelemetry's `ERROR` code, 2. */
+	setStatus(status: {
+		/** OpenTelemetry's `SpanStatusCode` number. */
+		code: number
+		/** A description of the status; honey never sets one, since its spans carry no error message. */
+		message?: string
+	}): unknown
+	/** The span's ids; an all-zero `traceId` means the span has none. */
+	spanContext(): {
+		/** The id of the span within its trace. */
+		readonly spanId: string
+		/** The trace flags byte, passed on in an outbound `traceparent`. */
+		readonly traceFlags: number
+		/** The id of the trace the span belongs to. */
+		readonly traceId: string
+	}
+	/** Renames the span; honey renames the root to `{method} {route}` once the request is routed. */
 	updateName(name: string): unknown
 }
 
+/** What a tracer is asked to start a span with. */
 export type SpanOptions = {
+	/** Attributes set when the span starts. */
 	readonly attributes: Attributes
+	/** `server` for the request's root span, `client` for an outbound call, `internal` for everything else. */
 	readonly kind: "client" | "internal" | "server"
+	/** Remote spans this one is linked to without being their child. */
 	readonly links: readonly RemoteContext[]
 	/** explicit: the span it runs under, a remote one, or `null` for a new trace */
 	readonly parent: RemoteContext | Span | null
 }
 
+/** The tracer `Telemetry` carries: starts spans, and optionally makes one the ambient active span. */
 export type Tracer = {
+	/**
+	 * Starts a span named `name` under `options.parent`, ignoring any ambient span. A throw costs a `telemetry failed`
+	 * warning and the request goes on without that span.
+	 */
 	startSpan(name: string, options: SpanOptions): Span
 	/** run `fn` with `span` as the ambient active span, so the app's own instrumentation nests under it */
 	run?<T>(span: Span, fn: () => T): T
@@ -52,16 +82,21 @@ export type Tracer = {
 export type TelemetryErrorReport = {
 	/** the unknown 5xx's digest, as the client and the operator line have it */
 	readonly digest?: string
+	/** Milliseconds from the request's arrival until the answer was decided, rounded to the microsecond. */
 	readonly durationMs: number
 	/** what was thrown */
 	readonly error: unknown
 	/** what it answered as */
 	readonly honeyError: HoneyError
+	/** The request's HTTP method. */
 	readonly method: string
 	/** without the query */
 	readonly path: string
+	/** The id of the route that served the request; empty when no route did. */
 	readonly routeId: string
+	/** The root span's id; absent when the span has none, as when the tracer failed to start one. */
 	readonly spanId?: string
+	/** The root span's trace id; absent when the span has none, as when the tracer failed to start one. */
 	readonly traceId?: string
 }
 
@@ -69,6 +104,7 @@ export type TelemetryErrorReport = {
 export type Telemetry = {
 	/** fire-and-forget error reporting: never awaited, never shapes the answer */
 	readonly onError: ((report: TelemetryErrorReport) => unknown) | null
+	/** The tracer that starts the request's spans. */
 	readonly tracer: Tracer
 	/** whether an inbound `traceparent` is continued (else only linked); default `false` */
 	readonly trustInbound: InboundTrust
@@ -107,8 +143,11 @@ export class RequestTrace {
 	#current: Span
 	/** the span an error last left, until its http.error is recorded */
 	#failed: Span | null = null
+	/** Whether the root span records; when it does not, or asking it throws, no span is built below it. */
 	readonly recording: boolean
+	/** The request's root span, of kind `server`; an inert span that records nothing when the tracer failed to start one. */
 	readonly root: Span
+	/** The `performance.now()` reading taken as the request came in, before routing. */
 	readonly started: number
 	/** the tracestate of a trace continued from a trusted hop */
 	readonly #state: string | undefined
@@ -118,7 +157,15 @@ export class RequestTrace {
 		s: AppSettings<unknown>,
 		tracer: Tracer,
 		root: Span,
-		{ started, state }: { readonly started: number; readonly state: string | undefined },
+		{
+			started,
+			state,
+		}: {
+			/** The `performance.now()` reading taken as the request came in. */
+			readonly started: number
+			/** The tracestate of a continued trace; `undefined` when none was continued. */
+			readonly state: string | undefined
+		},
 	) {
 		this.#s = s
 		this.#tracer = tracer
@@ -140,7 +187,12 @@ export class RequestTrace {
 	}
 
 	/** The root's trace and span ids, or `null` when it has none. */
-	ids(): { spanId: string; traceId: string } | null {
+	ids(): {
+		/** The root's span id. */
+		spanId: string
+		/** The root's trace id. */
+		traceId: string
+	} | null {
 		const ids = this.#safe(() => idsOf(this.root), null)
 		return ids === null ? null : { spanId: ids.spanId, traceId: ids.traceId }
 	}
@@ -200,6 +252,7 @@ export class RequestTrace {
 		}, undefined)
 	}
 
+	/** Adds an event to the root span, when it records. */
 	event(name: string, attributes?: Attributes): void {
 		if (this.recording) this.#safe(() => this.root.addEvent(name, attributes), undefined)
 	}

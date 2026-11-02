@@ -7,6 +7,7 @@
 import { HoneyError } from "../errors/error.ts"
 import { formatLine, type LogFormat } from "./log-format.ts"
 
+/** A log level, from `trace` (most verbose) to `fatal`; `silent` writes nothing. */
 export type LogLevel = "debug" | "error" | "fatal" | "info" | "silent" | "trace" | "warn"
 
 /** pino's numeric levels; `silent` is above every one. */
@@ -20,23 +21,35 @@ export const LEVELS: Readonly<Record<LogLevel, number>> = /* @__PURE__ */ Object
 	warn: 40,
 })
 
+/** A log method: call it with a message, or with fields and an optional message. */
 type LogFn = {
+	/** Writes a line with this message. */
 	(msg: string): void
+	/** Writes a line with `fields` merged in and an optional message; a top-level `Error` field is written with its name, message, stack and cause. */
 	(fields: Record<string, unknown>, msg?: string): void
 }
 
+/** A leveled logger. A call below the logger's level does no work. */
 export type Logger = {
+	/** The level this logger writes at or above. */
 	readonly level: LogLevel
 	/** A logger that writes `bindings` into every line, over this one's. */
 	child(bindings: Record<string, unknown>): Logger
+	/** Writes at level `debug` (20). */
 	debug: LogFn
+	/** Writes at level `error` (50). */
 	error: LogFn
+	/** Writes at level `fatal` (60). */
 	fatal: LogFn
+	/** Writes at level `info` (30). */
 	info: LogFn
+	/** Writes at level `trace` (10). */
 	trace: LogFn
+	/** Writes at level `warn` (40). */
 	warn: LogFn
 }
 
+/** Options for `createLogger`. */
 export type CreateLoggerOptions = {
 	/** Fields every line carries. */
 	base?: Record<string, unknown>
@@ -59,7 +72,12 @@ export function nodeEnv(): string | undefined {
  * The default level and format for a NODE_ENV. Unset, unreadable or unknown takes production's:
  * forgetting NODE_ENV must never turn on debug output.
  */
-export function defaultsFor(env: string | undefined): { format: LogFormat; level: LogLevel } {
+export function defaultsFor(env: string | undefined): {
+	/** `pretty` in development, else `json`. */
+	format: LogFormat
+	/** `debug` in development, `error` in test, else `info`. */
+	level: LogLevel
+} {
 	if (env === "development") return { format: "pretty", level: "debug" }
 	/* the runner sets NODE_ENV=test, not the author: a quiet test is worth having, a swallowed incident is not */
 	if (env === "test") return { format: "json", level: "error" }

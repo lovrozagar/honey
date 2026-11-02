@@ -5,6 +5,7 @@
  * for logs. The request is cloned, so its body stays readable.
  */
 
+/** Options for `requestToCurl`. */
 export type RequestToCurlOptions = {
 	/** Leave a header out of the command. */
 	excludeHeader?: (name: string, value: string) => boolean
@@ -35,6 +36,11 @@ export function shellQuote(value: string): string {
 	return `${out}'`
 }
 
+/**
+ * The `curl` command for `request`, for a developer to paste. No header is redacted: leave one out with
+ * `excludeHeader`, and use `curlLogger` for logs. The body stays readable, because a clone is read. The body is
+ * decoded as text, so a binary one does not survive. Rejects with a `TypeError` when the body was already read.
+ */
 export async function requestToCurl(request: Request, options: RequestToCurlOptions = {}): Promise<string> {
 	const copy = request.clone()
 	const parts = ["curl", "-X", shellQuote(copy.method)]

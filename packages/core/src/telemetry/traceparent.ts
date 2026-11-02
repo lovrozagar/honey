@@ -9,10 +9,20 @@
 import type { InboundTrust } from "../middleware/request-id.ts"
 
 /** A trace's ids as `traceparent` carries them. */
-export type TraceIds = { readonly flags: number; readonly spanId: string; readonly traceId: string }
+export type TraceIds = {
+	/** The trace flags byte, 0 to 255; the lowest-order flag marks the trace as sampled. */
+	readonly flags: number
+	/** The span id: 16 lowercase hex characters. `parseTraceparent` rejects an all-zero one. */
+	readonly spanId: string
+	/** The trace id: 32 lowercase hex characters. `parseTraceparent` rejects an all-zero one. */
+	readonly traceId: string
+}
 
 /** A span in another process: its ids and, on a continued trace, its `tracestate`. */
-export type RemoteContext = TraceIds & { readonly state: string | undefined }
+export type RemoteContext = TraceIds & {
+	/** The validated `tracestate` header value; `undefined` when absent, invalid, or from an untrusted hop. */
+	readonly state: string | undefined
+}
 
 /** The inbound trace: continued (the remote is the root's parent) or linked; `null` when there is none. */
 export type Inbound = { readonly continued: boolean; readonly remote: RemoteContext } | null
@@ -21,6 +31,7 @@ const TRACEPARENT = /^([0-9a-f]{2})-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})$
 const ZERO_TRACE = "00000000000000000000000000000000"
 const ZERO_SPAN = "0000000000000000"
 
+/** The ids in a `traceparent` header value, or `null` when it is absent or invalid. */
 export function parseTraceparent(header: string | null): TraceIds | null {
 	if (header === null || header.length < 55) return null
 	const version = header.slice(0, 2)
@@ -33,6 +44,7 @@ export function parseTraceparent(header: string | null): TraceIds | null {
 	return { flags: Number.parseInt(flags, 16), spanId, traceId }
 }
 
+/** The version `00` `traceparent` header value for `ids`. */
 export function formatTraceparent(ids: TraceIds): string {
 	return `00-${ids.traceId}-${ids.spanId}-${(ids.flags & 0xff).toString(16).padStart(2, "0")}`
 }
