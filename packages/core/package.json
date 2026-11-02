@@ -264,6 +264,21 @@
 			"types": "./dist/cron/workers.d.ts",
 			"default": "./dist/cron/workers.js"
 		},
+		"./queue": {
+			"honey-source": "./src/queue/define.ts",
+			"types": "./dist/queue/define.d.ts",
+			"default": "./dist/queue/define.js"
+		},
+		"./queue/serve": {
+			"honey-source": "./src/queue/serve.ts",
+			"types": "./dist/queue/serve.d.ts",
+			"default": "./dist/queue/serve.js"
+		},
+		"./queue/workers": {
+			"honey-source": "./src/queue/workers.ts",
+			"types": "./dist/queue/workers.d.ts",
+			"default": "./dist/queue/workers.js"
+		},
 		"./user-agent": {
 			"honey-source": "./src/context/user-agent.ts",
 			"types": "./dist/context/user-agent.d.ts",

@@ -18,6 +18,9 @@ generator.
 | `@lovrozagar/honey/cron`            | `defineCron`, `CronConfig`, `CronDefinition`, `CronHandler`, `CronJob`, `CronSchedule`                                                  |
 | `@lovrozagar/honey/cron/serve`      | `serveCron`, `ServeCronOptions`, `CronHandle`, `CronFailure`                                                                            |
 | `@lovrozagar/honey/cron/workers`    | `workersCron`, `WorkersScheduledController`                                                                                             |
+| `@lovrozagar/honey/queue`           | `queueContract`, `queueMessage`, `defineConsumer`, `deadLetter`, `QueueBodyError`, `QueueDeadLetter`, and their types                   |
+| `@lovrozagar/honey/queue/serve`     | `serveQueue`, `memoryQueueStore`, `QueueStore`, `ServeQueueOptions`, `QueueHandle`, `QueueFailure` and the store's types                |
+| `@lovrozagar/honey/queue/workers`   | `workersQueue`, `WorkersQueueOptions` and the binding's types                                                                           |
 | `@lovrozagar/honey/user-agent`      | `parseUserAgent`, `ParsedUserAgent`, `DeviceType`                                                                                       |
 | `@lovrozagar/honey/ws/workers`      | `workersWebSocket`                                                                                                                      |
 | `@lovrozagar/honey/ws/session`      | `createWsSession`: the session runtime a custom WebSocket adapter builds on                                                             |

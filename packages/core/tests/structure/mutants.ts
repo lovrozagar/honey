@@ -10,6 +10,8 @@ import type { ParsedUserAgent } from "../../src/context/user-agent.ts"
 import type { CompressOptions } from "../../src/middleware/compress.ts"
 import type { CompiledChain } from "../../src/middleware/middleware.ts"
 import type { StaticConfig } from "../../src/response/static.ts"
+import type { QueueConsumer } from "../../src/queue/define.ts"
+import type { QueueHandle, ServeQueueOptions } from "../../src/queue/serve.ts"
 import type { IpLists, IpRestrictOptions } from "../../src/middleware/ip-restrict.ts"
 import type { MemoryStoreOptions, RateLimitOptions } from "../../src/middleware/rate-limit.ts"
 import type { JwtVerifyResult, VerifyJwtOptions } from "../../src/security/jwt.ts"
@@ -151,6 +153,42 @@ export function claimIgnoringServeCron(real: ServeCron): ServeCron {
 			},
 			singleInstance: undefined,
 		} as ServeCronOptions<unknown>)
+}
+
+export type Deliver = typeof import("../../src/queue/deliver.ts").deliver<unknown>
+
+/** deliver that acks a type the contract lacks, as the runner it was ported from did. */
+export function ackingDeliver(real: Deliver): Deliver {
+	return async (consumer, delivery, env, background) => {
+		const { type } = delivery.body as { type: string }
+		if (Object.hasOwn(consumer.schemas, type)) await real(consumer, delivery, env, background)
+		else await delivery.ack()
+	}
+}
+
+/** deliver whose handlers settle directly, with no memory of having settled. */
+export function resettlingDeliver(real: Deliver): Deliver {
+	return (consumer, delivery, env, background) => {
+		const direct =
+			(handler: (typeof consumer.handlers)[string]): typeof handler =>
+			(context) => {
+				const message = {
+					...context.message,
+					ack: () => void delivery.ack(),
+					retry: () => void delivery.retry({ reason: "mutant" }),
+				}
+				return handler({ ...context, message })
+			}
+		const handlers = Object.fromEntries(Object.entries(consumer.handlers).map(([type, h]) => [type, direct(h)]))
+		return real({ ...consumer, handlers }, delivery, env, background)
+	}
+}
+
+export type ServeQueue = (consumer: QueueConsumer<unknown>, options: ServeQueueOptions<unknown>) => QueueHandle
+
+/** serveQueue with no limit on attempts, so a message that always fails never leaves. */
+export function unboundedServeQueue(real: ServeQueue): ServeQueue {
+	return (consumer, options) => real(consumer, { ...options, maxAttempts: Number.MAX_SAFE_INTEGER })
 }
 
 export type SignWebhook = (options: SignWebhookOptions) => Promise<WebhookHeaders>

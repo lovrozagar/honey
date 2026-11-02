@@ -8,7 +8,7 @@ import { type ChildProcess, spawn } from "node:child_process"
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { createServer } from "node:net"
 import { resolve } from "node:path"
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest"
 import { type BuildTarget, createBuildPlugin } from "../../src/build/targets.ts"
 import { SPAWN_TIMEOUT } from "../fixture/spawn-timeout.ts"
 
@@ -256,6 +256,49 @@ describe.sequential("the build plugin's bundles, served (bit 19 h2)", () => {
 			expect(await answered(base, "/ran", 25_000)).toBe("200 ")
 			expect((await answered(base, "/__scheduled?cron=*/5+*+*+*+*", 5_000)).slice(0, 3)).toBe("200")
 			expect(await answered(base, "/ran", 5_000)).toBe("200 */5 * * * *")
+		},
+		SPAWN_TIMEOUT,
+	)
+
+	it(
+		"workers: a real batch runs, and a bad body reaches onDeadLetter through a real dead-letter queue",
+		async (ctx) => {
+			if (!existsSync(WRANGLER)) ctx.skip("wrangler is not installed")
+			const outDir = await viteBuild("workers", "tests/build/fixture/worker-queue.ts", "cloudflare-queue")
+			const wrangler = {
+				compatibility_date: "2026-01-20",
+				main: "index.js",
+				name: "honey-build-queue-fixture",
+				queues: {
+					consumers: [
+						{
+							dead_letter_queue: "fixture-dead",
+							max_batch_size: 2,
+							max_batch_timeout: 1,
+							max_retries: 0,
+							queue: "fixture-jobs",
+						},
+						{ max_batch_size: 1, max_batch_timeout: 1, queue: "fixture-dead" },
+					],
+					producers: [{ binding: "JOBS", queue: "fixture-jobs" }],
+				},
+			}
+			writeFileSync(resolve(outDir, "wrangler.jsonc"), `${JSON.stringify(wrangler, null, 2)}\n`)
+			const port = String(PORTS.workers)
+			const flags = ["--ip", "127.0.0.1", "--port", port, "--inspector-port", "0", "--log-level", "error"]
+			start(WRANGLER, ["dev", ...flags, "--persist-to", resolve(outDir, "state")], { cwd: outDir })
+			const base = `http://127.0.0.1:${port}`
+			expect(await answered(base, "/ran", 25_000)).toBe("200 []")
+			expect(await answered(base, "/send", 5_000)).toBe("200 sent")
+			let ran = ""
+			await vi.waitFor(
+				async () => {
+					ran = await answered(base, "/ran", 5_000)
+					expect(ran).toContain("letter")
+				},
+				{ interval: 200, timeout: 30_000 },
+			)
+			expect(JSON.parse(ran.slice(4))).toEqual(["job 1", "job 2", 'letter fixture-dead gone {"data":3,"type":"gone"}'])
 		},
 		SPAWN_TIMEOUT,
 	)

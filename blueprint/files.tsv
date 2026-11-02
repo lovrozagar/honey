@@ -1110,3 +1110,17 @@ tests/integration/security/cron-adversarial.test.ts	core	test	21	a job slower th
 tests/build/fixture/worker-cron.ts	core	test	21	a Worker entry exporting a cron handler, for the workerd leg	cron.ts
 src/cron/define.test.ts	core	test	21	a definition that could never run	cron.ts
 src/cron/run.test.ts	core	test	21	the bound logger and a throw before the first await	cron.ts
+src/queue/define.ts	core	src	21	queueContract, queueMessage, defineConsumer and deadLetter, ./queue	queue.ts
+src/queue/deliver.ts	core	src	21	one message's run: bodies, settling, delays and letters, shared	queue.ts
+src/queue/workers.ts	core	src	21	workersQueue: a binding's batch, and reporting a dead-letter queue	queue.ts
+src/queue/serve.ts	core	src	21	serveQueue and QueueStore: one claim loop with leases for Node and Bun	queue.ts
+src/queue/memory-store.ts	core	src	21	memoryQueueStore: a leased store in memory, for development	queue.ts
+src/queue/define.test.ts	core	test	21	sending, an empty batch, deadLetter and a missing handler	queue.ts
+src/queue/deliver.test.ts	core	test	21	settling, bad bodies, retryDelay, a handler's context and letters	queue.ts
+src/queue/workers.test.ts	core	test	21	batches, delays, reports and the dead-letter queue path	queue.ts
+src/queue/serve.test.ts	core	test	21	the claim loop under fake clocks: concurrency, leases, attempts, failures and close	queue.ts
+src/queue/memory-store.test.ts	core	test	21	order, delays, leases, stale receipts and copied bodies	queue.ts
+tests/types/queue.typetest.ts	core	test	21	what a contract lets a sender write and a handler read	queue.ts
+tests/integration/queue-runtimes.test.ts	core	test	21	one claim loop running and closing on real Node and Bun children	queue.ts
+tests/integration/security/queue-adversarial.test.ts	core	test	21	an unknown type, a double settle and a message that always fails, rerun by the mutation harness	queue.ts
+tests/build/fixture/worker-queue.ts	core	test	21	a Worker entry exporting a queue handler, for the workerd leg	queue.ts
