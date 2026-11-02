@@ -249,6 +249,21 @@
 			"types": "./dist/ws/route.d.ts",
 			"default": "./dist/ws/route.js"
 		},
+		"./cron": {
+			"honey-source": "./src/cron/define.ts",
+			"types": "./dist/cron/define.d.ts",
+			"default": "./dist/cron/define.js"
+		},
+		"./cron/serve": {
+			"honey-source": "./src/cron/serve.ts",
+			"types": "./dist/cron/serve.d.ts",
+			"default": "./dist/cron/serve.js"
+		},
+		"./cron/workers": {
+			"honey-source": "./src/cron/workers.ts",
+			"types": "./dist/cron/workers.d.ts",
+			"default": "./dist/cron/workers.js"
+		},
 		"./user-agent": {
 			"honey-source": "./src/context/user-agent.ts",
 			"types": "./dist/context/user-agent.d.ts",

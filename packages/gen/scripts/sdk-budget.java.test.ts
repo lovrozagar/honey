@@ -247,7 +247,7 @@ describe("the v1 Java SDK within the budget (bit 16, G13)", () => {
 			ceiling: JAVA_SDK_CEILING,
 			over: overCeiling(measured, JAVA_SDK_CEILING),
 			surfaces: measured.tokens.size,
-		}).toEqual({ ceiling: 113, over: [], surfaces: 71 })
+		}).toEqual({ ceiling: 113, over: [], surfaces: 72 })
 	})
 
 	/* the ceiling's own input, so a surface that shrinks brings the ceiling down instead of leaving stale headroom */

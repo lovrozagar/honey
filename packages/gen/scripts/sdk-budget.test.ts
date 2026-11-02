@@ -114,7 +114,7 @@ describe("the TS SDK within its own budget (bit 21 i1, G13)", () => {
 			ceiling: TS_SDK_CEILING,
 			over: overCeiling(measured, TS_SDK_CEILING),
 			surfaces: measured.tokens.size,
-		}).toEqual({ ceiling: 98, over: [], surfaces: 71 })
+		}).toEqual({ ceiling: 98, over: [], surfaces: 72 })
 	})
 
 	/* the ceiling's own input, so a surface that shrinks brings the ceiling down instead of leaving stale headroom */
@@ -212,7 +212,7 @@ describe("the v1 Go SDK within the budget (bit 12, G13)", () => {
 			ceiling: GO_SDK_CEILING,
 			over: overCeiling(measured, GO_SDK_CEILING),
 			surfaces: measured.tokens.size,
-		}).toEqual({ ceiling: 137, over: [], surfaces: 71 })
+		}).toEqual({ ceiling: 137, over: [], surfaces: 72 })
 	})
 
 	it("measures its largest surface where its ceiling comes from", () => {
@@ -316,7 +316,7 @@ describe("the v1 Rust SDK within the budget (bit 13, G13)", () => {
 			ceiling: RUST_SDK_CEILING,
 			over: overCeiling(measured, RUST_SDK_CEILING),
 			surfaces: measured.tokens.size,
-		}).toEqual({ ceiling: 95, over: [], surfaces: 71 })
+		}).toEqual({ ceiling: 95, over: [], surfaces: 72 })
 	})
 
 	it("measures its largest surface where its ceiling comes from", () => {
@@ -408,7 +408,7 @@ describe("the v1 Python SDK within the budget (bit 14, G13)", () => {
 			ceiling: PYTHON_SDK_CEILING,
 			over: overCeiling(measured, PYTHON_SDK_CEILING),
 			surfaces: measured.tokens.size,
-		}).toEqual({ ceiling: 90, over: [], surfaces: 71 })
+		}).toEqual({ ceiling: 90, over: [], surfaces: 72 })
 	})
 
 	it("measures its largest surface where its ceiling comes from", () => {
@@ -504,7 +504,7 @@ describe("the v1 C# SDK within the budget (bit 15, G13)", () => {
 			ceiling: CSHARP_SDK_CEILING,
 			over: overCeiling(measured, CSHARP_SDK_CEILING),
 			surfaces: measured.tokens.size,
-		}).toEqual({ ceiling: 129, over: [], surfaces: 71 })
+		}).toEqual({ ceiling: 129, over: [], surfaces: 72 })
 	})
 
 	it("measures its largest surface where its ceiling comes from", () => {

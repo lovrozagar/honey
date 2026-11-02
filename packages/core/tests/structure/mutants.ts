@@ -4,6 +4,8 @@
  */
 import type { ServerResponse } from "node:http"
 import type { TapCall } from "../../src/context/context.ts"
+import type { CronDefinition } from "../../src/cron/define.ts"
+import type { CronHandle, ServeCronOptions } from "../../src/cron/serve.ts"
 import type { ParsedUserAgent } from "../../src/context/user-agent.ts"
 import type { CompressOptions } from "../../src/middleware/compress.ts"
 import type { CompiledChain } from "../../src/middleware/middleware.ts"
@@ -123,6 +125,32 @@ export function cubicParseUserAgent(real: ParseUserAgent): ParseUserAgent {
 		;/\bVersion\/(\d+)[\d.]*.*\bSafari\//.exec((header ?? "").slice(0, 512))
 		return real(header)
 	}
+}
+
+export type ServeCron = (cron: CronDefinition<unknown>, options: ServeCronOptions<unknown>) => CronHandle
+
+/** serveCron whose jobs answer at once and work on behind it, so nothing looks to be still running. */
+export function overlappingServeCron(real: ServeCron): ServeCron {
+	return (cron, options) => {
+		const schedules = cron.schedules.map((schedule) => ({
+			...schedule,
+			jobs: schedule.jobs.map(([name, handler]) => [name, async (job) => void handler(job)] as const),
+		})) as CronDefinition<unknown>["schedules"]
+		return real({ ...cron, schedules }, options)
+	}
+}
+
+/** serveCron that asks for a claim and runs the job whatever it answered. */
+export function claimIgnoringServeCron(real: ServeCron): ServeCron {
+	return (cron, options) =>
+		real(cron, {
+			...options,
+			claim: async (key, scheduledAt) => {
+				await options.claim?.(key, scheduledAt)
+				return true
+			},
+			singleInstance: undefined,
+		} as ServeCronOptions<unknown>)
 }
 
 export type SignWebhook = (options: SignWebhookOptions) => Promise<WebhookHeaders>

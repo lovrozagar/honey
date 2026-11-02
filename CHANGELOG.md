@@ -23,6 +23,8 @@ Every deliberate change has its before and after in [the migration guide](https:
 ### Added
 
 - **Tokens with no JWT library.** `@lovrozagar/honey/jwt` signs and verifies compact JWS tokens on WebCrypto, so Node, Bun and Workers run the same code: `signJwt`, `verifyJwt`, `remoteJwks` for an issuer's keys, `decodeJwtPayload`, `importPkcs8` and `isJwsAlgorithm`. `exp` is required unless you opt out, and `jwks` requires `audience` and `issuer`.
+- **Cron on every runtime.** `defineCron` from `@lovrozagar/honey/cron` holds one schedule definition. `workersCron` runs it from a Workers trigger and `serveCron` on one timer for Node and Bun, with overlap skipping, a per-tick `claim` for several instances and a bounded `close`. Expressions that runtimes read differently, such as a numeric weekday, throw at definition.
+- **Workers handlers from the entry.** A `scheduled` or `queue` function exported by the app's entry now lands on the Worker's default export, where workerd calls it. Before, it was a named export nothing reached.
 - **User agents.** `parseUserAgent` from `@lovrozagar/honey/user-agent` reads a header into a coarse browser, OS and device for session lists and new-device checks. It reads the first 512 characters in linear time, and a header is never proof of identity.
 - **Signed webhooks.** `signWebhook` from `@lovrozagar/honey/webhook` answers the Standard Webhooks headers on WebCrypto, one signature per secret during a rotation, proven against the official library.
 - **IP rules for lists you store.** `ipAllowed(ip, lists)` from `@lovrozagar/honey/ip-restrict` gives per-tenant lists `ipRestrict`'s rules, and `isIpRule(rule)` checks a rule before you save it.

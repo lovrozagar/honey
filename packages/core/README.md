@@ -688,11 +688,11 @@ Full reference: [WebSockets, realtime and SSE](https://github.com/lovrozagar/hon
 
 One app runs on each of them; only how it is served differs.
 
-| Runtime            | How it runs                                                                       |
-| ------------------ | --------------------------------------------------------------------------------- |
-| Node               | `serve(app)` from `@lovrozagar/honey/serve`                                       |
-| Bun                | `serve(app)`, or `Bun.serve({ fetch: app.fetch })`                                |
-| Cloudflare Workers | `export default app` — the Worker's `fetch` handler, with named exports beside it |
+| Runtime            | How it runs                                                                                                                      |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| Node               | `serve(app)` from `@lovrozagar/honey/serve`                                                                                      |
+| Bun                | `serve(app)`, or `Bun.serve({ fetch: app.fetch })`                                                                               |
+| Cloudflare Workers | `export default app` — the Worker's `fetch` handler, with named exports beside it; `scheduled` and `queue` move onto the default |
 
 ```ts
 import { detectRuntime, honey, toFetchRequest } from "@lovrozagar/honey"
@@ -1083,8 +1083,9 @@ console.log(await timingSafeEqual("s3cret-token", expected), await timingSafeEqu
 
 Full reference: [internationalization](https://github.com/lovrozagar/honey/blob/main/docs/i18n.md),
 [crypto](https://github.com/lovrozagar/honey/blob/main/docs/crypto.md),
-[JWT](https://github.com/lovrozagar/honey/blob/main/docs/jwt.md) and
-[user agent](https://github.com/lovrozagar/honey/blob/main/docs/user-agent.md).
+[JWT](https://github.com/lovrozagar/honey/blob/main/docs/jwt.md),
+[user agent](https://github.com/lovrozagar/honey/blob/main/docs/user-agent.md) and
+[cron](https://github.com/lovrozagar/honey/blob/main/docs/cron.md).
 
 ## Testing
 
@@ -1246,6 +1247,9 @@ generator.
 | `@lovrozagar/honey/ws/bun`          | `bunWebSocket`                                                                                                                          |
 | `@lovrozagar/honey/ws/node`         | `nodeWebSocket` (with the optional `ws` peer)                                                                                           |
 | `@lovrozagar/honey/webhook`         | `signWebhook`                                                                                                                           |
+| `@lovrozagar/honey/cron`            | `defineCron`, `CronConfig`, `CronDefinition`, `CronHandler`, `CronJob`, `CronSchedule`                                                  |
+| `@lovrozagar/honey/cron/serve`      | `serveCron`, `ServeCronOptions`, `CronHandle`, `CronFailure`                                                                            |
+| `@lovrozagar/honey/cron/workers`    | `workersCron`, `WorkersScheduledController`                                                                                             |
 | `@lovrozagar/honey/user-agent`      | `parseUserAgent`, `ParsedUserAgent`, `DeviceType`                                                                                       |
 | `@lovrozagar/honey/ws/workers`      | `workersWebSocket`                                                                                                                      |
 | `@lovrozagar/honey/ws/session`      | `createWsSession`: the session runtime a custom WebSocket adapter builds on                                                             |

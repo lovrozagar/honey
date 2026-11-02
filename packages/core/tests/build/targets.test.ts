@@ -242,6 +242,24 @@ describe.sequential("the build plugin's bundles, served (bit 19 h2)", () => {
 		SPAWN_TIMEOUT,
 	)
 
+	it(
+		"workers: a cron trigger reaches a job through the built entry",
+		async (ctx) => {
+			if (!existsSync(WRANGLER)) ctx.skip("wrangler is not installed")
+			const outDir = await viteBuild("workers", "tests/build/fixture/worker-cron.ts", "cloudflare-cron")
+			const wrangler = { compatibility_date: "2026-01-20", main: "index.js", name: "honey-build-cron-fixture" }
+			writeFileSync(resolve(outDir, "wrangler.jsonc"), `${JSON.stringify(wrangler, null, 2)}\n`)
+			const port = String(PORTS.workers)
+			const flags = ["--ip", "127.0.0.1", "--port", port, "--inspector-port", "0", "--log-level", "error"]
+			start(WRANGLER, ["dev", "--test-scheduled", ...flags], { cwd: outDir })
+			const base = `http://127.0.0.1:${port}`
+			expect(await answered(base, "/ran", 25_000)).toBe("200 ")
+			expect((await answered(base, "/__scheduled?cron=*/5+*+*+*+*", 5_000)).slice(0, 3)).toBe("200")
+			expect(await answered(base, "/ran", 5_000)).toBe("200 */5 * * * *")
+		},
+		SPAWN_TIMEOUT,
+	)
+
 	// v0: eb3666936c
 	it("node: vite build then node dist serves health + openapi", async () => {
 		const outDir = await viteBuild("node")

@@ -3,8 +3,9 @@
  * from a virtual entry that imports it and starts it the way that target runs an app. Nothing is detected or
  * injected: v1 code-splits through plain dynamic import() (Q4, H23). Bit 21 h: a Worker's module also exports every
  * other named export of the app's entry (a Durable Object class, a WorkerEntrypoint, a Workflow), since a Worker's
- * bindings name classes its main module exports; its default stays honey's fetch. A value workerd takes as no
- * entrypoint (a string, a number) is exported as an inert empty object, so it never stops the Worker.
+ * bindings name classes its main module exports. A value workerd takes as no entrypoint (a string, a number) is
+ * exported as an inert empty object, so it never stops the Worker. Its default holds honey's fetch, plus a `scheduled`
+ * or `queue` function from the entry: workerd calls those only on the default export.
  */
 import { builtinModules } from "node:module"
 
@@ -62,6 +63,9 @@ function serverEntry(app: BuildApp, port: number): string {
 }
 
 /** A Worker: the app is its fetch, its entry's `named` exports its own, and there is nothing to listen on. */
+/* workerd calls these on the default export, and a named one would be an entrypoint nothing reaches */
+const DEFAULT_HANDLERS = ["queue", "scheduled"]
+
 function workerEntry(app: BuildApp, _port: number, named: readonly string[]): string {
 	/* an export name need not be an identifier (`export { x as "a-b" }`) */
 	const names = named.map((name) => (/^[A-Za-z_$][\w$]*$/.test(name) ? name : JSON.stringify(name)))
@@ -77,7 +81,12 @@ function workerEntry(app: BuildApp, _port: number, named: readonly string[]): st
 			: [
 					`import * as entry from "./${app.entry}"`,
 					'const entrypoint = (value) => (typeof value === "function" || (typeof value === "object" && value !== null) ? value : {})',
-					...named.map((name, at) => `const named${at} = entrypoint(entry[${JSON.stringify(name)}])`),
+					/* an export list is static, so a handler moved onto the default leaves its name behind, inert */
+					...named.map((name, at) => {
+						const value = `entry[${JSON.stringify(name)}]`
+						const moved = DEFAULT_HANDLERS.includes(name) ? `typeof ${value} === "function" ? {} : ` : ""
+						return `const named${at} = ${moved}entrypoint(${value})`
+					}),
 					`export { ${names.map((name, at) => `named${at} as ${name}`).join(", ")} }`,
 				]
 	return [
@@ -86,6 +95,9 @@ function workerEntry(app: BuildApp, _port: number, named: readonly string[]): st
 		"",
 		"export default {",
 		"  fetch: (req, env, ctx) => app.fetch(req, env, ctx),",
+		...DEFAULT_HANDLERS.filter((name) => named.includes(name)).map(
+			(name) => `  ...(typeof entry.${name} === "function" ? { ${name}: entry.${name} } : {}),`,
+		),
 		"}",
 	].join("\n")
 }

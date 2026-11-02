@@ -3,6 +3,9 @@
  * the app on node and bun as `serve(app)` does and exports its fetch on a Worker; node's builtins external everywhere,
  * dependencies bundled for a Worker alone, and no other target (H15). v0's five feature-detection cases retire (Q4, H23).
  */
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import { type BuildTarget, createBuildPlugin, type HoneyBuildConfig } from "./targets.ts"
 
@@ -263,5 +266,62 @@ describe("a Worker's named exports (bit 21 h)", () => {
 
 	it.each(["node", "bun"] as const)("%s: no export is passed on: a server's module exports nothing", (target) => {
 		expect(entryOf(plugin(target)).includes("export")).toBe(false)
+	})
+})
+
+describe("a Worker's scheduled and queue handlers", () => {
+	/* the emitted module, run for real against an app entry written as `source` */
+	const worker = async (exports: readonly string[], source: string) => {
+		const dir = mkdtempSync(join(tmpdir(), "honey-worker-entry-"))
+		const code = (await workerOf(exports)).replaceAll("./src/app.ts", "./app.mjs")
+		writeFileSync(join(dir, "app.mjs"), `export const app = { fetch: () => "served" }\n${source}`)
+		writeFileSync(join(dir, "worker.mjs"), code)
+		try {
+			return (await import(/* @vite-ignore */ join(dir, "worker.mjs"))) as Record<string, unknown> & {
+				default: Record<string, unknown>
+			}
+		} finally {
+			rmSync(dir, { force: true, recursive: true })
+		}
+	}
+
+	it("moves a function onto the default export, where workerd calls it", async () => {
+		const built = await worker(
+			["app", "queue", "scheduled"],
+			'export const scheduled = () => "ticked"\nexport const queue = () => "drained"\n',
+		)
+		const handlers = built.default as { queue: () => string; scheduled: () => string }
+		expect([handlers.scheduled(), handlers.queue()]).toEqual(["ticked", "drained"])
+	})
+
+	it("keeps the moved name from being an entrypoint with a handler of its own", async () => {
+		const built = await worker(["app", "scheduled"], "export const scheduled = () => 1\n")
+		expect([typeof built.scheduled, Object.keys(built.scheduled as object)]).toEqual(["object", []])
+	})
+
+	it("adds no key for a handler the entry does not export", async () => {
+		const built = await worker(["app", "scheduled"], "export const scheduled = () => 1\n")
+		expect(Object.keys(built.default).toSorted()).toEqual(["fetch", "scheduled"])
+	})
+
+	it("leaves a value that is no function a named export, under the usual rule", async () => {
+		const built = await worker(
+			["app", "queue", "scheduled"],
+			'export const scheduled = { fetch: () => "own" }\nexport const queue = "text"\n',
+		)
+		expect([Object.keys(built.default), Object.keys(built.scheduled as object), built.queue]).toEqual([
+			["fetch"],
+			["fetch"],
+			{},
+		])
+	})
+
+	it("leaves every other name where it was", async () => {
+		const built = await worker(["app", "tail"], "export const tail = () => 1\n")
+		expect([Object.keys(built.default), typeof built.tail]).toEqual([["fetch"], "function"])
+	})
+
+	it("imports the entry when a handler is its only other export", async () => {
+		expect(await workerOf(["app", "scheduled"])).toContain('import * as entry from "./src/app.ts"')
 	})
 })

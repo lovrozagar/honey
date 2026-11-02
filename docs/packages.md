@@ -15,6 +15,9 @@ generator.
 | `@lovrozagar/honey/ws/bun`          | `bunWebSocket`                                                                                                                          |
 | `@lovrozagar/honey/ws/node`         | `nodeWebSocket` (with the optional `ws` peer)                                                                                           |
 | `@lovrozagar/honey/webhook`         | `signWebhook`                                                                                                                           |
+| `@lovrozagar/honey/cron`            | `defineCron`, `CronConfig`, `CronDefinition`, `CronHandler`, `CronJob`, `CronSchedule`                                                  |
+| `@lovrozagar/honey/cron/serve`      | `serveCron`, `ServeCronOptions`, `CronHandle`, `CronFailure`                                                                            |
+| `@lovrozagar/honey/cron/workers`    | `workersCron`, `WorkersScheduledController`                                                                                             |
 | `@lovrozagar/honey/user-agent`      | `parseUserAgent`, `ParsedUserAgent`, `DeviceType`                                                                                       |
 | `@lovrozagar/honey/ws/workers`      | `workersWebSocket`                                                                                                                      |
 | `@lovrozagar/honey/ws/session`      | `createWsSession`: the session runtime a custom WebSocket adapter builds on                                                             |

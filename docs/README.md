@@ -25,6 +25,7 @@ client and an MCP server. These pages cover each part, each with an example the 
 - [Crypto](crypto.md)
 - [JWT](jwt.md)
 - [User agent](user-agent.md)
+- [Cron](cron.md)
 - [The OpenAPI document](openapi.md)
 - [The build plugin](plugin.md)
 

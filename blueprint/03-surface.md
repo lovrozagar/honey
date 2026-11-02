@@ -29,6 +29,7 @@ Every public export of both packages, tagged **KEEP** (re-homed and split, behav
 | `./jwt` | NEW | |
 | `./webhook` | NEW | |
 | `./user-agent` | NEW | |
+| `./cron`, `./cron/serve`, `./cron/workers` | NEW | |
 | `./logger` | KEEP | the only `console` owner |
 | `./node` | KEEP | Node adapter |
 | `./openapi`, `./openapi/scalar`, `./openapi/swagger` | MODIFY [B1,B2,B3] | configurable `servers` + variables, `tags`/`externalDocs`, `webhooks` |
