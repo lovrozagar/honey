@@ -44,13 +44,23 @@ export type McpMount = {
 
 /** A call an upload is bound to: the credential headers its request carried, the tool, every argument. */
 export type McpUploadScope = {
+	/** The credential headers the request carried, one `name: value` line each; empty when it carried none. */
 	readonly credential: string
+	/** The name of the tool being called. */
 	readonly tool: string
+	/** Every argument of the call. */
 	readonly args: Record<string, unknown>
 }
 
 /** A file an upload is for: its id in the call, its declared size, its SHA-256 (base64url). */
-export type McpUploadFile = { readonly id: string; readonly size: number; readonly digest: string }
+export type McpUploadFile = {
+	/** The id the client gave the file, unique within the call. */
+	readonly id: string
+	/** The declared size in bytes. */
+	readonly size: number
+	/** The declared SHA-256 digest, as unpadded base64url. */
+	readonly digest: string
+}
 
 /**
  * One request's uploads: the URL a token is PUT under (`base/<token>`), the most bytes a file may declare, a file's
@@ -58,9 +68,17 @@ export type McpUploadFile = { readonly id: string; readonly size: number; readon
  * rule a missing upload breaks.
  */
 export type McpUploading = {
+	/** The URL prefix a file is PUT under, followed by its token. */
 	readonly base: string
+	/** The most bytes a file may declare. */
 	readonly max: number
+	/** Issues the token a file is PUT under, bound to this call and credential and to the file's size and digest. */
 	readonly issue: (scope: McpUploadScope, file: McpUploadFile) => Promise<string>
+	/**
+	 * Resolves the bytes uploaded under `token` and removes them, so a later take finds none. Resolves a string naming
+	 * the rule broken when no upload is there or its bytes do not match. Rejects a token that is forged, expired, or
+	 * issued for another call or credential.
+	 */
 	readonly take: (scope: McpUploadScope, file: McpUploadFile, token: string) => Promise<Uint8Array | string>
 }
 
@@ -74,12 +92,25 @@ export type McpUploads = (app: unknown, path: string) => (request: Request) => M
 export type McpFileFetch = (
 	url: string,
 	signal: AbortSignal,
-) => Promise<{ readonly bytes: Uint8Array; readonly type: string; readonly name?: string }>
+) => Promise<{
+	/** The file's content. */
+	readonly bytes: Uint8Array
+	/** The answer's `Content-Type`, or `application/octet-stream` when it has none. */
+	readonly type: string
+	/** The last segment of the URL's path, left out when that is empty. */
+	readonly name?: string
+}>
 
 /** The generated handler (`mcpHandler`): whether a tool requires a credential, the challenge it names, the endpoint. */
 export type McpHandler = {
+	/** Whether any tool requires a credential; when true, `mcp()` throws without `authenticate`. */
 	readonly secured: boolean
+	/**
+	 * The `WWW-Authenticate` value of the 401 `mcp()` sends when `authenticate` refuses a request: the API's auth scheme,
+	 * or `ApiKey` when it names none. With `oauth` on the mount, oauth's challenge replaces it.
+	 */
 	readonly challenge: string
+	/** Serves one request to the endpoint, after `authenticate` passed; `mount` holds the dispatch and the opt-ins. */
 	readonly fetch: (request: Request, mount: McpMount) => Promise<Response>
 }
 
@@ -108,7 +139,7 @@ type CtxOf<A> = A extends { readonly $ctx: infer TCtx } ? TCtx : HoneyContext<un
 
 /** What `mcp()` takes beside the handler; `TCtx` is the ctx `authenticate` is given, any app's by default. */
 export type McpOptions<TCtx = HoneyContext<unknown>> = {
-	/** the check run on every request before any dispatch; required when a tool requires a credential */
+	/** the check run on every request before any dispatch; required when a tool needs a credential or `oauth` is set */
 	readonly authenticate?: McpAuthenticate<TCtx>
 	/** browser origins served beside the endpoint's own; any other Origin is 403 */
 	readonly origins?: readonly string[]

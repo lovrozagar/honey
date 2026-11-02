@@ -11,7 +11,12 @@ import { parseMediaType } from "../response/media-type.ts"
 export type BinaryTypes = `${string}/${string}` | readonly `${string}/${string}`[]
 
 /** The body as ctx.input.binary carries it. */
-export type BinaryBody<T extends string = string> = { readonly bytes: Uint8Array<ArrayBuffer>; readonly type: T }
+export type BinaryBody<T extends string = string> = {
+	/** The whole request body. */
+	readonly bytes: Uint8Array<ArrayBuffer>
+	/** The request's media type in lower case without its parameters, as matched against the declared types. */
+	readonly type: T
+}
 
 /** One declared type: an exact essence, or a `type/*` range. */
 type Range = { readonly essence: string } | { readonly type: string }

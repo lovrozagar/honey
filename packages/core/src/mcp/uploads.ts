@@ -39,7 +39,7 @@ export type UploadStore = {
 	readonly take: (id: string) => Uint8Array | undefined | Promise<Uint8Array | undefined>
 }
 
-/** The options of `uploads()`. */
+/** What `uploads()` takes: the signing secret, the store, a token's lifetime, a file's size cap, the public origin. */
 export type McpUploadsOptions = {
 	/** the HMAC key its tokens are signed with: at least 32 characters, the app's own secret */
 	readonly secret: string

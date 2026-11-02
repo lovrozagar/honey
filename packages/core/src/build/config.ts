@@ -13,6 +13,7 @@ import type { OpenApiSanitizeOptions } from "../schema/sanitize-spec.ts"
 
 /** One OpenAPI document a generation writes. */
 export type HoneyOpenApiOutputConfig = {
+	/** The document's `info.description`; left out when unset. */
 	readonly description?: string
 	/** leave out every route this answers false for */
 	readonly filterRoutes?: (route: OpenApiRouteInfo) => boolean
@@ -22,8 +23,14 @@ export type HoneyOpenApiOutputConfig = {
 	readonly profile?: string
 	/** what the published document leaves out */
 	readonly sanitize?: OpenApiSanitizeOptions
+	/**
+	 * The document's `components.securitySchemes`, keyed by scheme name. A route naming a scheme missing here is an
+	 * error, or a warning when none are declared.
+	 */
 	readonly securitySchemes?: Readonly<Record<string, unknown>>
+	/** The document's `info.title`. */
 	readonly title: string
+	/** The document's `info.version`: the API's own version, not the OpenAPI version. */
 	readonly version: string
 }
 
@@ -39,6 +46,7 @@ export type HoneyMcpOutputConfig = {
 	readonly securitySchemes?: Readonly<Record<string, unknown>>
 }
 
+/** Which artifacts a generation writes. The route tree is on by default; every other one is off until configured. */
 export type HoneyCodegenConfig = {
 	/** mutations that declare no `invalidate`, reported once per generation; default `"warn"` */
 	readonly invalidate?: InvalidateCheckConfig
@@ -53,12 +61,22 @@ export type HoneyCodegenConfig = {
 	/** the route tree module; on by default at `src/_gen/routes.gen.ts` */
 	readonly tree?: boolean | string
 	/** the app's types; `true` is `src/_gen/types.gen.d.ts` */
-	readonly types?: boolean | string | { readonly baseCtxName?: string; readonly path?: string }
+	readonly types?:
+		| boolean
+		| string
+		| {
+				/** The name the generated file gives the app's base context type; default `BaseCtx`. */
+				readonly baseCtxName?: string
+				/** Where the types file is written; default `src/_gen/types.gen.d.ts`. */
+				readonly path?: string
+		  }
 }
 
+/** What `honey()` takes: the app module, the artifacts to generate, and the files whose edits regenerate them. */
 export type HoneyVitePluginConfig = {
 	/** the module exporting the app (`app`, else the default export) */
 	readonly app?: string
+	/** Which artifacts a generation writes; only the route tree when unset. */
 	readonly codegen?: HoneyCodegenConfig
 	/** globs, from the project root, whose edits regenerate in dev */
 	readonly watch?: readonly string[]

@@ -23,28 +23,88 @@ export type { HoneyCodegenConfig, HoneyOpenApiOutputConfig, HoneyVitePluginConfi
 const VIRTUAL = { manifest: "virtual:honey/manifest", openApi: "virtual:honey/openapi", routes: "virtual:honey/routes" }
 const RESOLVED = { manifest: `\0${VIRTUAL.manifest}`, openApi: `\0${VIRTUAL.openApi}`, routes: `\0${VIRTUAL.routes}` }
 
-type ModuleGraph = { getModuleById(id: string): unknown }
+/** The part of Vite's module graph the plugin reads. */
+type ModuleGraph = {
+	/** The module registered under `id`, or nothing when the graph has none. */
+	getModuleById(id: string): unknown
+}
+/** The part of Vite's resolved config the plugin reads. */
 type ResolvedViteConfig = {
+	/** `"build"` for a production build, `"serve"` for the dev server; `"build"` when unset. */
 	command?: "build" | "serve"
+	/** The Vite config file's path, when the project has one; without it, generation runs in this process. */
 	configFile?: string
+	/** Vite's mode; when unset, `"development"` under `serve` and `"production"` otherwise. */
 	mode?: string
+	/** Every plugin in the config, used to find this plugin's position among the `honey()` ones. */
 	plugins?: readonly unknown[]
+	/** The project root, which relative `watch` globs and output paths resolve against. */
 	root: string
 }
-type HotUpdate = { file: string; modules: unknown[]; server: { moduleGraph: ModuleGraph }; timestamp?: number }
+/** The part of Vite's hot-update context the plugin reads. */
+type HotUpdate = {
+	/** The absolute path of the file that changed. */
+	file: string
+	/** The modules Vite will update for this change. */
+	modules: unknown[]
+	/** The dev server, whose module graph is the fallback when the call carries no environment. */
+	server: {
+		/** The dev server's module graph. */
+		moduleGraph: ModuleGraph
+	}
+	/** When the change happened; with `file` it identifies one save across Vite's environments. */
+	timestamp?: number
+}
 
+/** The plugin object `honey()` returns, shaped for Vite. */
 export type HoneyVitePlugin = {
-	api: { honeyConfig: HoneyVitePluginConfig }
+	/** Carries the plugin's config so `honey generate` can read it from a loaded Vite config. */
+	api: {
+		/** The config passed to `honey()`, as given. */
+		honeyConfig: HoneyVitePluginConfig
+	}
+	/**
+	 * Writes the app's artifacts. A call while an earlier one is generating joins it, so the calls Vite makes back to
+	 * back, one per environment, share one generation. Rejects when the generation fails.
+	 */
 	buildStart(): Promise<void>
+	/** Records the command, config file, mode and root that generations run with. */
 	configResolved(cfg: ResolvedViteConfig): void
+	/**
+	 * Regenerates once on a save a `watch` glob matches, generated files never counting, and returns Vite's modules
+	 * with the virtual route tree added. Returns nothing when it ignores the file or has no route tree to add. A failed
+	 * generation is written to stderr and the update goes on.
+	 */
 	hotUpdate(this: unknown, ctx: HotUpdate): Promise<unknown[] | undefined>
-	load(id: string): Promise<{ code: string; moduleType: string } | undefined>
+	/** Serves the `virtual:honey/*` modules from a fresh load of the app; nothing for an unconfigured output or other id. */
+	load(id: string): Promise<
+		| {
+				/** The module's source. */
+				code: string
+				/** `"js"`, or `"ts"` for the route tree when Vite or its `transformWithOxc` is missing. */
+				moduleType: string
+		  }
+		| undefined
+	>
+	/** Always `"honey"`. */
 	name: string
+	/**
+	 * Resolves `virtual:honey/routes` always, `virtual:honey/manifest` when a manifest is configured and
+	 * `virtual:honey/openapi` when an OpenAPI output is; nothing for any other id.
+	 */
 	resolveId(id: string): string | undefined
 }
 
-/** `honey generate <args>` in a child (core's own bin on this runtime); resolves when it exits 0. */
-export function runGenerate(args: readonly string[], options: { cwd: string; env: NodeJS.ProcessEnv }): Promise<void> {
+/** `honey generate <args>` in a child (core's own bin on this runtime); resolves when it exits 0, rejects otherwise. */
+export function runGenerate(
+	args: readonly string[],
+	options: {
+		/** The directory the child runs in. */
+		cwd: string
+		/** Variables added to the parent's environment for the child. */
+		env: NodeJS.ProcessEnv
+	},
+): Promise<void> {
 	const bin = fileURLToPath(new URL("../../bin/honey.js", import.meta.url))
 	return new Promise((done, fail) => {
 		const child = spawn(process.execPath, [bin, "generate", ...args], {
@@ -100,7 +160,12 @@ export function oncePerKey(run: () => Promise<unknown>, limit: number): (key: st
 export async function toJavaScript(
 	code: string,
 	vite: () => Promise<unknown> = () => import("vite"),
-): Promise<{ code: string; moduleType: string }> {
+): Promise<{
+	/** The module's source: JavaScript, or the original TypeScript when Vite or its `transformWithOxc` is missing. */
+	code: string
+	/** `"js"` when transformed, `"ts"` when Vite or its `transformWithOxc` is missing. */
+	moduleType: string
+}> {
 	/* no Vite to transform with: the tree is served as TypeScript, which the bundler strips */
 	const loaded = (await vite().catch(() => ({}))) as {
 		transformWithOxc?: (code: string, file: string, options: object) => Promise<{ code: string }>
@@ -123,6 +188,12 @@ const isHoneyPlugin = (plugin: unknown) =>
 	(plugin as { name?: unknown } | null)?.name === "honey" &&
 	(plugin as { api?: { honeyConfig?: unknown } }).api?.honeyConfig !== undefined
 
+/**
+ * The honey Vite plugin: writes the configured artifacts at build start, regenerates them in dev when a watched file
+ * changes, and serves `virtual:honey/routes`, plus `virtual:honey/manifest` and `virtual:honey/openapi` (the first
+ * OpenAPI output) when configured. Throws on a `codegen.sdk` or `codegen.cli` key, which belong to honey-clients, and
+ * on an MCP output path that is not a `.ts` module.
+ */
 export function honey(config: HoneyVitePluginConfig): [HoneyVitePlugin] {
 	const resolved = resolveHoneyConfig(config)
 	const matchesWatch = compileGlobs(resolved.watch)

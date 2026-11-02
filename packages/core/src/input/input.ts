@@ -22,7 +22,12 @@ import { searchInput } from "./query.ts"
  * A source whose schema documents the shape (for the client and docs) but is not run: a body is
  * left unread for the handler to stream from `ctx.req`, a non-body source passes as parsed.
  */
-export type ReadableStreamSchema<S> = { readonly _tag: "readableStream"; readonly schema: S }
+export type ReadableStreamSchema<S> = {
+	/** Marks the entry as a `readableStream()` wrapper. */
+	readonly _tag: "readableStream"
+	/** The schema that documents the source without being run. */
+	readonly schema: S
+}
 
 /** Hand the source on unvalidated: see {@link ReadableStreamSchema}. */
 export function readableStream<S extends StandardSchemaLike>(schema: S): ReadableStreamSchema<S> {
@@ -32,19 +37,50 @@ export function readableStream<S extends StandardSchemaLike>(schema: S): Readabl
 /** A source's schema, or its `readableStream()` wrapper. */
 export type InputEntry = StandardSchemaLike | ReadableStreamSchema<StandardSchemaLike>
 
-/** The non-body sources: all a WebSocket route may declare, since an upgrade has no body. */
+/**
+ * The non-body sources: all a WebSocket route may declare, since an upgrade has no body. A value its schema rejects
+ * answers 400 `validation_failed`.
+ */
 export type NonBodyInput = {
+	/** Schema for the request's cookies, a record by name holding the first value of a repeated name. */
 	readonly cookies?: InputEntry
+	/** Schema for the request headers, a record with lower-case names. */
 	readonly headers?: InputEntry
+	/** Schema for the route's path parameters, a record by name. */
 	readonly params?: InputEntry
+	/**
+	 * Schema for the query string. A repeated key follows the schema: a key it types as an array gets every value, a
+	 * key it types as a scalar the first.
+	 */
 	readonly search?: InputEntry
 }
 
 /** What `.input()` takes: json, form and binary are exclusive, as a request carries one body. */
 export type InputSchemas =
-	| (NonBodyInput & { readonly binary?: never; readonly form?: InputEntry; readonly json?: never })
-	| (NonBodyInput & { readonly binary?: never; readonly form?: never; readonly json?: InputEntry })
-	| (NonBodyInput & { readonly binary?: BinaryTypes; readonly form?: never; readonly json?: never })
+	| (NonBodyInput & {
+			/** Not allowed beside `form`. */
+			readonly binary?: never
+			/** Schema for a urlencoded or multipart form body; any other media type answers 415. */
+			readonly form?: InputEntry
+			/** Not allowed beside `form`. */
+			readonly json?: never
+	  })
+	| (NonBodyInput & {
+			/** Not allowed beside `json`. */
+			readonly binary?: never
+			/** Not allowed beside `json`. */
+			readonly form?: never
+			/** Schema for a JSON body; any other media type answers 415, an empty or unparseable body 400. */
+			readonly json?: InputEntry
+	  })
+	| (NonBodyInput & {
+			/** The media types accepted as a raw body; any other answers 415 before the body is read. */
+			readonly binary?: BinaryTypes
+			/** Not allowed beside `binary`. */
+			readonly form?: never
+			/** Not allowed beside `binary`. */
+			readonly json?: never
+	  })
 
 /** The media type ctx.input.binary names: a declared essence, or any subtype of a `type/*` range. */
 type BinaryTypeOf<T> = (T extends readonly (infer U)[] ? U : T) extends infer E
@@ -89,15 +125,26 @@ type RequestKey<T> = { [K in keyof T]-?: [NonNullable<T[K]>] extends [never] ? n
 export type InferRequestMap<T> = { readonly [K in RequestKey<T>]: RequestValue<K, NonNullable<T[K]>> }
 
 /** What `.input()` records at the type level: the handler's ctx.input and the client's request. */
-export type InputTypes<T> = { input: InferInputMap<T>; request: InferRequestMap<T> }
+export type InputTypes<T> = {
+	/** The handler's `ctx.input`. */
+	input: InferInputMap<T>
+	/** What a client sends. */
+	request: InferRequestMap<T>
+}
 
 /** What the input step reads off a request context. */
 type InputCtx = {
+	/** The request cookies by name. */
 	readonly cookies: Record<string, string>
+	/** The request headers, with lower-case names. */
 	readonly headers: Record<string, string>
+	/** Set by the input step once every source has passed; a body left unread has no key in it. */
 	input?: unknown
+	/** The path parameters by name. */
 	readonly params: Record<string, string>
+	/** The request, whose body the step reads. */
 	readonly req: Request
+	/** Every query string value, repeated keys included. */
 	readonly searchAll: Record<string, string[]>
 }
 
@@ -124,7 +171,7 @@ function readBody(body: Compiled, ctx: InputCtx, parser: BodyParser): unknown {
 
 /**
  * Compile `schemas` for a route at `path` reached by `methods`. A body schema on a route only GET
- * or HEAD reach, or json and form together, throws here, at registration.
+ * or HEAD reach, more than one body source, or a malformed binary type throws here, at registration.
  */
 export function compileInput(schemas: InputSchemas, methods: readonly string[], path: string): InputStep {
 	assertBodySchemaAllowed(schemas, methods, path)

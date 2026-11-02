@@ -10,6 +10,7 @@ import { type MiddlewareFn, namedMiddleware } from "../middleware/middleware.ts"
 import { replaceRequest } from "../context/context.ts"
 import { parseMediaType } from "../response/media-type.ts"
 
+/** Options for `bodyLimit()`: the cap in bytes, any caps by media type, and whether a declared length is trusted. */
 export type BodyLimitOptions = {
 	/**
 	 * Limits by media type, read from the request's parsed media type: an essence key
@@ -90,8 +91,19 @@ function counted(body: ReadableStream<Uint8Array>, cap: number): ReadableStream<
 	})
 }
 
-/** Limit the request body to `options.maxSize` bytes, or to the `limits` entry for its media type. */
-export function bodyLimit(options: BodyLimitOptions): MiddlewareFn<{ req: Request }, {}, "content_too_large"> {
+/**
+ * Limit the request body to `options.maxSize` bytes, or to the `limits` entry for its media type. A declared
+ * Content-Length over the cap answers 413 before anything is read; otherwise the read that passes the cap fails with
+ * 413.
+ */
+export function bodyLimit(options: BodyLimitOptions): MiddlewareFn<
+	{
+		/** The request whose body is limited. */
+		req: Request
+	},
+	{},
+	"content_too_large"
+> {
 	const { maxSize, trustContentLength = false } = options
 	/* keys lowercased once, on a record with no prototype: a media type never finds a prototype member */
 	const limits: Record<string, number> = Object.create(null)

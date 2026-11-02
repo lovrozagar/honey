@@ -8,25 +8,38 @@
  */
 import { builtinModules } from "node:module"
 
+/** The runtime a bundle is built for: `node` and `bun` bundles start a server, a `cloudflare` bundle is a Worker. */
 export type BuildTarget = "bun" | "cloudflare" | "node"
 
+/** Options for `createBuildPlugin`: the runtime to build for and how the bundle is written. */
 export type HoneyBuildConfig = {
 	/** modules left out of the bundle beside node's builtins */
 	external?: string[]
+	/** Whether to minify the bundle; default `true`. */
 	minify?: boolean
+	/** Where the bundle is written, relative to Vite's project root; default `./dist`. */
 	outDir?: string
 	/** a node or bun server's port when PORT is unset; default 3000 */
 	port?: number
+	/** The runtime the bundle is built for; `createBuildPlugin` throws on any other value. */
 	target: BuildTarget
 }
 
 /** The app module the entry imports and its export's name, `default` for the default export. */
-export type BuildApp = { entry: string; export: string }
+export type BuildApp = {
+	/** The app module's path, relative to Vite's project root. */
+	entry: string
+	/** The name the module exports the app under, or `"default"`. */
+	export: string
+}
 
+/** How one target starts the app and how its bundle is resolved. */
 type Target = {
+	/** The source of the virtual entry module for `app`, given the default port and the entry's extra export names. */
 	entry(app: BuildApp, port: number, named: readonly string[]): string
 	/** bundle every dependency: a Worker has no node_modules at run time */
 	noExternal: boolean
+	/** The runtime Vite resolves server-side imports for: `webworker` for a Worker, `node` for node and bun. */
 	ssrTarget: "node" | "webworker"
 }
 
@@ -79,26 +92,74 @@ function workerEntry(app: BuildApp, _port: number, named: readonly string[]): st
 
 /** What the plugin asks of the build: the app entry resolved, and its module's export names. */
 type EntryContext = {
-	resolve(source: string): Promise<{ id: string } | null>
-	load(module: { id: string }): Promise<{ exports?: readonly string[] | null }>
+	/** Resolves `source` to a module, or `null` when it does not resolve. */
+	resolve(source: string): Promise<{
+		/** The resolved module id. */
+		id: string
+	} | null>
+	/** Loads `module` and reports the names it exports. */
+	load(module: {
+		/** The resolved module id. */
+		id: string
+	}): Promise<{
+		/** The names the module exports; absent or `null` counts as none. */
+		exports?: readonly string[] | null
+	}>
 }
 
-type VirtualEntry = { code: string; moduleType: "js" }
+/** The generated entry module that starts the app. */
+type VirtualEntry = {
+	/** The entry's JavaScript source. */
+	code: string
+	/** Always `"js"`. */
+	moduleType: "js"
+}
 
+/** The Vite plugin `createBuildPlugin` returns. */
 export type HoneyBuildPlugin = {
+	/** Runs under `vite build` only. */
 	apply: "build"
+	/** The Vite config the plugin contributes: a server-side bundle of the virtual entry. */
 	config(): {
+		/** Vite's build options for the bundle. */
 		build: {
+			/** Always `false`: the output directory is not emptied. */
 			emptyOutDir: boolean
+			/** The configured `minify`, or `true`. */
 			minify: boolean
+			/** The configured `outDir`, or `./dist`. */
 			outDir: string
-			rolldownOptions: { external: string[]; input: string; output: { entryFileNames: string } }
+			/** The bundler's input, externals and output file name. */
+			rolldownOptions: {
+				/** Modules left out of the bundle: node's builtins, with and without `node:`, plus the configured externals. */
+				external: string[]
+				/** The virtual entry module. */
+				input: string
+				/** How the bundle's one entry file is named. */
+				output: {
+					/** Always `index.js`. */
+					entryFileNames: string
+				}
+			}
+			/** Always `true`: the bundle is built for a server runtime. */
 			ssr: boolean
 		}
-		ssr: { noExternal?: boolean; target: Target["ssrTarget"] }
+		/** How Vite resolves server-side imports. */
+		ssr: {
+			/** `true` for a Worker, which bundles every dependency; left out for node and bun. */
+			noExternal?: boolean
+			/** `webworker` for a Worker, `node` for node and bun. */
+			target: Target["ssrTarget"]
+		}
 	}
+	/**
+	 * Returns the virtual entry's source for its own id, and nothing for any other. For a Worker it rejects when the app
+	 * entry does not resolve, or when the entry has a default export beside a named app.
+	 */
 	load(this: EntryContext, id: string): Promise<VirtualEntry> | VirtualEntry | undefined
+	/** Always `"honey:build"`. */
 	name: string
+	/** Resolves the virtual entry's id, and nothing for any other. */
 	resolveId(id: string): string | undefined
 }
 
