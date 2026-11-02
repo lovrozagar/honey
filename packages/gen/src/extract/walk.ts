@@ -12,8 +12,14 @@ import type { Compiler } from "./serialize.ts"
 /** ts-morph, passed in by the caller: an optional peer this package never imports. */
 export type TsMorph = typeof import("ts-morph")
 
+/** Which exported app to read. */
 export type EntryOptions = {
+	/** The path of the source file that holds the app. */
 	entryPath: string
+	/**
+	 * The app's export name in that file (`default` for a default export); an unexported variable of that name also
+	 * counts. Throws when neither exists.
+	 */
 	exportName: string
 	/** the tsconfig to read the project with; else the nearest one (`findTsConfig`) */
 	tsconfigPath?: string

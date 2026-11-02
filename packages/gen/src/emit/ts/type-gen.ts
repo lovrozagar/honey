@@ -17,16 +17,20 @@ import { irToTs, type TypeOptions } from "../shared/type-emitter.ts"
 import type { RouteTreeV2 } from "./route-tree.ts"
 import { componentNames } from "./sdk-types.ts"
 
+/**
+ * What `generateTypes` reads: the app's document, route tree and extracted types, and how to report what could not be
+ * joined.
+ */
 export type GenerateTypesOptions = {
 	/** what the ctx base type is named; default `BaseCtx` */
 	readonly baseCtxName?: string
-	/** the app's OpenAPI document; the IR is built from it with derived operation ids (O5) */
+	/** the app's OpenAPI document; an operation without an `operationId` gets a derived one */
 	readonly document: Record<string, unknown>
 	/** the app's extracted types; null without ts-morph (inputs then fall back to the document's) */
 	readonly extracted: ExtractedTypes | null
 	/** what could not be joined, said once each */
 	readonly report: (message: string) => void
-	/** the app's route tree: each route's meta (O1) */
+	/** the app's route tree, read for each route's meta */
 	readonly tree: RouteTreeV2
 }
 

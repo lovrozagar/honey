@@ -17,6 +17,7 @@ import { MCP_PORTABLE, mcpRuntimeSource } from "./runtime.ts"
 import { resolved } from "./server.ts"
 import { isTool, toolsOf, untoolable } from "./tools.ts"
 
+/** How `generateMcpHandler` names what it generates; a `dir` that a relative import cannot name makes it throw. */
 export type McpHandlerOptions = {
 	/** the server's name: lowercase words joined by `-`; by default the document title's */
 	readonly name?: string
@@ -24,6 +25,10 @@ export type McpHandlerOptions = {
 	readonly dir?: string
 }
 
+/**
+ * What `generateMcpHandler` returns, as source text for the caller to write: the entry, its companion files and the
+ * operations no tool serves.
+ */
 export type GeneratedMcpHandler = {
 	/** the entry module, exporting `mcpHandler` */
 	readonly entry: string

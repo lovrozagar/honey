@@ -13,6 +13,7 @@ import { type EntryOptions, loadEntry, type Registration, registrations, type Ts
 
 export type { ExtractedProp } from "./chain.ts"
 
+/** What `extractTypes` reads: the app's entry, where the output goes, and how to report and name routes. */
 export type ExtractOptions = EntryOptions & {
 	/** where the generated file goes: `import()` specifiers are written relative to it */
 	outputDir?: string
@@ -20,16 +21,25 @@ export type ExtractOptions = EntryOptions & {
 	report: (message: string) => void
 	/** the router's id for a method and a full path (core's `routeId`); throws on a pattern it refuses */
 	routeId: (method: string, path: string) => string
+	/**
+	 * The caller's `ts-morph` module, as `loadTsMorph` returns it; when undefined, `extractTypes` reports that and
+	 * returns null.
+	 */
 	tsMorph: TsMorph | undefined
 }
 
+/**
+ * The types extracted from an app's source, as TypeScript source text whose `import()` specifiers resolve from
+ * `outputDir`.
+ */
 export type ExtractedTypes = {
+	/** The app's environment bindings: the type of `ctx.env`. */
 	env: string
 	/** what the app's middleware and context values added */
 	middleware: ExtractedProp[]
-	/** per route id, `ctx.input` as the handler gets it (the parsed type, O3); a route without input has none */
+	/** per route id, `ctx.input` as the handler gets it (the parsed type); a route without input has none */
 	inputs: Record<string, string>
-	/** the meta type the app declares (`meta<AppMeta>()`), or null when it declares none (bit 22 a) */
+	/** the meta type the app declares (`meta<AppMeta>()`), or null when it declares none */
 	meta: string | null
 	/** per route id, what the route's middleware added beyond `middleware`; a route that added nothing has none */
 	routes: Record<string, ExtractedProp[]>

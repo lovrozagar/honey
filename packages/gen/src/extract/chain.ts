@@ -8,7 +8,15 @@ import type { ts } from "ts-morph"
 import { isPublicName, type Serializer } from "./serialize.ts"
 import type { Registration } from "./walk.ts"
 
-export type ExtractedProp = { name: string; optional: boolean; type: string }
+/** One property on `ctx` that the framework's context class does not declare: what the middleware added. */
+export type ExtractedProp = {
+	/** Its name on `ctx`. */
+	name: string
+	/** Whether it is declared optional (`?`). */
+	optional: boolean
+	/** Its type as TypeScript source text: the type its declaration names when there is one, else the checker's. */
+	type: string
+}
 
 /** The class that declares `res` on `ctx`: the framework's context. None for a ctx typed without it. */
 export function frameworkClass(ctx: ts.Type, compiler: typeof ts): ts.Node | undefined {

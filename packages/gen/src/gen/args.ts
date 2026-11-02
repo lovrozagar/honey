@@ -6,10 +6,8 @@
  * target or an option for a target not asked for is a usage error.
  */
 /**
- * Each target, its generate function's options by name, each carried as a string. Bit 21 i6 left no boolean option —
- * the SDKs' `throwOnError`, the last ones, went when a client began always throwing and its safe mirror answering a
- * Result. Bit 22 brings one back for a switch whose name is the whole option: `--ts-tanstack-query` turns the TanStack
- * Query adapter on, and `BOOLEAN_OPTIONS` below says which options parse that way.
+ * Each target and the names of its generate function's options, which `--<target>-<option>` carries as strings.
+ * `--ts-tanstack-query` is the one switch that takes no value: it turns the TanStack Query adapter on.
  */
 const TARGETS = {
 	cli: ["baseUrl", "binaryName", "envPrefix", "modulePath", "repo"],
@@ -32,7 +30,15 @@ const BOOLEAN_OPTIONS = { ts: ["tanstackQuery"] } as const satisfies Partial<
 	Record<keyof typeof TARGETS, readonly string[]>
 >
 
+/**
+ * What `generate` can produce: an SDK per language (`csharp`, `go`, `java`, `python`, `rust`, `ts`), a Go `cli`, or an
+ * `mcp` server.
+ */
 export type Target = keyof typeof TARGETS
+/**
+ * One target's options by camelCase name (`--ts-tanstack-query` is `tanstackQuery`), each a string; a switch is
+ * `"true"` or `"false"`.
+ */
 export type Options = Record<string, string>
 
 /** Whether `target`'s option `key` takes no value. */

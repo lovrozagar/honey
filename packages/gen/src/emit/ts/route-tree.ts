@@ -11,29 +11,68 @@ import { literalType, quoteKey } from "../shared/literals.ts"
 
 /** core's route-tree node (routing/tree.ts), field by field. */
 export type TreeNodeV2 = {
-	d: { c: TreeNodeV2; n: string } | null
+	/** The dynamic parameter child: the parameter's name `n` and its subtree `c`; null when the node has none. */
+	d: {
+		/** The subtree under the parameter. */
+		c: TreeNodeV2
+		/** The parameter's name. */
+		n: string
+	} | null
+	/** The route id for each HTTP method at exactly this path; null when no HTTP route ends here. */
 	m: Readonly<Record<string, string>> | null
+	/** The static children, by literal path segment. */
 	s: Readonly<Record<string, TreeNodeV2>>
-	w: { m: Readonly<Record<string, string>>; n: string } | null
+	/** The wildcard: its name `n` and the route id for each method `m`; null when the node has none. */
+	w: {
+		/** The route id for each HTTP method on the wildcard. */
+		m: Readonly<Record<string, string>>
+		/** The wildcard's name. */
+		n: string
+	} | null
+	/** The WebSocket route id at this path; null when there is none. */
 	ws: string | null
 }
 
 /** One route's data in a snapshot; `h`, `iv` and `out` are live values, never emitted. */
 export type RouteEntryV2 = {
+	/**
+	 * The error key an undeclared throw from this route is answered with; null when it has none, which answers an
+	 * internal error.
+	 */
 	bek?: string | null
+	/** The error keys the route declares. */
 	ek?: readonly string[]
+	/** Each declared error key's status name, such as `conflict` or `bad_gateway`. */
 	es?: Readonly<Record<string, string>>
+	/** The live handler record; present in a snapshot of a running app, never written. */
 	h?: unknown
+	/** Set on an internal route (spec, docs, manifest): it is left out of the route selectors. */
 	i?: 1 | true
+	/** What the route's `.input()` declares; a live value, never written. */
 	iv?: unknown
+	/**
+	 * The route's meta. `generateRouteTree` throws on a value JSON cannot carry, such as a function, a class instance
+	 * or a cycle.
+	 */
 	mt?: Readonly<Record<string, unknown>> | null
+	/** What the route's `.output()` declares; a live value, never written. */
 	out?: unknown
 }
 
+/**
+ * A route tree in core's format (`app.toRouteTree()` makes one) as `generateRouteTree` reads it: the topology and each
+ * route's data.
+ */
 export type RouteTreeV2 = {
+	/** Not read by the generators: each route's meta comes from its entry's `mt`. */
 	meta?: Readonly<Record<string, unknown>>
+	/** The topology's root node; its leaves are route ids. */
 	root: TreeNodeV2
+	/**
+	 * Each route's data by route id. A route no leaf of `root` names is not emitted; a leaf with no entry here throws.
+	 */
 	routes: Readonly<Record<string, RouteEntryV2>>
+	/** The format version. `generateRouteTree` throws unless it is 2, so leaving it out throws too. */
 	v?: number
 }
 

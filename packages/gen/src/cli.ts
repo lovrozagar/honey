@@ -68,26 +68,44 @@ function filesOf(
 	return sdk.files
 }
 
-/** What a generation reads beside its run: the environment, where skips are reported, the oxfmt module to load. */
 /**
  * What one run generates: its targets, and each target's options by name (a target whose options are left out
  * takes its generator's defaults). The CLI parses `generate` into one of these; a consumer writes one by hand.
  */
 export type GenerateRun = {
+	/** Each target's options by name, as `--<target>-<option>` carries them; a target left out takes its defaults. */
 	readonly options?: Readonly<Partial<Record<Target, Options>>>
+	/** The targets to generate, in the order given. */
 	readonly targets: readonly Target[]
 }
 
+/** What a generation reads beside its run: the environment, where skips are reported, the oxfmt module to load. */
 export type GenerateContext = {
+	/**
+	 * Where formatters are looked up (`PATH`, `GOROOT`, `GOFMT`, `RUFF`, `RUSTFMT`); `HONEY_REQUIRE_FORMATTERS=1` makes
+	 * a missing one throw.
+	 */
 	readonly env: NodeJS.ProcessEnv
+	/**
+	 * Receives each notice as one newline-terminated line: a name an SDK renamed, an operation no MCP tool serves, a
+	 * missing formatter.
+	 */
 	readonly report: (line: string) => void
-	/** oxfmt's specifier, "oxfmt" by default: a leg names a missing one to run without it */
+	/**
+	 * The module specifier oxfmt is imported from, "oxfmt" by default; when it is not installed, TS goes out as
+	 * emitted, unreported.
+	 */
 	readonly oxfmt?: string
 }
 
+/** A run's files: each generated target's files by path under that target's directory. */
 export type GeneratedFiles = Partial<Record<Target, Readonly<Record<string, string>>>>
 
-/** Every file a run writes, by target and its path under the target's directory, Go's through gofmt, TS's through oxfmt. */
+/**
+ * Every file a run writes, by target and its path under the target's directory. Go goes through gofmt, Python through
+ * ruff, Rust through rustfmt and TS through oxfmt; C# and Java go out as emitted, as does a target whose formatter is
+ * missing, unless `HONEY_REQUIRE_FORMATTERS=1` makes that throw.
+ */
 export async function generated(
 	run: GenerateRun,
 	document: Record<string, unknown>,
@@ -118,16 +136,29 @@ function readSpec(path: string): Record<string, unknown> {
 }
 
 /** Where the CLI writes: standard output and standard error, by default the process's. */
-export type Io = { readonly out: (text: string) => void; readonly err: (text: string) => void }
+export type Io = {
+	/** Receives the CLI's standard output, whole lines ending in a newline: the usage text and each run's summary. */
+	readonly out: (text: string) => void
+	/**
+	 * Receives the CLI's standard error, ending in a newline: failures, usage errors, notices and stale files it kept.
+	 */
+	readonly err: (text: string) => void
+}
 
 const PROCESS_IO: Io = {
 	err: (text) => void process.stderr.write(text),
 	out: (text) => void process.stdout.write(text),
 }
 
-/** `document`'s targets generated and written under `<out>/<target>`, stale files deleted. */
+/**
+ * `document`'s targets generated and written under `<out>/<target>`, stale files deleted unless edited since (those are
+ * kept and named on `io.err`).
+ */
 export async function writeGenerated(
-	run: GenerateRun & { readonly out: string },
+	run: GenerateRun & {
+		/** The directory each target's directory is written under. */
+		readonly out: string
+	},
 	document: Record<string, unknown>,
 	io: Io,
 	env: NodeJS.ProcessEnv,
@@ -151,7 +182,20 @@ async function generateOnce(run: Generate, io: Io, env: NodeJS.ProcessEnv, cwd: 
 }
 
 /** What a run takes beside its arguments: the environment, the directory paths resolve from, a watch's stop signal. */
-export type RunOptions = { readonly cwd?: string; readonly env?: NodeJS.ProcessEnv; readonly signal?: AbortSignal }
+export type RunOptions = {
+	/** The directory the spec, the app module and `--out` resolve from. Defaults to the process's. */
+	readonly cwd?: string
+	/**
+	 * The environment formatters are looked up in, laid over the process's for each `--watch` child. Defaults to the
+	 * process's.
+	 */
+	readonly env?: NodeJS.ProcessEnv
+	/**
+	 * Stops a `--watch` run, which ends with 0 once the generation in progress finishes. Without it a watch never
+	 * returns.
+	 */
+	readonly signal?: AbortSignal
+}
 
 /**
  * Generates now and on each change of the spec, each run a fresh child after the one before it (a change during a run
