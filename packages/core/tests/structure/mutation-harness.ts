@@ -492,6 +492,8 @@ export function guardNamed(id: string | undefined): Guard | undefined {
 export function runSuite(mutant: string | undefined): number {
 	const env = { ...process.env, HONEY_MUTANT: mutant ?? "" }
 	const run = spawnSync(process.execPath, [VITEST, "run", SUITE], { cwd: CORE, encoding: "utf8", env })
+	/* a red plain run is the one nobody expects: show what failed, or the gate says only "1" */
+	if (mutant === undefined && run.status !== 0) process.stderr.write(`${run.stdout}${run.stderr}`)
 	return run.status ?? 1
 }
 

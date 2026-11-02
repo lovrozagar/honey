@@ -32,6 +32,8 @@ export function runSuite(mutant: string | undefined): number {
 	const guard = guardNamed(mutant)
 	const suite = guard?.suite ?? (guard?.toolchain === undefined ? SUITE : SUITES[guard.toolchain])
 	const run = spawnSync(process.execPath, [VITEST, "run", suite], { cwd: GEN, encoding: "utf8", env })
+	/* a red plain run is the one nobody expects: show what failed, or the gate says only "1" */
+	if (mutant === undefined && run.status !== 0) process.stderr.write(`${run.stdout}${run.stderr}`)
 	return run.status ?? 1
 }
 
