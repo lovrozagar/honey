@@ -44,8 +44,22 @@ function hostOf(entry: string): string {
 	return url.host
 }
 
-/** `answer`'s body, at most `max` bytes counted as it streams; refused past it, or when the answer is no 200. */
-async function bodyOf(answer: Response, max: number): Promise<Uint8Array> {
+/** `work`, or `signal`'s reason once it aborts: the deadline holds whether or not the fetch heeds the signal. */
+function until<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
+	return new Promise((resolve, reject) => {
+		const abort = () => reject(signal.reason)
+		/* handled before the check, so work that rejects after an early abort is never an unhandled rejection */
+		work.then(resolve, reject).finally(() => signal.removeEventListener("abort", abort))
+		signal.throwIfAborted()
+		signal.addEventListener("abort", abort, { once: true })
+	})
+}
+
+/**
+ * `answer`'s body, at most `max` bytes counted as it streams; refused past it, when the answer is no 200, or when
+ * `signal` aborts, which cancels the stream.
+ */
+async function bodyOf(answer: Response, max: number, signal: AbortSignal): Promise<Uint8Array> {
 	if (answer.status !== 200) {
 		await answer.body?.cancel()
 		const redirect = answer.status >= 300 && answer.status < 400 ? ", a redirect, which is never followed" : ""
@@ -54,12 +68,15 @@ async function bodyOf(answer: Response, max: number): Promise<Uint8Array> {
 	const chunks: Uint8Array[] = []
 	let size = 0
 	const reader = answer.body?.getReader()
-	for (let read = await reader?.read(); read && !read.done; read = await reader?.read()) {
-		if ((size += read.value.length) > max) {
-			await reader?.cancel()
-			throw new Error(`is past the ${max}-byte cap`)
+	const next = () => reader && until(reader.read(), signal)
+	try {
+		for (let read = await next(); read && !read.done; read = await next()) {
+			if ((size += read.value.length) > max) throw new Error(`is past the ${max}-byte cap`)
+			chunks.push(read.value)
 		}
-		chunks.push(read.value)
+	} catch (error) {
+		await reader?.cancel()
+		throw error
 	}
 	return new Uint8Array(await new Blob(chunks as Uint8Array<ArrayBuffer>[]).arrayBuffer())
 }
@@ -88,9 +105,10 @@ export function urlFiles(options: McpUrlFilesOptions): McpFileFetch {
 	return async (value, signal) => {
 		const url = allowed(value)
 		const timeout = AbortSignal.timeout(timeoutMs)
+		const both = AbortSignal.any([signal, timeout])
 		try {
-			const answer = await fetcher(new Request(url, { redirect: "manual", signal: AbortSignal.any([signal, timeout]) }))
-			const bytes = await bodyOf(answer, maxBytes)
+			const answer = await until(fetcher(new Request(url, { redirect: "manual", signal: both })), both)
+			const bytes = await bodyOf(answer, maxBytes, both)
 			const name = url.pathname.split("/").pop()
 			return { bytes, type: answer.headers.get("content-type") ?? "application/octet-stream", ...(name && { name }) }
 			/* a fetch the clock aborted says so; any other refusal is its own */

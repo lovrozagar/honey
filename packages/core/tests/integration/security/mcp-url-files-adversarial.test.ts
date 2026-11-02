@@ -270,6 +270,35 @@ describe("urlFiles: the size streamed, the time, the answer's own type and name 
 	})
 })
 
+describe("urlFiles: the deadline is its own, not the fetch's", () => {
+	it("keeps its own clock: a fetch that drops the signal is still cut off past timeoutMs, headers or body", async () => {
+		let cancelled = 0
+		/* a body that never ends and never sees the signal: only urlFiles' own deadline ends the read */
+		const endless = () =>
+			new Response(
+				new ReadableStream<Uint8Array>({ cancel: () => void cancelled++, start: (c) => c.enqueue(new Uint8Array(1)) }),
+			)
+		const deaf = (answer: () => Promise<Response>) => urlFiles({ fetch: answer, hosts: HOSTS, timeoutMs: 100 })
+		const never = new Promise<Response>(() => {})
+		const started = performance.now()
+		const refused = [
+			await got(
+				"https://files.test/body",
+				deaf(async () => endless()),
+			),
+			await got(
+				"https://files.test/headers",
+				deaf(() => never),
+			),
+		]
+		expect([refused, cancelled, performance.now() - started < 2000]).toEqual([
+			["took longer than 100 ms", "took longer than 100 ms"],
+			1,
+			true,
+		])
+	}, 10_000)
+})
+
 const MODERN = "2026-07-28"
 const META = {
 	"io.modelcontextprotocol/clientCapabilities": {},
