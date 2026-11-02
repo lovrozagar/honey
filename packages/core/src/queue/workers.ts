@@ -83,8 +83,9 @@ const deliveryOf = <Env>(
 }
 
 /**
- * The `queue` handler for `consumer`. Export it from the app's entry and honey's Workers build moves
- * it onto the default export.
+ * The `queue` handler for `consumer`. Export it under that name from the app's entry and honey's
+ * Workers build moves it onto the default export. The platform's `max_retries` bounds attempts, and
+ * past it a message is deleted unless it moves to a dead-letter queue this consumer also reads.
  *
  * @example
  * export const queue = workersQueue(consumer, { deadLetterQueues: ["jobs-dead"] })

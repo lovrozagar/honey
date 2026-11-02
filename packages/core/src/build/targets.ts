@@ -62,10 +62,10 @@ function serverEntry(app: BuildApp, port: number): string {
 	].join("\n")
 }
 
-/** A Worker: the app is its fetch, its entry's `named` exports its own, and there is nothing to listen on. */
 /* workerd calls these on the default export, and a named one would be an entrypoint nothing reaches */
 const DEFAULT_HANDLERS = ["queue", "scheduled"]
 
+/** A Worker: the app is its fetch, its entry's `named` exports its own, and there is nothing to listen on. */
 function workerEntry(app: BuildApp, _port: number, named: readonly string[]): string {
 	/* an export name need not be an identifier (`export { x as "a-b" }`) */
 	const names = named.map((name) => (/^[A-Za-z_$][\w$]*$/.test(name) ? name : JSON.stringify(name)))

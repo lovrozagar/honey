@@ -1,7 +1,7 @@
 /**
  * One schedule definition for every runtime: `defineCron` checks it once, and `./cron/workers` or
  * `./cron/serve` runs it. An expression is five fields in UTC, in the subset every runtime reads the
- * same way; see `parseCron` for what is refused.
+ * same way; see `defineCron` for what is refused.
  */
 import { createLogger, type Logger } from "../telemetry/logger.ts"
 import { type CronFields, parseCron } from "./expression.ts"
@@ -60,7 +60,11 @@ const scheduleOf = <Env>(expression: string, jobs: Readonly<Record<string, CronH
 }
 
 /**
- * Checks a schedule definition, throwing on anything that could never run.
+ * Checks a schedule definition, throwing on anything that could never run or that runtimes read
+ * differently. An expression is five fields split by one space, in UTC. It takes `*`, lists, ranges,
+ * steps, and month and weekday names in any case. It refuses a weekday number or a step over `*` in
+ * the weekday field, a day of the month beside a weekday, a reversed range, the `L`, `W` and `#`
+ * forms, and a date that never occurs.
  *
  * @example
  * export const cron = defineCron<Env>({

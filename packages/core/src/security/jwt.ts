@@ -29,8 +29,9 @@ export { isJwsAlgorithm } from "./jws.ts"
 export type JwtPayload = Record<string, unknown>
 
 /**
- * Why a token was refused: `expired`, `invalid_claims` (issuer, audience or a time claim), `invalid_signature`,
- * `malformed`, or `unknown_key` (the issuer has no key for it).
+ * Why a token was refused: `expired`, `invalid_claims` (issuer, audience, a time claim, or a required claim missing),
+ * `invalid_signature`, `malformed` (also an `alg` outside `algorithms` or a `crit` header), or `unknown_key` (the
+ * issuer has no key for it).
  */
 export type JwtVerifyError = "expired" | "invalid_claims" | "invalid_signature" | "malformed" | "unknown_key"
 

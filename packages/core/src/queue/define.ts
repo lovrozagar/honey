@@ -65,7 +65,10 @@ export type QueueMessageHandle = {
 	readonly attempts: number
 	/** The message's id. */
 	readonly id: string
-	/** Delivers the message again. The first `ack` or `retry` wins. */
+	/**
+	 * Delivers the message again, holding it back for `delaySeconds` rounded up and capped at 12 hours.
+	 * The first `ack` or `retry` wins. On the last of `serveQueue`'s `maxAttempts` it dead-letters.
+	 */
 	retry(options?: QueueSendOptions): void
 }
 
@@ -85,20 +88,20 @@ export type QueueContext<Env, Data> = {
 	traceId: string
 }
 
-/** One message type's work. */
+/** One message type's work. Returning acks the message and a throw retries it. */
 export type QueueHandler<Env, Data> = (context: QueueContext<Env, Data>) => Promise<void> | void
 
 /** A message leaving the queue unprocessed. */
 export type QueueLetter = {
-	/** How many times it was delivered. */
+	/** How many times it was delivered, counted by the queue in `queue`. */
 	attempts: number
 	/** The message as it was sent, even when its type is unknown. */
 	body: unknown
 	/** The message's id. */
 	id: string
-	/** The queue it left. */
+	/** The queue it left, or the Workers dead-letter queue it was read from. */
 	queue: string
-	/** Why it left. */
+	/** Why it left. A message read from a Workers dead-letter queue says only that it moved there. */
 	reason: string
 	/** Its type, or `"unknown"` for a body with none. */
 	type: string
@@ -110,11 +113,16 @@ export type QueueConsumerConfig<Env, Schemas extends QueueSchemas> = {
 	handlers: { [Type in keyof Schemas]: QueueHandler<Env, InferOutput<Schemas[Type]>> }
 	/** Where the consumer logs; default honey's logger. */
 	logger?: Logger
-	/** Reports a letter. A runtime's own dead letters reach it too. */
+	/**
+	 * Reports a letter: a `deadLetter` throw, the last of `serveQueue`'s `maxAttempts`, or a message
+	 * read from one of `workersQueue`'s `deadLetterQueues`. A Workers message past `max_retries` reaches
+	 * it only through that last route. A throw is logged, and only that route reports again.
+	 */
 	onDeadLetter?(letter: QueueLetter, env: Env): Promise<void>
 	/**
 	 * Seconds to hold a retry back, given what failed: a handler's error, or a `QueueBodyError` for a
 	 * body past its contract. By default a handler's error retries at once and a bad body after 60 s.
+	 * `undefined` or a throw keeps that default. An answer is rounded up and capped at 12 hours.
 	 */
 	retryDelay?(error: unknown): number | undefined
 }
@@ -188,7 +196,8 @@ export function queueContract<Schemas extends QueueSchemas>(messages: Schemas): 
 
 /**
  * Gives up on a message: `throw deadLetter(reason)` from a handler sends it to `onDeadLetter` with
- * no more attempts.
+ * no more attempts. On Workers it is then acked, so it never reaches a dead-letter queue, and with
+ * no `onDeadLetter` its body is gone.
  *
  * @example
  * if (account === null) throw deadLetter("no such account")
@@ -198,8 +207,8 @@ export function deadLetter(reason: string): QueueDeadLetter {
 }
 
 /**
- * Binds handlers to a contract. It is called twice so `Env` can be written while the contract's
- * types are inferred.
+ * Binds handlers to a contract, throwing when a message type has none. It is called twice so `Env`
+ * can be written while the contract's types are inferred.
  *
  * @example
  * export const consumer = defineConsumer<Env>()(jobs, {

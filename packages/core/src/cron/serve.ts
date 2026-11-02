@@ -52,8 +52,9 @@ export type ServeCronOptions<Env> = ServeCronBase<Env> &
 /** A running schedule. */
 export type CronHandle = {
 	/**
-	 * Stops the timer and waits for running jobs. When `timeoutMs` passes first it aborts their signal
-	 * and resolves without them. A second call answers the first's promise.
+	 * Stops the timer and waits for running jobs. With no `timeoutMs` it waits as long as they take,
+	 * so a job closing its own schedule calls `void close()`. When `timeoutMs` passes first it aborts
+	 * their signal and resolves without them. A second call answers the first's promise.
 	 */
 	close(timeoutMs?: number): Promise<void>
 }
@@ -149,7 +150,10 @@ const stop = async <Env>(state: Running<Env>, timeoutMs: number | undefined) => 
 }
 
 /**
- * Runs `cron` on a timer until `close`.
+ * Runs `cron` on a timer, which keeps the process alive until `close`. The minute it starts in does
+ * not fire, ticks missed while the process was down or asleep are lost, and a job still running at
+ * its next tick skips that tick. Throws a `TypeError` unless exactly one of `singleInstance: true`
+ * and `claim` is set.
  *
  * @example
  * const running = serveCron(cron, { env, onError: report, singleInstance: true })

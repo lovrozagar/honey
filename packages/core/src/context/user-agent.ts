@@ -22,7 +22,10 @@ export type ParsedUserAgent = {
 	deviceType: DeviceType
 	/** The OS family, or `null` when none matched and for a bot. */
 	os: string | null
-	/** The OS version as dotted text, or `null` when the header carries none. */
+	/**
+	 * The OS version as dotted text, or `null` when the header carries none and always on Linux and
+	 * ChromeOS. Browsers freeze this text on some systems, so Windows 11 reads as `"10"`.
+	 */
 	osVersion: string | null
 }
 
@@ -100,10 +103,11 @@ const readBrowser = (ua: string): Pick<ParsedUserAgent, "browser" | "browserMajo
 
 /**
  * Reads a `User-Agent` header into a coarse browser, OS and device. A missing or unreadable header
- * answers nulls and `"unknown"`, and a bot answers `"bot"` with nulls.
+ * answers nulls and `"unknown"`, and a bot answers `"bot"` with nulls. The header is whatever the
+ * client sent, so this proves nothing, and an iPad's Safari reads as macOS desktop.
  *
  * @example
- * parseUserAgent(c.req.header("user-agent"))
+ * parseUserAgent(ctx.req.headers.get("user-agent"))
  * // { browser: "Chrome", browserMajor: 141, deviceType: "desktop", os: "Windows", osVersion: "10" }
  */
 export const parseUserAgent = (header: string | null | undefined): ParsedUserAgent => {

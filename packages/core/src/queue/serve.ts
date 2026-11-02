@@ -42,7 +42,7 @@ export type QueueStore = QueueTarget & {
 	ack(receipt: string): Promise<void>
 	/** Leases what is deliverable now, in order. */
 	claim(claim: QueueClaim): Promise<readonly ClaimedMessage[]>
-	/** Keeps a message from redelivering, as an `onDeadLetter` could not. */
+	/** Takes a message out of delivery for good. `onDeadLetter` runs only once this lands. */
 	deadLetter(receipt: string, reason: string): Promise<void>
 	/** Holds a lease `seconds` from now. */
 	extend(receipt: string, seconds: number): Promise<void>
@@ -83,8 +83,8 @@ export type QueueHandle = {
 	/**
 	 * Stops claiming and waits for running messages and their background work. With no `timeoutMs` it
 	 * waits as long as they take, so a handler closing its own consumer calls `void close()`. When
-	 * `timeoutMs` passes first it resolves and stops extending, and those messages redeliver. A second
-	 * call answers the first's promise.
+	 * `timeoutMs` passes first it resolves and stops extending. Handlers are not aborted, and a message
+	 * still running when its lease ends redelivers. A second call answers the first's promise.
 	 */
 	close(timeoutMs?: number): Promise<void>
 }
@@ -251,7 +251,8 @@ const stop = async <Env>(state: Running<Env>, timeoutMs: number | undefined) => 
 }
 
 /**
- * Runs `consumer` against `store` until `close`.
+ * Runs `consumer` against `store`, which keeps the process alive until `close`. Delivery is
+ * at-least-once, so a handler must be safe to run twice.
  *
  * @example
  * const running = serveQueue(consumer, { env, store })
