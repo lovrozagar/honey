@@ -2,14 +2,15 @@
  * The release's provenance (bit 19 i, R7, Q13), read from .github/workflows/release.yml: the workflow reads by default,
  * the npm publish job alone mints an OIDC token, the GitHub release job alone writes; exactly the two packages that
  * ship are published, each with `--provenance` after its tag check; nothing goes to GitHub Packages; publishing waits
- * on ci.yml green on the tagged commit; every action is pinned by commit and no checkout keeps credentials.
+ * on main's ci.yml push run green on the tagged commit; every action is pinned by commit and no checkout keeps
+ * credentials.
  */
 import { spawnSync } from "node:child_process"
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterAll, describe, expect, it } from "vitest"
-import { caller, jobsRunning, ROOT, type Step, stepsRunning, upstream, workflow } from "./fixture/workflows.ts"
+import { jobsRunning, ROOT, type Step, stepsRunning, upstream, workflow } from "./fixture/workflows.ts"
 import { SPAWN_TIMEOUT } from "../fixture/spawn-timeout.ts"
 
 const release = workflow("release.yml")
@@ -62,21 +63,8 @@ describe("release.yml: privilege", () => {
 		expect(checkouts.map((step) => step.with?.["persist-credentials"])).toEqual(checkouts.map(() => false))
 	})
 
-	it("pins every action by commit in each workflow it calls (ci.yml runs inside the release)", () => {
-		const called = Object.values(release.jobs).flatMap((job) =>
-			job.uses?.startsWith("./.github/workflows/") ? [job.uses.slice("./.github/workflows/".length)] : [],
-		)
-		expect(called).toEqual(["ci.yml"])
-		for (const name of called) {
-			const uses = Object.values(workflow(name).jobs).flatMap(({ steps = [] }) =>
-				steps.flatMap((step) => (step.uses === undefined ? [] : [step.uses])),
-			)
-			expect(uses.length, name).toBeGreaterThan(0)
-			expect(
-				uses.filter((ref) => !COMMIT.test(ref)),
-				name,
-			).toEqual([])
-		}
+	it("calls no reusable workflow: ci.yml runs once per commit, on main's push", () => {
+		expect(Object.entries(release.jobs).filter(([, job]) => job.uses !== undefined)).toEqual([])
 	})
 })
 
@@ -152,58 +140,96 @@ describe("release.yml: each package's tag check, run", () => {
 	}
 })
 
-/**
- * Whether a job `if` runs under `github`: ci.yml's forms only (`==`, `&&`, `||`, parentheses, startsWith over
- * github.event_name and github.ref, quoted strings); anything else throws, so a new form is never judged unread.
- */
-function runsUnder(condition: string | undefined, github: { event_name: string; ref: string }): boolean {
-	if (condition === undefined) return true
-	const js = condition
-		.replace(/github\.(event_name|ref)\b/g, (_, key: "event_name" | "ref") => JSON.stringify(github[key]))
-		.replace(/startsWith\(/g, "starts(")
-		.replace(/'([^']*)'/g, (_, text: string) => JSON.stringify(text))
-		.replace(/==/g, "===")
-	if (!/^(?:\s|"[^"]*"|===|&&|\|\||[(),]|starts)*$/.test(js)) throw new Error(`unread job condition: ${condition}`)
-	return new Function("starts", `return ${js}`)((text: string, prefix: string) => text.startsWith(prefix)) as boolean
-}
+const WAIT = "--workflow ci.yml"
+/** the job that waits on main's ci.yml run, and its one step */
+const waiter = jobsRunning(release, WAIT)[0] as string
+const waitStep = stepsRunning(release, WAIT)[0]
 
-describe("release.yml: publishing waits on ci.yml green on the tagged commit", () => {
-	const ci = caller(release, "./.github/workflows/ci.yml")
+/** a ci.yml run as `gh run list --json status,conclusion,url` lists it */
+const run = (status: string, conclusion: string, id: number) => ({
+	conclusion,
+	status,
+	url: `https://github.com/owner/repo/actions/runs/${id}`,
+})
 
-	it("calls ci.yml, which accepts the call, upstream of every publish and of the GitHub release", () => {
-		expect(ci).toBeDefined()
-		expect(Object.keys(workflow("ci.yml").on)).toContain("workflow_call")
-		for (const id of [...jobsRunning(release, "npm publish"), ...jobsRunning(release, "gh release create")])
-			expect([...upstream(release, id)], id).toContain(ci)
+describe("release.yml: publishing waits on main's ci.yml run green on the tagged commit", () => {
+	const dirs: string[] = []
+	afterAll(() => {
+		for (const dir of dirs) rmSync(dir, { force: true, recursive: true })
 	})
 
-	it("runs no job past a skipped or failed one, and tests the commit it publishes", () => {
+	/** The wait step run by bash with a `gh` that answers `runs` and records its arguments. */
+	function wait(runs: readonly object[], grace = "600") {
+		const dir = mkdtempSync(join(tmpdir(), "honey-release-wait-"))
+		dirs.push(dir)
+		mkdirSync(join(dir, "bin"))
+		writeFileSync(join(dir, "runs.json"), JSON.stringify(runs))
+		const gh = join(dir, "bin", "gh")
+		writeFileSync(gh, `#!/usr/bin/env bash\nprintf '%s\\n' "$@" > "${dir}/args"\ncat "${dir}/runs.json"\n`)
+		chmodSync(gh, 0o755)
+		const env = {
+			...process.env,
+			...waitStep?.env,
+			GITHUB_REF_NAME: "v1.2.3",
+			GITHUB_REPOSITORY: "owner/repo",
+			GITHUB_SHA: "abc123",
+			GRACE_SECONDS: grace,
+			PATH: `${join(dir, "bin")}:${process.env.PATH}`,
+		}
+		const ran = spawnSync("bash", ["-e", "-c", waitStep?.run ?? "exit 99"], { cwd: dir, encoding: "utf8", env })
+		const args = readFileSync(join(dir, "args"), "utf8").trim().split("\n")
+		return { args, out: `${ran.stdout}${ran.stderr}`, status: ran.status }
+	}
+
+	it("waits in one read-only job upstream of every publish and of the GitHub release", () => {
+		expect(jobsRunning(release, WAIT)).toHaveLength(1)
+		expect(permissions(waiter)).toEqual({ actions: "read" })
+		for (const id of [...jobsRunning(release, "npm publish"), ...jobsRunning(release, "gh release create")])
+			expect([...upstream(release, id)], id).toContain(waiter)
+		expect(workflow("ci.yml").on.push).toEqual({ branches: ["main"] })
+	})
+
+	it(
+		"passes on main's green push run for the tagged commit, asking for no other run",
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			const { args, out, status } = wait([run("completed", "failure", 1), run("completed", "success", 2)])
+			expect({ out: out.trim(), status }).toEqual({
+				out: "ci.yml passed on main at abc123: https://github.com/owner/repo/actions/runs/2",
+				status: 0,
+			})
+			const flag = (name: string) => args[args.indexOf(name) + 1]
+			expect(["--repo", "--workflow", "--branch", "--event", "--commit"].map(flag)).toEqual([
+				"owner/repo",
+				"ci.yml",
+				"main",
+				"push",
+				"abc123",
+			])
+		},
+	)
+
+	it("fails on a red or cancelled run, naming it and the release's re-run", { timeout: SPAWN_TIMEOUT }, () => {
+		const { out, status } = wait([run("completed", "cancelled", 3)])
+		expect(status).toBe(1)
+		expect(out).toContain("https://github.com/owner/repo/actions/runs/3")
+		expect(out).toContain("gh workflow run release.yml --ref v1.2.3")
+	})
+
+	it("fails a commit main never ran once the grace is up", { timeout: SPAWN_TIMEOUT }, () => {
+		const { out, status } = wait([], "0")
+		expect(status).toBe(1)
+		expect(out).toContain("push the commit to main before its tag")
+	})
+
+	it("runs no job past a skipped or failed one, and waits on the commit it publishes", () => {
 		/* a job-level `if` (always(), !cancelled(), failure()) is how a job runs past a red need */
 		expect(Object.entries(release.jobs).filter(([, job]) => job.if !== undefined || job["continue-on-error"])).toEqual(
 			[],
 		)
-		/* a dispatch input naming another tag would test this ref and publish that one */
+		/* a dispatch input naming another tag would wait on this ref's run and publish that one */
 		expect(release.on.workflow_dispatch ?? null).toBeNull()
 		expect(Object.keys(release.on).sort()).toEqual(["push", "workflow_dispatch"])
 		expect(release.on.push).toEqual({ tags: ["v*"] })
-		/* ci.yml runs on the caller's commit with the caller's read-only token: no inputs, no secrets */
-		expect(Object.keys(release.jobs[ci as string] ?? {}).filter((key) => key === "with" || key === "secrets")).toEqual(
-			[],
-		)
-	})
-
-	it("runs no ci.yml job that reads a secret on a tag's call: a release never waits on one", () => {
-		/* a called workflow sees its caller's context: release.yml's tag push */
-		const tag = { event_name: "push", ref: "refs/tags/v1.0.0" }
-		const running = Object.entries(workflow("ci.yml").jobs).filter(([, job]) => runsUnder(job.if, tag))
-		expect(running.filter(([, job]) => JSON.stringify(job).includes("secrets.")).map(([id]) => id)).toEqual([])
-		/* the evaluator itself: main's push and a pull request each answered */
-		expect([
-			runsUnder("github.event_name == 'push' && github.ref == 'refs/heads/main'", {
-				event_name: "push",
-				ref: "refs/heads/main",
-			}),
-			runsUnder("github.event_name == 'pull_request'", tag),
-		]).toEqual([true, false])
 	})
 })

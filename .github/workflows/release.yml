@@ -1,7 +1,8 @@
 name: Release
 
 # A v* tag publishes the two packages that ship, @lovrozagar/honey and @lovrozagar/honey-clients, to npm with
-# provenance, once ci.yml (its harness and conformance gate included) passes on the tagged commit. A failed release
+# provenance, once main's ci.yml push run (its harness and conformance gate included) passed on the tagged commit: the
+# tag reuses that run instead of running CI again, so tag the commit right after pushing it to main. A failed release
 # re-runs on its tag: `gh workflow run release.yml --ref vX.Y.Z`; a version already on npm is skipped.
 on:
   push:
@@ -70,11 +71,38 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  # the whole of ci.yml on the tagged commit, with this workflow's read-only token: the CI evidence a publish needs
+  # main's ci.yml push run on the tagged commit, waited on and not run again: the CI evidence a publish needs. A pull
+  # request's run or a dispatched one never counts; a red or cancelled run fails here, naming its re-run.
   ci:
     name: ci
-    needs: pack
-    uses: ./.github/workflows/ci.yml
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      actions: read
+    steps:
+      - name: Wait for main's ci.yml run on the tagged commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # how long a commit may go without a run before it is judged never pushed to main
+          GRACE_SECONDS: "600"
+        run: |
+          while :; do
+            runs="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --branch main --event push --commit "$GITHUB_SHA" --json status,conclusion,url)"
+            passed="$(jq -r 'map(select(.conclusion == "success"))[0].url // empty' <<<"$runs")"
+            if [ -n "$passed" ]; then echo "ci.yml passed on main at $GITHUB_SHA: $passed"; exit 0; fi
+            if [ "$(jq 'map(select(.status != "completed")) | length' <<<"$runs")" -eq 0 ]; then
+              red="$(jq -r 'map(.url) | join(" ")' <<<"$runs")"
+              if [ -n "$red" ]; then
+                echo "ci.yml did not pass on main at $GITHUB_SHA ($red): re-run it with gh run rerun <id> --failed, then this release with gh workflow run release.yml --ref $GITHUB_REF_NAME"
+                exit 1
+              fi
+              if [ "$SECONDS" -ge "$GRACE_SECONDS" ]; then
+                echo "ci.yml has no push run on main at $GITHUB_SHA: push the commit to main before its tag, then gh workflow run release.yml --ref $GITHUB_REF_NAME"
+                exit 1
+              fi
+            fi
+            sleep 30
+          done
 
   # the one job that mints an OIDC token: it runs no repository code, only npm on the packed tarballs
   npm:

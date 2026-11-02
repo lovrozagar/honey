@@ -1,5 +1,5 @@
 /**
- * The release's conformance gate (bit 19 i, R11): the release waits on ci.yml, whose harness job runs every target's
+ * The release's conformance gate (bit 19 i, R11): the release waits on main's ci.yml run, whose harness job runs every target's
  * cells on its toolchain and records what each observed, and whose conformance job holds every cell of every target
  * against that record with compareCell (gen's conformance/gate.ts). Here, with no toolchain: the workflow wiring, the
  * gate's verdicts on recorded cells, and the gate script over the real grid.
@@ -17,7 +17,7 @@ import {
 	recordCell,
 } from "../../../gen/tests/integration/conformance/gate.ts"
 import { type Cell, cellsFor, TARGETS, type Target } from "../../../gen/tests/integration/conformance/matrix.ts"
-import { caller, jobsRunning, ROOT, type Step, upstream, workflow } from "./fixture/workflows.ts"
+import { jobsRunning, ROOT, type Step, upstream, workflow } from "./fixture/workflows.ts"
 import { SPAWN_TIMEOUT } from "../fixture/spawn-timeout.ts"
 
 const GATE = "packages/gen/tests/integration/conformance/gate.ts"
@@ -39,7 +39,7 @@ describe("the release waits on the harness and its gate", () => {
 		ci.jobs[job]?.steps?.find((s) => s.run?.includes(text) || s.uses?.startsWith(text))
 
 	it("needs ci.yml upstream of every publish, and ci.yml's conformance job needs its harness job", () => {
-		const ciJob = caller(release, "./.github/workflows/ci.yml")
+		const [ciJob] = jobsRunning(release, "--workflow ci.yml")
 		expect(ciJob).toBeDefined()
 		for (const id of jobsRunning(release, "npm publish")) expect([...upstream(release, id)], id).toContain(ciJob)
 		expect(jobsRunning(ci, GATE)).toEqual(["conformance"])

@@ -66,7 +66,3 @@ export const stepsRunning = (wf: Workflow, text: string): readonly (Step & { rea
 export const jobsRunning = (wf: Workflow, text: string): readonly string[] => [
 	...new Set(stepsRunning(wf, text).map((step) => step.job)),
 ]
-
-/** The id of the job in `wf` that calls the reusable workflow `path` (`./.github/workflows/ci.yml`), if any. */
-export const caller = (wf: Workflow, path: string): string | undefined =>
-	Object.entries(wf.jobs).find(([, job]) => job.uses === path)?.[0]

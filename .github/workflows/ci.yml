@@ -16,11 +16,11 @@ on:
         type: choice
         options: [judge, record]
         default: judge
-  # release.yml runs all of it on the tagged commit before it publishes
-  workflow_call:
 
+# a newer push cancels a pull request's run, never main's: each commit on main keeps its own run, the one release.yml
+# publishes on when the commit is tagged
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: true
 
 permissions:
