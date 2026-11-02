@@ -249,6 +249,11 @@
 			"types": "./dist/ws/route.d.ts",
 			"default": "./dist/ws/route.js"
 		},
+		"./webhook": {
+			"honey-source": "./src/security/webhook.ts",
+			"types": "./dist/security/webhook.d.ts",
+			"default": "./dist/security/webhook.js"
+		},
 		"./ws/bun": {
 			"honey-source": "./src/ws/bun.ts",
 			"types": "./dist/ws/bun.d.ts",
@@ -297,6 +302,7 @@
 		"effect": "catalog:",
 		"js-yaml": "4.3.1",
 		"oxc-parser": "0.152.0",
+		"standardwebhooks": "1.1.1",
 		"typescript": "catalog:",
 		"valibot": "catalog:",
 		"vite": "catalog:",

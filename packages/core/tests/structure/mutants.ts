@@ -10,6 +10,7 @@ import type { StaticConfig } from "../../src/response/static.ts"
 import type { IpLists, IpRestrictOptions } from "../../src/middleware/ip-restrict.ts"
 import type { MemoryStoreOptions, RateLimitOptions } from "../../src/middleware/rate-limit.ts"
 import type { JwtVerifyResult, VerifyJwtOptions } from "../../src/security/jwt.ts"
+import type { SignWebhookOptions, WebhookHeaders } from "../../src/security/webhook.ts"
 import type { SSEEvent, SSEOptions, SSEStream } from "../../src/response/sse.ts"
 import { type ProducerOptions, type ProducerSink, producerStream } from "../../src/streaming/producer-stream.ts"
 import type { JsonSchema, jsonSchemaOf } from "../../src/schema/to-json-schema.ts"
@@ -105,6 +106,21 @@ export function bodylessRouteTree(real: GenerateRouteTree): GenerateRouteTree {
 	return (tree) => {
 		const routes = Object.entries(tree.routes).map(([id, { bd: _bd, ...entry }]) => [id, entry])
 		return real({ ...tree, routes: Object.fromEntries(routes) })
+	}
+}
+
+export type SignWebhook = (options: SignWebhookOptions) => Promise<WebhookHeaders>
+
+/** signWebhook that takes any secret, padding one too short to pass as long enough. */
+export function laxSecretSignWebhook(real: SignWebhook): SignWebhook {
+	return (options) => real({ ...options, secrets: btoa("k".repeat(32)) })
+}
+
+/** signWebhook whose signature covers the body alone, the id and timestamp only sent beside it. */
+export function bodyOnlySignWebhook(real: SignWebhook): SignWebhook {
+	return async (options) => {
+		const headers = await real({ ...options, id: "fixed", timestamp: 0 })
+		return { ...headers, "webhook-id": options.id, "webhook-timestamp": String(options.timestamp) }
 	}
 }
 

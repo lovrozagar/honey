@@ -1093,3 +1093,5 @@ src/security/jwks.ts	core	src	21	remoteJwks: an issuer's keys, single flight, co
 src/security/jwt.ts	core	src	21	signJwt, verifyJwt and the claim rules on WebCrypto alone	jwt.ts
 tests/fixture/jwt-known-answer.ts	core	test	21	tokens jose signed, public keys only	jwt.ts
 tests/integration/security/jwt-adversarial.test.ts	core	test	21	algorithm confusion and a token with no exp, rerun by the mutation harness	jwt.ts
+src/security/webhook.ts	core	src	21	signWebhook: the Standard Webhooks headers on WebCrypto alone	crypto.ts
+tests/integration/security/webhook-adversarial.test.ts	core	test	21	a short secret and a signature leaving the id and timestamp out, rerun by the mutation harness	crypto.ts

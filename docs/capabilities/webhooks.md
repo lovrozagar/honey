@@ -28,3 +28,10 @@ serveOpenApi(app, {
 ```
 
 Tested by: `openapi/webhooks.test.ts`
+
+## Sending to the Standard Webhooks scheme
+
+[`signWebhook`](../crypto.md#signing-a-webhook) signs a delivery to the Standard Webhooks scheme, for receivers you do
+not generate. The signature check in generated SDKs covers the raw payload under its own header, so a delivery from
+`signWebhook` does not verify there: do not declare `signature` on those webhooks, and have the receiver verify with a
+Standard Webhooks library.
