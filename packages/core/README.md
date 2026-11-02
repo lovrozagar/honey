@@ -1081,8 +1081,9 @@ console.log(await timingSafeEqual("s3cret-token", expected), await timingSafeEqu
 // prints: true false
 ```
 
-Full reference: [internationalization](https://github.com/lovrozagar/honey/blob/main/docs/i18n.md) and
-[crypto](https://github.com/lovrozagar/honey/blob/main/docs/crypto.md).
+Full reference: [internationalization](https://github.com/lovrozagar/honey/blob/main/docs/i18n.md),
+[crypto](https://github.com/lovrozagar/honey/blob/main/docs/crypto.md) and
+[JWT](https://github.com/lovrozagar/honey/blob/main/docs/jwt.md).
 
 ## Testing
 

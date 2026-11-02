@@ -53,6 +53,9 @@ two say a token is for yours.
 | `importPkcs8(pem, alg)`               | a private signing key from a PKCS#8 PEM                                                           |
 | `isJwsAlgorithm(value)`               | whether honey supports that `alg`                                                                 |
 
+`verifyJwt` also takes `clockToleranceSeconds` for skew on the time claims, `maxAgeSeconds` to refuse an older token,
+and `requiredClaims` for claims a token must carry beyond `exp`.
+
 `verifyJwt` takes exactly one of `secret`, `jwk` or `jwks`, so a token cannot choose which kind of key verifies it. It
 requires `exp` unless you pass `requireExp: false`.
 
