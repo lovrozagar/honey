@@ -1,5 +1,12 @@
 import type { WebhookEvent } from "./kitchen.types.gen"
 
+export type {
+	OrderPaidWebhookEvent,
+	OrderRefundedWebhookEvent,
+	UnknownWebhookEvent,
+	WebhookEvent,
+} from "./kitchen.types.gen"
+
 /** A webhook delivery that is not genuine: unsigned, signed by no key the receiver holds, stale, or not an event. */
 export class WebhookVerificationError extends Error {
 	override readonly name = "WebhookVerificationError"
@@ -9,7 +16,7 @@ export class WebhookVerificationError extends Error {
 export type WebhookHeaders = Headers | Readonly<Record<string, string | readonly string[] | undefined>>
 
 /** A verified Standard Webhooks event, untyped: the delivery's id and its body's envelope. */
-export type VerifiedWebhook = { id: string; type: string; timestamp: string; data: unknown }
+type VerifiedWebhook = { id: string; type: string; timestamp: string; data: unknown }
 
 /* how far a delivery's timestamp may be from now, either way, in seconds */
 const TOLERANCE = 300
@@ -86,7 +93,7 @@ function envelopeOf(text: string): Omit<VerifiedWebhook, "id"> {
  * from now either way, or whose body is not a `{ type, timestamp, data }` event is a `WebhookVerificationError`; a
  * secret that is not a key is a `TypeError`. Signatures are checked by WebCrypto, in constant time.
  */
-export async function verifyStandardWebhook(
+async function verifyStandardWebhook(
 	body: string | Uint8Array,
 	headers: WebhookHeaders,
 	secrets: string | readonly string[],

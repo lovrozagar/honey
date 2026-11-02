@@ -605,9 +605,9 @@ jobs:
       - name: cpu
         run: grep -m1 "model name" /proc/cpuinfo
       # Each bench: v1's cost as a ratio to a raw twin doing the same work, judged against its ceiling in
-      # blueprint/baselines/bench.json (the worst of six CI runs on these pins, plus 10%): that margin is the
-      # noise budget, so a red is never retried away. A red with v1 unchanged is answered by a re-record
-      # (dispatch this workflow with bench_mode=record, the ceiling widened with its evidence), never a rerun.
+      # blueprint/baselines/bench.json (bench/src/derive-ceilings.ts over CI's own runs: the worst plus 35%, or a
+      # 2% false-red tail): that margin is the noise budget, so a red is never retried away. A red with v1 unchanged
+      # is answered by a re-record (dispatch this workflow with bench_mode=record, then re-derive), never a rerun.
       - name: hotpath
         run: bun run bench:hotpath
         env:

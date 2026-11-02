@@ -1,7 +1,7 @@
 /**
  * A TS SDK's Standard Webhooks events: one type per event the document declares, the `WebhookEvent` union a receiver
- * narrows (`known` first, then `type`), and `${stem}.webhooks.gen.ts`, a receiver's whole import: the verifier and
- * `verifyWebhook`, which marks whether a delivery's type is one of them. Written only for a document that declares one.
+ * narrows (`known` first, then `type`), and `${stem}.webhook.gen.ts`, a receiver's whole import: `verifyWebhook`, which
+ * marks whether a delivery's type is one of them, its error, and the event types. Written only for a document that declares one.
  */
 import type { IR, IRWebhookEvent } from "../../ir/model.ts"
 import { blockCommentText, tsString } from "../shared/escape.ts"
@@ -63,15 +63,23 @@ export type WebhookEvent = ${[...named.map(({ name }) => name), "UnknownWebhookE
 `
 }
 
+/* the runtime verifier's untyped core, which `verifyWebhook` wraps: kept inside the file, out of a receiver's imports */
+const INTERNAL = /^export ((?:async function verifyStandardWebhook|type VerifiedWebhook)\b)/gm
+
 /**
- * The `${stem}.webhooks.gen.ts` text of `ir`: the runtime's verifier verbatim, then `verifyWebhook` over it. It imports
- * only the event types, which compile away, so a receiver that imports it bundles no client.
+ * The `${stem}.webhook.gen.ts` text of `ir`: the runtime's verifier, its untyped core unexported, then `verifyWebhook`
+ * over it, and the event types re-exported. Its only import is type-only, which compiles away, so a receiver that
+ * imports it bundles no client.
  */
 export function webhooksText(ir: IR, stem: string): string {
-	const known = namedEvents(ir).map(({ event }) => tsString(event.type))
+	const named = namedEvents(ir)
+	const known = named.map(({ event }) => tsString(event.type))
+	const types = [...named.map(({ name }) => name), ...WEBHOOK_TYPES].sort(compareCodeUnits)
 	return `import type { WebhookEvent } from "./${stem}.types.gen"
 
-${webhookSource()}
+export type { ${types.join(", ")} } from "./${stem}.types.gen"
+
+${webhookSource().replace(INTERNAL, "$1")}
 
 const KNOWN: ReadonlySet<string> = new Set([${known.join(", ")}])
 

@@ -19,10 +19,10 @@ import {
 
 /* finalize 100x10 on CI's bun 1.3, from blueprint/baselines/bench.json: its CI median and its ceiling */
 const own = ceilingsOf("finalize", "bun 1.3")?.["100x10"]
-/* seeded ratios, one pass of them: samples tightly around 3.2 (past the CI median, under the ceiling) and 4.2 (over it) */
+/* seeded ratios, one pass of them: samples tightly around 3.2 (past the CI median, under the ceiling) and 4.4 (over it) */
 const around = (ratio: number) => [[-0.01, 0, 0.01, 0, -0.01, 0, 0.01, 0, 0].map((d) => ratio + d)]
 const under = rowOf("100x10", around(3.2), own).status
-const over = rowOf("100x10", around(4.2), own).status
+const over = rowOf("100x10", around(4.4), own).status
 /* a report row with only what exitCode reads: its status and its pass spread */
 const row = (status: string, spread = 0) => ({ ratio: 1, scenario: "s", spread, status })
 
@@ -55,7 +55,7 @@ describe("the gate's two modes", () => {
 
 describe("the judge reads its ceilings from bench.json (bit 20 e3)", () => {
 	it("holds finalize 100x10's CI median and ceiling for bun 1.3", () => {
-		expect([own?.baseline, own?.ceiling]).toEqual([2.505, 4.011])
+		expect([own?.baseline, own?.ceiling]).toEqual([2.53, 4.226])
 	})
 
 	it("passes a ratio past the CI median but under the ceiling, and fails one above the ceiling", () => {
@@ -66,7 +66,7 @@ describe("the judge reads its ceilings from bench.json (bit 20 e3)", () => {
 		/* adapter post-1kib, bimodal on CI (bench.json's reason), against finalize 100x10 over its ceiling */
 		const postOwn = ceilingsOf("adapter", "node 26.12")?.["post-1kib"]
 		const post = rowOf("post-1kib", around(9.2), postOwn).status
-		expect([postOwn?.reportOnly, postOwn?.ceiling, post]).toEqual([true, 8.867, "report-only: over"])
+		expect([postOwn?.reportOnly, postOwn?.ceiling, post]).toEqual([true, 8.352, "report-only: over"])
 		expect([exitCode("judge", true, [row("ok"), row(post)]), exitCode("judge", true, [row(post), row(over)])]).toEqual([
 			0, 1,
 		])
@@ -162,8 +162,8 @@ describe("k passes interleaved across the scenarios, judged on the median of the
 
 describe("a record run refuses a scenario whose pass medians disagree (bit 21 k-pass)", () => {
 	it("refuses a drifting scenario past SPREAD_TOLERANCE, records a steady one, and never judges on spread", async () => {
-		/* v1 grows 0.15 a call (A and B share the count): pass spreads 0.7-0.85, as the echo drifted in its bench (0.91-1.46) */
-		const drifting = await rows(PASSES, 0, { drift: 0.15 })
+		/* v1 grows 0.6 a call (A and B share the count): pass spreads 0.99-1.31, as the echo drifted in its bench (1.15-1.46) */
+		const drifting = await rows(PASSES, 0, { drift: 0.6 })
 		const steady = await rows(PASSES, 0)
 		expect({
 			judged: exitCode(
@@ -176,9 +176,9 @@ describe("a record run refuses a scenario whose pass medians disagree (bit 21 k-
 			tolerance: SPREAD_TOLERANCE,
 		}).toEqual({
 			judged: 0,
-			refused: ["A spread 0.847 > 0.5", "B spread 0.699 > 0.5"],
+			refused: ["A spread 1.309 > 0.95", "B spread 0.986 > 0.95"],
 			runs: [1, 0],
-			tolerance: 0.5,
+			tolerance: 0.95,
 		})
 	})
 })

@@ -193,7 +193,7 @@ const webhookDoc = (type: string) => ({
 
 describe("gen adversarial: the TS SDK's webhook verifier", () => {
 	it("checks a signature only through WebCrypto's verify, never by comparing signature text (H18.9)", () => {
-		const runtime = generateSdk(webhookDoc("order.paid"), { name: "SDK", stem: "sdk" }).files["sdk.webhooks.gen.ts"]
+		const runtime = generateSdk(webhookDoc("order.paid"), { name: "SDK", stem: "sdk" }).files["sdk.webhook.gen.ts"]
 		expect([
 			/crypto\.subtle\.verify\("HMAC"/.test(runtime ?? ""),
 			/\bsubtle\.sign\(|===\s*btoa\(/.test(runtime ?? ""),

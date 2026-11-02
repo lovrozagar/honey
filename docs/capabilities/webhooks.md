@@ -44,18 +44,29 @@ For a body outside a contract, [`signWebhook`](../crypto.md#signing-a-webhook) s
 
 ## Receiving
 
-A TypeScript SDK generated from a document with these events writes `<stem>.webhooks.gen.ts`, which exports
+A TypeScript SDK generated from a document with these events writes `<stem>.webhook.gen.ts`, which exports
 `verifyWebhook(body, headers, secret)`. Pass
 the raw body, before any parse, and the request's headers. It checks a `v1` signature on WebCrypto, in constant time,
 under the secret or, while you rotate, under either of two. It refuses a timestamp more than five minutes from now in
 either direction. It returns the event: check `known` first, then switch on `type`, and `data` is typed by the event.
 An event type your SDK predates comes back with `known: false` and its data as sent, so a newer API never breaks an
 older receiver. A forged, tampered, stale or malformed delivery throws `WebhookVerificationError`, and a secret that
-is not a `whsec_` key throws `TypeError`. Import them from that file, not the SDK's index: it holds the whole verifier and
-imports nothing else, so a receiver bundles no client and needs no credentials.
+is not a `whsec_` key throws `TypeError`.
+
+Import everything a receiver needs from that one file: `verifyWebhook`, `WebhookVerificationError`, `WebhookHeaders`,
+`WebhookEvent` and each event's type. It holds the whole verifier and imports nothing at run time, so a receiver bundles
+no client and needs no credentials. An SDK published as a package maps it to its own subpath, beside `"."`:
+
+```json
+{ "exports": { ".": "./src/index.ts", "./webhook": "./src/_gen/ts/shop.webhook.gen.ts" } }
+```
 
 ```ts sdk
-import { verifyWebhook, WebhookVerificationError } from "./shop.webhooks.gen"
+import { type WebhookEvent, verifyWebhook, WebhookVerificationError } from "./shop.webhook.gen"
+
+export function describe(event: WebhookEvent): string {
+	return event.known ? `${event.type} ${event.id}` : `unknown ${event.type}`
+}
 
 export async function receive(request: Request): Promise<Response> {
 	try {

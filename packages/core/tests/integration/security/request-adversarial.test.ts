@@ -86,13 +86,18 @@ describe("v1 adversarial: a client's user agent stays cheap to read", () => {
 	})
 
 	it(
-		"takes twice the time for twice the header",
+		"takes four times the time for four times the header",
 		() => {
+			/*
+			 * 4x the length: linear grows about 4x, quadratic 16x, cubic 64x, so 10 sits between linear and even a
+			 * quadratic pattern on any runner. Plan 37 measured 1.5-2.5 for this code and 45-88 for the cubic mutant on
+			 * Bun and Node; at 2x (256/512) the mutant's 6-10 sat close enough to the old 5 for a runner to pass it.
+			 */
 			const header = (length: number) => `Version/${"1".repeat(length - "Version/".length)}`
 			fastestCallMs(() => parseUserAgent(header(512)))
-			const short = fastestCallMs(() => parseUserAgent(header(256)))
+			const short = fastestCallMs(() => parseUserAgent(header(128)))
 			const long = fastestCallMs(() => parseUserAgent(header(512)))
-			expect(long / short).toBeLessThan(5)
+			expect(long / short).toBeLessThan(10)
 		},
 		SPAWN_TIMEOUT,
 	)

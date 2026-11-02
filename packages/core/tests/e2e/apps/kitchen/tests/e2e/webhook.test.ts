@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test"
-import { verifyWebhook, WebhookVerificationError } from "../../src/_gen/sdk/ts/kitchen.webhooks.gen.ts"
+import { verifyWebhook, WebhookVerificationError } from "../../src/_gen/sdk/ts/kitchen.webhook.gen.ts"
 import { WEBHOOK_SECRET } from "../../src/webhook-secret.ts"
 
 type Sample = { body: string; headers: Record<string, string> }

@@ -3,8 +3,8 @@
  * doing the same work without honey, both timed in the same process in interleaved samples, so the machine and the
  * runtime's speed cancel out. The samples come in k passes (PASSES) interleaved across the scenarios, and the median of
  * a scenario's pass medians is judged against its `ceiling` in blueprint/baselines/bench.json, per runtime minor: above
- * it is REGRESSED. The ceilings come from CI's own runs (the worst of six, plus 10%; the file's note), so the CI run is
- * the gate; a local run on other hardware only hints. Under BENCH_MODE=record every judged ratio is printed as a
+ * it is REGRESSED. The ceilings come from CI's own runs (the worst run plus 35%, or a log-normal tail at a 2% false-red
+ * budget: bench/src/derive-ceilings.ts), so the CI run is the gate; a local run on other hardware only hints. Under BENCH_MODE=record every judged ratio is printed as a
  * `RATIO` line and no ceiling fails the run, but a scenario whose pass medians disagree past SPREAD_TOLERANCE refuses
  * it: an unsteady measurement is never recorded. That is how CI re-records.
  */
@@ -68,10 +68,13 @@ export function spreadOf(medians: readonly number[]): number {
  * on 5 local k=3 record runs of the five benches, all 27 scenarios (Bun 1.3.11, Node 26.12.1, bit 21 k-pass): steady
  * scenarios spread 0.06 at the median, 0.22 at p95 and 0.457 at most (finalize 500x50); the drift this refuses read
  * 0.91-1.46 (websockets' echo: 1.15-1.46 on the feed loop it shared with realtime-inbound, 0.91 once before each
- * sample closed its connection; websockets.ts has both fixes). 0.5 sits between them.
- * A burst that lifts one pass past it refuses the run too: that run is re-run, though its median held.
+ * sample closed its connection; websockets.ts has both fixes).
+ * On CI's runners steady scenarios spread wider: stream-1mb printed 0.67 (41401699590), 0.643 (41397685122), 0.622
+ * (40992951769) and 0.546 (41483452655, whose whole record was lost to the old 0.5). Plan 37 sets the tolerance
+ * the way it sets the ceilings' floor (ceiling-rule.ts WORST_MARGIN): the worst spread any of 46 CI runs printed,
+ * 0.67, x 1.35, rounded up to 0.05. The echo's feed-loop drift, 1.15-1.46, stays refused.
  */
-export const SPREAD_TOLERANCE = 0.5
+export const SPREAD_TOLERANCE = 0.95
 
 function statusOf(ratio: number, own: Ceiling | undefined): string {
 	if (own === undefined) return "unbaselined"

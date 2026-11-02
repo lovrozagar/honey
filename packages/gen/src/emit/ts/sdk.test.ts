@@ -215,10 +215,55 @@ describe("sdkMemberPaths: where each operation sits on the client", () => {
 	})
 })
 
+/** A Standard Webhooks event `a.b`, as a document's `webhooks` declares it. */
+const AB_EVENT = {
+	post: {
+		"x-honey-webhook": "standard-webhooks",
+		requestBody: {
+			content: {
+				"application/json": {
+					schema: {
+						properties: { data: { type: "object" }, timestamp: { type: "string" }, type: { const: "a.b" } },
+						required: ["type", "timestamp", "data"],
+						type: "object",
+					},
+				},
+			},
+		},
+		responses: { 200: { description: "ok" } },
+	},
+}
+
 describe("generateSdk: names it refuses, and renames that collide", () => {
 	it("refuses a class name that is not an identifier and a stem that is not a plain file name", () => {
 		expect(() => generateSdk(doc(USERS), { name: "Not-An-Id" })).toThrow(/is not a TypeScript identifier/)
 		expect(() => generateSdk(doc(USERS), { name: "TestSDK", stem: "../x" })).toThrow(/must be a plain file name/)
+	})
+
+	/* a class or derived type named like a runtime, types-file or event name is a duplicate export or a shadow */
+	it.each([
+		["Client", "declares ClientConfig"],
+		["ClientError", "is a name the SDK's runtime"],
+		["HTTPClient", "is a name the SDK's runtime"],
+		["SDKClient", "is a name the SDK's runtime"],
+		["serviceMap", "is a name the SDK's runtime"],
+		["Honey", "declares HoneySafe"],
+	])("refuses the name %s (it %s), pointing at --ts-name", (name, clash) => {
+		expect(() => generateSdk(doc(USERS), { name })).toThrow(clash)
+		expect(() => generateSdk(doc(USERS), { name })).toThrow("choose another name (--ts-name)")
+	})
+
+	it("refuses a name one of the document's webhook events takes, and keeps a component off the SDK's own names", () => {
+		const withEvent = { ...doc(USERS), webhooks: { "a.b": AB_EVENT } }
+		const withComponent = { ...doc(USERS), components: { schemas: { ApiConfig: { type: "object" } } } }
+		const types = generateSdk(withComponent, { name: "Api" }).files["api.types.gen.ts"] ?? ""
+		expect(() => generateSdk(withEvent, { name: "WebhookEvent" })).toThrow(
+			'name "WebhookEvent" is a name the document\'s webhook events already uses',
+		)
+		expect([
+			types.match(/^export type ApiConfig\b/gm)?.length,
+			Object.keys(generateSdk(doc(USERS), { name: "AnyrowSDK" }).files).length,
+		]).toEqual([1, 5])
 	})
 
 	it("names a root group renamed off the safe mirror, never silently, and nothing for any other", () => {

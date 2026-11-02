@@ -258,6 +258,39 @@ describe("the runtime bundle of an installed core (bit 19 i)", () => {
 		60_000,
 	)
 
+	it.skipIf(!BUN)(
+		`a sender of webhooks alone carries none of honey()'s router (bun ${pinnedBunVersion()})`,
+		() => {
+			const sender = [
+				'import { signWebhook, webhookContract } from "@lovrozagar/honey/webhook"',
+				'const schema = { "~standard": { validate: (value: unknown) => ({ value }), vendor: "app", version: 1 } } as const',
+				"const events = webhookContract({ ping: schema })",
+				"export const send = async (secret: string) => [",
+				'\tawait events.sign("ping", {}, { id: "msg_1", occurredAt: new Date(), secrets: [secret] }),',
+				'\tawait signWebhook({ body: "{}", id: "msg_2", secrets: [secret], timestamp: 1 }),',
+				"]",
+				"",
+			]
+			const router = [
+				'import { honey } from "@lovrozagar/honey"',
+				'const app = honey().get("/json").handler((ctx) => ctx.res.json("ok", { ok: true }))',
+				"export default { fetch: (req: Request) => app.fetch(req, {}) }",
+				"",
+			]
+			const routing = (js: string) => js.includes("/dist/routing/")
+			const sent = bunBundle("webhook-sender-plain", sender, false)
+			const features = Object.entries(OPTIONAL_FEATURES)
+				.filter(([, marker]) => sent.includes(marker))
+				.map(([name]) => name)
+			expect([routing(sent), features, routing(bunBundle("webhook-router-plain", router, false))]).toEqual([
+				false,
+				[],
+				true,
+			])
+		},
+		60_000,
+	)
+
 	it("a Worker built by the build plugin carries none of ts-morph, ws, oxfmt, jiti or honey-clients", async () => {
 		write(full, {
 			"src/worker-app.ts": [

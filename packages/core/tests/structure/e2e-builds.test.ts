@@ -7,8 +7,10 @@
  */
 import { describe, expect, it } from "vitest"
 import * as gate from "../e2e/build-gate.ts"
+import { ceilingRule, chiSquareQuantile, normalQuantile, WORST_MARGIN } from "../e2e/ceiling-rule.ts"
 import { BUILD_SPECS } from "../e2e/builds.ts"
 import { COMPLETE } from "./check-tree.ts"
+import KNOWN_REDS from "./fixtures/known-perf-reds.json" with { type: "json" }
 
 /*
  * surface×workers on bun 1.3.11 on this machine, under the heavy lock (bit 21 cfb, cfb-cause.md): its honey
@@ -63,8 +65,8 @@ describe("the e2e build gate's ratio", () => {
 	it("derives one ceiling from both runner classes under the 2% rule, each class's median beside it", () => {
 		/* the fast runner's cold 1.16x build (3132 ms) reads as the middle class: a job is classed by its own builds' ms */
 		const byClass = { fast: 14.95, middle: 17.17, slow: 15.1 }
-		/* one cell carries the whole 2% budget: its log-normal tail, 20.322, sits over the worst x 1.10, 18.887 */
-		expect(CEILING).toEqual({ baseline: 15.1, byClass, catches: "+35%", ceiling: 20.322 })
+		/* one cell carries the whole 2% budget: the worst, 17.17, x 1.35 is 23.18, over its log-normal tail, 20.322 */
+		expect(CEILING).toEqual({ baseline: 15.1, byClass, catches: "+54%", ceiling: 23.18 })
 	})
 
 	it("passes the unchanged build on either runner class, the 1.16x cold build included", () => {
@@ -74,16 +76,17 @@ describe("the e2e build gate's ratio", () => {
 		expect(statuses).toEqual(["ok", "ok", "ok", "ok", "ok", "ok"])
 	})
 
-	it("reds honey generate made 1.5x slower, on the fast runner class and on the slow one", () => {
-		const slower = LOCAL.generate * 1.5 + LOCAL.bundle
-		const regressed = "build ratio 21.5 over its 20.322 ceiling (CI median 15.1)"
+	/* 1.5x slower reads 21.5, under the 23.18 ceiling: the cost of a margin that holds a runner-class swing (plan 37) */
+	it("reds honey generate made 1.75x slower, on the fast runner class and on the slow one", () => {
+		const slower = LOCAL.generate * 1.75 + LOCAL.bundle
+		const regressed = "build ratio 24.85 over its 23.18 ceiling (CI median 15.1)"
 		/* on the slow class the same build also crosses the hang guard: both checks report, the ratio's independently */
 		expect(Object.values(PROFILES).map((factor) => judge(slower, LOCAL.reference, factor))).toEqual([
-			{ failures: [regressed], hung: false, ratio: 21.5, status: "REGRESSED" },
+			{ failures: [regressed], hung: false, ratio: 24.85, status: "REGRESSED" },
 			{
-				failures: ["built in 8050ms, over the 8000ms hang guard on bun", regressed],
+				failures: ["built in 9303ms, over the 8000ms hang guard on bun", regressed],
 				hung: true,
-				ratio: 21.5,
+				ratio: 24.85,
 				status: "REGRESSED",
 			},
 		])
@@ -92,14 +95,14 @@ describe("the e2e build gate's ratio", () => {
 	it("reds a regression slowing every honey app alike, which an app-over-sibling-app ratio passes", () => {
 		/* CI's cf-workers prod job on a fast runner, run 40734198419: surface built in 2.7 s, defaults in 2.4 s */
 		const sibling = { defaults: 2_400, surface: 2_700 }
-		const added = (LOCAL.generate / 2) * PROFILES.fast /* +50% of generation's time, in every app's build alike */
+		const added = LOCAL.generate * 0.75 * PROFILES.fast /* +75% of generation's time, in every app's build alike */
 		const local = (ms: number) => ms / PROFILES.fast
 		const verdict = judge(local(sibling.surface + added), LOCAL.reference, PROFILES.fast)
 		expect({
 			honeyFree: verdict.status,
 			siblingAfter: Number(((sibling.surface + added) / (sibling.defaults + added)).toFixed(2)),
 			siblingBefore: Number((sibling.surface / sibling.defaults).toFixed(2)),
-		}).toEqual({ honeyFree: "REGRESSED", siblingAfter: 1.08, siblingBefore: 1.13 })
+		}).toEqual({ honeyFree: "REGRESSED", siblingAfter: 1.07, siblingBefore: 1.13 })
 	})
 
 	it("never judges in record mode or with no recorded ceiling: report-only until CI records one", () => {
@@ -127,20 +130,26 @@ const Z = { 1: 2.05375, 42: 3.30423 } as const
 
 describe("the e2e build gate's ceiling rule", () => {
 	it("reads chi-square and normal quantiles to their tables", () => {
-		const chi2 = [5, 11, 23].map((df) => Number(gate.chiSquareQuantile(0.1, df).toFixed(4)))
-		const z = [1, 42].map((cells) => Number(gate.normalQuantile(1 - 0.02 / cells).toFixed(5)))
+		const chi2 = [5, 11, 23].map((df) => Number(chiSquareQuantile(0.1, df).toFixed(4)))
+		const z = [1, 42].map((cells) => Number(normalQuantile(1 - 0.02 / cells).toFixed(5)))
 		expect({ chi2, z }).toEqual({ chi2: [...CHI2_LOW], z: [Z[1], Z[42]] })
 	})
 
-	it("takes a spread cell's log-normal tail at 2% over the cells, which the worst x 1.10 sits under", () => {
-		/* CI's Node 22 cells move between runner classes, about 1.8 and 2.35: worst x 1.10 is 2.64 */
+	it("takes a spread cell's log-normal tail at 2% over the cells, which the worst x 1.35 sits under", () => {
+		/* CI's Node 22 cells move between runner classes, about 1.8 and 2.35: worst x 1.35 is 3.24 */
 		const bimodal = [1.8, 1.85, 1.82, 2.3, 2.35, 2.4, 1.79, 2.1]
-		expect(Number(gate.ceilingRule(bimodal, 42).toFixed(3))).toBe(3.985)
+		expect(Number(ceilingRule(bimodal, 42).toFixed(3))).toBe(3.985)
 	})
 
-	it("keeps the worst x 1.10 for a tight cell, whose tail sits under it", () => {
+	it("keeps the worst x 1.35 for a tight cell, whose tail sits under it", () => {
 		const tight = [...Array.from({ length: 11 }, () => 2), 2.02]
-		expect(Number(gate.ceilingRule(tight, 42).toFixed(3))).toBe(2.222)
+		expect([WORST_MARGIN, Number(ceilingRule(tight, 42).toFixed(3))]).toEqual([1.35, 2.727])
+	})
+
+	/* the three judged reds on unchanged code, each over the ceiling its own pool gave under the old 1.10 floor */
+	it("holds each known runner-class red under the ceiling its pool now gives", () => {
+		const reds = KNOWN_REDS.map(({ pool, red }) => red < ceilingRule(pool, 1))
+		expect(reds).toEqual(KNOWN_REDS.map(() => true))
 	})
 })
 
@@ -316,15 +325,15 @@ describe("the e2e build gate's derive across commits", () => {
 		expect(row(CELL)?.ceiling).toEqual({
 			baseline: 15.07,
 			byClass: { fast: 15.05, slow: 15.07 },
-			catches: "+12%",
-			ceiling: 16.83,
+			catches: "+37%",
+			ceiling: 20.655,
 		})
 	})
 
 	it("derives a shifted cell from the newest commit's runs alone", () => {
 		expect(row("mcp×workers")).toEqual({
 			cell: "mcp×workers",
-			ceiling: { baseline: 4.65, byClass: { fast: 4.55, slow: 4.7 }, catches: "+14%", ceiling: 5.28 },
+			ceiling: { baseline: 4.65, byClass: { fast: 4.55, slow: 4.7 }, catches: "+39%", ceiling: 6.48 },
 			decision: "new-only",
 			groups: [
 				{ classes: { fast: 2, slow: 4 }, commit: OLD.commit, n: 6 },
@@ -350,7 +359,7 @@ describe("the e2e build gate's derive across commits: the runner classes it asks
 		expect([cell?.groups, cell?.refused, cell?.ceiling?.ceiling]).toEqual([
 			[{ classes: { slow: 6 }, commit: NEW.commit, n: 6 }],
 			undefined,
-			16.632,
+			20.412,
 		])
 	})
 
@@ -436,6 +445,6 @@ describe("the e2e build gate's derive across commits, on CI's own samples", () =
 
 	it("calls an 8% shift shifted though the groups' class mixes differ: each group weighs alike in a class's centre", () => {
 		const decided = gate.deriveByCommit(ciJobs(CELL, CONFOUNDED))[0]
-		expect([decided?.decision, decided?.n, decided?.ceiling?.ceiling]).toEqual(["new-only", 10, 23.76])
+		expect([decided?.decision, decided?.n, decided?.ceiling?.ceiling]).toEqual(["new-only", 10, 29.16])
 	})
 })

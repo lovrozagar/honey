@@ -10,10 +10,11 @@ import { tsString } from "../shared/escape.ts"
 import { compareCodeUnits, words } from "../shared/lang.ts"
 import { MIRROR, mirrorNotice } from "../shared/mirror.ts"
 import { runtimeFeatures, runtimeSource, type TsRuntimeFeatures } from "./http.ts"
+import { RESERVED } from "./sdk-types-preamble.ts"
 import { sdkTypesText } from "./sdk-types.ts"
 import { tanstackQueryText } from "./tanstack-query.ts"
 import { memberTree, serviceMapText } from "./service-map.ts"
-import { webhooksText } from "./webhooks.ts"
+import { webhooksText, webhookTypeNames } from "./webhooks.ts"
 
 export { sdkMemberPaths, serviceMapOf } from "./service-map.ts"
 
@@ -102,11 +103,40 @@ const kebab = (name: string) =>
 		.map((word) => word.toLowerCase())
 		.join("-")
 
+/**
+ * Whether `own` is a name the runtime of any features shares with the index, or one the client file imports and the
+ * index re-exports beside the class.
+ */
+const runtimeOwns = (own: string) =>
+	["SDKClient", "schemeAuth", "serviceMap"].includes(own) ||
+	[RUNTIME_EXPORTS, RUNTIME_TYPES].some((lists) => Object.values(lists).some((names) => names.includes(own)))
+
+/** The names the SDK `name` declares: the class, then the types file's three. */
+const ownNames = (name: string) => [name, `${name}Config`, `${name}Operations`, `${name}Safe`]
+
+/**
+ * Refuses a name whose class or derived types clash with a name the files already use, `taken` saying whose.
+ * `${name}Config` may be `SDKConfig`: the types file then imports the runtime's own under another name.
+ */
+function refuseClash(name: string, taken: (own: string) => string | undefined): void {
+	for (const own of ownNames(name)) {
+		if (own === "SDKConfig" && own !== name) continue
+		const owner = taken(own)
+		if (owner === undefined) continue
+		const subject =
+			own === name ? `name ${JSON.stringify(name)} is` : `name ${JSON.stringify(name)} declares ${own}, which is`
+		throw new Error(`generateSdk: ${subject} a name ${owner} already uses; choose another name (--ts-name)`)
+	}
+}
+
 /** The class name lands in source and the stem in import specifiers and file names: both are checked. */
 function validated(options: SdkOptions): { name: string; stem: string } {
 	const { name } = options
 	if (!IDENTIFIER.test(name))
 		throw new Error(`generateSdk: name ${JSON.stringify(name)} is not a TypeScript identifier`)
+	refuseClash(name, (own) =>
+		runtimeOwns(own) ? "the SDK's runtime" : RESERVED.includes(own) ? "the SDK's types" : undefined,
+	)
 	const stem = options.stem ?? kebab(name)
 	if (!/^[A-Za-z0-9_-][A-Za-z0-9._-]*$/.test(stem)) {
 		throw new Error(
@@ -154,6 +184,8 @@ export type { ${shipped(RUNTIME_TYPES, features).join(", ")} } from "./${stem}.r
 export function generateSdk(document: Record<string, unknown>, options: SdkOptions): GeneratedSdk {
 	const { name, stem } = validated(options)
 	const ir = toIR(document as OpenApiDocument, { deriveOperationIds: true, duplicateOperationIds: "throw" })
+	const events = new Set(webhookTypeNames(ir))
+	refuseClash(name, (own) => (events.has(own) ? "the document's webhook events" : undefined))
 	const runtime = `${stem}.runtime.gen`
 	const features = runtimeFeatures(ir)
 	/* memberTree emits the root groups in code-unit order, each renamed in place */
@@ -167,7 +199,7 @@ export function generateSdk(document: Record<string, unknown>, options: SdkOptio
 		[`${stem}.runtime.gen.ts`]: runtimeSource(features),
 		[`${stem}.types.gen.ts`]: sdkTypesText(ir, name, runtime),
 	}
-	if (ir.webhooks.some((webhook) => webhook.event)) files[`${stem}.webhooks.gen.ts`] = webhooksText(ir, stem)
+	if (ir.webhooks.some((webhook) => webhook.event)) files[`${stem}.webhook.gen.ts`] = webhooksText(ir, stem)
 	/* the index never names it: its text must not vary by option, and it must never name query-core */
 	if (options.tanstackQuery === true) files[`${stem}.tanstack-query.gen.ts`] = tanstackQueryText(ir, name, stem)
 	return { files, notices, stem }

@@ -81,7 +81,7 @@ function moduleSource(name: string): string {
 	return text.replace(SIBLING_IMPORT, "").trim()
 }
 
-/** The Standard Webhooks verifier, verbatim: it imports nothing, so the webhooks file that carries it stands alone. */
+/** The Standard Webhooks verifier: it imports nothing, so the webhook file that carries it stands alone. */
 export function webhookSource(): string {
 	return moduleSource("webhook")
 }

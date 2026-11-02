@@ -58,7 +58,7 @@ export async function emittedWebhooks(
 	options: SdkOptions = { name: "TestSDK" },
 ): Promise<Record<string, unknown> & { files: Readonly<Record<string, string>> }> {
 	const { files, stem } = generateSdk(document, options)
-	return { ...(await load(files, `${stem}.webhooks.gen.ts`)), files }
+	return { ...(await load(files, `${stem}.webhook.gen.ts`)), files }
 }
 
 /**

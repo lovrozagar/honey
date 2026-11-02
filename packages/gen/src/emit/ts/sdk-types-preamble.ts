@@ -126,8 +126,12 @@ export function shared(features: TsRuntimeFeatures): string {
 
 /** The runtime types this text names, in order: a document with no realtime route uses neither
  *  `SSEEvent` nor `ResumableConnection`, and an import a file never reads is a consumer's error
- *  under `noUnusedLocals`. */
-export function importText(body: string, runtime: string): string {
-	const used = RUNTIME_TYPES.filter((type) => new RegExp(`\\b${type}\\b`).test(body))
+ *  under `noUnusedLocals`. A type in `aliases` is imported, and named in `body`, by its alias. */
+export function importText(body: string, runtime: string, aliases: Readonly<Record<string, string>> = {}): string {
+	const used = RUNTIME_TYPES.flatMap((type) => {
+		const local = aliases[type] ?? type
+		if (!new RegExp(`\\b${local}\\b`).test(body)) return []
+		return local === type ? [type] : [`${type} as ${local}`]
+	})
 	return `import type { ${used.join(", ")} } from "./${runtime}"\n`
 }

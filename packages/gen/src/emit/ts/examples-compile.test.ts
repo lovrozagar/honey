@@ -3,7 +3,7 @@
  * on a docs page and docs/examples/ts/example.ts, each importing the client from `./kitchen`, type-checked by tsc
  * beside the generated files. A realtime block imports from `./live`, an SDK whose document has an `x-realtime`
  * operation, since an SDK ships the realtime helpers only then (plan 32). A webhook receiver block imports from
- * `./shop.webhooks.gen` of the Shop SDK, whose document declares the Standard Webhooks event the webhooks page sends (plan 36).
+ * `./shop.webhook.gen` of the Shop SDK, whose document declares the Standard Webhooks event the webhooks page sends (plan 36).
  */
 import { spawnSync } from "node:child_process"
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"

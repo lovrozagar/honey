@@ -5,6 +5,6 @@
 		"kitchen.map.gen.ts": "13b41eb52a58f66630caf3c8b4f6abf9d261afdb17e953ef7d64ec2a4456eead",
 		"kitchen.runtime.gen.ts": "c7ac09df5c64dda0aeb2413ead6707a26f42e6c31be1f3dd74b9e2b05a5a633f",
 		"kitchen.types.gen.ts": "3b42664db8b328578cf01856684e57b5b20e4be95818ea61ac7ae7d858ed5d20",
-		"kitchen.webhooks.gen.ts": "5874220245850a4e6258228ec2d64bb8f79a5fc5472822787bdd125016a70c01"
+		"kitchen.webhook.gen.ts": "741ae098bc8ce15810ea016c2a7d0ba325ce6dc7cf6d2a36e1f4ce23eff9717e"
 	}
 }

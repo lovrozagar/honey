@@ -133,11 +133,11 @@ describe("verifyWebhook: a delivery it refuses", () => {
 	it("refuses a changed body, a changed id and the wrong key", async () => {
 		const { body, headers } = delivery(PAID_BODY)
 		const refused = [
-			verifyWebhook(body.replace("42", "43"), headers, SECRET),
-			verifyWebhook(body, { ...headers, "webhook-id": "msg_2" }, SECRET),
-			verifyWebhook(body, headers, OTHER),
+			() => verifyWebhook(body.replace("42", "43"), headers, SECRET),
+			() => verifyWebhook(body, { ...headers, "webhook-id": "msg_2" }, SECRET),
+			() => verifyWebhook(body, headers, OTHER),
 		]
-		for (const verdict of refused) await expect(verdict).rejects.toBeInstanceOf(WebhookVerificationError)
+		for (const verdict of refused) await expect(verdict()).rejects.toBeInstanceOf(WebhookVerificationError)
 	})
 
 	it("refuses a timestamp 301 seconds old or ahead, and accepts one 300 seconds either way", async () => {
@@ -219,5 +219,37 @@ describe("the event types", () => {
 		expect(() => generateSdk(colliding, { name: "Api", stem: "api" })).toThrow(
 			'webhook events "order.paid" and "order_paid" both name the type OrderPaidWebhookEvent',
 		)
+	})
+})
+
+describe("the receiver's file", () => {
+	/** Every name a module text exports, declared or re-exported, sorted. */
+	const exportsOf = (text: string) =>
+		[
+			...[...text.matchAll(/^export (?:async )?(?:class|function|type|const|interface) ([A-Za-z_$][\w$]*)/gm)].map(
+				(m) => m[1] as string,
+			),
+			...[...text.matchAll(/^export (?:type )?\{([^}]*)\}/gm)].flatMap((m) =>
+				(m[1] as string).split(",").map((name) => name.trim().replace(/^type /, "")),
+			),
+		].sort()
+
+	it("is <stem>.webhook.gen.ts, exporting the verifier, its error, its headers type and the event types alone", () => {
+		const { files } = generateSdk(DOC, { name: "Api", stem: "api" })
+		expect([
+			Object.keys(files).filter((name) => name.includes("webhook")),
+			exportsOf(files["api.webhook.gen.ts"] ?? ""),
+		]).toEqual([
+			["api.webhook.gen.ts"],
+			[
+				"OrderPaidWebhookEvent",
+				"OrderRefundedWebhookEvent",
+				"UnknownWebhookEvent",
+				"verifyWebhook",
+				"WebhookEvent",
+				"WebhookHeaders",
+				"WebhookVerificationError",
+			].sort(),
+		])
 	})
 })

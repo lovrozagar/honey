@@ -183,10 +183,10 @@ export function componentNames(ir: IR, reserved: readonly string[]): (schema: st
 }
 
 /** The config type: `baseURL` optional when the document declares a server, the first one being its default. */
-function configText(name: string, server: string | undefined): string {
+function configText(name: string, server: string | undefined, runtimeConfig: string): string {
 	const head = `export type ${name}Config =`
-	if (server === undefined) return `${head} SDKConfig`
-	return `${head} Omit<SDKConfig, "baseURL"> & {
+	if (server === undefined) return `${head} ${runtimeConfig}`
+	return `${head} Omit<${runtimeConfig}, "baseURL"> & {
 	/** Default: the document's first server, ${blockCommentText(server)} */
 	baseURL?: string
 }`
@@ -195,14 +195,24 @@ function configText(name: string, server: string | undefined): string {
 /** The `${stem}.types.gen.ts` text of `ir` for the SDK `name`, importing the runtime module `runtime`. */
 export function sdkTypesText(ir: IR, name: string, runtime: string): string {
 	const model = sdkModel(ir)
-	const own = [name, `${name}Config`, `${name}Operations`, `${name}Safe`, ...webhookTypeNames(ir)]
+	/* the SDK named `SDK` declares `SDKConfig`, so the runtime's own is imported under another name */
+	const aliases: Record<string, string> = name === "SDK" ? { SDKConfig: "HoneySDKConfig" } : {}
+	const runtimeConfig = aliases["SDKConfig"] ?? "SDKConfig"
+	const own = [
+		name,
+		`${name}Config`,
+		`${name}Operations`,
+		`${name}Safe`,
+		...webhookTypeNames(ir),
+		...Object.values(aliases),
+	]
 	const types: TypeOptions = { refName: componentNames(ir, [...RESERVED, ...own]) }
 	const ctx: Context = { ops: model.opsById, resolve: model.resolve, types }
 	const schemas = model.schemaNames.map(
 		(schema) => `export type ${types.refName?.(schema)} = ${irToTs(ir.schemas[schema] as IRSchema, types)}`,
 	)
 	const body = `${schemas.length === 0 ? "" : `${schemas.join("\n")}\n\n`}${webhookTypesText(ir, types)}${shared(runtimeFeatures(ir))}
-${configText(name, ir.servers[0])}
+${configText(name, ir.servers[0], runtimeConfig)}
 
 /** Every operation of the SDK, by its member path. */
 export interface ${name}Operations {
@@ -212,6 +222,6 @@ ${members(memberTree(ir.tree), ctx, "\t").join("\n")}
 /** \`client.safe\`: every operation, a call answering a Result. */
 export type ${name}Safe = HoneySafe<${name}Operations>
 `
-	return `${importText(body, runtime)}
+	return `${importText(body, runtime, aliases)}
 ${body}`
 }

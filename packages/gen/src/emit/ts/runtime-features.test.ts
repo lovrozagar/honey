@@ -8,6 +8,7 @@ import { spawnSync } from "node:child_process"
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { afterAll, describe, expect, it } from "vitest"
+import { withPinnedBun } from "../../gen/__fixtures__/pinned-bun.ts"
 import { SPAWN_TIMEOUT } from "../../gen/__fixtures__/spawn-timeout.ts"
 import { REPO } from "../shared/__fixtures__/docs-blocks.ts"
 import { emittedSdk, recordingFetch } from "./__fixtures__/emitted.ts"
@@ -88,8 +89,8 @@ const INDEX_NAMES = {
 const FEATURES = ["realtime", "sse", "ws"] as const
 
 /** The SDK's files for `document`, by role. */
-function sdkFiles(document: Record<string, unknown>) {
-	const { files, stem } = generateSdk(document, { name: "Api", stem: "api" })
+function sdkFiles(document: Record<string, unknown>, name = "Api") {
+	const { files, stem } = generateSdk(document, { name, stem: "api" })
 	return {
 		files,
 		index: files[`${stem}.index.gen.ts`] as string,
@@ -150,6 +151,14 @@ describe("the runtime a generated SDK ships", () => {
 		expect(typeErrors(sdkFiles(document).files)).toEqual([])
 	})
 
+	/* `SDK` is honey-clients' default name, and `SDKConfig` is also the runtime config type the types file imports */
+	it.each([
+		["a plain document", doc(HEALTH)],
+		["a document with events", doc(HEALTH, EVENTS_HOOKS)],
+	])("named SDK, the CLI's default, for %s type-checks", { timeout: SPAWN_TIMEOUT }, (_, document) => {
+		expect(typeErrors(sdkFiles(document, "SDK").files)).toEqual([])
+	})
+
 	it("answers a plain HTTP call from the smallest runtime", async () => {
 		const { fetch, calls } = recordingFetch(() => Response.json({ ok: true }))
 		const sdk = await emittedSdk(doc(HEALTH), { name: "Api", stem: "api" })
@@ -160,11 +169,11 @@ describe("the runtime a generated SDK ships", () => {
 })
 
 /** A receiver that narrows on `known`, then on `type`, every declared event handled or `never` fails to compile. */
-const RECEIVER = `import { verifyWebhook, WebhookVerificationError } from "./api.webhooks.gen"
+const RECEIVER = `import { type WebhookEvent, verifyWebhook, WebhookVerificationError } from "./api.webhook.gen"
 
 export async function receive(request: Request, secret: string): Promise<Response> {
 	try {
-		const event = await verifyWebhook(await request.text(), request.headers, secret)
+		const event: WebhookEvent = await verifyWebhook(await request.text(), request.headers, secret)
 		if (!event.known) return new Response(null, { status: 204 })
 		switch (event.type) {
 			case "order.paid":
@@ -187,14 +196,45 @@ describe("a receiver of the SDK's webhook events", () => {
 	it("gets a webhooks file of its own, the runtime and the index left as they are without events", () => {
 		const plain = sdkFiles(doc(HEALTH, UNMARKED))
 		const events = sdkFiles(doc(HEALTH, EVENTS_HOOKS))
-		const imports = [...(events.files["api.webhooks.gen.ts"] ?? "").matchAll(/^import .*$/gm)].map((m) => m[0])
+		const imports = [...(events.files["api.webhook.gen.ts"] ?? "").matchAll(/^import .*$/gm)].map((m) => m[0])
 		expect([
 			events.runtime === plain.runtime,
 			events.index === plain.index,
-			"api.webhooks.gen.ts" in plain.files,
+			"api.webhook.gen.ts" in plain.files,
 			imports,
 		]).toEqual([true, true, false, ['import type { WebhookEvent } from "./api.types.gen"']])
 	})
+
+	/* minified, the receiver's bytes are the verifier's: 2,406 at plan 37, with room for one small fix */
+	it(
+		"bundles alone, no client in it, where the same import through the index carries the client",
+		{ timeout: SPAWN_TIMEOUT },
+		(ctx) => {
+			const bun = withPinnedBun()
+			if (bun === undefined) return ctx.skip()
+			const dir = mkdtempSync(join(scratch, "receiver-"))
+			const files = { ...sdkFiles(doc(HEALTH, EVENTS_HOOKS)).files, "receiver.ts": RECEIVER }
+			const indexed = RECEIVER.replace('"./api.webhook.gen"', '"./api.index.gen"').replace(
+				"type WebhookEvent, verifyWebhook, WebhookVerificationError",
+				"type WebhookEvent, isClientError as verifyWebhook, ClientError as WebhookVerificationError",
+			)
+			for (const [name, text] of Object.entries({ ...files, "indexed.ts": indexed }))
+				writeFileSync(join(dir, name), text)
+			const bundle = (entry: string) => {
+				const out = spawnSync(bun, ["build", entry, "--minify", "--target", "browser"], { cwd: dir, encoding: "utf8" })
+				expect(out.status, out.stderr).toBe(0)
+				return out.stdout
+			}
+			const alone = bundle("receiver.ts")
+			/* a header name only the client's cross-origin handling holds */
+			const CLIENT = '"accept-language"'
+			expect([alone.includes(CLIENT), alone.length <= 2_560, bundle("indexed.ts").includes(CLIENT)]).toEqual([
+				false,
+				true,
+				true,
+			])
+		},
+	)
 
 	it("narrows each declared event's data under every strictness flag", { timeout: SPAWN_TIMEOUT }, () => {
 		expect(typeErrors({ ...sdkFiles(doc(HEALTH, EVENTS_HOOKS)).files, "receiver.ts": RECEIVER })).toEqual([])

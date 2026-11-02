@@ -30,6 +30,7 @@ import {
 	median,
 	parseRatios,
 } from "./build-gate.ts"
+import { WORST_MARGIN } from "./ceiling-rule.ts"
 
 /* the jobs that build e2e apps through run-build.ts: build (bun|node) and every prod e2e cell */
 const BUILDS_IN = /^(build \(|e2e \(.* prod\)$)/
@@ -105,10 +106,10 @@ const note =
 	"reference build's (packages/core/tests/e2e/build-gate.ts), from the RATIO build lines of the build and prod e2e " +
 	`jobs of CI runs ${[...new Set(runs)].sort().join(", ")} (ci.yml dispatched with build_mode=record). Each job is ` +
 	"classed fast, middle or slow by its own surface builds on bun, Node-only jobs unclassified; byClass is each class's " +
-	"median. baseline: the median of every job's ratio. ceiling (build-gate.ts ceilingRule): per cell, fit " +
+	"median. baseline: the median of every job's ratio. ceiling (ceiling-rule.ts ceilingRule): per cell, fit " +
 	"log(ratio) (mean m, sample sd s), sigma_upper = s * sqrt((n-1)/chi2_0.10,n-1) (one-sided 90% upper bound on " +
 	`sigma), z = Phi^-1(1 - 0.02/G) with G = ${Object.values(builds).flatMap(Object.keys).length} cells, ceiling = ` +
-	"max(worst x 1.10, exp(m + z*sigma_upper)), so the cells share a 2% per-run false-red budget. A ratio above its " +
+	`max(worst x ${WORST_MARGIN}, exp(m + z*sigma_upper)), so the cells share a 2% per-run false-red budget. A ratio above its ` +
 	"ceiling is REGRESSED. catches: ceiling / baseline. No retry: a red with honey unchanged is answered by a " +
 	"re-record (6+ runs spanning both runner classes, derived by derive-build-ceilings.ts), never a rerun." +
 	(byCommit
