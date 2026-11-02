@@ -22,21 +22,6 @@ export const localeOrder = (a: string, b: string): number => a.localeCompare(b)
 export const rawKey = (key: string): string => key
 
 /* each language's constant-time digest compare, and the value compare a careless helper writes instead */
-const VALUE_COMPARE: readonly (readonly [RegExp, string])[] = [
-	[/CryptographicOperations\.FixedTimeEquals\(expected, given\)/, "expected.SequenceEqual(given)"],
-	[/hmac\.Equal\(expected, given\)/, "bytes.Equal(expected, given)"],
-	[/MessageDigest\.isEqual\(expected, given\)/, "java.util.Arrays.equals(expected, given)"],
-	[/hmac\.compare_digest\(expected, given\)/, "expected == given"],
-	[/expected\.ct_eq\(&given\)\.into\(\)/, "expected == given"],
-	[/timingSafeEqual\(expected, given\)/, "expected.equals(given)"],
-]
-
-/** A verify helper whose digest compare stops at the first differing byte: a timing oracle. */
-export function variableTimeHelper(verifyHelper: (language: string) => string): (language: string) => string {
-	return (language) =>
-		VALUE_COMPARE.reduce((text, [constantTime, value]) => text.replace(constantTime, value), verifyHelper(language))
-}
-
 /** `text` with `from` replaced by `to`; a patch that no longer matches throws (a stale mutant is red). */
 function patched(text: string, [from, to]: readonly [string, string], where = "the runtime"): string {
 	if (!text.includes(from)) throw new Error(`stale runtime mutant: ${JSON.stringify(from)} is not in ${where}`)

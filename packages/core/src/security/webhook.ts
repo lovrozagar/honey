@@ -64,8 +64,7 @@ async function signature(key: Uint8Array<ArrayBuffer>, content: Uint8Array<Array
 
 /**
  * The headers of a signed delivery, one signature per secret. Sign each attempt with its own `timestamp`, as a
- * receiver refuses an old one. honey's generated SDKs check a different signature, so do not declare `signature` on a
- * webhook sent this way: its receivers verify with a Standard Webhooks library.
+ * receiver refuses an old one. Its receivers verify with a Standard Webhooks library.
  *
  * @param options The delivery and the secrets to sign it with.
  * @returns The headers to send with `body`.

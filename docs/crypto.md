@@ -37,8 +37,6 @@ await fetch("https://example.com/hook", { body, headers, method: "POST" })
 Keep `id` across retries and give each attempt its own `timestamp`. During a rotation pass both secrets in a list:
 each signs, and either verifies alone. A secret is base64 with an optional `whsec_` prefix, 24 to 64 bytes decoded.
 
-honey's generated SDKs check a different signature, so do not declare `signature` on a webhook sent this way.
-
 ## Reference
 
 | Value                   | Default   | What it does                                                                                                                                                                                                                                                                                       | Watch for                                                                                                                                                                       |

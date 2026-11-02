@@ -14,7 +14,6 @@ export {
 	type OpenApiServerVariable,
 	type OpenApiTag,
 	type OpenApiWebhook,
-	type WebhookSignature,
 } from "./generate.ts"
 export {
 	type GenerateManifestOptions,

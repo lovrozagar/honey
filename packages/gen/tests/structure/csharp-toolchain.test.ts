@@ -45,11 +45,7 @@ const CS_COMMAND =
 
 /* the files besides the env that may name the SDK root or the reference pack: the compile fixture (csc's
  * references) and the toolchain legs, which compile and run their programs with csc */
-const HANDED = [
-	"src/emit/csharp/__fixtures__/compiled.ts",
-	"src/emit/shared/escape.toolchains.test.ts",
-	"src/emit/shared/webhooks.toolchains.test.ts",
-]
+const HANDED = ["src/emit/csharp/__fixtures__/compiled.ts", "src/emit/shared/escape.toolchains.test.ts"]
 
 /** Every TS file under `dir`, recursively, gen-relative. */
 function tsFiles(dir: string): string[] {

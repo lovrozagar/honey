@@ -10,6 +10,5 @@ Runs against any `openapi.json` (3.x), not only honey's. Emits SDKs, the CLI, an
 | formatter post-pass | no | on in CI | **[H12]** runs gofmt/rustfmt/ruff/`dotnet format`/google-java-format/oxfmt (TS) | mandatory in publish CI; valid-but-unformatted fallback when the toolchain is absent (pure-JS/worker) | `emit/shared/format.test.ts` |
 | runtime | — | vendored | **[H9]** glue vendored inline, depends on the ecosystem lib by version range | no per-language runtime package is published | `gen/write.test.ts` |
 | type extraction | no | — | **[H12]** extract middleware ctx/chain types from a TS honey app via the ts-morph compiler API | needs `ts-morph` (optional peer); only for TS honey apps | `extract/extract.test.ts` |
-| webhook helpers | — | — | **[B3]** emit a typed webhook-payload parser + signature-verify helper when the spec declares `webhooks` | — | `emit/shared/webhooks.test.ts` |
 | naming / sanitizer | — | — | **[F2]** one shared, fuzzed string-escape + identifier layer across all emitters | raw spec text never reaches source | `emit/shared/escape.test.ts` |
 | determinism | — | on | stable, code-unit-ordered output across machines | `localeCompare` is banned in emitters (host-locale drift) | `emit/shared/escape.test.ts` |

@@ -7,15 +7,7 @@ import { compareCodeUnits, pascalWords } from "../emit/shared/lang.ts"
 import { type IR, type IRAuth, type IRInfo, type IROperation, type IRSchema, type IRWebhook } from "./model.ts"
 import { schemaToIR } from "./schema.ts"
 import { buildResourceTree } from "./resource-tree.ts"
-import {
-	type Components,
-	extensionsOf,
-	paramsOf,
-	parseOpenApiPath,
-	requestBodies,
-	responsesOf,
-	signatureOf,
-} from "./slots.ts"
+import { type Components, extensionsOf, paramsOf, parseOpenApiPath, requestBodies, responsesOf } from "./slots.ts"
 
 type Json = Record<string, unknown>
 
@@ -124,11 +116,9 @@ function webhooksOf(doc: OpenApiDocument): IRWebhook[] {
 			return METHODS.filter((method) => typeof item[method] === "object" && item[method] !== null).map((method) => {
 				const op = item[method] as Json
 				const json = requestBodies(op, components).find((b) => b.kind === "raw" && b.contentType === "application/json")
-				const signature = signatureOf(name, op)
 				const webhook: IRWebhook = { method: method.toUpperCase(), name }
 				if (json?.kind === "raw") webhook.body = json.schema
 				if (typeof op.description === "string") webhook.description = op.description
-				if (signature !== undefined) webhook.signature = signature
 				if (typeof op.summary === "string") webhook.summary = op.summary
 				return webhook
 			})

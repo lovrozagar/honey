@@ -32,7 +32,6 @@ const HANDED = [
 	"src/emit/java/__fixtures__/compiled.ts",
 	"src/emit/java/format.test.ts",
 	"src/emit/shared/escape.toolchains.test.ts",
-	"src/emit/shared/webhooks.toolchains.test.ts",
 ]
 
 /* a spawn of a JDK or build tool, a command list whose entry starts with one, or a `-jar` launch (a list of language

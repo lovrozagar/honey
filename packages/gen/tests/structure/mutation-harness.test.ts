@@ -144,7 +144,7 @@ describe("each guard's toolchain", () => {
 })
 
 describe("each guard's verdict", () => {
-	it("runs every guard, all 23, where .NET, Go, Rust and Python are present", () => {
+	it("runs every guard, all 22, where .NET, Go, Rust and Python are present", () => {
 		const ids = GUARDS.map((g) => g.id)
 		expect(verdicts(GUARDS, skippedFor(GUARDS, { csharp: true, go: true, python: true, rust: true }), () => 1)).toEqual(
 			{
@@ -153,7 +153,7 @@ describe("each guard's verdict", () => {
 				survived: [],
 			},
 		)
-		expect(ids).toHaveLength(23)
+		expect(ids).toHaveLength(22)
 	})
 
 	it("counts a skipped guard as neither killed nor survived, and never runs it", () => {

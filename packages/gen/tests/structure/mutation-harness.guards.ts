@@ -34,7 +34,6 @@ import {
 	RUST_KEEP_CROSS_ORIGIN_HEADERS,
 	RUST_LEAKY_LOG,
 	RUST_RAW_PATH_PARAMS,
-	variableTimeHelper,
 } from "../security/mutants.ts"
 
 /** A language toolchain a guard's cases compile with. */
@@ -89,14 +88,6 @@ export const GUARDS: readonly Guard[] = [
 		disable: () => ({ quoteKey: rawKey }),
 		id: "spec-text-to-source",
 		module: "packages/gen/src/emit/shared/literals.ts",
-	},
-	{
-		catches: "a webhook verify helper comparing the digest by value, a timing oracle on the signature (H18.9)",
-		disable: (original) => ({
-			verifyHelper: variableTimeHelper(original.verifyHelper as (language: string) => string),
-		}),
-		id: "webhook-ct-compare",
-		module: "packages/gen/src/emit/shared/webhooks.ts",
 	},
 	{
 		catches: "a cross-origin redirect hop that keeps the auth header, cookies and configured headers (H18.10)",

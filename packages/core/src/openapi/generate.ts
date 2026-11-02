@@ -41,7 +41,7 @@ import { type OpenApiWebhook, webhooksOf } from "./webhooks.ts"
 export type { OpenApiDocument, OpenApiInfo } from "./document.ts"
 export type { OpenApiServer, OpenApiServerVariable } from "./servers.ts"
 export type { OpenApiExternalDocs, OpenApiTag } from "./tags.ts"
-export type { OpenApiWebhook, WebhookSignature } from "./webhooks.ts"
+export type { OpenApiWebhook } from "./webhooks.ts"
 
 /** What `filterRoutes` is shown of a route: its resolved meta, its method and its honey pattern. */
 export type OpenApiRouteInfo = {

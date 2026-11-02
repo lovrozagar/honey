@@ -61,41 +61,18 @@ describe("webhooks: what the API sends, documented in 3.1 webhooks", () => {
 		]).toEqual([["a.made", "b.removed"], ["put"], ["delete"], undefined, undefined])
 	})
 
-	it("states how the payload is signed as x-honey-signature, for the SDKs' verify helpers", () => {
+	it("takes no signature and writes no extension: an operation holds only its own OpenAPI fields", () => {
 		const doc = documented({
-			"invoice.paid": {
-				body: Paid,
-				signature: { algorithm: "hmac-sha256", encoding: "hex", header: "X-Signature", prefix: "sha256=" },
-			},
-			"order.shipped": { body: Paid, signature: { algorithm: "hmac-sha256", encoding: "base64", header: "Sig" } },
-			unsigned: { body: Paid },
+			// @ts-expect-error a webhook declares no signature scheme
+			"invoice.paid": { body: Paid, signature: { algorithm: "hmac-sha256", encoding: "hex", header: "X-Signature" } },
 		})
-		const signature = (name: string) =>
-			(doc.webhooks?.[name]?.post as Record<string, unknown> | undefined)?.["x-honey-signature"]
-		expect([signature("invoice.paid"), signature("order.shipped"), signature("unsigned")]).toEqual([
-			{ algorithm: "hmac-sha256", encoding: "hex", header: "X-Signature", prefix: "sha256=" },
-			{ algorithm: "hmac-sha256", encoding: "base64", header: "Sig" },
-			undefined,
-		])
+		expect(Object.keys(doc.webhooks?.["invoice.paid"]?.post ?? {})).toEqual(["requestBody", "responses"])
 	})
 })
 
-describe("webhooks: a declaration that cannot be signed or sent is refused", () => {
-	it("refuses an unknown algorithm or encoding, a header that is not a token, a control character, a bad method and no name", () => {
+describe("webhooks: a declaration that cannot be sent is refused", () => {
+	it("refuses a bad method, no name and a control character", () => {
 		const bad = (webhook: Record<string, unknown>) => () => documented({ hook: { body: Paid, ...webhook } as never })
-		const sig = { algorithm: "hmac-sha256", encoding: "hex", header: "X-Signature" }
-		expect(bad({ signature: { ...sig, algorithm: "md5" } })).toThrow(
-			/INVALID_WEBHOOK.*webhook "hook": signature algorithm "md5" is not hmac-sha256/s,
-		)
-		expect(bad({ signature: { ...sig, encoding: "utf8" } })).toThrow(
-			/INVALID_WEBHOOK.*webhook "hook": signature encoding "utf8" is not hex or base64/s,
-		)
-		expect(bad({ signature: { ...sig, header: "X Sig:" } })).toThrow(
-			/INVALID_WEBHOOK.*webhook "hook": signature header "X Sig:" is not a header name/s,
-		)
-		expect(bad({ signature: { ...sig, prefix: "v1=\r\n" } })).toThrow(
-			/INVALID_WEBHOOK.*webhook "hook": the signature prefix holds a control character/s,
-		)
 		expect(bad({ method: "TRACE" })).toThrow(/INVALID_WEBHOOK.*webhook "hook": method "TRACE" is not one of/s)
 		expect(() => documented({ "": { body: Paid } })).toThrow(/INVALID_WEBHOOK.*a webhook needs a name/s)
 		expect(() => documented({ "a\nb": { body: Paid } })).toThrow(/INVALID_WEBHOOK.*the name holds a control character/s)

@@ -1,24 +1,11 @@
 /**
  * The document's webhooks (OpenAPI 3.1): each request the API sends a subscriber, by name, as the
  * operation the subscriber serves. Its body converts on the output side, as the API writes it. A
- * signed webhook states how as `x-honey-signature`, which the SDKs' verify helpers read; a
- * declaration that cannot be signed or sent as written is refused.
+ * declaration that cannot be sent as written is refused.
  */
 import { compareCodeUnits } from "../schema/canonicalize.ts"
 import type { Operation } from "./paths.ts"
 import type { Convert } from "./responses.ts"
-
-/** How a webhook is signed, stated in the document as `x-honey-signature` for a subscriber to verify. */
-export type WebhookSignature = {
-	/** the signing algorithm; any other value fails the document */
-	readonly algorithm: "hmac-sha256"
-	/** how the digest is written in the header */
-	readonly encoding: "base64" | "hex"
-	/** the name of the header that carries the signature */
-	readonly header: string
-	/** what precedes the digest in the header, as `sha256=` */
-	readonly prefix?: string
-}
 
 /** One request the API sends a subscriber. */
 export type OpenApiWebhook = {
@@ -28,8 +15,6 @@ export type OpenApiWebhook = {
 	readonly description?: string
 	/** `"post"` by default */
 	readonly method?: string
-	/** how the request is signed; with none, the document states no signature */
-	readonly signature?: WebhookSignature
 	/** a short label for the operation */
 	readonly summary?: string
 }
@@ -39,22 +24,6 @@ const METHODS: readonly string[] = ["delete", "get", "patch", "post", "put"]
 const CONTROL = /\p{Cc}/u
 /* a summary or description is CommonMark text: tabs and line breaks are its own */
 const STRAY = /(?![\t\n\r])\p{Cc}/u
-/* RFC 9110 token: a header name */
-const TOKEN = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/
-
-/** Each reason `signature` cannot be checked as written. */
-function signatureErrors(signature: WebhookSignature): string[] {
-	const errors: string[] = []
-	if (signature.algorithm !== "hmac-sha256")
-		errors.push(`signature algorithm "${signature.algorithm}" is not hmac-sha256`)
-	if (signature.encoding !== "hex" && signature.encoding !== "base64")
-		errors.push(`signature encoding "${signature.encoding}" is not hex or base64`)
-	if (!TOKEN.test(signature.header))
-		errors.push(`signature header ${JSON.stringify(signature.header)} is not a header name`)
-	if (signature.prefix !== undefined && CONTROL.test(signature.prefix))
-		errors.push("the signature prefix holds a control character")
-	return errors
-}
 
 /** Each reason `webhook` cannot be sent as written. */
 function webhookErrors(webhook: OpenApiWebhook, method: string): string[] {
@@ -65,7 +34,7 @@ function webhookErrors(webhook: OpenApiWebhook, method: string): string[] {
 	] as const) {
 		if (text !== undefined && STRAY.test(text)) errors.push(`the ${field} holds a control character`)
 	}
-	return webhook.signature === undefined ? errors : [...errors, ...signatureErrors(webhook.signature)]
+	return errors
 }
 
 /** The 3.1 `webhooks` of `webhooks`, by name in code-unit order; each refusal reported through `error`. */
@@ -87,14 +56,7 @@ export function webhooksOf(
 		const schema = convert(webhook.body, "output", `${name}Webhook`)
 		operation.requestBody = { content: { "application/json": { schema } }, required: true }
 		operation.responses = { "200": { description: "Received" } }
-		if (webhook.signature !== undefined) operation["x-honey-signature"] = signatureOf(webhook.signature)
 		out[name] = { [method]: operation }
 	}
 	return out
-}
-
-/** The signature as the SDKs read it: its own fields only, in one order. */
-function signatureOf(signature: WebhookSignature): WebhookSignature {
-	const { algorithm, encoding, header, prefix } = signature
-	return prefix === undefined ? { algorithm, encoding, header } : { algorithm, encoding, header, prefix }
 }

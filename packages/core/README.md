@@ -824,8 +824,7 @@ serveManifest(app, { path: "/manifest.json" })
 const pages = [scalar({ title: "Shop", url: "/openapi.json" }), swagger({ title: "Shop", url: "/openapi.json" })]
 ```
 
-Webhooks — the requests your API sends out — are declared with the document, signature and all, so a generated
-client gets a typed parser and a verifier for them:
+Webhooks, the requests your API sends out, are declared with the document, so it states each one's body:
 
 ```ts
 import { honey } from "@lovrozagar/honey"
@@ -840,7 +839,6 @@ serveOpenApi(app, {
 	webhooks: {
 		orderShipped: {
 			body: z.object({ orderId: z.string(), shippedAt: z.string() }),
-			signature: { algorithm: "hmac-sha256", encoding: "hex", header: "x-signature", prefix: "sha256=" },
 			summary: "An order left the warehouse",
 		},
 	},
