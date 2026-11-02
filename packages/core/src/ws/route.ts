@@ -28,6 +28,10 @@ export type WsRouteOf<TApp, TPath extends string> =
 		? WSRouteBuilder<TCtx & ApplyScoped<TScoped, MergePath<TBase, TPath>>, MergePath<TBase, TPath>, TApp>
 		: never
 
+/**
+ * Start a WebSocket route at `path` on `app`. Chain `.use()`, `.origins()` and the other builder methods on the result,
+ * then call `.handler()` with the connection callbacks to register the route; it returns the app.
+ */
 export function ws<TApp extends AnyHoneyHandle, const TPath extends string>(
 	app: TApp,
 	path: TPath,

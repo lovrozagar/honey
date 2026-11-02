@@ -10,13 +10,20 @@ import { CLOSE_POLICY } from "./shared.ts"
 /** Messages one connection may have waiting for its handler; more close it with 1008. */
 export const WS_PENDING_MAX = 1024
 
+/**
+ * What one WebSocket connection's session needs: the route's callbacks, its request context, and an optional logger
+ * and reconnect token.
+ */
 export type WsSessionOptions = {
 	/** The route's own callbacks; each receives the route's request context first. */
 	callbacks: WSHandler<unknown>
+	/** The request context passed as the first argument to every callback. */
 	ctx: unknown
+	/** Where a failure is logged when the route has no `onError`, or when `onError` itself fails; `null` logs nothing. */
 	log: InvokeLogger | null
 	/** The client's `reconnect_token`: `onReconnect` runs in place of `onOpen` when both exist. */
 	reconnectToken: string | null
+	/** The route path, attached to log lines for a failing callback. */
 	route: string
 }
 

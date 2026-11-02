@@ -12,12 +12,15 @@ export type WSReadyState = 0 | 1 | 2 | 3
 /** Messages kept while a socket is still opening; past this the oldest goes. */
 export const WS_SEND_BUFFER_MAX = 32
 
+/** The socket a WebSocket handler talks to, the same on Node, Bun and Workers. `T` is the runtime's own socket type. */
 export type WSContext<T = unknown> = {
 	/** Outbound bytes the runtime holds unsent, when it reports them (0 otherwise). */
 	readonly bufferedAmount?: number
 	/** Close the connection; a reason over 123 UTF-8 bytes is cut to fit. */
 	close(code?: number, reason?: string): void
+	/** The runtime's own socket object, for anything `WSContext` does not cover. */
 	readonly raw: T
+	/** Connection state: 0 connecting, 1 open, 2 closing, 3 closed. */
 	readonly readyState: WSReadyState
 	/**
 	 * Send a message; any other value goes as JSON. While the socket opens, the newest 32 wait
@@ -27,23 +30,55 @@ export type WSContext<T = unknown> = {
 	send(data: ArrayBuffer | Uint8Array | object | string): void
 }
 
+/**
+ * The callbacks of a WebSocket route. Each receives the route's request context and the socket. They run one at a
+ * time, in order: open, then messages, then close. A throw or rejection is passed to `onError`, else logged.
+ */
 export type WSHandler<TCtx = unknown> = {
+	/** Runs once when the connection closes, with the close code and reason. */
 	onClose?(ctx: TCtx, ws: WSContext, code: number, reason: string): Promise<void> | void
+	/** Runs when the connection reports an error, or when another callback throws or rejects. Its own failure is logged. */
 	onError?(ctx: TCtx, ws: WSContext, error: unknown): Promise<void> | void
+	/**
+	 * Runs for each inbound message: text as a string, binary as an `ArrayBuffer`. A message that finds 1024 waiting for
+	 * this callback closes the connection with 1008.
+	 */
 	onMessage?(ctx: TCtx, ws: WSContext, data: ArrayBuffer | string): Promise<void> | void
+	/** Runs once when the connection opens, unless `onReconnect` runs in its place. */
 	onOpen?(ctx: TCtx, ws: WSContext): Promise<void> | void
 	/** In place of `onOpen` when the client reconnects with a `reconnect_token`; the token is client data. */
 	onReconnect?(ctx: TCtx, ws: WSContext, token: string): Promise<void> | void
 }
 
+/**
+ * What a runtime adapter provides: it upgrades a request to a WebSocket and wires the socket to a handler. Use
+ * `nodeWebSocket()`, `bunWebSocket()` or `cfWebSocket()`.
+ */
 export type WSAdapter = {
+	/**
+	 * Upgrade `req` to a WebSocket handled by `handler`. Returns the 101 response and the connection's context. Honey
+	 * calls this for each WebSocket route; app code does not.
+	 */
 	upgrade(
 		req: Request,
 		env: unknown,
 		handler: WSHandler<unknown>,
-	): Promise<{ response: Response; socket: WSContext }> | { response: Response; socket: WSContext }
+	):
+		| Promise<{
+				/** The 101 for this request. Only Workers sends it; Node and Bun write the handshake themselves. */
+				response: Response
+				/** The connection's context. `undefined` on Bun, which opens the socket later and passes it to `handler`. */
+				socket: WSContext
+		  }>
+		| {
+				/** The 101 for this request. Only Workers sends it; Node and Bun write the handshake themselves. */
+				response: Response
+				/** The connection's context. `undefined` on Bun, which opens the socket later and passes it to `handler`. */
+				socket: WSContext
+		  }
 	/** Close every open connection (graceful shutdown). */
 	closeAll?(code: number, reason: string): void
+	/** The adapter's options with defaults applied. */
 	readonly options?: ResolvedWSOptions
 	/** The runtime the adapter upgrades on; `serve(app)` refuses another runtime's adapter. */
 	readonly runtime?: "bun" | "node" | "workers"

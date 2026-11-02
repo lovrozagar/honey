@@ -9,13 +9,32 @@ import { fireHandler, switchingProtocols, type WSAdapter, type WSHandler, WSCont
 import { type ResolvedWSOptions, resolveWSOptions, selectProtocol, type WSAdapterOptions } from "./shared.ts"
 
 /** The upgrade the Node bridge hands over on the request view. `upgraded` turns true once `ws` wrote the 101. */
-export type NodeUpgrade = { readonly head: Buffer; readonly req: unknown; readonly socket: unknown; upgraded: boolean }
+export type NodeUpgrade = {
+	/** The first bytes read after the request headers, as `ws` needs them to finish the handshake. */
+	readonly head: Buffer
+	/** Node's `IncomingMessage` for the upgrade request. */
+	readonly req: unknown
+	/** The raw network socket the connection arrived on. */
+	readonly socket: unknown
+	/** Becomes true once `ws` took over the socket and wrote the 101; the server must not write HTTP on it after that. */
+	upgraded: boolean
+}
 
+/**
+ * Key under which the Node server stores a `NodeUpgrade` on the request; the Node adapter reads it. Exposed for
+ * honey's own server, not for app code.
+ */
 export const NODE_UPGRADE: unique symbol = /* @__PURE__ */ Symbol("honey.nodeUpgrade")
 
+/** Options for `nodeWebSocket()`: the shared adapter options plus `keepalive`. */
 export type NodeWebSocketOptions = WSAdapterOptions & {
 	/** Ping every `interval` ms; a pong missing after `timeout` ms terminates the connection. */
-	keepalive?: { interval: number; timeout: number }
+	keepalive?: {
+		/** Milliseconds between pings. Must be positive. */
+		interval: number
+		/** Milliseconds to wait for the pong before terminating. Must be positive. */
+		timeout: number
+	}
 }
 
 type NodeWS = {
@@ -99,6 +118,11 @@ function wire(ws: NodeWS, socket: WSContextImpl<NodeWS>, handler: WSHandler<unkn
 	})
 }
 
+/**
+ * Create the WebSocket adapter for Node. It needs the optional `ws` package, loaded on the first upgrade, and a server
+ * started with `serve(app)`, which uses one with default options when the app sets none. Pass your options with
+ * `app.wsAdapter(nodeWebSocket(options))`. Throws a `TypeError` for an invalid option.
+ */
 export function nodeWebSocket(options?: NodeWebSocketOptions): WSAdapter {
 	const resolved = resolveWSOptions(options)
 	const keepalive = options?.keepalive

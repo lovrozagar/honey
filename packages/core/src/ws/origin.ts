@@ -10,7 +10,7 @@
  *   or `Authorization`, what hijacking needs) is rejected. A request without `Origin` (not a
  *   browser) passes.
  *
- * Same-origin is the full origin (H18.12): an `http://` page is not same-origin to an `https`
+ * Same-origin is the full origin: an `http://` page is not same-origin to an `https`
  * server. Behind a TLS terminator the server sees plain http, so the shortcut fails closed there:
  * such an app lists its origins.
  */

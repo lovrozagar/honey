@@ -11,15 +11,19 @@ import { createBus, type RealtimeBus } from "./bus.ts"
  * Every frame, in both directions, is one JSON text.
  */
 export type ConnContext = {
+	/** Random UUID of this connection. */
 	readonly id: string
 	/** What the route's `identify(ctx)` returned, else `null`. */
 	readonly userId: string | null
+	/** The transport this connection runs on; only the WebSocket transport exists. */
 	readonly transport: "ws"
-	/** `true` once the connection closed (or `close()` was called). `join` and `send` are then no-ops. */
+	/** `true` once the connection closed (or `close()` was called). `join`, `leave` and `send` are then no-ops. */
 	readonly closed: boolean
+	/** Free-form storage for the handler, kept for the life of the connection. */
 	readonly state: Record<string, unknown>
-	/** Subscribe to `topic` in this route's namespace. Throws past `limits.maxTopics`. */
+	/** Subscribe to `topic` in this route's namespace. Throws a `RangeError` past `limits.maxTopics`. */
 	join(topic: string): void
+	/** Unsubscribe from `topic` in this route's namespace. */
 	leave(topic: string): void
 	/** Send one JSON frame to this connection. Throws when `payload` is not JSON-serializable. */
 	send(payload: unknown): void
@@ -27,10 +31,19 @@ export type ConnContext = {
 	publish(topic: string, payload: unknown): void
 	/** Close with code 1000. A reason longer than 123 UTF-8 bytes is truncated. */
 	close(reason?: string): void
+	/**
+	 * Run `handler` for each inbound frame, parsed from JSON; binary frames and text that is not JSON are ignored. Frames
+	 * that arrive before it is set wait, up to `limits.maxPendingFrames`. Setting it again replaces the handler.
+	 */
 	on(event: "message", handler: (payload: unknown) => Promise<void> | void): void
+	/** Run `handler` once when the connection closes, with the close reason (`"normal"` when empty). Setting it again replaces the handler. */
 	on(event: "close", handler: (reason: string) => Promise<void> | void): void
 }
 
+/**
+ * Per-connection limits for a realtime route. The numeric ones are positive integers; `realtime()` throws a `TypeError`
+ * for an invalid value.
+ */
 export type RealtimeLimits = {
 	/** Topics one connection may join. Default 128. */
 	maxTopics?: number
@@ -65,6 +78,7 @@ export type RealtimeOptions<C = unknown> = {
 	identify?: (ctx: C) => Promise<string | null | undefined> | string | null | undefined
 	/** Receives every error thrown by `handler` and the `message`/`close` handlers. */
 	onError?: (error: unknown, conn: ConnContext) => Promise<void> | void
+	/** Per-connection limits; unset ones use their defaults. */
 	limits?: RealtimeLimits
 	/**
 	 * Browser origins allowed to connect: `"*"`, a list (`https://app.example.com`), or a
@@ -72,6 +86,10 @@ export type RealtimeOptions<C = unknown> = {
 	 * or `Authorization` gets 403.
 	 */
 	allowedOrigins?: WSOriginPolicy
+	/**
+	 * Runs for each connection after it opens. Subscribe with `conn.join` and attach `conn.on` listeners here. Inbound
+	 * frames wait until it settles. A throw or rejection closes the connection with 1011.
+	 */
 	handler: (ctx: C, conn: ConnContext) => Promise<void> | void
 }
 

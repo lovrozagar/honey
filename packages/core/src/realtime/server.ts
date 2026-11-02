@@ -22,7 +22,10 @@ export type RealtimePublisher = {
 	/** Send `data` as one JSON frame to every connection on `topic`. Throws when `data` is not JSON. */
 	publish(topic: string, data: unknown): void
 	/** The publisher for another namespace on the same bus. */
-	namespace(name: string): { publish(topic: string, data: unknown): void }
+	namespace(name: string): {
+		/** Send `data` as one JSON frame to every connection on `topic` in this namespace. Throws when `data` is not JSON. */
+		publish(topic: string, data: unknown): void
+	}
 }
 
 const SEP = "\u0000"

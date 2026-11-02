@@ -8,6 +8,7 @@
 
 /** The error side of a structured logger (`error(fields, msg)`). */
 export type InvokeLogger = {
+	/** Receives one contained failure: `fields` holds `err` and `phase`, plus any route fields. A throw here is ignored. */
 	error?: (fields: Record<string, unknown>, msg?: string) => void
 }
 

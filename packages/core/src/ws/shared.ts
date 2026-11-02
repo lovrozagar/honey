@@ -9,24 +9,34 @@ export type WSAdapterOptions = {
 	 * Bun enforces the limit itself and force-closes without a close frame). Default 1 MiB.
 	 */
 	maxPayload?: number
-	/** Outbound bytes a socket may hold unsent before `backpressurePolicy` applies to the next `send()`. Default 8 MiB. */
+	/**
+	 * Outbound bytes a socket may hold unsent before `backpressurePolicy` applies to the next `send()`. `0` turns the
+	 * policy off; Bun then drops sends as soon as anything is queued. Default 8 MiB.
+	 */
 	backpressureLimit?: number
 	/** Over `backpressureLimit`: `"close"` closes with 1013 (try again later), `"drop"` discards the message. Default `"close"`. */
 	backpressurePolicy?: "close" | "drop"
 	/**
 	 * Close a connection that received nothing (no message, no pong) for this many ms. Idle peers
-	 * are pinged first where the runtime allows it. `0` disables. Default 120 000; Bun takes whole seconds.
+	 * are pinged first where the runtime allows it. `0` disables. Default 120 000. Bun rounds up to
+	 * whole seconds, at most 960. Workers does not enforce it.
 	 */
 	idleTimeout?: number
 	/** Choose the subprotocol from the ones the client offered; `null` or `undefined` for none. Default: the first offered. */
 	protocol?: (offered: string[], req: Request) => string | null | undefined
 }
 
+/** `WSAdapterOptions` with every default applied. */
 export type ResolvedWSOptions = {
+	/** Outbound bytes a socket may hold unsent before the policy applies; 0 turns the policy off. */
 	readonly backpressureLimit: number
+	/** What happens to the next `send()` over the limit: close with 1013, or drop the message. */
 	readonly backpressurePolicy: "close" | "drop"
+	/** Milliseconds without inbound traffic before the connection is closed; 0 disables. Workers does not enforce it. */
 	readonly idleTimeout: number
+	/** Largest inbound message in bytes, always positive; a bigger one closes the connection. */
 	readonly maxPayload: number
+	/** The `protocol` option, or the first offered subprotocol when it was unset. */
 	readonly protocol: (offered: string[], req: Request) => string | null | undefined
 }
 

@@ -1,22 +1,32 @@
 /**
  * The in-process topic bus behind `realtime()`. Topics are opaque keys here; the realtime server
  * namespaces them per route before they reach the bus. A publish serializes its payload once and
- * hands every subscriber the same JSON text frame. Pass one bus to several routes to share topics.
+ * hands every subscriber the same JSON text frame. Routes share topics only through the same bus
+ * and the same namespace.
  */
 export type RealtimeBus = {
+	/** Put connection `connId` on `topic`; repeating it changes nothing. */
 	subscribe(connId: string, topic: string): void
+	/** Take connection `connId` off `topic`; nothing happens when it is not on it. */
 	unsubscribe(connId: string, topic: string): void
+	/** Take connection `connId` off every topic it is on. Its sink stays until `removeHandler`. */
 	unsubscribeAll(connId: string): void
 	/** Serialize `data` once and deliver the frame to every subscriber of `topic`; throws when `data` is not JSON. */
 	publish(topic: string, data: unknown): void
 	/** Deliver an already-serialized frame to every subscriber of `topic`. */
 	publishFrame(topic: string, frame: string): void
+	/**
+	 * Set the sink that receives frames published to `connId`'s topics, replacing an earlier one. A connection without
+	 * a sink receives nothing, and a sink that throws does not stop delivery to the others.
+	 */
 	onMessage(connId: string, sink: (frame: string) => void): void
+	/** Drop the sink set with `onMessage` for `connId`; its topics are left as they are. */
 	removeHandler(connId: string): void
 	/** The connections on `topic`, as a snapshot. */
 	presence(topic: string): string[]
 	/** How many topics `connId` is on. */
 	topicCount(connId: string): number
+	/** Whether `connId` is on `topic`. */
 	isSubscribed(connId: string, topic: string): boolean
 }
 
@@ -44,6 +54,10 @@ function addTo(map: Map<string, Set<string>>, key: string, member: string): void
 	set.add(member)
 }
 
+/**
+ * Create a topic bus that lives in this process. To share topics across `realtime()` routes, pass them the same `bus`
+ * and the same `namespace`.
+ */
 export function createBus(): RealtimeBus {
 	/* topic → connections on it, and connection → its topics (for unsubscribeAll) */
 	const topicSubs = new Map<string, Set<string>>()

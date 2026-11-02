@@ -27,6 +27,10 @@ export type RealtimeCtx<TApp, TPath extends string> =
 		? WSRouteCtx<TCtx, TFull>
 		: never
 
+/**
+ * Add a realtime route at `path` on `app`. Returns the publisher for the route's namespace, which REST handlers use
+ * to push frames to connected clients. Throws a `TypeError` for an invalid option.
+ */
 export function realtime<TApp extends AnyHoneyHandle, const TPath extends string>(
 	app: TApp,
 	path: TPath,

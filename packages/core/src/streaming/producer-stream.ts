@@ -28,7 +28,7 @@ export type ProducerSink = {
 }
 
 export type ProducerOptions = {
-	/** A producer failure that is not the stream's own abort. Wired to the logger at bit 07. */
+	/** Receives a producer failure that is not the stream's own abort; `ctx.res` logs it. */
 	report?: (error: unknown) => void
 	/** The request's signal (`ctx.signal`), read when the producer starts. */
 	signal?: () => AbortSignal | undefined

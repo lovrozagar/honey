@@ -49,6 +49,11 @@ function wire(
 	})
 }
 
+/**
+ * Create the WebSocket adapter for Cloudflare Workers. Workers has no default adapter, so a WebSocket route needs
+ * `app.wsAdapter(cfWebSocket())`. It takes the shared adapter options, but `idleTimeout` has no effect here. Throws a
+ * `TypeError` for an invalid option.
+ */
 export function cfWebSocket(options?: WSAdapterOptions): WSAdapter {
 	const resolved = resolveWSOptions(options)
 	return {
