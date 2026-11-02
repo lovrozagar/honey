@@ -139,6 +139,7 @@ public class Probe {
 const pairProbe = (url: string) => `package probe;
 
 import ai.anyrow.AnyrowClient;
+import ai.anyrow.RequestOptions;
 import ai.anyrow.UsersGetParams;
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -160,9 +161,12 @@ public class Probe {
           }
         })
         .build();
+    /* the warming call unbounded: a cold JVM's first request can outlast 500 ms on its own */
+    RequestOptions warm = RequestOptions.builder().timeout(Duration.ZERO).build();
     for (int i = 0; i < 2; i++) {
       try {
-        client.users().get(UsersGetParams.builder().id("1").build());
+        if (i == 0) client.users().get(UsersGetParams.builder().id("1").build(), warm);
+        else client.users().get(UsersGetParams.builder().id("1").build());
         System.out.println("answered");
       } catch (RuntimeException e) {
         System.out.println(e.getClass().getSimpleName() + " " + e.getMessage());
