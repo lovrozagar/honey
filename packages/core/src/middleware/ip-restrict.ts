@@ -7,7 +7,7 @@
  * The deny list is checked first; with an allow list, everything else is refused. Fails closed: no
  * reported peer is 403 under either list.
  */
-import { parseIpv4, parseIpv6 } from "../context/peer.ts"
+import { canonicalIp, parseIpv4, parseIpv6 } from "../context/peer.ts"
 import { HoneyError } from "../errors/error.ts"
 import { type MiddlewareFn, namedMiddleware } from "./middleware.ts"
 
@@ -71,6 +71,59 @@ function addressOf(ip: string): Address {
 function inRange(addr: Address, range: Range): boolean {
 	if (addr.v === 4) return range.v === 4 && (addr.n & range.mask) >>> 0 === range.base
 	return range.v === 6 && (addr.n & range.mask) === range.base
+}
+
+/**
+ * Whether `rule` is an address or CIDR range `ipRestrict` and {@link ipAllowed} can match: check a list with it
+ * before storing the list.
+ *
+ * @param rule An address or CIDR range, IPv4 or IPv6, with no brackets, zone or port.
+ * @returns `true` when the rule parses.
+ */
+export function isIpRule(rule: string): boolean {
+	return parseRule(rule) !== null
+}
+
+/** The stored lists {@link ipAllowed} checks an address against. */
+export type IpLists = {
+	/** Addresses and CIDR ranges admitted; when non-empty, every other address is refused. */
+	readonly allow?: readonly string[] | null
+	/** Addresses and CIDR ranges refused, checked before `allow`. */
+	readonly deny?: readonly string[] | null
+}
+
+/** The rules of `list` that parse: a stored rule that does not is skipped, never thrown over mid-request. */
+function storedRules(list: readonly string[] | null | undefined): Range[] {
+	return (list ?? []).map(parseRule).filter((range) => range !== null)
+}
+
+/**
+ * Whether `ip` passes `lists`, by `ipRestrict`'s rules: for lists read per request, as a tenant's stored ones,
+ * where `ipRestrict`'s fixed lists cannot go. The deny list is checked first; with an allow list, everything else
+ * is refused. A list that is null, missing or empty restricts nothing, unlike `ipRestrict`'s `allowList: []`, which
+ * throws because there the list is code.
+ *
+ * Fails closed: under any non-empty list, an `ip` that is null or no address is refused. A stored rule that does
+ * not parse never matches, so validate lists with {@link isIpRule} when they are saved.
+ *
+ * @param ip The client's address, as `ctx.ip` reports it; any spelling of one address is that address.
+ * @param lists The addresses and CIDR ranges allowed and denied.
+ * @returns `true` when the address passes.
+ *
+ * @example
+ * if (!ipAllowed(ctx.ip, { allow: key.allowedIps, deny: key.blockedIps })) {
+ * 	throw new HoneyError({ errorKey: "forbidden", status: "forbidden" })
+ * }
+ */
+export function ipAllowed(ip: string | null, lists: IpLists): boolean {
+	const restricted = (lists.allow?.length ?? 0) > 0 || (lists.deny?.length ?? 0) > 0
+	if (!restricted) return true
+	const canonical = ip === null ? null : canonicalIp(ip)
+	if (canonical === null) return false
+	const addr = addressOf(canonical)
+	if (storedRules(lists.deny).some((range) => inRange(addr, range))) return false
+	if ((lists.allow?.length ?? 0) === 0) return true
+	return storedRules(lists.allow).some((range) => inRange(addr, range))
 }
 
 function forbidden(): never {

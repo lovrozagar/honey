@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { PEER_ADDRESS } from "../context/peer.ts"
 import { honey } from "../routing/app.ts"
-import { ipRestrict, type IpRestrictOptions } from "./ip-restrict.ts"
+import { ipAllowed, ipRestrict, type IpRestrictOptions, isIpRule } from "./ip-restrict.ts"
 
 function app(options: IpRestrictOptions) {
 	const a = honey<{}>()
@@ -198,4 +198,76 @@ describe("ipRestrict(): construction", () => {
 	it("declares the error it answers with", () => {
 		expect(ipRestrict({ denyList: ["10.0.0.1"] }).errors).toEqual(["forbidden"])
 	})
+})
+
+describe("ipAllowed(): lists held per tenant", () => {
+	it("no list, or an empty one, restricts nothing", () => {
+		expect([
+			ipAllowed("203.0.113.9", {}),
+			ipAllowed("203.0.113.9", { allow: null, deny: null }),
+			ipAllowed("203.0.113.9", { allow: [], deny: [] }),
+			ipAllowed(null, { allow: [], deny: null }),
+		]).toEqual([true, true, true, true])
+	})
+
+	it.each([
+		["a different spelling of one address", "2001:db8::1", "2001:0db8:0:0:0:0:0:1"],
+		["an uppercase rule", "2001:db8::1", "2001:DB8::1"],
+		["an IPv4-mapped peer against a v4 range", "::ffff:203.0.113.9", "203.0.113.0/24"],
+		["an IPv4 peer against a mapped range", "203.0.113.9", "::ffff:203.0.113.0/120"],
+	])("%s is one address", (_name, ip, rule) => {
+		expect([ipAllowed(ip, { deny: [rule] }), ipAllowed(ip, { allow: [rule] })]).toEqual([false, true])
+	})
+
+	it("an empty allow list beside a deny list restricts by the deny list alone", () => {
+		expect(ipAllowed("1.2.3.4", { allow: [], deny: ["1.2.3.4"] })).toBe(false)
+		expect(ipAllowed("1.2.3.5", { allow: [], deny: ["1.2.3.4"] })).toBe(true)
+	})
+
+	it("an address with a port is the address", () => {
+		expect(ipAllowed("1.2.3.4:80", { allow: ["1.2.3.4"] })).toBe(true)
+	})
+
+	it("the deny list wins over the allow list", () => {
+		expect(ipAllowed("10.0.0.1", { allow: ["10.0.0.0/8"], deny: ["10.0.0.1"] })).toBe(false)
+	})
+
+	it("an address no list names passes a deny list and fails an allow list", () => {
+		expect([
+			ipAllowed("10.0.0.1", { deny: ["192.0.2.0/24"] }),
+			ipAllowed("10.0.0.1", { allow: ["192.0.2.0/24"] }),
+		]).toEqual([true, false])
+	})
+
+	it.each([[null], [""], ["1.2.3.4x"], ["not an address"]])("%j under a list is refused", (ip) => {
+		expect([ipAllowed(ip, { deny: ["192.0.2.0/24"] }), ipAllowed(ip, { allow: ["192.0.2.0/24"] })]).toEqual([
+			false,
+			false,
+		])
+	})
+
+	it("a bad stored rule never matches, never throws, and leaves the good rules working", () => {
+		expect([
+			ipAllowed("1.2.3.4", { deny: ["1.2.3.0/24x"] }),
+			ipAllowed("1.2.3.4", { allow: ["1.2.3.0/24x"] }),
+			ipAllowed("1.2.3.4", { allow: ["garbage", "1.2.3.0/24"] }),
+			ipAllowed("1.2.3.4", { deny: ["garbage", "1.2.3.0/24"] }),
+		]).toEqual([true, false, true, false])
+	})
+})
+
+describe("isIpRule(): what a list may store", () => {
+	it.each(["1.2.3.4", "1.2.3.0/24", "0.0.0.0/0", "2001:db8::1", "2001:db8::/32", "::ffff:1.2.3.0/120"])(
+		"%s is a rule",
+		(rule) => {
+			expect(isIpRule(rule)).toBe(true)
+		},
+	)
+
+	it.each(["", "1.2.3.4x", "1.2.3.0/24x", "1.2.3.0/33", "010.0.0.1", "2001:db8::/129", "[::1]", "1.2.3.4:80"])(
+		"%j is not",
+		(rule) => {
+			expect(isIpRule(rule)).toBe(false)
+		},
+	)
 })

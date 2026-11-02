@@ -513,6 +513,7 @@ app.get("/report").handler((ctx) => ctx.res.text("ok", "row\n".repeat(5000)))
 | `timeout(options)`        | `@lovrozagar/honey/timeout`        | a deadline per request                                     |
 | `bodyLimit(options)`      | `@lovrozagar/honey/body-limit`     | refuses a body over a size                                 |
 | `ipRestrict(options)`     | `@lovrozagar/honey/ip-restrict`    | an allow or deny list over `ctx.ip`                        |
+| `ipAllowed(ip, lists)`    | `@lovrozagar/honey/ip-restrict`    | the same check for lists read per request                  |
 | `serverTiming()`          | `@lovrozagar/honey/server-timing`  | `Server-Timing`, and `ctx.timing` to add to it             |
 | `poweredBy(options?)`     | `@lovrozagar/honey/powered-by`     | the `X-Powered-By` header                                  |
 | `staticFiles(options)`    | `@lovrozagar/honey/static`         | serves files under a prefix                                |
@@ -1264,7 +1265,7 @@ generator.
 | `@lovrozagar/honey/csrf`            | `csrf`                                                                                                                                  |
 | `@lovrozagar/honey/body-limit`      | `bodyLimit`                                                                                                                             |
 | `@lovrozagar/honey/timeout`         | `timeout`                                                                                                                               |
-| `@lovrozagar/honey/ip-restrict`     | `ipRestrict`                                                                                                                            |
+| `@lovrozagar/honey/ip-restrict`     | `ipRestrict`, `ipAllowed`, `isIpRule`                                                                                                   |
 | `@lovrozagar/honey/request-id`      | `requestId`                                                                                                                             |
 | `@lovrozagar/honey/secure-headers`  | `secureHeaders`                                                                                                                         |
 | `@lovrozagar/honey/server-timing`   | `serverTiming`                                                                                                                          |

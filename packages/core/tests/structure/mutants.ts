@@ -7,7 +7,7 @@ import type { TapCall } from "../../src/context/context.ts"
 import type { CompressOptions } from "../../src/middleware/compress.ts"
 import type { CompiledChain } from "../../src/middleware/middleware.ts"
 import type { StaticConfig } from "../../src/response/static.ts"
-import type { IpRestrictOptions } from "../../src/middleware/ip-restrict.ts"
+import type { IpLists, IpRestrictOptions } from "../../src/middleware/ip-restrict.ts"
 import type { MemoryStoreOptions, RateLimitOptions } from "../../src/middleware/rate-limit.ts"
 import type { SSEEvent, SSEOptions, SSEStream } from "../../src/response/sse.ts"
 import { type ProducerOptions, type ProducerSink, producerStream } from "../../src/streaming/producer-stream.ts"
@@ -88,6 +88,12 @@ export function textIpRestrict(options: IpRestrictOptions): Mw {
 		if (denied || !admitted) return Promise.resolve(new Response(null, { status: 403 }))
 		return next()
 	}
+}
+
+/** ipAllowed that compares the address with each stored rule as text. */
+export function textIpAllowed(ip: string | null, lists: IpLists): boolean {
+	const named = (list: readonly string[] | null | undefined) => list?.includes(ip ?? "") ?? false
+	return !named(lists.deny) && (!lists.allow?.length || named(lists.allow))
 }
 
 export type IpRestrict = (options: IpRestrictOptions) => Mw

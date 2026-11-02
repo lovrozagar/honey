@@ -28,6 +28,7 @@ import {
 	rawServerTiming,
 	rawTargetProxy,
 	reflectingCors,
+	textIpAllowed,
 	textIpRestrict,
 	translatingInPlace,
 	trustingJsonSchemaOf,
@@ -202,6 +203,12 @@ export const GUARDS: readonly Guard[] = [
 		catches: "v1: an IP rule compared as text, so another spelling of a denied address passes",
 		disable: () => ({ ipRestrict: textIpRestrict }),
 		id: "v1-ip-restrict-canonical",
+		module: "packages/core/src/middleware/ip-restrict.ts",
+	},
+	{
+		catches: "v1: a stored IP rule compared as text, so a tenant's list misses a spelling of its own address",
+		disable: () => ({ ipAllowed: textIpAllowed }),
+		id: "v1-ip-allowed-canonical",
 		module: "packages/core/src/middleware/ip-restrict.ts",
 	},
 	{

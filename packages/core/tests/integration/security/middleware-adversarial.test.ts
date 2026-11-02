@@ -44,7 +44,7 @@ const { memoryStore, rateLimit } = (await import(
 const { PEER_ADDRESS } = (await import(
 	resolvePath(REPO, "packages/core/src/context/peer.ts")
 )) as typeof import("../../../src/context/peer.ts")
-const { ipRestrict } = (await import(
+const { ipAllowed, ipRestrict } = (await import(
 	resolvePath(REPO, "packages/core/src/middleware/ip-restrict.ts")
 )) as typeof import("../../../src/middleware/ip-restrict.ts")
 const { compress } = (await import(
@@ -248,6 +248,22 @@ describe("v1 adversarial: ipRestrict sees only the platform peer", () => {
 			statuses.push((await app.fetch(fromPeer(peer), {})).status)
 		}
 		expect(statuses).toEqual([403, 403, 403])
+	})
+})
+
+describe("v1 adversarial: a stored IP list reads addresses, not text", () => {
+	it("admits another spelling of an allowed address", () => {
+		expect(ipAllowed("2001:0db8::1", { allow: ["2001:db8:0:0:0:0:0:1"] })).toBe(true)
+	})
+
+	it("treats a mapped peer as the IPv4 address it carries", () => {
+		expect(ipAllowed("::ffff:1.2.3.4", { allow: ["1.2.3.0/24"] })).toBe(true)
+		expect(ipAllowed("::ffff:1.2.3.4", { deny: ["1.2.3.4"] })).toBe(false)
+	})
+
+	it("never reads a number out of a trailing junk rule or address", () => {
+		expect(ipAllowed("1.2.3.4", { allow: ["1.2.3.0/24x"] })).toBe(false)
+		expect(ipAllowed("1.2.3.4x", { allow: ["1.2.3.0/24"] })).toBe(false)
 	})
 })
 

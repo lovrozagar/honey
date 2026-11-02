@@ -37,7 +37,7 @@ generator.
 | `@lovrozagar/honey/csrf`            | `csrf`                                                                                                                                  |
 | `@lovrozagar/honey/body-limit`      | `bodyLimit`                                                                                                                             |
 | `@lovrozagar/honey/timeout`         | `timeout`                                                                                                                               |
-| `@lovrozagar/honey/ip-restrict`     | `ipRestrict`                                                                                                                            |
+| `@lovrozagar/honey/ip-restrict`     | `ipRestrict`, `ipAllowed`, `isIpRule`                                                                                                   |
 | `@lovrozagar/honey/request-id`      | `requestId`                                                                                                                             |
 | `@lovrozagar/honey/secure-headers`  | `secureHeaders`                                                                                                                         |
 | `@lovrozagar/honey/server-timing`   | `serverTiming`                                                                                                                          |
