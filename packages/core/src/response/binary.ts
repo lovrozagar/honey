@@ -8,7 +8,10 @@ import type { ResponseOptions } from "./response.ts"
 export type BinaryBody = ArrayBuffer | Uint8Array<ArrayBuffer>
 
 /** `ctx.res.binary()`'s options: the media type (`application/octet-stream` by default) beside the usual ones. */
-export type BinaryOptions<CT extends string = string> = ResponseOptions & { contentType?: CT }
+export type BinaryOptions<CT extends string = string> = ResponseOptions & {
+	/** The media type of the bytes. Default `application/octet-stream`. */
+	contentType?: CT
+}
 
 /* frozen: the Node path hands the map to the bag as its header map */
 export const BINARY_HEADERS = /* @__PURE__ */ Object.freeze({ "content-type": "application/octet-stream" })

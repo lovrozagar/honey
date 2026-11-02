@@ -14,15 +14,23 @@ import type { RequestTrace } from "../telemetry/request-trace.ts"
 import { parseCookieHeader } from "./cookie.ts"
 import { ipOf } from "./peer.ts"
 
-export type ExecutionCtx = { waitUntil?: (p: Promise<unknown>) => void }
+/** The runtime's execution context, as far as honey uses it. */
+export type ExecutionCtx = {
+	/** Keeps the runtime alive until `p` settles, after the response is sent. */
+	waitUntil?: (p: Promise<unknown>) => void
+}
 
 /** The per-request state dispatch owns; the context reads its request fields from it. */
 export type RequestState<TEnv> = {
+	/** The environment passed to `app.fetch()`. */
 	readonly env: TEnv
+	/** The execution context passed to `app.fetch()`, if any; Workers provide one. */
 	readonly executionCtx: ExecutionCtx | undefined
 	/** the app's logger */
 	readonly logger: Logger
+	/** The normalized request path, as on `ctx.path`. */
 	readonly path: string
+	/** The incoming request. */
 	readonly req: Request
 	/** `ctx.ip` once something asked: the canonical peer, or `null` when no runtime reports one */
 	ip?: string | null
@@ -36,8 +44,14 @@ export type RequestState<TEnv> = {
 export type RouteInfo = {
 	/** the route's id (`GET /users/:id`); empty for a request no route serves */
 	readonly id: string
+	/**
+	 * The error factories handlers on this route get: its declared keys, or all of the app's when it declares none;
+	 * `null` when neither the app nor the route has a factory.
+	 */
 	readonly errors: Readonly<Record<string, (...args: never[]) => unknown>> | null
+	/** The route's metadata: what its middleware contributes, overlaid by what the route states itself. */
 	readonly meta: Readonly<Record<string, unknown>>
+	/** The route's path pattern, for example `/users/:id`; empty when no route serves the request. */
 	readonly pattern: string
 }
 
@@ -66,7 +80,12 @@ export const TAPS: unique symbol = /* @__PURE__ */ Symbol("honey.taps")
 const SELF: unique symbol = /* @__PURE__ */ Symbol("honey.self")
 
 /** One `ctx.tap(key, payload)` call, waiting for the handler's answer. */
-export type TapCall = { readonly key: string; readonly payload: unknown }
+export type TapCall = {
+	/** The key given to `ctx.tap()`: it picks the handler `app.tap()` registered. */
+	readonly key: string
+	/** The value given to `ctx.tap()`, handed to that handler. */
+	readonly payload: unknown
+}
 
 /**
  * Every name the framework owns on a context. `next({ ... })` additions and `.context()` values may
@@ -113,25 +132,47 @@ export function setCtxError(ctx: HoneyContext<never> | HoneyContext, error: Hone
 	;(ctx as { error: HoneyError | undefined }).error = error
 }
 
+/**
+ * What a handler and its middleware see for one request: the request and response helpers, the route's params and
+ * metadata, the environment, the logger and the abort signal.
+ */
 export class HoneyContext<TEnv = Record<string, unknown>> {
 	/**
 	 * Keep a promise running past the response: `waitUntil` on Workers, which reports a rejection
 	 * itself; elsewhere a rejection goes to the request's logger.
 	 */
 	readonly background: (p: Promise<unknown>) => void
+	/** The environment passed to `app.fetch()`: the bindings on Workers, the `env` serve option on Bun and Node. */
 	readonly env: TEnv
 	/**
 	 * The error behind the response, once a handler or a deeper middleware threw and the `next()`
 	 * boundary turned it into an error response; `undefined` while nothing failed.
 	 */
 	readonly error: HoneyError | undefined = undefined
+	/**
+	 * The error factories this route may use: its declared keys, or all of the app's when it declares none. Empty when
+	 * neither the app nor the route has a factory.
+	 */
 	readonly errors: Readonly<Record<string, (...args: never[]) => unknown>>
+	/** The execution context passed to `app.fetch()`: Workers provide one, the Bun and Node adapters do not. */
 	readonly executionCtx: ExecutionCtx | undefined
+	/**
+	 * The route's metadata: what its middleware contributes, overlaid by what the route states. Empty when neither sets
+	 * any.
+	 */
 	readonly meta: Readonly<Record<string, unknown>>
+	/** The route's path parameters by name, percent-decoded. Empty when no route serves the request. */
 	readonly params: Record<string, string>
+	/**
+	 * The request path without the query, normalized the same way on every runtime: repeated slashes collapse, dot
+	 * segments resolve, and percent escapes stay encoded.
+	 */
 	readonly path: string
+	/** The incoming request. */
 	readonly req: Request
+	/** Builders for the response: `json`, `text`, `redirect` and the rest. */
 	readonly res: HoneyRes
+	/** The route's path pattern, for example `/users/:id`; empty when no route serves the request. */
 	readonly routePattern: string
 	readonly [REQUEST]: RequestState<TEnv>
 	readonly [SELF]: HoneyContext<TEnv>
@@ -145,6 +186,7 @@ export class HoneyContext<TEnv = Record<string, unknown>> {
 	#searchAll: Record<string, string[]> | null = null
 	#taps: TapCall[] | null = null
 
+	/** Honey builds one for each request; application code receives the context instead of making one. */
 	constructor(state: RequestState<TEnv>, route: RouteInfo, params: Record<string, string>) {
 		this.env = state.env
 		this.errors = route.errors ?? EMPTY
@@ -171,7 +213,11 @@ export class HoneyContext<TEnv = Record<string, unknown>> {
 		return this[REQUEST].trace ?? null
 	}
 
-	/** The peer the platform reports, canonical (H23): CF-Connecting-IP on Workers, the socket on Bun and Node. */
+	/**
+	 * The client address the platform reports, in one canonical spelling: `CF-Connecting-IP` on Workers, the socket on
+	 * Bun and Node; `null` when nothing reports one. Forwarding headers are not trusted, so behind your own reverse
+	 * proxy this is the proxy's address.
+	 */
 	get ip(): string | null {
 		return ipOf(this[REQUEST])
 	}
@@ -191,6 +237,10 @@ export class HoneyContext<TEnv = Record<string, unknown>> {
 		return self.#log
 	}
 
+	/**
+	 * The request's cookies by name, percent-decoded, parsed from the `Cookie` header on first use. When a name
+	 * repeats, the first value wins.
+	 */
 	get cookies(): Record<string, string> {
 		const self = this[SELF]
 		self.#cookies ??= parseCookieHeader(self.req.headers.get("cookie") ?? "")

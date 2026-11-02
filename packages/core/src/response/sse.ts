@@ -4,15 +4,22 @@
  */
 import { type ProducerOptions, type ProducerSink, producerStream } from "../streaming/producer-stream.ts"
 
+/** One server-sent event. */
 export type SSEEvent = {
+	/** The event's payload: a string as is, an object as JSON. */
 	data: object | string
+	/** The event name the client listens for. A newline in it makes `send()` throw. */
 	event: string
-	/** The id a reconnecting client sends back as `Last-Event-ID`; `""` tells it to forget its last one. */
+	/**
+	 * The id a reconnecting client sends back as `Last-Event-ID`; `""` tells it to forget its last one. A newline in it
+	 * makes `send()` throw.
+	 */
 	id?: string
 	/** Reconnect delay in ms; anything but a non-negative finite number is left out. */
 	retry?: number
 }
 
+/** Options for `ctx.res.sse()`. */
 export type SSEOptions = {
 	/** A `retry:` directive sent before any event. */
 	defaultRetry?: number
@@ -22,11 +29,16 @@ export type SSEOptions = {
 	lastEventId?: string
 }
 
+/** The stream an `sse()` callback writes events into. */
 export type SSEStream = {
 	/** End the stream. Idempotent and synchronous: safe in a `finally`. */
 	close(): void
 	/** True once the stream ended: closed, or the client went away. */
 	readonly closed: boolean
+	/**
+	 * The id the client resumes from: `lastEventId` from the options, else its `Last-Event-ID` header; `undefined` when
+	 * neither exists.
+	 */
 	readonly lastEventId: string | undefined
 	/**
 	 * Queue an event. Resolves when the client is ready for more. After the stream ended it

@@ -24,6 +24,7 @@ import { addVary, withHeaders } from "./with-headers.ts"
 /** What `resolve` may find: a Response to send as it is, or a body to type and range. */
 export type StaticFile = RangeBody | Response
 
+/** Options for `staticFiles()`. Only `resolve` is required. */
 export type StaticConfig<TCtx> = {
 	/** Extra response headers; a function gets the path `resolve` got. */
 	headers?: Record<string, string> | ((filePath: string) => Record<string, string>)
@@ -37,7 +38,7 @@ export type StaticConfig<TCtx> = {
 	rewritePath?: (filePath: string, ctx: TCtx) => string
 }
 
-/** The web's own types by extension (A1); anything else is a Blob's own type or octet-stream. */
+/** The web's own types by extension; anything else is a Blob's own type or octet-stream. */
 const TYPES: Readonly<Record<string, string>> = /* @__PURE__ */ Object.freeze({
 	avif: "image/avif",
 	css: "text/css; charset=utf-8",
@@ -184,9 +185,20 @@ function respond(request: Request, found: Found, answer: Answer): Response {
 	return rangeResponse(request, file, init)
 }
 
-export function staticFiles<TCtx extends { readonly path: string; readonly req: Request }>(
-	config: StaticConfig<TCtx>,
-): MiddlewareFn<TCtx> {
+/**
+ * Middleware that serves GET and HEAD requests from the files `config.resolve` finds. A body it returns honors the
+ * request's `Range`; a Response it returns goes out as it is, plus any configured headers. A request outside `prefix`,
+ * with another method, with an unsafe path (a `..` segment, for example), or for a file `resolve` does not find
+ * (`null`) goes on to the next handler. Throws a `TypeError` at creation when `prefix` is not a valid path.
+ */
+export function staticFiles<
+	TCtx extends {
+		/** The normalized request path, matched against `prefix`. */
+		readonly path: string
+		/** The request: its method and its `Range` and `Accept-Encoding` headers decide the answer. */
+		readonly req: Request
+	},
+>(config: StaticConfig<TCtx>): MiddlewareFn<TCtx> {
 	const prefix = normalizePrefix(config.prefix ?? "/")
 	return namedMiddleware("staticFiles", async (ctx, next) => {
 		const req = ctx.req

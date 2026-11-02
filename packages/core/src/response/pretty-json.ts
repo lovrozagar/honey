@@ -8,6 +8,7 @@ import { type MiddlewareFn, namedMiddleware } from "../middleware/middleware.ts"
 import { rawBodyOf, replaceResponse } from "./builder.ts"
 import { isJsonMediaType, parseMediaType } from "./media-type.ts"
 
+/** Options for `prettyJson()`. */
 export type PrettyJsonOptions = {
 	/** The query parameter that asks for it; default `pretty`. */
 	query?: string
@@ -29,9 +30,15 @@ function indented(text: string, space: number): string | null {
 	}
 }
 
-export function prettyJson(
-	options: PrettyJsonOptions = {},
-): MiddlewareFn<{ readonly search: Readonly<Record<string, string>> }> {
+/**
+ * Middleware that indents a JSON answer (`application/json` or a `+json` type) when the request's query has the
+ * `pretty` parameter (or the one named by `query`) with any value, even `?pretty=false`. Only a body in memory or of
+ * declared length is touched. Other answers, and bodies that do not parse as JSON, go out unchanged.
+ */
+export function prettyJson(options: PrettyJsonOptions = {}): MiddlewareFn<{
+	/** The request's query, first value per key. */
+	readonly search: Readonly<Record<string, string>>
+}> {
 	const query = options.query ?? "pretty"
 	const space = options.space ?? 2
 	return namedMiddleware("prettyJson", async (ctx, next) => {

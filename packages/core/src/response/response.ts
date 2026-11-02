@@ -20,17 +20,36 @@ import type { HeaderMap } from "./out-headers.ts"
 import { SSE_HEADERS, type SSEOptions, type SSEStream, sseBody } from "./sse.ts"
 import { type StatusKey, statusKeyToCode } from "./status.ts"
 
+/** Options the `ctx.res` helpers accept; only `raw()` takes none. */
 export type ResponseOptions = {
+	/** Cookies to set, by name: each becomes one `Set-Cookie` header, and an invalid one throws. */
 	cookies?: Record<string, CookieOptions>
+	/** Headers set on the answer; each replaces the helper's own header of that name. */
 	headers?: Record<string, string>
+	/**
+	 * The status to send instead of the helper's own; `noContent()` ignores it. A helper with a body throws a
+	 * `TypeError` for a status that cannot carry one, such as 204 or 304.
+	 */
 	status?: number
 }
 
 /** What `ctx.res` reads from its request, only when a stream needs it: the context itself is one. */
-export type ResLink = { readonly log: Logger; readonly req: Request; readonly signal: AbortSignal }
+export type ResLink = {
+	/** Logger that hears a failed stream producer. */
+	readonly log: Logger
+	/** The request; its `Last-Event-ID` header seeds `sse()`. */
+	readonly req: Request
+	/** Ends streamed bodies when it aborts. */
+	readonly signal: AbortSignal
+}
 
-export type GenerateOptions = ResponseOptions & { contentType?: string }
+/** Options for `ctx.res.generate()`: the usual response options plus the media type. */
+export type GenerateOptions = ResponseOptions & {
+	/** The media type of the streamed values. Default `application/octet-stream`. */
+	contentType?: string
+}
 
+/** A sync or async generator of strings or bytes, as `ctx.res.generate()` takes. */
 type Generated = AsyncGenerator<string | Uint8Array, void, unknown> | Generator<string | Uint8Array, void, unknown>
 
 /* phantom brands: they exist only at the type level, never assigned at runtime */
@@ -129,6 +148,10 @@ function writableOver(write: (bytes: Uint8Array) => Promise<void>, end: { close(
 	return { pending, writable }
 }
 
+/**
+ * The `ctx.res` helpers. `json()`, `text()` and the other body helpers take a status key and a body; `noContent()`,
+ * `redirect()`, `stream()`, `generate()` and `sse()` pick their own status; `raw()` passes a native Response through.
+ */
 export class HoneyRes {
 	protected readonly nodeOut: boolean
 	readonly #link: ResLink | undefined
@@ -190,14 +213,20 @@ export class HoneyRes {
 		return this.#known(statusKeyToCode[statusKey], binaryHeaders(opts?.contentType), binaryBytes(body), opts)
 	}
 
+	/** A `text/csv; charset=utf-8` answer; `body` goes out as written. */
 	csv<SK extends StatusKey>(statusKey: SK, body: string, opts?: ResponseOptions): TypedResponse<"text/csv", SK> {
 		return this.#known(statusKeyToCode[statusKey], CSV_HEADERS, body, opts)
 	}
 
+	/** A `text/html; charset=utf-8` answer; `body` goes out as written, with no escaping. */
 	html<SK extends StatusKey>(statusKey: SK, body: string, opts?: ResponseOptions): TypedResponse<"text/html", SK> {
 		return this.#known(statusKeyToCode[statusKey], HTML_HEADERS, body, opts)
 	}
 
+	/**
+	 * An `application/json` answer; `data` is serialized with `JSON.stringify`. Data that serializes to nothing
+	 * (`undefined`, a function, a symbol) gives an empty body; data it refuses, such as a cycle, throws.
+	 */
 	json<SK extends StatusKey>(
 		statusKey: SK,
 		data: unknown,
@@ -208,6 +237,7 @@ export class HoneyRes {
 		return this.#known(statusKeyToCode[statusKey], JSON_HEADERS, body ?? "", opts)
 	}
 
+	/** A 204 answer with no body. `opts.status` is ignored; headers and cookies apply. */
 	noContent(opts?: ResponseOptions): TypedResponse<"none", "no_content"> {
 		return typed(this.#empty(204, {}, opts))
 	}
@@ -217,7 +247,7 @@ export class HoneyRes {
 	 * return guarded headers that throw on `set`, which breaks response middleware. Copy status and
 	 * headers into a new Response; the body streams through unread. WebSocket upgrades and responses
 	 * Honey built pass through as-is. A response whose body was already read is a bug, usually one
-	 * kept across requests: it throws instead of answering 200 with an unreadable body (H18.18).
+	 * kept across requests: it throws instead of answering 200 with an unreadable body.
 	 */
 	raw(response: Response): TypedResponse {
 		if (response.bodyUsed)
@@ -264,14 +294,17 @@ export class HoneyRes {
 		return typed(this.#streamed(body, BINARY_HEADERS, opts))
 	}
 
+	/** A redirect to `url`, status 302 unless `opts.status` says otherwise. */
 	redirect(url: string, opts?: ResponseOptions): TypedResponse<"none", "found"> {
 		return typed(this.#empty(opts?.status ?? 302, { location: url }, opts))
 	}
 
+	/** A `text/plain; charset=utf-8` answer. */
 	text<SK extends StatusKey>(statusKey: SK, body: string, opts?: ResponseOptions): TypedResponse<"text/plain", SK> {
 		return this.#known(statusKeyToCode[statusKey], TEXT_HEADERS, body, opts)
 	}
 
+	/** An `application/xml` answer; `body` goes out as written, with no escaping. */
 	xml<SK extends StatusKey>(statusKey: SK, body: string, opts?: ResponseOptions): TypedResponse<"application/xml", SK> {
 		return this.#known(statusKeyToCode[statusKey], XML_HEADERS, body, opts)
 	}

@@ -17,11 +17,13 @@ const V2_DOMAIN = "honey-cookie-v2\0"
 /* an HMAC-SHA256 tag is 32 bytes: 43 base64url characters, no padding */
 const SIG_RE = /^[A-Za-z0-9_-]{43}$/
 
+/** Options for `sign()` and `CookieSigner.sign()`. */
 export type SignOptions = {
 	/** The cookie name to bind the signature to. Pass the same name to `verify`. */
 	name?: string
 }
 
+/** Options for `verify()` and `CookieSigner.verify()`. */
 export type VerifyOptions = {
 	/**
 	 * Also accept legacy (v1) signatures, which are not bound to a name.
@@ -97,8 +99,9 @@ async function verifiesWith(
 	}
 }
 
+/** Signs and verifies cookie values: the first secret signs, any secret verifies, so secrets can rotate. */
 export type CookieSigner = {
-	/** Sign with the first secret. */
+	/** Sign with the first secret. Rejects with a `TypeError` when the list has none. */
 	sign(value: string, opts?: SignOptions): Promise<string>
 	/** The original value, or `null` when no secret verifies it or the input is malformed. */
 	verify(signed: string, opts?: VerifyOptions): Promise<string | null>

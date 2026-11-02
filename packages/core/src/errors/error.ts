@@ -7,8 +7,11 @@ import { type StatusKey, statusKeyToCode } from "../response/status.ts"
 
 /** One problem with one input field: what the client reads under `fields`. */
 export type FieldError = {
+	/** Machine-readable key of the problem; clients branch on it. */
 	error_key: string
+	/** Human-readable description of the problem. */
 	message: string
+	/** The dotted path of the field, for example `json.email`; its display name when error messages are translated. */
 	path: string
 }
 
@@ -45,17 +48,33 @@ export function isFrameworkErrorKey(key: string): boolean {
 	return key !== EK.internal_server_error && Object.hasOwn(EK, key)
 }
 
+/** What a `HoneyError` is built from. Only `errorKey` and `status` are required. */
 export type HoneyErrorOptions = {
+	/**
+	 * The underlying failure, kept on the error's `cause`. Not sent to the client; `HoneyError.serialize()` includes
+	 * it.
+	 */
 	cause?: unknown
+	/**
+	 * The payload of an error declared with a schema. When set, it is the response body, or what the app's custom error
+	 * formatter makes of it, in place of the standard shape.
+	 */
 	data?: unknown
+	/**
+	 * The error's key, for example `not_found`: the `error_key` the client reads, and the `message` until translated.
+	 */
 	errorKey: string
+	/** Per-field problems, keyed by field name, that the client reads under `fields`. Default none. */
 	fields?: Record<string, FieldError[]>
+	/** Headers added to the error response. */
 	headers?: Record<string, string>
+	/** The response status, by key such as `not_found`. A key that names no status makes the error a 500. */
 	status: StatusKey
+	/** Named values that fill the translated message's template. `HoneyError.serialize()` includes them. */
 	vars?: Record<string, number | string>
 }
 
-/** Marks an error built with a status key that names no status: not representable to a client (H18.17). */
+/** Marks an error built with a status key that names no status: not representable to a client. */
 const UNKNOWN_STATUS = /* @__PURE__ */ Symbol("honey.unknownStatus")
 
 /** Whether `error` was built with a status key that names no status. */
@@ -63,15 +82,28 @@ export function hasUnknownStatus(error: HoneyError): boolean {
 	return Object.hasOwn(error, UNKNOWN_STATUS)
 }
 
+/**
+ * The error honey throws and answers with: an error key, a status, optional per-field problems and a payload.
+ * The client sees the key, status, message and fields, or only `data` for a schema error. The cause stays on the
+ * server, and `vars` reach the client only through a translated message.
+ */
 export class HoneyError extends Error {
+	/** Payload of an error declared with a schema; `undefined` otherwise. */
 	readonly data?: unknown
+	/** The error's key, for example `not_found`. */
 	readonly errorKey: string
+	/** Per-field problems, keyed by field name. Empty when there are none. */
 	readonly fields: Readonly<Record<string, FieldError[]>>
+	/** Headers added to the error response. */
 	readonly headers?: Record<string, string>
+	/** The numeric response status. A status key that named no status gives 500. */
 	readonly status: number
+	/** The status by key, for example `not_found`. An unknown key becomes `internal_server_error`. */
 	readonly statusKey: StatusKey
+	/** Named values that fill the translated message's template. */
 	readonly vars?: Record<string, number | string>
 
+	/** Builds the error from `options`; the message is the error key. */
 	constructor(options: HoneyErrorOptions) {
 		/* no cause given: no own `cause` property, as with a plain Error */
 		super(options.errorKey, options.cause === undefined ? undefined : { cause: options.cause })
@@ -87,7 +119,10 @@ export class HoneyError extends Error {
 		this.vars = options.vars
 	}
 
-	/** A thrown value as a plain object for the operator log: message, name, stack, the error's keys and its cause chain. */
+	/**
+	 * A thrown value as a plain object for the operator log: message, name, stack, the error's keys and its cause
+	 * chain.
+	 */
 	static serialize(error: unknown): Record<string, unknown> {
 		if (!(error instanceof Error)) return { message: String(error) }
 		const out: Record<string, unknown> = { message: error.message, name: error.name, stack: error.stack }

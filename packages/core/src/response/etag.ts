@@ -10,6 +10,7 @@ import { type MiddlewareFn, namedMiddleware } from "../middleware/middleware.ts"
 import { rawBodyOf, replaceResponse } from "./builder.ts"
 import { withHeaders } from "./with-headers.ts"
 
+/** Options for `etag()`: whether the tag it adds is weak (the default) or strong. */
 export type ETagOptions = {
 	/** A weak validator (`W/"…"`, the default), or a strong one with `false`. */
 	weak?: boolean
@@ -64,7 +65,15 @@ async function bytesOf(response: Response): Promise<{ bytes: Uint8Array<ArrayBuf
 	return { bytes: typeof raw === "string" ? encoder.encode(raw) : (raw as Uint8Array<ArrayBuffer>), read: false }
 }
 
-export function etag(options: ETagOptions = {}): MiddlewareFn<{ req: Request }> {
+/**
+ * Middleware that adds an `ETag` to a 200 answer to GET or HEAD, hashing a body that is in memory or has a declared
+ * `Content-Length`. Streamed bodies and empty bodies get none, and an `ETag` the handler set is kept. With either tag,
+ * a matching `If-None-Match` turns the answer into a 304.
+ */
+export function etag(options: ETagOptions = {}): MiddlewareFn<{
+	/** The request: its method and `If-None-Match` header decide what this middleware does. */
+	req: Request
+}> {
 	const weak = options.weak !== false
 	return namedMiddleware("etag", async (ctx, next) => {
 		const method = ctx.req.method

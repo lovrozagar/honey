@@ -8,21 +8,36 @@ import { type MiddlewareFn, namedMiddleware } from "../middleware/middleware.ts"
 import { notModified } from "./etag.ts"
 import { withHeaders } from "./with-headers.ts"
 
+/** Options for `cacheControl()`. At least one directive or `lastModified` is required. */
 export type CacheControlOptions = {
+	/** Adds `immutable`: the response never changes while fresh, so clients skip revalidation. */
 	immutable?: boolean
 	/** Seconds a response stays fresh (`max-age`). */
 	maxAge?: number
+	/** Adds `must-revalidate`: a stale response must be revalidated before use. */
 	mustRevalidate?: boolean
+	/** Adds `no-cache`: caches revalidate before reusing the response. */
 	noCache?: boolean
+	/** Adds `no-store`: no cache may keep the response. */
 	noStore?: boolean
+	/** Adds `private`: only the end user's cache may keep it. Cannot be combined with `public`. */
 	private?: boolean
+	/** Adds `public`: any cache may keep it. Cannot be combined with `private`. */
 	public?: boolean
 	/** Seconds a shared cache keeps it fresh (`s-maxage`). */
 	sMaxAge?: number
 	/** Seconds a stale response may be served while it revalidates. */
 	staleWhileRevalidate?: number
-	/** When the answer last changed, for an answer that does not say: sent in whole seconds. */
-	lastModified?: ((ctx: { req: Request }) => Date | null | undefined) | undefined
+	/**
+	 * When the answer last changed, for an answer that does not say: sent in whole seconds. Return `null` or
+	 * `undefined` to send none.
+	 */
+	lastModified?:
+		| ((ctx: {
+				/** The request being answered. */
+				req: Request
+		  }) => Date | null | undefined)
+		| undefined
 }
 
 /** `date` as an HTTP-date (IMF-fixdate), in whole seconds. */
@@ -64,7 +79,18 @@ function unmodifiedSince(lastModified: string | null, ifModifiedSince: string): 
 	return !Number.isNaN(since) && !Number.isNaN(modified) && modified <= since
 }
 
-export function cacheControl(options: CacheControlOptions): MiddlewareFn<{ req: Request }> {
+/**
+ * Middleware that sets `Cache-Control` on GET and HEAD answers with a 2xx or 304 status, unless the answer already has
+ * one. `lastModified` adds `Last-Modified` to a 200 answer that has none. A 200 answer with a `Last-Modified`, its own
+ * or the option's, becomes a 304 when the request's `If-Modified-Since` is the same or later; a request that also
+ * carries `If-None-Match` never gets this 304. Throws a `TypeError` at creation when given no directive and no
+ * `lastModified`, when `public` and `private` are both set, or when a duration is not a whole, non-negative number of
+ * seconds.
+ */
+export function cacheControl(options: CacheControlOptions): MiddlewareFn<{
+	/** The request: its method and conditional headers decide what this middleware does. */
+	req: Request
+}> {
 	const header = directives(options)
 	const lastModified = options.lastModified
 	if (header === null && lastModified === undefined) {

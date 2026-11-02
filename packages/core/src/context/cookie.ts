@@ -4,14 +4,28 @@
  * was set; names, domains and paths are validated so no input can inject an attribute.
  */
 
+/** One cookie to set: its value and `Set-Cookie` attributes. Only `value` is required. */
 export type CookieOptions = {
+	/**
+	 * The `Domain` attribute. Must be a host name or IP literal. Default: none, so the cookie is host-only. A `__Host-`
+	 * name must not set it.
+	 */
 	domain?: string
+	/** The `Expires` attribute. Must be a valid date. */
 	expires?: Date
+	/** Adds `HttpOnly`, hiding the cookie from page scripts. */
 	httpOnly?: boolean
+	/** Seconds until the cookie expires (`Max-Age`). Must be a finite, non-negative number; it is rounded down. */
 	maxAge?: number
+	/**
+	 * The `Path` attribute: printable ASCII without `;`. A `__Host-` name must use `/` or leave it unset, and gets `/`.
+	 */
 	path?: string
+	/** The `SameSite` attribute. `none` requires `secure`. */
 	sameSite?: "lax" | "none" | "strict"
+	/** Adds `Secure`. Cookie names starting with `__Host-` or `__Secure-` require it. */
 	secure?: boolean
+	/** The cookie value, percent-encoded as needed so it reads back unchanged. A lone surrogate throws. */
 	value: string
 }
 
@@ -127,6 +141,10 @@ function lifetime(opts: CookieOptions): string {
 	return out
 }
 
+/**
+ * One `Set-Cookie` header value for the cookie `name`. Throws when the name, value, domain, path, `maxAge` or `expires`
+ * is invalid, or when a `__Host-` or `__Secure-` name or `SameSite=None` breaks its attribute rules.
+ */
 export function serializeCookie(name: string, opts: CookieOptions): string {
 	if (!validCookieNameRe.test(name)) throw new Error(`Invalid cookie name: ${JSON.stringify(name)}`)
 	const { path, secure } = prefixRules(name, opts)

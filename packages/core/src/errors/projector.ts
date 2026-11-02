@@ -16,6 +16,7 @@ export type CustomErrorFormatter = (error: HoneyError, data: Record<string, unkn
 
 /** A `defineErrors` result, as the projector reads it. */
 export type ErrorFactoryRecord = {
+	/** The error factories, by error key. */
 	readonly [key: string]: unknown
 	readonly [ERROR_META]?: Readonly<Record<string, ErrorMetaEntry>>
 }
@@ -29,6 +30,7 @@ export type ErrorPolicy = {
 	boundaryKey: string | null
 	/** The keys the route declared via `.errors()`; `null`: the route does not enforce them. */
 	declared: ReadonlySet<string> | null
+	/** The app's error factories, used to build the boundary error; `null` when it has none. */
 	factory: ErrorFactoryRecord | null
 }
 
@@ -65,14 +67,17 @@ export function projectThrown(thrown: unknown, policy: ErrorPolicy): HoneyError 
 export type FormatterReport = (failure: unknown) => void
 
 /**
- * How an error answer is built: who hears a crashed formatter, whether it goes out over the Node
- * bridge (a HoneyResponse, so a middleware's header write stays on the plain map, b4), its format,
- * and the request id a Problem Details document names as its instance.
+ * How an error answer is built: who hears a crashed formatter, whether honey's Node adapter sends
+ * it, its format, and the request id a Problem Details document names as its instance.
  */
 export type ErrorAnswer = {
+	/** Body format: honey's envelope by default, or `problem+json`. */
 	readonly format?: ErrorFormat
+	/** The request id a Problem Details document names as its `instance`. */
 	readonly instance?: string | null
+	/** Build the answer for honey's Node adapter, as a `HoneyResponse` rather than a `Response`. Default false. */
 	readonly nodeOut?: boolean
+	/** Called with the failure when a formatter throws. */
 	readonly report?: FormatterReport | undefined
 }
 

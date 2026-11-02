@@ -9,16 +9,23 @@ import { createHoneyResponse, isNodeOutbound, withRawBody } from "./builder.ts"
 
 /** A body that can hand out any byte span without reading the rest. */
 export type RangeSource = {
+	/** Total size of the body in bytes. */
 	readonly size: number
+	/** The bytes from offset `start` to offset `endInclusive`, both included, unlike `Blob.slice()`. */
 	slice(start: number, endInclusive: number): Blob | ReadableStream<Uint8Array> | Uint8Array<ArrayBuffer>
 }
 
 /** Bytes backed by a plain ArrayBuffer: a shared one cannot be a response body. */
 export type RangeBody = Blob | RangeSource | Uint8Array<ArrayBuffer>
 
+/** Options for `rangeResponse()`. */
 export type RangeInit = {
 	/** Default: a Blob's own type, else `application/octet-stream`. */
 	contentType?: string
+	/**
+	 * Headers added to every answer. `Content-Type` (use `contentType`) and `Accept-Ranges` here are overwritten, as
+	 * are `Content-Length` and `Content-Range` on the answers that set them.
+	 */
 	headers?: Record<string, string>
 }
 
@@ -94,7 +101,7 @@ function whole(request: Request, body: RangeBody, headers: Record<string, string
 /**
  * Answer `request` from `body` honoring its `Range` header. Only GET carries a range (RFC 9110
  * §14.2); one satisfiable range is 206 with `Content-Range`, one past the end is 416, and several
- * ranges, a malformed header or an `If-Range` (until validators exist, A4) get the whole body.
+ * ranges, a malformed header or any `If-Range` get the whole body.
  * Every answer says `Accept-Ranges: bytes`.
  */
 export function rangeResponse(request: Request, body: RangeBody, init?: RangeInit): Response {
