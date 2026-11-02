@@ -93,7 +93,9 @@ export type ApplyScoped<
 export type ApplyParams<TCtx, TParams> = [keyof TParams] extends [string]
 	? string extends keyof TParams
 		? TCtx
-		: TCtx & { /** The route's path params by name, percent-decoded. */ readonly params: TParams }
+		: TCtx & {
+				/** The route's path params by name, percent-decoded. */ readonly params: TParams
+			}
 	: TCtx
 
 /** The handler ctx: params, meta, pattern, declared errors (as at runtime), input, ctx.res narrowed by output. */
@@ -136,7 +138,9 @@ export type HandlerCtx<
 					}) &
 		([TInput] extends [never]
 			? {}
-			: { /** The request values `.input()` validated, one key per declared source. */ readonly input: TInput }),
+			: {
+					/** The request values `.input()` validated, one key per declared source. */ readonly input: TInput
+				}),
 	TOutput
 >
 

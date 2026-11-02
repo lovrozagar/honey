@@ -82,10 +82,11 @@ export abstract class SettingsChain<TEnv> {
 	 * The policy that maps route meta and schema metadata into the OpenAPI document. Declared once;
 	 * a mounted sub-app's is merged under it when a document is built, whichever came first.
 	 */
-	metaSpec<TThis extends { /** The app's route meta type. */ readonly $meta: unknown }>(
-		this: TThis,
-		config: HoneyMetaSpec<TThis["$meta"]>,
-	): TThis {
+	metaSpec<
+		TThis extends {
+			/** The app's route meta type. */ readonly $meta: unknown
+		},
+	>(this: TThis, config: HoneyMetaSpec<TThis["$meta"]>): TThis {
 		const source = (this as unknown as SettingsChain<TEnv>).settings.metaSpec
 		if (source.declared !== null) throw new Error("metaSpec() was already called on this app")
 		source.declared = config as MetaSpecConfig

@@ -16,6 +16,8 @@ const restates = (name: string) =>
 	`\`${name}\` is public through "." and its JSDoc only restates the name: say what a caller needs and the type does not`
 const internal = (name: string) =>
 	`\`${name}\` is public through "." and its JSDoc cites an internal reference, which ships to consumers: say it in their terms`
+const sameLine = (name: string) =>
+	`\`${name}\` is public through "." and its JSDoc shares a line with the code before it, so editors do not show it: put it on its own line`
 const inferred = (name: string) =>
 	`\`${name}\` is public through "." and its type is inferred, so its shape goes unchecked: write the type out`
 
@@ -39,7 +41,7 @@ describe("honey/public-jsdoc: what needs a doc", { timeout: SPAWN_TIMEOUT }, () 
 			["f", "f"],
 		],
 		["a type member", "/** The shape. */\nexport type T = { a: string }\n", ["T.a"]],
-		["a nested member", "/** The shape. */\nexport type T = { /** The inner. */ a: { b: string } }\n", ["T.b"]],
+		["a nested member", "/** The shape. */\nexport type T = {\n/** The inner. */\na: { b: string } }\n", ["T.b"]],
 		[
 			"a union and intersection member",
 			"/** The shape. */\nexport type T = { a: string } & ({ b: string } | { c: string })\n",
@@ -161,6 +163,18 @@ describe("honey/public-jsdoc: docs that say nothing", { timeout: SPAWN_TIMEOUT }
 		["a member's name", "/** The shape. */\nexport type T = {\n/** Origin. */\norigin: string }\n", "T.origin"],
 	])("rejects a doc that restates %s", (_, code, name) => {
 		expect(messages(code)).toEqual([restates(name)])
+	})
+
+	it("rejects a doc on the line of the code before it, which TypeScript does not attach", () => {
+		const code =
+			"/** The shape. */\nexport type T = { /** The first field. */ a: string; /** The second field. */ b: string }\n"
+		expect(messages(code)).toEqual([sameLine("T.a"), sameLine("T.b")])
+	})
+
+	it("accepts a doc on the line of a parameter property, which TypeScript does attach", () => {
+		const code =
+			"/** The class. */\nexport class C {\n/** Makes it. */\nconstructor(/** The port it binds. */ readonly p: string) {} }\n"
+		expect(messages(code)).toEqual([])
 	})
 
 	it("accepts a doc that adds a word to the name", () => {

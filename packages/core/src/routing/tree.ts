@@ -11,13 +11,19 @@ import type { HttpMethod } from "./types.ts"
 /** One path position in the router tree: the routes served exactly here and the children that continue the path. */
 export type TreeNode = {
 	/** dynamic param child: { n: param name, c: child subtree } */
-	d: { /** The subtree below the param. */ c: TreeNode; /** The param's name. */ n: string } | null
+	d: {
+		/** The subtree below the param. */ c: TreeNode
+		/** The param's name. */ n: string
+	} | null
 	/** method → route id at this exact path */
 	m: Record<string, RouteId> | null
 	/** static children: literal path segment → child subtree (null-prototype) */
 	s: Record<string, TreeNode>
 	/** wildcard: { n: wildcard name, m: method → route id } */
-	w: { /** Wildcard route ids by method. */ m: Record<string, RouteId>; /** The wildcard's name. */ n: string } | null
+	w: {
+		/** Wildcard route ids by method. */ m: Record<string, RouteId>
+		/** The wildcard's name. */ n: string
+	} | null
 	/** websocket route id for this path */
 	ws: RouteId | null
 }

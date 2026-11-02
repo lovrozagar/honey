@@ -64,7 +64,9 @@ export type OnErrorFn<TEnv> = (
 
 /** Answers a request whose path exists but not for its method. Honey adds `Allow` to what it returns. */
 export type OnMethodNotAllowedFn<TEnv> = (
-	ctx: ErrorCtx<TEnv> & { /** The methods the path serves. */ allowed: string[] },
+	ctx: ErrorCtx<TEnv> & {
+		/** The methods the path serves. */ allowed: string[]
+	},
 ) => MaybePromise<Response>
 
 /** Answers a request that matches no route. */

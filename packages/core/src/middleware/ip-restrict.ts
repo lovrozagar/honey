@@ -136,10 +136,10 @@ function forbidden(): never {
  * It fails closed: a request with no reported peer is refused under either list. Throws `TypeError`
  * for an empty `allowList`, for no rules at all, or for a rule that is not an IP address or CIDR range.
  */
-export function ipRestrict(
-	options: IpRestrictOptions,
-): MiddlewareFn<
-	{ /** The platform-reported peer address, or `null` when none is reported. */ readonly ip: string | null },
+export function ipRestrict(options: IpRestrictOptions): MiddlewareFn<
+	{
+		/** The platform-reported peer address, or `null` when none is reported. */ readonly ip: string | null
+	},
 	{},
 	"forbidden"
 > {

@@ -319,7 +319,14 @@ export class RouteBuilder<B extends BuilderTypes> {
 	/** Validate params, query, headers, cookies and one body onto ctx.input: the first failure is a 400 (415). */
 	input<const TSchemas extends InputSchemas>(
 		schemas: TSchemas,
-	): BuilderChain<Next<B, InputTypes<TSchemas> & { /** Records `.input()` as called. */ used: B["used"] | "input" }>> {
+	): BuilderChain<
+		Next<
+			B,
+			InputTypes<TSchemas> & {
+				/** Records `.input()` as called. */ used: B["used"] | "input"
+			}
+		>
+	> {
 		const step = compileInput(schemas, [this.#s.method, ...this.#s.extraMethods], this.#s.path)
 		return this.#next({ input: { schemas, step } })
 	}
@@ -330,16 +337,24 @@ export class RouteBuilder<B extends BuilderTypes> {
 	): BuilderChain<
 		Next<
 			B,
-			{ /** The declared output. */ output: TOutput; /** Records `.output()` as called. */ used: B["used"] | "output" }
+			{
+				/** The declared output. */ output: TOutput
+				/** Records `.output()` as called. */ used: B["used"] | "output"
+			}
 		>
 	> {
 		return this.#next({ output: schemas })
 	}
 
 	/** Route-level middleware, after the chain and the scopes. */
-	use<TAdds>(
-		mw: MiddlewareFn<B["ctx"], TAdds>,
-	): BuilderChain<Next<B, { /** The ctx plus what the middleware adds. */ ctx: B["ctx"] & TAdds }>> {
+	use<TAdds>(mw: MiddlewareFn<B["ctx"], TAdds>): BuilderChain<
+		Next<
+			B,
+			{
+				/** The ctx plus what the middleware adds. */ ctx: B["ctx"] & TAdds
+			}
+		>
+	> {
 		return this.#next({ middlewares: [...this.#s.middlewares, mw as unknown as RuntimeMiddleware] })
 	}
 

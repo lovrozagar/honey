@@ -56,9 +56,13 @@ function forbidden(): never {
  * `Origin`; a sibling subdomain counts as cross-origin, and a request with neither header (curl, a
  * server) passes.
  */
-export function csrf(
-	options: CSRFOptions = {},
-): MiddlewareFn<{ /** Read for its method, its URL, `Origin` and `Sec-Fetch-Site`. */ req: Request }, {}, "forbidden"> {
+export function csrf(options: CSRFOptions = {}): MiddlewareFn<
+	{
+		/** Read for its method, its URL, `Origin` and `Sec-Fetch-Site`. */ req: Request
+	},
+	{},
+	"forbidden"
+> {
 	const allow = options.origin
 	const mw: MiddlewareFn<{ req: Request }, {}, "forbidden"> = (ctx, next) => {
 		const req = ctx.req

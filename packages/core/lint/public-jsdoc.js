@@ -11,6 +11,7 @@ const FAULTS = {
 	internal: "its JSDoc cites an internal reference, which ships to consumers: say it in their terms",
 	missing: `has no JSDoc: add a /** */ block that ${ASK.replace("say ", "says ")}`,
 	restates: `its JSDoc only restates the name: ${ASK}`,
+	sameLine: "its JSDoc shares a line with the code before it, so editors do not show it: put it on its own line",
 }
 
 const STOPWORDS = new Set("a an the of for to this that is are value option options returns type property".split(" "))
@@ -87,6 +88,12 @@ function faultIn(comment, name) {
 	return words(prose).every((word) => own.has(word) || STOPWORDS.has(word)) ? "restates" : null
 }
 
+/* TypeScript attaches a member's doc only from the comments after a line break, so `{ /** x *\/ a: string }` is no doc */
+function sharesLine(context, comment) {
+	const text = context.sourceCode.getText()
+	return text.slice(text.lastIndexOf("\n", comment.start) + 1, comment.start).trim() !== ""
+}
+
 function jsdocOf(context, node) {
 	const comments = context.sourceCode.getCommentsBefore(node)
 	return comments.findLast((comment) => comment.type === "Block" && comment.value.startsWith("*"))
@@ -97,7 +104,9 @@ function checker(context, owner, entry) {
 	const report = (fault, node, label) =>
 		context.report({ message: `\`${label}\` is public through "${entry}" and ${FAULTS[fault]}`, node })
 	const check = (node, label, name) => {
-		const fault = faultIn(jsdocOf(context, node), name)
+		const comment = jsdocOf(context, node)
+		const inline = comment !== undefined && node.type !== "TSParameterProperty" && sharesLine(context, comment)
+		const fault = inline ? "sameLine" : faultIn(comment, name)
 		if (fault !== null) report(fault, node, label)
 	}
 	const inferred = (node, label) => report("inferred", node, label)

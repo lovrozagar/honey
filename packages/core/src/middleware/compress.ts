@@ -77,9 +77,9 @@ async function gzip(raw: RawBody): Promise<Uint8Array<ArrayBuffer>> {
  * so does an answer to a request with a `Cookie` or `Authorization`, and one that sets a cookie.
  * Throws `TypeError` unless `threshold` is a finite number, 0 or more.
  */
-export function compress(
-	options: CompressOptions = {},
-): MiddlewareFn<{ /** Read for `Accept-Encoding`, `Cookie` and `Authorization`. */ readonly req: Request }> {
+export function compress(options: CompressOptions = {}): MiddlewareFn<{
+	/** Read for `Accept-Encoding`, `Cookie` and `Authorization`. */ readonly req: Request
+}> {
 	const { credentialed = false, threshold = 1024 } = options
 	if (!(Number.isFinite(threshold) && threshold >= 0)) {
 		throw new TypeError("compress: threshold must be a finite number of bytes, 0 or more")

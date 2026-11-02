@@ -48,9 +48,9 @@ const joined = (list: readonly string[] | undefined): string | null =>
  * origin `null` is never allowed. Throws `TypeError` when `credentials` is set and `origin` is `"*"`
  * or unset.
  */
-export function cors(
-	options: CORSOptions = {},
-): MiddlewareFn<{ /** Read for `Origin` and the preflight headers. */ req: Request }> {
+export function cors(options: CORSOptions = {}): MiddlewareFn<{
+	/** Read for `Origin` and the preflight headers. */ req: Request
+}> {
 	const { credentials = false, origin } = options
 	if (credentials && (origin === undefined || origin === "*")) {
 		throw new TypeError(
