@@ -58,6 +58,8 @@ describe("parseCron: what it refuses", () => {
 		["a step with no number", "*/ * * * *"],
 		["a step on one value", "5/10 * * * *"],
 		["a reversed range", "50-10 * * * *"],
+		["a range of three", "1-2-3 * * * *"],
+		["two steps", "*/2/3 * * * *"],
 		["a reversed weekday range", "* * * * FRI-MON"],
 		["a numeric weekday", "* * * * 1"],
 		["a numeric weekday range", "* * * * 1-5"],

@@ -4,6 +4,11 @@ import { defineCron } from "./define.ts"
 type Env = { readonly name: string }
 
 describe("defineCron", () => {
+	it("logs through honey's logger when given none", () => {
+		const cron = defineCron<Env>({ schedules: { "* * * * *": { job: async () => {} } } })
+		expect(typeof cron.logger.child).toBe("function")
+	})
+
 	it("refuses a definition that could never run, naming the expression", () => {
 		const define = (schedules: Parameters<typeof defineCron<Env>>[0]["schedules"]) => () =>
 			defineCron<Env>({ schedules })

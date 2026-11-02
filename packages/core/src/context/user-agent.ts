@@ -54,7 +54,7 @@ const WINDOWS_VERSIONS: Readonly<Record<string, string>> = {
 
 const OS_TOKEN = /\bOS (\d+(?:_\d+)*)/
 
-const dotted = (version: string | undefined) => version?.replaceAll("_", ".") ?? null
+const dotted = (version: string) => version.replaceAll("_", ".")
 
 /* two steps, because one pattern with `.*?` between the tokens rescans from every device token */
 const iosVersion = (ua: string, device: RegExp) => {

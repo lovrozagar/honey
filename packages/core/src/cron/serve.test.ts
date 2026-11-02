@@ -86,6 +86,17 @@ describe("serveCron: the clock", () => {
 		const fired = times(job)
 		expect([fired.length === new Set(fired).size, fired.includes("03:03")]).toEqual([true, true])
 	})
+})
+
+describe("serveCron: a clock that moves", () => {
+	it("remembers a day of minutes, so what it fired stays bounded", async () => {
+		const job = runs()
+		await vi.advanceTimersByTimeAsync(30_000 + 1_441 * MINUTE)
+		const fired = job.mock.calls.length
+		vi.setSystemTime(Date.now() - 1_442 * MINUTE)
+		await vi.advanceTimersByTimeAsync(MINUTE)
+		expect(job.mock.calls.length).toBe(fired + 1)
+	})
 
 	it("loses the ticks a suspended process missed", async () => {
 		const job = runs()
