@@ -1,0 +1,223 @@
+import { declarationOf, declaredNames, isHiddenMember, walkPublic } from "./public-declarations.js"
+import { findPackageRoot, publicSurface } from "./public-surface.js"
+
+/* Hover is the docs a consumer reads: every declaration the package's exports reach, and every member they can see on
+ * it, carries a written doc, in the consumer's terms, on a shape this rule can see. */
+
+const ASK = "say what a caller needs and the type does not"
+const FAULTS = {
+	empty: `its JSDoc is empty: ${ASK}`,
+	inferred: "its type is inferred, so its shape goes unchecked: write the type out",
+	internal: "its JSDoc cites an internal reference, which ships to consumers: say it in their terms",
+	missing: `has no JSDoc: add a /** */ block that ${ASK.replace("say ", "says ")}`,
+	restates: `its JSDoc only restates the name: ${ASK}`,
+}
+
+const STOPWORDS = new Set("a an the of for to this that is are value option options returns type property".split(" "))
+const INTERNAL = /\b[Bb]it \d+\b|\bH\d+(?:\.\d+)?\b|\b[Bb]lueprint\b/
+
+const SIGNATURES = {
+	TSCallSignatureDeclaration: "(call)",
+	TSConstructSignatureDeclaration: "(new)",
+	TSIndexSignature: "(index)",
+}
+const MEMBERS = new Set([
+	"AccessorProperty",
+	"MethodDefinition",
+	"PropertyDefinition",
+	"TSAbstractMethodDefinition",
+	"TSAbstractPropertyDefinition",
+	"TSEnumMember",
+	"TSMethodSignature",
+	"TSPropertySignature",
+])
+
+const LITERAL_ARITHMETIC = new Set(["BinaryExpression", "ParenthesizedExpression", "UnaryExpression"])
+
+function isLiteral(node) {
+	if (node === null || node === undefined) return false
+	if (node.type === "Literal") return true
+	if (node.type === "TemplateLiteral") return node.expressions.length === 0
+	if (!LITERAL_ARITHMETIC.has(node.type)) return false
+	if (node.type === "BinaryExpression") return isLiteral(node.left) && isLiteral(node.right)
+	return isLiteral(node.argument ?? node.expression)
+}
+
+function statesItsType(init) {
+	if (isLiteral(init) || init?.type === "TSAsExpression") return true
+	const isFunction = init?.type === "ArrowFunctionExpression" || init?.type === "FunctionExpression"
+	return isFunction && Boolean(init.returnType)
+}
+
+function keyName(key) {
+	if (key.type === "Identifier") return key.name
+	if (key.type === "Literal") return String(key.value)
+	if (key.type === "MemberExpression") return `${key.object.name}.${key.property.name}`
+	return key.name ?? "(computed)"
+}
+
+function isUnnameableKey(node) {
+	return node.computed === true && node.key?.type === "Identifier"
+}
+
+function docText(comment) {
+	return comment.value
+		.replace(/^\*/, "")
+		.split("\n")
+		.map((line) => line.replace(/^\s*\*?\s?/, ""))
+		.join("\n")
+}
+
+function words(text) {
+	return text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []
+}
+
+function nameWords(name) {
+	return words(name.replace(/([\p{Ll}\p{N}])(\p{Lu})/gu, "$1 $2"))
+}
+
+function faultIn(comment, name) {
+	if (comment === undefined) return "missing"
+	const text = docText(comment)
+	const prose = text.split(/^\s*@/m)[0].trim()
+	if (prose === "") return "empty"
+	if (INTERNAL.test(text)) return "internal"
+	const own = new Set([...nameWords(name), ...words(name)])
+	return words(prose).every((word) => own.has(word) || STOPWORDS.has(word)) ? "restates" : null
+}
+
+function jsdocOf(context, node) {
+	const comments = context.sourceCode.getCommentsBefore(node)
+	return comments.findLast((comment) => comment.type === "Block" && comment.value.startsWith("*"))
+}
+
+/* the walk of one public declaration; `label` is `Owner.member`, `name` the part a doc may not merely restate */
+function checker(context, owner, entry) {
+	const report = (fault, node, label) =>
+		context.report({ message: `\`${label}\` is public through "${entry}" and ${FAULTS[fault]}`, node })
+	const check = (node, label, name) => {
+		const fault = faultIn(jsdocOf(context, node), name)
+		if (fault !== null) report(fault, node, label)
+	}
+	const inferred = (node, label) => report("inferred", node, label)
+	return { check, inferred, owner }
+}
+
+function methodKey(node) {
+	return `${node.static ? "static " : ""}${keyName(node.key)}`
+}
+
+function isBareClassMember(body, node) {
+	if (node.type !== "MethodDefinition") return false
+	const siblings = body.filter(
+		(other) => other !== node && other.type === node.type && methodKey(other) === methodKey(node),
+	)
+	if (node.kind === "set") return siblings.some((other) => other.kind === "get")
+	const signed = siblings.some((other) => other.value.type === "TSEmptyBodyFunctionExpression")
+	return signed && node.value.type !== "TSEmptyBodyFunctionExpression"
+}
+
+function checkReturn(walk, node, label) {
+	const isFunction = node.type === "MethodDefinition" && node.kind !== "constructor" && node.kind !== "set"
+	if (isFunction && node.value.body && !node.value.returnType) walk.inferred(node, label)
+}
+
+function checkClassValue(walk, node, label) {
+	const isProperty = node.type === "PropertyDefinition" || node.type === "AccessorProperty"
+	if (isProperty && !node.typeAnnotation && !statesItsType(node.value)) walk.inferred(node, label)
+}
+
+function checkMember(walk, node, siblings) {
+	const name = keyName(node.id ?? node.key)
+	const label = `${walk.owner}.${name}`
+	if (siblings !== undefined && isBareClassMember(siblings, node)) return
+	walk.check(node, label, name)
+	checkReturn(walk, node, label)
+	checkClassValue(walk, node, label)
+}
+
+function visitorOf(walk) {
+	const visit = (node) => {
+		if (node.type === "StaticBlock") return false
+		if (node.type === "ClassBody") return classBody(node)
+		if (node.type === "TSParameterProperty") return parameterProperty(node)
+		if (node.type === "TSConditionalType") return conditional(node)
+		if (node.type in SIGNATURES) walk.check(node, `${walk.owner}.${SIGNATURES[node.type]}`, "")
+		if (!MEMBERS.has(node.type)) return true
+		if (isUnnameableKey(node)) return false
+		checkMember(walk, node)
+		return true
+	}
+	const classBody = (body) => {
+		for (const member of body.body) {
+			if (isHiddenMember(member) || isUnnameableKey(member)) continue
+			if (MEMBERS.has(member.type)) checkMember(walk, member, body.body)
+			walkPublic(member.type === "MethodDefinition" ? member.value : member, skipSelf(member, visit))
+		}
+		return false
+	}
+	const parameterProperty = (node) => {
+		walk.check(node, `${walk.owner}.${keyName(node.parameter)}`, keyName(node.parameter))
+		return true
+	}
+	const conditional = (node) => {
+		for (const part of [node.checkType, node.trueType, node.falseType]) walkPublic(part, visit)
+		return false
+	}
+	return visit
+}
+
+function skipSelf(self, visit) {
+	return (node) => (node === self ? true : visit(node))
+}
+
+function checkDeclaration(context, statement, name, file) {
+	const declaration = declarationOf(statement)
+	const walk = checker(context, name, file.names.get(name))
+	const variable = declaration.declarations?.find((d) => d.id.name === name)
+	if (declaration.type === "FunctionDeclaration" && file.signed.has(name)) return
+	walk.check(statement, name, name)
+	if (variable !== undefined && !variable.id.typeAnnotation && !statesItsType(variable.init))
+		walk.inferred(statement, name)
+	if (declaration.type === "FunctionDeclaration" && !declaration.returnType) walk.inferred(statement, name)
+	walkPublic(variable ?? declaration, visitorOf(walk))
+}
+
+function signedNames(program) {
+	const signed = new Set()
+	for (const statement of program.body) {
+		const declaration = declarationOf(statement)
+		if (declaration?.type === "TSDeclareFunction") signed.add(declaration.id.name)
+	}
+	return signed
+}
+
+export const rule = {
+	create(context) {
+		const root = findPackageRoot(context.filename)
+		if (root === null) return {}
+		const surface = publicSurface(root)
+		return {
+			Program(program) {
+				for (const { file, form } of surface.unknown) {
+					if (file !== context.filename) continue
+					const message = `honey/public-jsdoc cannot follow ${form} here, so what it exposes goes unchecked: write it as a plain export`
+					context.report({ message, node: program })
+				}
+				const names = surface.names.get(context.filename)
+				if (names === undefined) return
+				const file = { names, signed: signedNames(program) }
+				for (const statement of program.body) {
+					for (const name of declaredNames(statement)) {
+						if (names.has(name)) checkDeclaration(context, statement, name, file)
+					}
+				}
+			},
+		}
+	},
+}
+
+export default {
+	meta: { name: "honey" },
+	rules: { "public-jsdoc": rule },
+}

@@ -72,7 +72,7 @@
 			"rules": {
 				"complexity": ["error", 15],
 				"max-depth": ["error", 4],
-				"max-lines": ["error", 300],
+				"max-lines": ["error", { "max": 300, "skipComments": true }],
 				"max-lines-per-function": ["error", 60],
 				"max-params": ["error", 4],
 				"vitest/expect-expect": "error",
@@ -118,7 +118,7 @@
 				"bench/src/significance.test.ts"
 			],
 			"rules": {
-				"max-lines": ["error", 500]
+				"max-lines": ["error", { "max": 500, "skipComments": true }]
 			}
 		}
 	]
