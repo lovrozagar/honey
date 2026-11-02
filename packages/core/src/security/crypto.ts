@@ -1,8 +1,9 @@
 /**
  * `timingSafeEqual(a, b)`: constant-time equality for secrets (an API key, a token), on WebCrypto
  * alone, so it runs on Node, Bun and Workers. Both sides are MACed under a key drawn fresh for the
- * call and the MACs compared by `crypto.subtle.verify`, so neither the content nor the length of
- * either side leaks through timing, and no key outlives the comparison (no module state, H23).
+ * call and the MACs compared by `crypto.subtle.verify`, so the content of neither side leaks through
+ * timing, and no key outlives the comparison (no module state, H23). The MACs take longer on longer
+ * input, so timing does show each side's length.
  */
 
 /**
@@ -20,6 +21,11 @@ function toBytes(value: string | Uint8Array): Uint8Array<ArrayBuffer> {
 	return bytes
 }
 
+/**
+ * Whether `a` and `b` are equal, in a time that does not depend on their content or where they
+ * differ. It grows with their lengths, so it does not hide a secret's length. Strings compare by
+ * UTF-16 code unit; a string never equals bytes, and that mismatch returns `false` at once.
+ */
 export async function timingSafeEqual(a: string | Uint8Array, b: string | Uint8Array): Promise<boolean> {
 	/* a string never equals bytes: "ab" and its code units differ */
 	if ((typeof a === "string") !== (typeof b === "string")) return false

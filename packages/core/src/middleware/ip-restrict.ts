@@ -11,6 +11,7 @@ import { parseIpv4, parseIpv6 } from "../context/peer.ts"
 import { HoneyError } from "../errors/error.ts"
 import { type MiddlewareFn, namedMiddleware } from "./middleware.ts"
 
+/** Options for `ipRestrict`: a non-empty `allowList`, a non-empty `denyList`, or both. `allowList: []` throws even beside a `denyList`. */
 export type IpRestrictOptions = {
 	/** Addresses and CIDR ranges admitted; with it, every other peer is refused. */
 	allowList?: readonly string[]
@@ -76,7 +77,19 @@ function forbidden(): never {
 	throw new HoneyError({ errorKey: "forbidden", status: "forbidden" })
 }
 
-export function ipRestrict(options: IpRestrictOptions): MiddlewareFn<{ readonly ip: string | null }, {}, "forbidden"> {
+/**
+ * Middleware that answers 403 `forbidden` to a peer on `denyList`, or off `allowList` when there is
+ * one. It reads only `ctx.ip`, so behind a self-hosted reverse proxy it sees the proxy's address.
+ * It fails closed: a request with no reported peer is refused under either list. Throws `TypeError`
+ * for an empty `allowList`, for no rules at all, or for a rule that is not an IP address or CIDR range.
+ */
+export function ipRestrict(
+	options: IpRestrictOptions,
+): MiddlewareFn<
+	{ /** The platform-reported peer address, or `null` when none is reported. */ readonly ip: string | null },
+	{},
+	"forbidden"
+> {
 	if (options.allowList?.length === 0) {
 		throw new TypeError(
 			"ipRestrict: `allowList: []` would refuse every request; remove the middleware or list addresses",

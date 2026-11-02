@@ -13,8 +13,16 @@ import { type MiddlewareFn, namedMiddleware } from "./middleware.ts"
  * May the hop that sent this request decide a value it carries (a request id, a trace)? `false`
  * (the default) never; `true` always; a function decides per request.
  */
-export type InboundTrust = boolean | ((ctx: { readonly ip: string | null; readonly req: Request }) => boolean)
+export type InboundTrust =
+	| boolean
+	| ((ctx: {
+			/** The platform-reported peer address, or `null` when none is reported. */
+			readonly ip: string | null
+			/** The incoming request, for a check such as a shared-secret header. */
+			readonly req: Request
+	  }) => boolean)
 
+/** How `requestId` makes an id, which header carries it, and whether it may reuse one the caller sent. */
 export type RequestIdOptions = {
 	/** Default `crypto.randomUUID()`. */
 	generate?: () => string
@@ -36,9 +44,23 @@ function freshId(): string {
 	return crypto.randomUUID()
 }
 
-export function requestId(
-	options: RequestIdOptions = {},
-): MiddlewareFn<{ readonly ip: string | null; readonly req: Request }, { requestId: string }> {
+/**
+ * Middleware that gives each request an id on `ctx.requestId` and sets it as a header on the answer,
+ * errors included. An inbound id is ignored by default: it is reused only when `trustInbound` allows
+ * it and it passes `validate`.
+ */
+export function requestId(options: RequestIdOptions = {}): MiddlewareFn<
+	{
+		/** The peer address, handed on to a `trustInbound` function. */
+		readonly ip: string | null
+		/** Read for the inbound id, and handed on to a `trustInbound` function. */
+		readonly req: Request
+	},
+	{
+		/** This request's id: a fresh one, or the inbound one when it was reused. */
+		requestId: string
+	}
+> {
 	const header = options.header ?? "x-request-id"
 	const generate = options.generate ?? freshId
 	const validate = options.validate ?? safeId

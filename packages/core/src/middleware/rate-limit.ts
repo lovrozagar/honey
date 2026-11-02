@@ -13,29 +13,66 @@ import { withHeaders } from "../response/with-headers.ts"
 import { type MiddlewareFn, namedMiddleware } from "./middleware.ts"
 
 /** A key's window after one more request: requests counted so far, and when it ends (epoch ms). */
-export type RateLimitHit = { readonly count: number; readonly resetAt: number }
+export type RateLimitHit = {
+	/** Requests counted in the window so far, this one included. */
+	readonly count: number
+	/** When the window ends, in epoch milliseconds. */
+	readonly resetAt: number
+}
 
 /** Counts a request against `key`'s current window, starting a new one when it has ended. */
-export type RateLimitStore = { hit(key: string): Promise<RateLimitHit> | RateLimitHit }
+export type RateLimitStore = {
+	/** Counts one request against `key` and returns its window. */
+	hit(key: string): Promise<RateLimitHit> | RateLimitHit
+}
 
-export type MemoryStore = { hit(key: string): RateLimitHit; readonly size: number }
+/** An in-process `RateLimitStore` made by `memoryStore`. */
+export type MemoryStore = {
+	/** Counts one request against `key` and returns its window. */
+	hit(key: string): RateLimitHit
+	/** Windows kept, counting an ended one until its key is hit again or evicted. */
+	readonly size: number
+}
 
+/** The window length and the size bound of a `memoryStore`. */
 export type MemoryStoreOptions = {
 	/** Windows kept at most; past it the least recently used is evicted. Default 10 000. */
 	maxKeys?: number | undefined
+	/** Length of each window in milliseconds; a positive finite number. */
 	windowMs: number
 }
 
-type KeyContext = { readonly ip: string | null; readonly req: Request }
+/** What a `key` function can read from the request. */
+type KeyContext = {
+	/** The platform-reported peer address, or `null` when none is reported. */
+	readonly ip: string | null
+	/** The incoming request, for a key built from a header or the URL. */
+	readonly req: Request
+}
 
+/** Options for `rateLimit`: give `windowMs` (and optionally `maxKeys`) for the built-in store, or your own `store`, not both. */
 export type RateLimitOptions = {
-	/** The window a request counts against. Default `ctx.ip`; no reported peer shares one window. */
+	/** Names the window a request counts against. Default `ctx.ip`; requests with no reported peer all share one window. */
 	key?: (ctx: KeyContext) => string
 	/** Requests per window. */
 	limit: number
 } & (
-	| { maxKeys?: number; store?: never; windowMs: number }
-	| { maxKeys?: never; store: RateLimitStore; windowMs?: never }
+	| {
+			/** Most windows the built-in store keeps. Default 10 000. */
+			maxKeys?: number
+			/** Not allowed with `windowMs`: the built-in store is used. */
+			store?: never
+			/** Window length in milliseconds. */
+			windowMs: number
+	  }
+	| {
+			/** Not allowed with a custom `store`; the store sets its own cap. */
+			maxKeys?: never
+			/** A shared store to count in, for several instances; it owns the window length. */
+			store: RateLimitStore
+			/** Not allowed with a custom `store`; the store sets its own window. */
+			windowMs?: never
+	  }
 )
 
 class WindowStore implements MemoryStore {
@@ -68,6 +105,11 @@ class WindowStore implements MemoryStore {
 	}
 }
 
+/**
+ * An in-process store of fixed windows, bounded to `maxKeys` with the least recently used evicted
+ * first. An evicted key starts over at its next request. Throws `TypeError` unless `windowMs` is a
+ * positive finite number and `maxKeys` a positive integer.
+ */
 export function memoryStore(options: MemoryStoreOptions): MemoryStore {
 	const { maxKeys = 10_000, windowMs } = options
 	if (!(Number.isFinite(windowMs) && windowMs > 0)) {
@@ -81,6 +123,15 @@ function peerKey(ctx: KeyContext): string {
 	return ctx.ip ?? ""
 }
 
+/**
+ * Middleware that lets each key make `limit` requests per fixed window. Past that it answers 429
+ * `too_many_requests` with `Retry-After`, and the handler does not run. Its answers carry
+ * `X-RateLimit-Limit`, `X-RateLimit-Remaining` and `X-RateLimit-Reset` (epoch seconds). The default
+ * key is `ctx.ip`, so behind a self-hosted reverse proxy every client shares one window. The
+ * built-in store counts per process and per middleware; behind several instances, pass a shared
+ * `store`. Throws `TypeError` unless `limit` is a positive integer, and for a `windowMs` or `maxKeys`
+ * that `memoryStore` refuses.
+ */
 export function rateLimit(options: RateLimitOptions): MiddlewareFn<KeyContext, {}, "too_many_requests"> {
 	const { limit } = options
 	if (!(Number.isInteger(limit) && limit > 0)) throw new TypeError("rateLimit: limit must be a positive integer")

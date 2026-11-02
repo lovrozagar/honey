@@ -7,14 +7,25 @@
 import { withHeaders } from "../response/with-headers.ts"
 import { type MiddlewareFn, namedMiddleware } from "./middleware.ts"
 
+/**
+ * Which headers `secureHeaders` sends. A string sets that header's value. Options that accept `false`
+ * have a default, which `false` turns off; the others are sent only when set. An empty string leaves
+ * any header out.
+ */
 export type SecureHeadersOptions = {
+	/** Value of `Content-Security-Policy`. Not sent unless set. */
 	contentSecurityPolicy?: string
+	/** Value of `Cross-Origin-Embedder-Policy`. Not sent unless set. */
 	crossOriginEmbedderPolicy?: string
+	/** Value of `Cross-Origin-Opener-Policy`. Not sent unless set. */
 	crossOriginOpenerPolicy?: string
+	/** Value of `Cross-Origin-Resource-Policy`. Not sent unless set. */
 	crossOriginResourcePolicy?: string
+	/** Value of `Permissions-Policy`. Not sent unless set. */
 	permissionsPolicy?: string
 	/** Default `strict-origin-when-cross-origin`; `false` leaves it out. */
 	referrerPolicy?: false | string
+	/** Value of `Strict-Transport-Security`. Not sent unless set. */
 	strictTransportSecurity?: string
 	/** Default `nosniff`; `false` leaves it out. */
 	xContentTypeOptions?: false | string
@@ -46,6 +57,11 @@ function headersFor(options: SecureHeadersOptions): [string, string][] {
 	return entries.filter((entry): entry is [string, string] => typeof entry[1] === "string" && entry[1] !== "")
 }
 
+/**
+ * Middleware that adds security headers to every answer passing through it, except a 101 upgrade.
+ * `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` and `X-XSS-Protection` are on by
+ * default; the others are sent only when configured. A header the handler already set is kept.
+ */
 export function secureHeaders(options: SecureHeadersOptions = {}): MiddlewareFn<{}> {
 	const headers = headersFor(options)
 	return namedMiddleware("secureHeaders", async (_ctx, next) =>

@@ -17,6 +17,7 @@ import { isHoneyResponse, rawBodyOf, replaceResponse, type RawBody, withRawBody 
 import { addVary, withHeaders } from "../response/with-headers.ts"
 import { type MiddlewareFn, namedMiddleware } from "./middleware.ts"
 
+/** Options for `compress`: the smallest body worth compressing, and whether answers to credentialed requests are compressed. */
 export type CompressOptions = {
 	/** Compress answers to credentialed requests and answers that set a cookie. Default `false` (BREACH). */
 	credentialed?: boolean
@@ -69,7 +70,16 @@ async function gzip(raw: RawBody): Promise<Uint8Array<ArrayBuffer>> {
 	return new Uint8Array(await new Response(stream).arrayBuffer())
 }
 
-export function compress(options: CompressOptions = {}): MiddlewareFn<{ readonly req: Request }> {
+/**
+ * Middleware that gzips an answer built from an in-memory body when the client's `Accept-Encoding`
+ * takes gzip. A streamed answer passes through as it is, as does one under `threshold`, already
+ * encoded, marked `no-transform` or of a type that does not compress. Unless `credentialed` is set,
+ * so does an answer to a request with a `Cookie` or `Authorization`, and one that sets a cookie.
+ * Throws `TypeError` unless `threshold` is a finite number, 0 or more.
+ */
+export function compress(
+	options: CompressOptions = {},
+): MiddlewareFn<{ /** Read for `Accept-Encoding`, `Cookie` and `Authorization`. */ readonly req: Request }> {
 	const { credentialed = false, threshold = 1024 } = options
 	if (!(Number.isFinite(threshold) && threshold >= 0)) {
 		throw new TypeError("compress: threshold must be a finite number of bytes, 0 or more")

@@ -7,12 +7,13 @@
 import { addVary, withHeaders } from "../response/with-headers.ts"
 import { type MiddlewareFn, namedMiddleware } from "./middleware.ts"
 
+/** What `cors` allows. With no options, any origin may read the answer (`*`), without credentials. */
 export type CORSOptions = {
 	/** Requires an explicit `origin`: a string, a list or a predicate. With `"*"` or none, cors() throws. */
 	credentials?: boolean
 	/** Response headers a browser script may read. */
 	exposeHeaders?: string[]
-	/** Request headers a preflight allows; unset, the requested ones are echoed. */
+	/** Request headers a preflight allows; unset or empty, the requested ones are echoed. */
 	headers?: string[]
 	/** Seconds a browser may cache a preflight. Default 86400. */
 	maxAge?: number
@@ -40,7 +41,16 @@ function allowedOrigin(origin: string, policy: CORSOptions["origin"]): string | 
 const joined = (list: readonly string[] | undefined): string | null =>
 	list !== undefined && list.length > 0 ? list.join(", ") : null
 
-export function cors(options: CORSOptions = {}): MiddlewareFn<{ req: Request }> {
+/**
+ * Middleware that answers a preflight from an allowed origin with 204 and adds CORS headers to the
+ * answers allowed origins get. It does not block: any other origin's request still runs the chain,
+ * preflights included, and only the headers are withheld. With an explicit `origin`, the opaque
+ * origin `null` is never allowed. Throws `TypeError` when `credentials` is set and `origin` is `"*"`
+ * or unset.
+ */
+export function cors(
+	options: CORSOptions = {},
+): MiddlewareFn<{ /** Read for `Origin` and the preflight headers. */ req: Request }> {
 	const { credentials = false, origin } = options
 	if (credentials && (origin === undefined || origin === "*")) {
 		throw new TypeError(

@@ -6,10 +6,12 @@
 import { isReservedCtxKey } from "../context/context.ts"
 import { isHoneyResponse } from "../response/builder.ts"
 
+/** A result that may come directly or through a promise, so a callback typed with it can be plain or `async`. */
 export type MaybePromise<T> = Promise<T> | T
 
 /** A Response carrying, at the type level only, the context a middleware added. */
 export type MiddlewareResult<TAdds = {}> = Response & {
+	/** Type-level only: never set at runtime. Carries the context additions to the types of later layers. */
 	readonly __adds?: TAdds
 }
 
@@ -18,14 +20,21 @@ export type MiddlewareResult<TAdds = {}> = Response & {
  * everything downstream did: `await` it, never `.then` it.
  */
 export type NextFn = {
+	/** Merges `additions` into the context, then runs the rest of the chain. A key the framework reserves (`req`, `env`) is dropped. A second call throws. */
 	<T>(additions: T): MaybePromise<MiddlewareResult<T>>
+	/** Runs the rest of the chain with the context unchanged. A second call throws. */
 	(): MaybePromise<MiddlewareResult<{}>>
 }
 
+/**
+ * A middleware: a function of the context and `next`, returning the answer. `TCtx` is what it
+ * reads from the context, `TAdds` what it adds, `TErrors` the error keys it can answer with.
+ */
 export type MiddlewareFn<TCtx = {}, TAdds = {}, TErrors extends string = string> = ((
 	ctx: TCtx,
 	next: NextFn,
 ) => MaybePromise<MiddlewareResult<TAdds>>) & {
+	/** Error keys this middleware can answer with. A route mounting it counts them as declared, and generated documents list them. */
 	errors?: readonly TErrors[]
 	/** Meta this middleware contributes to every route that mounts it. */
 	meta?: Readonly<Record<string, unknown>>
@@ -67,8 +76,11 @@ export function defineMiddleware<
 	TFactory extends Record<string, (...args: never[]) => unknown>,
 	TKeys extends keyof TFactory & string,
 >(opts: {
+	/** The error factory, then the keys from it this middleware can answer with. */
 	errors?: [TFactory, ...TKeys[]]
+	/** The middleware. This same function is returned, with `errors` and `meta` set on it. */
 	fn: MiddlewareFn<TReqs, TAdds>
+	/** Meta every route mounting this middleware gets; the route's own meta wins over it. Setting `internal` throws. */
 	meta?: Record<string, unknown>
 }): MiddlewareFn<TReqs, TAdds, TKeys> {
 	const fn = opts.fn as MiddlewareFn<TReqs, TAdds, TKeys>
@@ -90,7 +102,10 @@ type ExtractAdds<T> = Awaited<T> extends MiddlewareResult<infer A> ? A : never
  */
 export function createMiddleware<TReqs = {}, TRet extends MaybePromise<Response> = MaybePromise<MiddlewareResult<{}>>>(
 	fn: (ctx: TReqs, next: NextFn) => TRet,
-	opts?: { meta?: Record<string, unknown> },
+	opts?: {
+		/** Meta every route mounting this middleware gets; the route's own meta wins over it. Setting `internal` throws. */
+		meta?: Record<string, unknown>
+	},
 ): MiddlewareFn<TReqs, ExtractAdds<TRet>> {
 	if (opts?.meta) attachMiddlewareMeta(fn, opts.meta)
 	return fn as unknown as MiddlewareFn<TReqs, ExtractAdds<TRet>>
@@ -113,6 +128,7 @@ export function collectMiddlewareMeta(
 /** Turns a value thrown inside a chain into the Response that stands in for it. Must not throw. */
 export type ChainErrorConverter = (thrown: unknown, ctx: object) => MaybePromise<Response>
 
+/** A chain compiled with its handler: runs the whole chain on a context and yields the answer. */
 export type CompiledChain = (ctx: object) => MaybePromise<Response>
 
 const NO_RESPONSE_HANDLER = "handler must return a Response — did you forget 'return ctx.res...()'?"

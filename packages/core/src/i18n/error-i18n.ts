@@ -21,6 +21,7 @@ export type ErrorTranslations = {
 	fieldNames?: Record<string, Record<string, string>>
 }
 
+/** What `errorI18n` takes: the message templates and field names per locale, and how to pick the request's locale. */
 export type ErrorI18nConfig<TEnv> = ErrorTranslations & {
 	/** The request's locale: a header, a cookie, the tenant in env, a path param. */
 	resolveLocale: (ctx: ResolveLocaleCtx<TEnv>) => MaybePromise<string>

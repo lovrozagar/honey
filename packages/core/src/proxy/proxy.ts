@@ -22,12 +22,14 @@ import { forwardBody, msOf, timeoutError, withIdleTimeout, within } from "./upst
 /** Default time allowed until the upstream's response headers arrive. */
 const DEFAULT_TIMEOUT_MS = 60_000
 
+/** Options for `proxy`: where to forward, and how to adjust the request and the answer. */
 export type ProxyConfig<TCtx> = {
 	/**
 	 * Where the request goes: `fetch`, a Workers service binding, a Durable Object stub, anything
 	 * that answers a Response. `url` is the normalized path and query (after `rewriteUrl`), `init`
 	 * the method, headers, body, signal and `redirect: "manual"` the framework prepared. A network
-	 * failure the runtime reports is a 502; any other throw, a bug here included, a 500.
+	 * failure the runtime reports is a 502, a `TimeoutError` a 504; any other throw, a bug here
+	 * included, a 500.
 	 */
 	destination: (ctx: TCtx, url: string, init: RequestInit) => Promise<Response> | Response
 	/**
@@ -115,6 +117,7 @@ function traced(ctx: unknown, method: string, headers: Headers): Send {
 	return (call) => outbound.send(call)
 }
 
+/** A route handler that forwards each request to `config.destination` and streams the upstream's answer back. */
 export function proxy<TCtx>(config: ProxyConfig<TCtx>): (ctx: TCtx) => Promise<TypedResponse> {
 	const decoded = config.decoded !== false
 	const forwarded = config.forwardedHeaders !== false

@@ -6,8 +6,14 @@
  */
 import { Formatter } from "./icu.ts"
 
+/** One locale's strings: message key to ICU template, and field path to display name. */
 export type TranslationMap = Record<string, string>
 
+/**
+ * Where a locale's messages come from: the map itself, or a function returning it, sync or async.
+ * A function runs when the locale is first asked for and its result is kept; a rejection is not
+ * kept, so the next ask runs it again.
+ */
 export type TranslationSource = (() => Promise<TranslationMap> | TranslationMap) | TranslationMap
 
 export class TranslationRegistry {

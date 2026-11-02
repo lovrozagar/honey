@@ -8,11 +8,17 @@ import { ABORT_CONTEXT, type HoneyContext } from "../context/context.ts"
 import { HoneyError } from "../errors/error.ts"
 import { type MiddlewareFn, namedMiddleware } from "./middleware.ts"
 
+/** Options for `timeout`: the time limit for the rest of the chain. */
 export type TimeoutOptions = {
-	/** Milliseconds the chain below may take; 0 answers anything that waits a turn. */
+	/** Milliseconds the chain below may take; 0 times out anything that waits a turn of the event loop. */
 	duration: number
 }
 
+/**
+ * Middleware that answers 504 `request_timeout` when the rest of the chain has not answered within
+ * `duration`, and aborts `ctx.signal`. Work that ignores the signal keeps running and its answer is
+ * dropped. Throws `TypeError` unless `duration` is a finite number, 0 or more.
+ */
 export function timeout(options: TimeoutOptions): MiddlewareFn<{}, {}, "request_timeout"> {
 	const { duration } = options
 	if (!(Number.isFinite(duration) && duration >= 0)) {

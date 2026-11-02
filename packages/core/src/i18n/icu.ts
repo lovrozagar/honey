@@ -180,6 +180,7 @@ export class Formatter {
 
 /** An `interpolate` that keeps plural rules and number formats between calls: for a caller formatting in a loop. */
 export function createInterpolator(): {
+	/** Fills `template`'s ICU placeholders from `vars` for `locale`, reusing the plural rules and number formats built by earlier calls. */
 	interpolate: (template: string, vars: Record<string, unknown>, locale?: string) => string
 } {
 	const formatter = new Formatter()

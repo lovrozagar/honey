@@ -14,10 +14,12 @@
 import { HoneyError } from "../errors/error.ts"
 import { type MiddlewareFn, namedMiddleware } from "./middleware.ts"
 
+/** The cross-origin callers `csrf` lets through. With no options, it lets none through. */
 export type CSRFOptions = {
 	/**
-	 * Cross-origin callers allowed to make unsafe requests, matched exactly against the full `Origin`
-	 * (`https://app.example.com`). Same-origin requests never need listing.
+	 * Cross-origin callers allowed to make unsafe requests: a string or a list is matched exactly
+	 * against the full `Origin` (`https://app.example.com`), and a predicate is handed it. Same-origin
+	 * requests never need listing.
 	 */
 	origin?: ((origin: string) => boolean) | string | readonly string[]
 }
@@ -48,7 +50,15 @@ function forbidden(): never {
 	throw new HoneyError({ errorKey: "forbidden", status: "forbidden" })
 }
 
-export function csrf(options: CSRFOptions = {}): MiddlewareFn<{ req: Request }, {}, "forbidden"> {
+/**
+ * Middleware that answers 403 `forbidden` to a cross-origin request with any method but `GET`,
+ * `HEAD` or `OPTIONS`, unless its `Origin` is allow-listed. It judges by `Sec-Fetch-Site`, else by
+ * `Origin`; a sibling subdomain counts as cross-origin, and a request with neither header (curl, a
+ * server) passes.
+ */
+export function csrf(
+	options: CSRFOptions = {},
+): MiddlewareFn<{ /** Read for its method, its URL, `Origin` and `Sec-Fetch-Site`. */ req: Request }, {}, "forbidden"> {
 	const allow = options.origin
 	const mw: MiddlewareFn<{ req: Request }, {}, "forbidden"> = (ctx, next) => {
 		const req = ctx.req
