@@ -814,8 +814,17 @@ describe("the C# runtime within its byte budget (bit 15, G14)", () => {
  * as they arrive (openLine), where it re-counted and re-joined the whole line on every chunk. A 1 MiB line in 256-byte
  * chunks took 2.5 s and timed out a loaded verify at 30 s; it takes about 5 ms now. Net of the resume offset
  * completeLines no longer needs, which the pieces made dead; a closure, not a class, since it is 145 B smaller.
+ * Plan 32, +2,795 B to 126,712: an SDK ships only the transports its operations use, so each transport's code moved
+ * into modules the emitter can leave out, no feature added. Moved, not grown: the SSE members of HTTPClient and
+ * isEventStream into stream.ts, SdkCore's open, connect and realtime into sdk-sse.ts, sdk-ws.ts and sdk-realtime.ts,
+ * buildWSUrl into ws.ts. Named: the four new modules' own import lines +1,269, less the imports the old homes no
+ * longer need -169; http.ts's SEND and CONFIG symbols +194 and the two members that hand the send and config to
+ * stream.ts +259; ws.ts's wsUrl over the public buildUrl, net of buildWSUrl, +159; isEventStream's one-line doc +56;
+ * sdk.ts's CallInput, OperationFn and OperationCall types with the entry's `call` and its comment, and the three
+ * adapters' signatures, WsInput and doc comments, +1,027. Left in core: #prepare's Accept and Last-Event-ID for the
+ * `stream` kind, a few lines inside the one request builder every hook sees.
  */
-const TS_RUNTIME_BYTES = 123_917
+const TS_RUNTIME_BYTES = 126_712
 
 describe("the TS runtime within its byte budget (bit 11, G14)", () => {
 	it(

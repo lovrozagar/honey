@@ -14,17 +14,20 @@ import {
 	requestInit,
 	requestSignal,
 } from "./request.ts"
-import { type Answer, errorFromResponse, finishRequest, isEventStream, type Reading, type Sent } from "./response.ts"
-import { parseSSEStream, type SSEEvent } from "./sse.ts"
+import { type Answer, finishRequest, type Reading, type Sent } from "./response.ts"
 
 /** One request, ready to send: where, with what, and the hooks' view of it. */
 type Prepared = { body: BodyInit | undefined; headers: Headers; url: URL }
 
 /** One call: its method, path template and options; `refreshes: false` leaves a 401 to the realtime loop. */
-type Call = { method: string; opts: RequestOptions; path: string; refreshes?: false | undefined }
+export type Call = { method: string; opts: RequestOptions; path: string; refreshes?: false | undefined }
 
 /** The realtime loop's refresh key, exported by the SDK under no name. */
 export const REFRESH_AUTH = /* @__PURE__ */ Symbol("honey.refreshAuth")
+
+/** The send and the config, for the stream functions beside the client. */
+export const SEND = /* @__PURE__ */ Symbol("honey.send")
+export const CONFIG = /* @__PURE__ */ Symbol("honey.config")
 
 /** One operation of a generated SDK: the call, how it is read, and its stale view for the hooks. */
 export type Operation = Call & {
@@ -32,16 +35,6 @@ export type Operation = Call & {
 	declared?: string | null | undefined
 	meta?: RequestMeta | undefined
 }
-
-/** An event stream's call: its stale view, and what runs once its answer is ok. */
-type StreamCall = Call & { meta?: RequestMeta | undefined; onOpen?: ((response: Response) => void) | undefined }
-
-/** An event stream sent when its iteration starts: `open`'s events. */
-export const later = (open: () => Promise<Answer>): AsyncIterable<SSEEvent> => ({
-	async *[Symbol.asyncIterator]() {
-		yield* (await open()).data as AsyncIterable<SSEEvent>
-	},
-})
 
 /** Ignore a failed cancel: the body is being discarded either way. */
 const discard = (response: Response) =>
@@ -128,6 +121,15 @@ export class HTTPClient {
 		return this.#refreshing
 	}
 
+	get [CONFIG](): ClientConfig {
+		return this.#config
+	}
+
+	/** One request sent: its hooks run, its auth refreshed, its redirects followed. */
+	[SEND](call: Call, kind: RequestKind, meta?: RequestMeta): Promise<Sent> {
+		return this.#send(call, kind, meta)
+	}
+
 	/** The client's one shared refresh; whether a new token is in place. */
 	async [REFRESH_AUTH](): Promise<boolean> {
 		return (await this.#refresh(this.#token)) !== null
@@ -198,19 +200,6 @@ export class HTTPClient {
 		}
 	}
 
-	#iterate(sent: Sent): AsyncIterable<SSEEvent> {
-		const caps = { maxEventBytes: this.#config.sseMaxEventBytes, maxLineBytes: this.#config.sseMaxLineBytes }
-		return {
-			async *[Symbol.asyncIterator]() {
-				try {
-					if (sent.response.body) yield* parseSSEStream(sent.response.body, { ...caps, failed: sent.failed })
-				} finally {
-					sent.done()
-				}
-			},
-		}
-	}
-
 	#reading(method: string, opts: RequestOptions): Reading {
 		return { limits: this.#config, method, raw: opts.raw }
 	}
@@ -226,44 +215,6 @@ export class HTTPClient {
 		return finishRequest(sent, { ...this.#reading(op.method, op.opts), declared: op.declared })
 	}
 
-	/**
-	 * One request whose shape is decided by the answer: an event stream becomes an
-	 * `AsyncIterable<SSEEvent>` (never buffered, exempt from the timeout once headers arrive);
-	 * anything else is read as in `request`.
-	 */
-	async requestAuto(method: string, path: string, opts: RequestOptions): Promise<Answer> {
-		const sent = await this.#send({ method, opts, path }, "auto")
-		if (!sent.response.ok || !isEventStream(sent.response) || opts.raw)
-			return finishRequest(sent, this.#reading(method, opts))
-		sent.exemptFromTimeout()
-		return { data: this.#iterate(sent), response: sent.response }
-	}
-
-	requestStream(method: string, path: string, opts: RequestOptions, meta?: RequestMeta): AsyncIterable<SSEEvent> {
-		return this.streamOperation({ meta, method, opts, path })
-	}
-
-	/** An event stream, sent when iteration starts; `onOpen` runs once the answer is ok. */
-	streamOperation(op: StreamCall): AsyncIterable<SSEEvent> {
-		return later(() => this.openStream(op))
-	}
-
-	/** An event stream opened: its non-2xx thrown as its ClientError, `onOpen` run, its events read as they arrive. */
-	async openStream(op: StreamCall): Promise<{ data: AsyncIterable<SSEEvent>; response: Response }> {
-		const sent = await this.#send(op, "stream", op.meta)
-		/* the timeout bounded the open; the stream itself is never cut by it */
-		sent.exemptFromTimeout()
-		if (!sent.response.ok) {
-			try {
-				throw await errorFromResponse(sent.response, this.#config)
-			} finally {
-				sent.done()
-			}
-		}
-		op.onOpen?.(sent.response)
-		return { data: this.#iterate(sent), response: sent.response }
-	}
-
 	buildUrl(path: string, opts: RequestOptions): string {
 		return this.#url(path, opts).toString()
 	}
@@ -272,12 +223,5 @@ export class HTTPClient {
 		const resolved = interpolatePath(path, opts.params)
 		const qs = opts.search ? this.#query(opts.search).toString() : ""
 		return qs ? `${resolved}?${qs}` : resolved
-	}
-
-	buildWSUrl(path: string, opts: RequestOptions): string {
-		const url = this.#url(path, opts)
-		if (url.protocol === "https:") url.protocol = "wss:"
-		else if (url.protocol === "http:") url.protocol = "ws:"
-		return url.toString()
 	}
 }

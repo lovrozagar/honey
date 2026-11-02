@@ -2,7 +2,7 @@
  * The app-typed front (F1): `createClient<typeof app>(config)`, vendored into an app's `_gen/`. It
  * reads the app's `$routes` phantom structurally (D3), so the files import nothing from honey.
  */
-import { runtimeSource } from "./http.ts"
+import { FULL_RUNTIME, runtimeSource } from "./http.ts"
 
 const VALUES = [
 	"APIConnectionError",
@@ -67,5 +67,5 @@ export function generateAppClient(): { files: Readonly<Record<string, string>> }
 	const client = `export { ${VALUES.join(", ")} } from "./client.runtime.gen"
 export type { ${TYPES.join(", ")} } from "./client.runtime.gen"
 `
-	return { files: { "client.gen.ts": client, "client.runtime.gen.ts": runtimeSource() } }
+	return { files: { "client.gen.ts": client, "client.runtime.gen.ts": runtimeSource(FULL_RUNTIME) } }
 }

@@ -9,8 +9,8 @@ import {
 } from "./realtime.ts"
 import { Resumable } from "./realtime-connection.ts"
 import type { RequestOptions } from "./request.ts"
-import { isEventStream } from "./response.ts"
-import { createTypedWebSocket } from "./ws.ts"
+import { isEventStream, streamOperation } from "./stream.ts"
+import { createTypedWebSocket, wsUrl } from "./ws.ts"
 
 type Target = { http: HTTPClient; opts: RequestOptions; path: string }
 
@@ -73,7 +73,7 @@ function wsAdapter(at: Target): TransportAdapter {
 				queueMicrotask(() => absent.onError(refused()))
 				return absent
 			}
-			const socket = createTypedWebSocket(at.http.buildWSUrl(at.path, cursorOpts(at, opts, true)))
+			const socket = createTypedWebSocket(wsUrl(at.http, at.path, cursorOpts(at, opts, true)))
 			const conn = connection(
 				() => socket.close(),
 				(data) => socket.send(data),
@@ -97,7 +97,7 @@ function sseAdapter(at: Target): TransportAdapter {
 		connect: (_url, opts) =>
 			httpConnection(at, async (conn, signal) => {
 				let stream = false
-				const events = at.http.streamOperation({
+				const events = streamOperation(at.http, {
 					method: "GET",
 					onOpen: (response) => {
 						stream = isEventStream(response)

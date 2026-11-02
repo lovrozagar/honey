@@ -1,4 +1,4 @@
-import type { RealtimeOptions, Result, ResumableConnection, SDKConfig, SSEEvent, TypedWebSocket } from "./api.runtime.gen"
+import type { Result, SDKConfig, SSEEvent } from "./api.runtime.gen"
 
 export type CreateProjectsExtractRequest = { columns?: string; file?: string; instruction?: string; schema?: string; strictness?: "strict" | "balanced" | "flexible"; text?: string }
 export type CreateProjectsExtractResponse200 = { files: { file_name: string; sha256: string; size: number }[]; status: string; texts: Record<string, string> }
@@ -15,7 +15,6 @@ export type HttpOptions = {
 }
 export type SseOptions = Omit<HttpOptions, "idempotencyKey"> & { lastEventId?: string }
 export type WsOptions = { protocols?: string | string[]; reconnectToken?: string }
-export type RealtimeCallOptions = Omit<HttpOptions, "idempotencyKey" | "timeout"> & RealtimeOptions
 
 type ErrorField = { error_key: string; message: string; path: string }
 
@@ -50,9 +49,7 @@ type HoneyStream<I, V, E = never> = {
 
 /** `client.safe`: every REST and stream call answering a Result, never throwing an API answer; a connection as is. */
 export type HoneySafe<T> = {
-	[K in keyof T]: T[K] extends (...input: never[]) => ResumableConnection<infer _> | TypedWebSocket
-		? T[K]
-		: T[K] extends HoneyCall<infer I, infer D, infer E, infer H>
+	[K in keyof T]: T[K] extends HoneyCall<infer I, infer D, infer E, infer H>
 			? {
 					(input: I & HttpOptions & { raw: true }): Promise<Result<Response, E>>
 					(...input: HoneyArgs<I, HttpOptions & { raw?: false }>): Promise<Result<D, E, H>>

@@ -4,6 +4,8 @@
  * stream shapes, the error envelope, the safe mirror). Here so sdk-types.ts holds only how a
  * document becomes those types.
  */
+import type { TsRuntimeFeatures } from "./http.ts"
+
 /* globals the emitted types read, and the names they declare: a component schema never takes one */
 export const RESERVED = [
 	"AbortSignal",
@@ -45,7 +47,7 @@ const RUNTIME_TYPES = [
 ] as const
 
 /** The input fields every call takes, by transport. */
-export const SHARED = `export type HttpOptions = {
+const OPTIONS = `export type HttpOptions = {
 	baseURL?: string
 	cookies?: Record<string, string>
 	headers?: Record<string, string>
@@ -55,8 +57,10 @@ export const SHARED = `export type HttpOptions = {
 }
 export type SseOptions = Omit<HttpOptions, "idempotencyKey"> & { lastEventId?: string }
 export type WsOptions = { protocols?: string | string[]; reconnectToken?: string }
-export type RealtimeCallOptions = Omit<HttpOptions, "idempotencyKey" | "timeout"> & RealtimeOptions
+`
 
+/* the error envelope, the call and stream shapes, and the safe mirror's opening */
+const CALLS = `
 type ErrorField = { error_key: string; message: string; path: string }
 
 /** honey's error envelope at one status, its error keys as literals. */
@@ -90,10 +94,10 @@ type HoneyStream<I, V, E = never> = {
 
 /** \`client.safe\`: every REST and stream call answering a Result, never throwing an API answer; a connection as is. */
 export type HoneySafe<T> = {
-	[K in keyof T]: T[K] extends (...input: never[]) => ResumableConnection<infer _> | TypedWebSocket
-		? T[K]
-		: T[K] extends HoneyCall<infer I, infer D, infer E, infer H>
-			? {
+	[K in keyof T]: `
+
+/* the safe mirror's REST and stream arms */
+const SAFE_ARMS = `			? {
 					(input: I & HttpOptions & { raw: true }): Promise<Result<Response, E>>
 					(...input: HoneyArgs<I, HttpOptions & { raw?: false }>): Promise<Result<D, E, H>>
 				}
@@ -102,6 +106,23 @@ export type HoneySafe<T> = {
 				: HoneySafe<T[K]>
 }
 `
+
+/** The input fields every call takes, by transport, and the safe twin's types, for an API with `features`. */
+export function shared(features: TsRuntimeFeatures): string {
+	const connections = [
+		...(features.realtime ? ["ResumableConnection<infer _>"] : []),
+		...(features.ws || features.realtime ? ["TypedWebSocket"] : []),
+	]
+	const realtime = features.realtime
+		? `export type RealtimeCallOptions = Omit<HttpOptions, "idempotencyKey" | "timeout"> & RealtimeOptions\n`
+		: ""
+	const rest = "T[K] extends HoneyCall<infer I, infer D, infer E, infer H>"
+	const safe =
+		connections.length === 0
+			? rest
+			: `T[K] extends (...input: never[]) => ${connections.join(" | ")}\n\t\t? T[K]\n\t\t: ${rest}`
+	return `${OPTIONS}${realtime}${CALLS}${safe}\n${SAFE_ARMS}`
+}
 
 /** The runtime types this text names, in order: a document with no realtime route uses neither
  *  `SSEEvent` nor `ResumableConnection`, and an import a file never reads is a consumer's error

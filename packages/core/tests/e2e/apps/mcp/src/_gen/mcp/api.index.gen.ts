@@ -1,5 +1,5 @@
 export { Api } from "./api.client.gen"
 export { serviceMap } from "./api.map.gen"
 export type * from "./api.types.gen"
-export { APIConnectionError, BadGatewayError, BadRequestError, ClientError, ConflictError, createFallbackChain, createKeepaliveLoop, createResumableConnection, DecodeError, ForbiddenError, GatewayTimeoutError, HTTPClient, InternalServerError, isClientError, newClientRequestId, NotFoundError, parseSSEStream, PathParamError, RateLimitError, RealtimeAbortError, RealtimeConnectError, RealtimeError, RealtimeKickedError, ServiceUnavailableError, UnauthorizedError, UnprocessableEntityError } from "./api.runtime.gen"
-export type { ClientConfig, ConnectionState, InvalidationConfig, LogEntry, RealtimeOptions, RequestOptions, Result, ResumableConnection, ResumableConnectionOpts, ServerFrame, SSEEvent, Transport, TransportAdapter, TransportConnection, TransportOpts, TypedWebSocket } from "./api.runtime.gen"
+export { APIConnectionError, BadGatewayError, BadRequestError, ClientError, ConflictError, DecodeError, ForbiddenError, GatewayTimeoutError, HTTPClient, InternalServerError, isClientError, newClientRequestId, NotFoundError, parseSSEStream, PathParamError, RateLimitError, ServiceUnavailableError, UnauthorizedError, UnprocessableEntityError } from "./api.runtime.gen"
+export type { ClientConfig, InvalidationConfig, LogEntry, RequestOptions, Result, SSEEvent } from "./api.runtime.gen"

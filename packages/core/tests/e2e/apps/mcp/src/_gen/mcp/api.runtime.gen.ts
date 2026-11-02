@@ -640,10 +640,6 @@ export type Result<T, TErrors = never, THeaders = never> =
 			: { ok: true; data: T; headers: THeaders; response: Response })
 	| { ok: false; error: StatusErrors<TErrors> | DecodeError; response: Response }
 
-export function isEventStream(response: Response): boolean {
-	return parseMediaType(response.headers.get("content-type"))?.essence === "text/event-stream"
-}
-
 /** How a REST answer is read: parsed or raw, by its declared media type, within the client's limits. */
 export type Reading = {
 	/**
@@ -1289,732 +1285,18 @@ export async function* parseSSEStream(
 	}
 }
 
-/**
- * An operation's WebSocket. Its dial runs no onRequest or onResponse hook, and a refused handshake's 401 is its error,
- * with no onAuthExpired refresh. The platform WebSocket exposes no ping and no message cap, so this socket has neither.
- */
-export type TypedWebSocket = {
-	close(code?: number, reason?: string): void
-	off(event: "binary" | "close" | "error" | "message" | "open", handler: (...args: never[]) => void): void
-	/** Binary frames, as `ArrayBuffer`. Text frames go to `"message"`. */
-	on(event: "binary", handler: (data: ArrayBuffer) => void): void
-	on(event: "close", handler: (code: number, reason: string) => void): void
-	on(event: "error", handler: (error: unknown) => void): void
-	/** Text frames. */
-	on(event: "message", handler: (data: string) => void): void
-	on(event: "open", handler: () => void): void
-	readonly readyState: number
-	/**
-	 * Strings, `ArrayBuffer`, typed arrays and `Blob` are sent as-is; any other value is JSON-encoded.
-	 * Sends before the socket opens are queued; after it closes they are dropped.
-	 */
-	send(data: ArrayBuffer | ArrayBufferView | Blob | object | string): void
-}
-
-export type WSOptions = {
-	protocols?: string | string[] | undefined
-}
-
-type Payload = Blob | string | Uint8Array<ArrayBuffer>
-type Handler = (...args: never[]) => void
-
-const WS_EVENTS: readonly string[] = ["binary", "close", "error", "message", "open"]
-
-/** The DOM listener that hands `event` to `handler` in its typed shape. */
-function wrapListener(event: string, handler: Handler): EventListener {
-	const call = handler as (...args: unknown[]) => void
-	if (event === "message") {
-		return (e) => {
-			const data = (e as MessageEvent).data
-			if (typeof data === "string") call(data)
-		}
-	}
-	if (event === "binary") {
-		return (e) => {
-			const data = (e as MessageEvent).data
-			if (data instanceof ArrayBuffer) call(data)
-		}
-	}
-	if (event === "open") return () => call()
-	if (event === "close") return (e) => call((e as CloseEvent).code, (e as CloseEvent).reason)
-	return (e) => call(e)
-}
-
-/** `data` as a frame: text and Blobs as they are, bytes copied, anything else as JSON. */
-function toPayload(data: ArrayBuffer | ArrayBufferView | Blob | object | string): Payload {
-	if (typeof data === "string") return data
-	if (typeof Blob !== "undefined" && data instanceof Blob) return data
-	if (data instanceof ArrayBuffer || ArrayBuffer.isView(data)) {
-		const view =
-			data instanceof ArrayBuffer ? new Uint8Array(data) : new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
-		const copy = new Uint8Array(view.byteLength)
-		copy.set(view)
-		return copy
-	}
-	return JSON.stringify(data)
-}
-
-/** A WebSocket with typed events, a send queue until it opens, and nothing sent once it closes. */
-class TypedSocket {
-	readonly #ws: WebSocket
-	/* user handler → wrapped listener, per event, so one handler can be registered for several events */
-	readonly #listeners = new Map<string, WeakMap<Handler, EventListener>>()
-	readonly #queue: Payload[] = []
-	#state: "closed" | "connecting" | "open" = "connecting"
-
-	constructor(ws: WebSocket) {
-		this.#ws = ws
-		ws.binaryType = "arraybuffer"
-		ws.addEventListener("open", () => {
-			this.#state = "open"
-			for (const msg of this.#queue) ws.send(msg)
-			this.#queue.length = 0
-		})
-		ws.addEventListener("close", () => {
-			this.#state = "closed"
-			this.#queue.length = 0
-		})
-	}
-
-	get readyState(): number {
-		return this.#ws.readyState
-	}
-
-	close(code?: number, reason?: string): void {
-		this.#state = "closed"
-		this.#queue.length = 0
-		this.#ws.close(code, reason)
-	}
-
-	on(event: string, handler: Handler): void {
-		if (!WS_EVENTS.includes(event)) return
-		const byHandler = this.#listeners.get(event) ?? new WeakMap<Handler, EventListener>()
-		this.#listeners.set(event, byHandler)
-		const target = event === "binary" ? "message" : event
-		const previous = byHandler.get(handler)
-		if (previous) this.#ws.removeEventListener(target, previous)
-		const wrapped = wrapListener(event, handler)
-		byHandler.set(handler, wrapped)
-		this.#ws.addEventListener(target, wrapped)
-	}
-
-	off(event: string, handler: Handler): void {
-		const byHandler = this.#listeners.get(event)
-		const wrapped = byHandler?.get(handler)
-		if (!wrapped) return
-		this.#ws.removeEventListener(event === "binary" ? "message" : event, wrapped)
-		byHandler?.delete(handler)
-	}
-
-	send(data: ArrayBuffer | ArrayBufferView | Blob | object | string): void {
-		if (this.#state === "closed") return
-		const payload = toPayload(data)
-		if (this.#state === "connecting") this.#queue.push(payload)
-		else this.#ws.send(payload)
-	}
-}
-
-export function createTypedWebSocket(
-	url: string,
-	opts?: WSOptions,
-	WebSocketImpl: typeof WebSocket = WebSocket,
-): TypedWebSocket {
-	const ws = opts?.protocols ? new WebSocketImpl(url, opts.protocols) : new WebSocketImpl(url)
-	const socket = new TypedSocket(ws)
-	const typed: TypedWebSocket = {
-		close: (code, reason) => socket.close(code, reason),
-		off: (event, handler) => socket.off(event, handler),
-		on: ((event: string, handler: Handler) => socket.on(event, handler)) as TypedWebSocket["on"],
-		get readyState() {
-			return socket.readyState
-		},
-		send: (data) => socket.send(data),
-	}
-	Object.defineProperty(typed, "_ws", { enumerable: false, value: ws })
-	return typed
-}
-
-/**
- * The realtime resume protocol's client side (H8): the frames a server sends, the errors a
- * connection ends with, the transport adapters a consumer plugs in, the keepalive loop and the
- * fallback chain that picks the first transport to answer `ready`.
- */
-
-export type ServerFrame =
-	| { data: unknown; id?: string | undefined; reconnectToken?: string | undefined; t: "msg" }
-	| { t: "pong" }
-	| { reason: string; t: "bye" }
-	| { reconnectToken: string; t: "ready" }
-
-export class RealtimeError extends Error {
-	readonly reason: string
-
-	constructor(message: string, reason: string) {
-		super(message)
-		this.reason = reason
-		this.name = "RealtimeError"
-	}
-}
-
-export class RealtimeConnectError extends RealtimeError {
-	override name = "RealtimeConnectError"
-}
-
-export class RealtimeKickedError extends RealtimeError {
-	override name = "RealtimeKickedError"
-}
-
-export class RealtimeAbortError extends RealtimeError {
-	override name = "RealtimeAbortError"
-}
-
-export type Transport = "longpoll" | "sse" | "ws"
-
-export type ConnectionState = "closed" | "connected" | "connecting" | "draining" | "idle" | "reconnecting"
-
-export type TransportOpts = {
-	headers?: Record<string, string> | undefined
-	lastEventId?: string | undefined
-	reconnectToken?: string | undefined
-	signal?: AbortSignal | undefined
-}
-
-/** One live transport: the adapter calls `onFrame`, `onClose` and `onError`; the client replaces them. */
-export type TransportConnection = {
-	close(): void
-	onClose: (reason: string) => void
-	onError: (err: unknown) => void
-	onFrame: (frame: ServerFrame) => void
-	send(data: string): Promise<void> | void
-}
-
-/** A swallowed callback: a consumer's hook must never break the reconnect loop. */
-export function safely(fn: (() => void) | undefined): void {
-	try {
-		fn?.()
-	} catch {
-		/* the consumer's callback threw; the connection carries on */
-	}
-}
-
-export type TransportAdapter = {
-	connect(url: string, opts: TransportOpts): TransportConnection
-}
-
-/** The transport the adapter at `index` of a chain stands for: WebSocket, then SSE, then long polling. */
-export function transportAt(index: number): Transport {
-	if (index === 0) return "ws"
-	return index === 1 ? "sse" : "longpoll"
-}
-
-export type KeepaliveOptions = {
-	interval?: number
-	onDead: () => void
-	sendPing: () => void
-	timeout?: number
-	transport: Transport
-}
-
-export type KeepaliveLoop = { onFrame(): void; onPong(): void; start(): void; stop(): void }
-
-/**
- * A connection's liveness: over WebSocket a ping every `interval` and dead after `timeout` without
- * a pong; over SSE dead after `timeout` without a frame; long polling needs none.
- */
-class Keepalive implements KeepaliveLoop {
-	readonly #opts: KeepaliveOptions
-	#ping: ReturnType<typeof setInterval> | null = null
-	#dead: ReturnType<typeof setTimeout> | null = null
-
-	constructor(opts: KeepaliveOptions) {
-		this.#opts = opts
-	}
-
-	#armDead(): void {
-		if (this.#dead !== null) clearTimeout(this.#dead)
-		this.#dead = setTimeout(() => this.#opts.onDead(), this.#opts.timeout ?? 60_000)
-	}
-
-	start(): void {
-		this.stop()
-		const { transport } = this.#opts
-		if (transport === "longpoll") return
-		if (transport === "ws") this.#ping = setInterval(() => this.#opts.sendPing(), this.#opts.interval ?? 25_000)
-		this.#armDead()
-	}
-
-	stop(): void {
-		if (this.#ping !== null) clearInterval(this.#ping)
-		if (this.#dead !== null) clearTimeout(this.#dead)
-		this.#ping = null
-		this.#dead = null
-	}
-
-	onPong(): void {
-		if (this.#dead !== null) this.#armDead()
-	}
-
-	onFrame(): void {
-		if (this.#opts.transport === "sse" && this.#dead !== null) this.#armDead()
-	}
-}
-
-export function createKeepaliveLoop(opts: KeepaliveOptions): KeepaliveLoop {
-	return new Keepalive(opts)
-}
-
-/** The keepalive `set` gives `transport` (WebSocket 20 s unless set, SSE none; 0 none), dead an interval after a ping. */
-export function keepaliveOf(
-	set: number | undefined,
-	transport: Transport,
-	conn: { send(data: string): void },
-	onDead: () => void,
-): KeepaliveLoop | null {
-	const interval = set ?? (transport === "ws" ? 20_000 : 0)
-	if (interval <= 0) return null
-	const sendPing = () => conn.send(JSON.stringify({ t: "ping" }))
-	return createKeepaliveLoop({ interval, onDead, sendPing, timeout: 2 * interval, transport })
-}
-
-/** Dial `adapter` and resolve once it sends `ready`; reject on an error, a close or `timeout`. */
-export function dialReady(
-	adapter: TransportAdapter,
-	target: { opts: TransportOpts; url: string },
-	timeout: number,
-): Promise<TransportConnection> {
-	return new Promise((resolve, reject) => {
-		const conn = adapter.connect(target.url, target.opts)
-		const timer = setTimeout(() => {
-			conn.close()
-			reject(new Error("timeout"))
-		}, timeout)
-		const onFrame = conn.onFrame
-		conn.onFrame = (frame) => {
-			if (frame.t !== "ready") return onFrame(frame)
-			clearTimeout(timer)
-			conn.onFrame = onFrame
-			resolve(conn)
-		}
-		conn.onError = (err) => {
-			clearTimeout(timer)
-			conn.close()
-			reject(err)
-		}
-		conn.onClose = (reason) => {
-			clearTimeout(timer)
-			reject(new Error(reason))
-		}
-	})
-}
-
-/** The dial statuses no retry changes, most specific highest; a WebSocket refused without a status ranks lowest. */
-const RANK: Record<number, number> = { 400: 3, 401: 6, 403: 5, 404: 1, 405: 1, 410: 2, 422: 4 }
-const rank = (err: unknown) =>
-	RANK[(err as { status?: number } | null)?.status ?? 0] ?? Number((err as RealtimeError)?.reason === "upgrade_refused")
-export const refused = (err: unknown): boolean => rank(err) > 0
-/** Dial 0, 1, … until one opens; else the last transient failure, or the most specific refusal. A 401 refreshes once. */
-export async function walkChain<T>(
-	count: number,
-	dial: (index: number) => Promise<T>,
-	opened: (index: number) => unknown,
-	refresh?: () => Promise<boolean>,
-): Promise<T> {
-	let transient: unknown
-	let refusal: unknown
-	for (let i = 0; i < count; i++) {
-		try {
-			const conn = await dial(i)
-			opened(i)
-			return conn
-		} catch (err) {
-			if (rank(err) === 6 && refresh) {
-				const fresh = await refresh()
-				refresh = undefined
-				if (fresh) {
-					;[i, transient, refusal] = [-1, undefined, undefined]
-					continue
-				}
-			}
-			if (!refused(err)) transient = err
-			else if (rank(err) > rank(refusal)) refusal = err
-		}
-	}
-	throw transient ?? refusal
-}
-
-export type FallbackChain = {
-	connect(url: string, transportOpts: TransportOpts): Promise<{ conn: TransportConnection; transport: Transport }>
-	readonly provenTransport: Transport | null
-}
-
-/** Try each transport in order until one is ready; remember the one that worked and try it first next time. */
-class Chain implements FallbackChain {
-	readonly #transports: TransportAdapter[]
-	readonly #timeout: number
-	#proven: number | null = null
-
-	constructor(opts: { timeout?: number; transports: TransportAdapter[] }) {
-		this.#transports = opts.transports
-		this.#timeout = opts.timeout ?? 3000
-	}
-
-	get provenTransport(): Transport | null {
-		return this.#proven === null ? null : transportAt(this.#proven)
-	}
-
-	async #dial(url: string, opts: TransportOpts) {
-		const proven = this.#proven
-		if (proven !== null && proven < this.#transports.length) {
-			try {
-				const conn = await dialReady(this.#transports[proven] as TransportAdapter, { opts, url }, this.#timeout)
-				return { conn, transport: transportAt(proven) }
-			} catch {
-				/* the proven transport failed: fall through to the whole chain */
-			}
-		}
-		for (let i = 0; i < this.#transports.length; i++) {
-			try {
-				const conn = await dialReady(this.#transports[i] as TransportAdapter, { opts, url }, this.#timeout)
-				this.#proven = i
-				return { conn, transport: transportAt(i) }
-			} catch {
-				/* try the next one */
-			}
-		}
-		throw new RealtimeConnectError("All transports failed", "all_failed")
-	}
-
-	connect(url: string, opts: TransportOpts): Promise<{ conn: TransportConnection; transport: Transport }> {
-		const attempt =
-			this.#transports.length === 0
-				? Promise.reject(new RealtimeConnectError("No transports configured", "no_transports"))
-				: this.#dial(url, opts)
-		/* a caller that never awaits the attempt must not see an unhandled rejection */
-		attempt.catch(() => {})
-		return attempt
-	}
-}
-
-export function createFallbackChain(opts: { timeout?: number; transports: TransportAdapter[] }): FallbackChain {
-	return new Chain(opts)
-}
-
-export type ResumableConnectionOpts = {
-	fallbackTimeout?: number | undefined
-	/** Each dial's headers; a function is read on every dial, so a rotated token reaches the reconnect. */
-	headers?: Record<string, string> | (() => Record<string, string> | Promise<Record<string, string>>) | undefined
-	/** Ping every this many ms (WebSocket 20 s, SSE none, unless set; 0: none); one unanswered as long reconnects. */
-	keepaliveInterval?: number | undefined
-	lastEventId?: string | undefined
-	/** Reconnects after a drop before the stream ends; 0 retries forever. Default 5. */
-	maxReconnectAttempts?: number | undefined
-	onReconnected?: (() => void) | undefined
-	onReconnecting?: ((attempt: number, transport: Transport) => void) | undefined
-	reconnectDelayMs?: number | undefined
-	reconnectToken?: string | undefined
-	signal?: AbortSignal | undefined
-	transports: TransportAdapter[]
-	url: string
-}
-
-export type ResumableConnection<T = unknown> = {
-	close(reason?: string): void
-	readonly provenTransport: Transport | null
-	/** Resolves once sent; over SSE and long-poll a POST, rejecting with its error. */
-	send(data: unknown): Promise<void>
-	/** `send`'s raw form: `text` as it is, a text frame or a POSTed text/plain body. */
-	sendText(text: string): Promise<void>
-	readonly state: ConnectionState
-	[Symbol.asyncIterator](): AsyncIterableIterator<T>
-}
-
-type QueueEntry = { type: "done" } | { error: unknown; type: "error" } | { type: "value"; value: unknown }
-
-/**
- * One logical stream over reconnecting transports: messages arrive in order through the async
- * iterator, a drop reconnects (proven transport first, then the chain) and resumes from the last
- * message id with the server's reconnect token.
- */
-export class Resumable implements ResumableConnection {
-	readonly #opts: ResumableConnectionOpts
-	readonly #refresh: (() => Promise<boolean>) | undefined
-	readonly #queue: QueueEntry[] = []
-	#pending: { reject: (err: unknown) => void; resolve: (result: IteratorResult<unknown>) => void } | null = null
-	#state: ConnectionState = "idle"
-	#conn: TransportConnection | null = null
-	#keepalive: KeepaliveLoop | null = null
-	#attempts = 0
-	#proven: number | null = null
-	#lastEventId: string | undefined
-	#reconnectToken: string | undefined
-	#started = false
-	#closed = false
-	/** the dial and reconnect timers still pending: `close()` clears them, so nothing outlives the connection */
-	readonly #timers = new Set<ReturnType<typeof setTimeout>>()
-	/** the transport being dialed, closed with the connection */
-	#dialing: TransportConnection | null = null
-
-	constructor(opts: ResumableConnectionOpts, refresh?: () => Promise<boolean>) {
-		this.#opts = opts
-		this.#refresh = refresh
-		this.#lastEventId = opts.lastEventId
-		this.#reconnectToken = opts.reconnectToken
-		if (opts.signal?.aborted) this.#end()
-		else opts.signal?.addEventListener("abort", () => this.#abort(), { once: true })
-	}
-
-	get state(): ConnectionState {
-		return this.#state
-	}
-
-	get provenTransport(): Transport | null {
-		return this.#proven === null ? null : transportAt(this.#proven)
-	}
-
-	#end(): void {
-		this.#state = "closed"
-		this.#closed = true
-		for (const timer of this.#timers) clearTimeout(timer)
-		this.#timers.clear()
-		const dialing = this.#dialing
-		this.#dialing = null
-		dialing?.close()
-	}
-
-	/** Run `fn` after `ms`, unless the connection closes first; the timer never holds the process open. */
-	#later(fn: () => void, ms: number): () => void {
-		const timer = setTimeout(() => {
-			this.#timers.delete(timer)
-			fn()
-		}, ms)
-		;(timer as unknown as { unref?: () => void }).unref?.()
-		this.#timers.add(timer)
-		return () => {
-			clearTimeout(timer)
-			this.#timers.delete(timer)
-		}
-	}
-
-	#enqueue(entry: QueueEntry): void {
-		const pending = this.#pending
-		if (!pending) {
-			this.#queue.push(entry)
-			return
-		}
-		this.#pending = null
-		if (entry.type === "value") pending.resolve({ done: false, value: entry.value })
-		else if (entry.type === "done") pending.resolve({ done: true, value: undefined })
-		else pending.reject(entry.error)
-	}
-
-	#detach(): void {
-		this.#keepalive?.stop()
-		this.#keepalive = null
-		const conn = this.#conn
-		if (!conn) return
-		this.#conn = null
-		conn.onFrame = () => {}
-		conn.onError = () => {}
-		conn.onClose = () => {}
-		try {
-			conn.close()
-		} catch {
-			/* an adapter's close is best-effort */
-		}
-	}
-
-	#abort(): void {
-		if (this.#state === "closed") return
-		this.#end()
-		this.#detach()
-		this.#enqueue({ error: new RealtimeAbortError("Connection aborted", "aborted"), type: "error" })
-	}
-
-	/** A frame on a ready connection: a message, a new reconnect token, a pong or the server's goodbye. */
-	#onFrame(frame: ServerFrame): void {
-		this.#keepalive?.onFrame()
-		if (frame.t === "msg") {
-			this.#lastEventId = frame.id ?? this.#lastEventId
-			this.#reconnectToken = frame.reconnectToken || this.#reconnectToken
-			this.#enqueue({ type: "value", value: frame.data })
-		} else if (frame.t === "ready") this.#reconnectToken = frame.reconnectToken || this.#reconnectToken
-		else if (frame.t === "pong") this.#keepalive?.onPong()
-		else {
-			this.#detach()
-			this.#reconnect()
-		}
-	}
-
-	/** Dial adapter `index` with this dial's headers (a function's read now); resolve when ready, frames wired first. */
-	#dial(index: number): Promise<TransportConnection> {
-		const given = this.#opts.headers
-		if (typeof given === "function") return Promise.resolve(given()).then((headers) => this.#dialWith(index, headers))
-		return this.#dialWith(index, given)
-	}
-
-	#dialWith(index: number, headers: Record<string, string> | undefined): Promise<TransportConnection> {
-		return new Promise((resolve, reject) => {
-			if (this.#closed) return reject(new RealtimeConnectError("the connection is closed", "closed"))
-			const adapter = this.#opts.transports[index] as TransportAdapter
-			const opts = { headers, lastEventId: this.#lastEventId, reconnectToken: this.#reconnectToken }
-			const conn = adapter.connect(this.#opts.url, { ...opts, signal: this.#opts.signal })
-			this.#dialing = conn
-			let ready = false
-			const cancel = this.#later(() => {
-				this.#dialing = null
-				conn.close()
-				reject(new RealtimeConnectError("transport open timeout", "timeout"))
-			}, this.#opts.fallbackTimeout ?? 3000)
-			const fail = (error: unknown) => {
-				cancel()
-				if (this.#dialing === conn) this.#dialing = null
-				if (!ready) return reject(error)
-				this.#detach()
-				if (refused(error)) this.#refuse(error)
-				else this.#reconnect()
-			}
-			conn.onFrame = (frame) => {
-				/* a message before ready is kept; a goodbye before ready is the server refusing the open */
-				if (ready || frame.t === "msg" || frame.t === "pong") return this.#onFrame(frame)
-				if (frame.t === "bye") {
-					conn.close()
-					return fail(new RealtimeConnectError(`transport refused: ${frame.reason}`, "bye"))
-				}
-				ready = true
-				cancel()
-				this.#dialing = null
-				/* the connection from its ready frame on, so a drop before the caller resumes is seen */
-				this.#conn = conn
-				this.#reconnectToken = frame.reconnectToken || this.#reconnectToken
-				resolve(conn)
-			}
-			conn.onError = (err) => {
-				if (!ready) conn.close()
-				fail(err)
-			}
-			conn.onClose = (reason) =>
-				fail(new RealtimeConnectError(`transport closed before ready: ${reason}`, "closed_early"))
-		})
-	}
-
-	/** The proven transport first, then walkChain. */
-	#open(): Promise<TransportConnection> {
-		const { transports } = this.#opts
-		if (transports.length === 0)
-			return Promise.reject(new RealtimeConnectError("No transports configured", "no_transports"))
-		const walk = () =>
-			walkChain(
-				transports.length,
-				(i) => this.#dial(i),
-				(i) => (this.#proven = i),
-				this.#refresh,
-			)
-		return this.#proven === null ? walk() : this.#dial(this.#proven).catch(walk)
-	}
-
-	#watch(conn: TransportConnection): void {
-		if (this.#proven === null) return
-		this.#keepalive = keepaliveOf(this.#opts.keepaliveInterval, transportAt(this.#proven), conn, () => {
-			this.#detach()
-			this.#reconnect()
-		})
-		this.#keepalive?.start()
-	}
-
-	async #connect(): Promise<void> {
-		if (this.#closed) return
-		if (this.#state === "idle") this.#state = "connecting"
-		try {
-			const conn = await this.#open()
-			/* closed, or dropped between its ready frame and here (a reconnect is already scheduled) */
-			if (this.#closed || this.#conn !== conn) return
-			this.#state = "connected"
-			this.#attempts = 0
-			this.#watch(conn)
-			safely(this.#opts.onReconnected)
-		} catch (err) {
-			if (refused(err)) this.#refuse(err)
-			else this.#reconnect()
-		}
-	}
-
-	/** End the connection with a refusal no retry changes. */
-	#refuse(err: unknown): void {
-		this.#end()
-		this.#enqueue({ error: err, type: "error" })
-	}
-
-	/** After a drop or a failed open: wait, then dial again; past the attempt cap the stream ends. */
-	#reconnect(): void {
-		if (this.#closed) return
-		this.#attempts += 1
-		const max = this.#opts.maxReconnectAttempts ?? 5
-		if (max > 0 && this.#attempts > max) {
-			this.#end()
-			this.#enqueue({ type: "done" })
-			return
-		}
-		this.#state = "reconnecting"
-		/* a drop means that transport is not healthy: the next attempt walks the whole chain */
-		this.#proven = null
-		const attempt = this.#attempts
-		safely(() => this.#opts.onReconnecting?.(attempt, transportAt(0)))
-		this.#later(() => void this.#connect(), this.#opts.reconnectDelayMs ?? 1000)
-	}
-
-	send(data: unknown): Promise<void> {
-		return this.sendText(JSON.stringify(data))
-	}
-
-	async sendText(text: string): Promise<void> {
-		if (!this.#closed) await this.#conn?.send(text)
-	}
-
-	close(_reason?: string): void {
-		if (this.#state === "closed") return
-		this.#end()
-		this.#detach()
-		this.#enqueue({ type: "done" })
-	}
-
-	#next(): Promise<IteratorResult<unknown>> {
-		if (!this.#started && !this.#closed) {
-			this.#started = true
-			this.#state = "connecting"
-			void this.#connect()
-		}
-		const entry = this.#queue.shift()
-		if (entry?.type === "value") return Promise.resolve({ done: false, value: entry.value })
-		if (entry?.type === "error") return Promise.reject(entry.error)
-		if (entry || this.#closed) return Promise.resolve({ done: true, value: undefined })
-		const next = new Promise<IteratorResult<unknown>>((resolve, reject) => {
-			this.#pending = { reject, resolve }
-		})
-		next.catch(() => {})
-		return next
-	}
-
-	[Symbol.asyncIterator](): AsyncIterableIterator<unknown> {
-		const iterator: AsyncIterableIterator<unknown> = {
-			next: () => this.#next(),
-			[Symbol.asyncIterator]: () => iterator,
-		}
-		return iterator
-	}
-}
-
-export function createResumableConnection(opts: ResumableConnectionOpts): ResumableConnection {
-	return new Resumable(opts)
-}
-
 /** One request, ready to send: where, with what, and the hooks' view of it. */
 type Prepared = { body: BodyInit | undefined; headers: Headers; url: URL }
 
 /** One call: its method, path template and options; `refreshes: false` leaves a 401 to the realtime loop. */
-type Call = { method: string; opts: RequestOptions; path: string; refreshes?: false | undefined }
+export type Call = { method: string; opts: RequestOptions; path: string; refreshes?: false | undefined }
 
 /** The realtime loop's refresh key, exported by the SDK under no name. */
 export const REFRESH_AUTH = /* @__PURE__ */ Symbol("honey.refreshAuth")
+
+/** The send and the config, for the stream functions beside the client. */
+export const SEND = /* @__PURE__ */ Symbol("honey.send")
+export const CONFIG = /* @__PURE__ */ Symbol("honey.config")
 
 /** One operation of a generated SDK: the call, how it is read, and its stale view for the hooks. */
 export type Operation = Call & {
@@ -2022,16 +1304,6 @@ export type Operation = Call & {
 	declared?: string | null | undefined
 	meta?: RequestMeta | undefined
 }
-
-/** An event stream's call: its stale view, and what runs once its answer is ok. */
-type StreamCall = Call & { meta?: RequestMeta | undefined; onOpen?: ((response: Response) => void) | undefined }
-
-/** An event stream sent when its iteration starts: `open`'s events. */
-export const later = (open: () => Promise<Answer>): AsyncIterable<SSEEvent> => ({
-	async *[Symbol.asyncIterator]() {
-		yield* (await open()).data as AsyncIterable<SSEEvent>
-	},
-})
 
 /** Ignore a failed cancel: the body is being discarded either way. */
 const discard = (response: Response) =>
@@ -2118,6 +1390,15 @@ export class HTTPClient {
 		return this.#refreshing
 	}
 
+	get [CONFIG](): ClientConfig {
+		return this.#config
+	}
+
+	/** One request sent: its hooks run, its auth refreshed, its redirects followed. */
+	[SEND](call: Call, kind: RequestKind, meta?: RequestMeta): Promise<Sent> {
+		return this.#send(call, kind, meta)
+	}
+
 	/** The client's one shared refresh; whether a new token is in place. */
 	async [REFRESH_AUTH](): Promise<boolean> {
 		return (await this.#refresh(this.#token)) !== null
@@ -2188,19 +1469,6 @@ export class HTTPClient {
 		}
 	}
 
-	#iterate(sent: Sent): AsyncIterable<SSEEvent> {
-		const caps = { maxEventBytes: this.#config.sseMaxEventBytes, maxLineBytes: this.#config.sseMaxLineBytes }
-		return {
-			async *[Symbol.asyncIterator]() {
-				try {
-					if (sent.response.body) yield* parseSSEStream(sent.response.body, { ...caps, failed: sent.failed })
-				} finally {
-					sent.done()
-				}
-			},
-		}
-	}
-
 	#reading(method: string, opts: RequestOptions): Reading {
 		return { limits: this.#config, method, raw: opts.raw }
 	}
@@ -2216,44 +1484,6 @@ export class HTTPClient {
 		return finishRequest(sent, { ...this.#reading(op.method, op.opts), declared: op.declared })
 	}
 
-	/**
-	 * One request whose shape is decided by the answer: an event stream becomes an
-	 * `AsyncIterable<SSEEvent>` (never buffered, exempt from the timeout once headers arrive);
-	 * anything else is read as in `request`.
-	 */
-	async requestAuto(method: string, path: string, opts: RequestOptions): Promise<Answer> {
-		const sent = await this.#send({ method, opts, path }, "auto")
-		if (!sent.response.ok || !isEventStream(sent.response) || opts.raw)
-			return finishRequest(sent, this.#reading(method, opts))
-		sent.exemptFromTimeout()
-		return { data: this.#iterate(sent), response: sent.response }
-	}
-
-	requestStream(method: string, path: string, opts: RequestOptions, meta?: RequestMeta): AsyncIterable<SSEEvent> {
-		return this.streamOperation({ meta, method, opts, path })
-	}
-
-	/** An event stream, sent when iteration starts; `onOpen` runs once the answer is ok. */
-	streamOperation(op: StreamCall): AsyncIterable<SSEEvent> {
-		return later(() => this.openStream(op))
-	}
-
-	/** An event stream opened: its non-2xx thrown as its ClientError, `onOpen` run, its events read as they arrive. */
-	async openStream(op: StreamCall): Promise<{ data: AsyncIterable<SSEEvent>; response: Response }> {
-		const sent = await this.#send(op, "stream", op.meta)
-		/* the timeout bounded the open; the stream itself is never cut by it */
-		sent.exemptFromTimeout()
-		if (!sent.response.ok) {
-			try {
-				throw await errorFromResponse(sent.response, this.#config)
-			} finally {
-				sent.done()
-			}
-		}
-		op.onOpen?.(sent.response)
-		return { data: this.#iterate(sent), response: sent.response }
-	}
-
 	buildUrl(path: string, opts: RequestOptions): string {
 		return this.#url(path, opts).toString()
 	}
@@ -2263,149 +1493,87 @@ export class HTTPClient {
 		const qs = opts.search ? this.#query(opts.search).toString() : ""
 		return qs ? `${resolved}?${qs}` : resolved
 	}
-
-	buildWSUrl(path: string, opts: RequestOptions): string {
-		const url = this.#url(path, opts)
-		if (url.protocol === "https:") url.protocol = "wss:"
-		else if (url.protocol === "http:") url.protocol = "ws:"
-		return url.toString()
-	}
 }
 
-type Target = { http: HTTPClient; opts: RequestOptions; path: string }
+/** An event stream's call: its stale view, and what runs once its answer is ok. */
+export type StreamCall = Call & { meta?: RequestMeta | undefined; onOpen?: ((response: Response) => void) | undefined }
 
-export type RealtimeOptions = Omit<ResumableConnectionOpts, "headers" | "signal" | "transports" | "url">
-
-/** A payload's JSON when it parses, else its text. */
-function payloadOf(text: string): unknown {
-	try {
-		return JSON.parse(text)
-	} catch {
-		return text
-	}
+/** Whether `response` answers with an event stream. */
+export function isEventStream(response: Response): boolean {
+	return parseMediaType(response.headers.get("content-type"))?.essence === "text/event-stream"
 }
 
-/** A payload's frame: `last_event_id` or `id` the cursor (a transport's id first), `reconnect_token` the token. */
-function frameOf(data: unknown, id?: string): Extract<ServerFrame, { t: "msg" }> {
-	const fields = (typeof data === "object" && data !== null ? data : {}) as Record<string, unknown>
-	const cursor = [fields["last_event_id"], fields["id"]].find((v) => typeof v === "string" || typeof v === "number")
-	const reconnectToken = typeof fields["reconnect_token"] === "string" ? fields["reconnect_token"] : undefined
-	return { data, id: id ?? (cursor === undefined ? undefined : String(cursor)), reconnectToken, t: "msg" }
-}
+/** An event stream sent when its iteration starts: `open`'s events. */
+export const later = (open: () => Promise<Answer>): AsyncIterable<SSEEvent> => ({
+	async *[Symbol.asyncIterator]() {
+		yield* (await open()).data as AsyncIterable<SSEEvent>
+	},
+})
 
-const ready = (opts: TransportOpts): ServerFrame => ({ reconnectToken: opts.reconnectToken ?? "", t: "ready" })
-
-/** The cursor in the query: the reconnect token, and the last event id when `withId`. */
-function cursorOpts(at: Target, opts: TransportOpts, withId: boolean): RequestOptions {
-	const search = { ...at.opts.search }
-	if (opts.reconnectToken) search["reconnect_token"] = opts.reconnectToken
-	if (withId && opts.lastEventId) search["last_event_id"] = opts.lastEventId
-	return { ...at.opts, search }
-}
-
-function connection(close: () => void, send: (data: string) => Promise<void> | void): TransportConnection {
-	return { close, onClose: () => {}, onError: () => {}, onFrame: () => {}, send }
-}
-
-/** An HTTP transport: `run` until closed; a send POSTs through the client. */
-function httpConnection(at: Target, run: (conn: TransportConnection, signal: AbortSignal) => Promise<void>) {
-	const abort = new AbortController()
-	const post = (data: string) => {
-		const value = payloadOf(data)
-		const text = { body: new TextEncoder().encode(data), headers: { ...at.opts.headers, "content-type": "text/plain" } }
-		return at.http.request("POST", at.path, { ...at.opts, ...(value === data ? text : { json: value }) }).then(() => {})
-	}
-	const conn = connection(() => abort.abort(), post)
-	run(conn, abort.signal).catch((err: unknown) => abort.signal.aborted || conn.onError(err))
-	return conn
-}
-
-/** The platform WebSocket: no credential; a failure before open is a refused upgrade. */
-function wsAdapter(at: Target): TransportAdapter {
+/** The events of a sent stream, read as they arrive; the request is done when iteration ends. */
+function iterate(http: HTTPClient, sent: Sent): AsyncIterable<SSEEvent> {
+	const config = http[CONFIG]
+	const caps = { maxEventBytes: config.sseMaxEventBytes, maxLineBytes: config.sseMaxLineBytes }
 	return {
-		connect(_url, opts) {
-			const refused = () => new RealtimeConnectError("the WebSocket upgrade failed", "upgrade_refused")
-			if (typeof WebSocket === "undefined") {
-				const absent = connection(
-					() => {},
-					() => {},
-				)
-				queueMicrotask(() => absent.onError(refused()))
-				return absent
+		async *[Symbol.asyncIterator]() {
+			try {
+				if (sent.response.body) yield* parseSSEStream(sent.response.body, { ...caps, failed: sent.failed })
+			} finally {
+				sent.done()
 			}
-			const socket = createTypedWebSocket(at.http.buildWSUrl(at.path, cursorOpts(at, opts, true)))
-			const conn = connection(
-				() => socket.close(),
-				(data) => socket.send(data),
-			)
-			let open = false
-			socket.on("open", () => {
-				open = true
-				conn.onFrame(ready(opts))
-			})
-			socket.on("message", (text) => conn.onFrame(frameOf(payloadOf(text))))
-			socket.on("error", (err) => conn.onError(open ? err : refused()))
-			socket.on("close", (code, reason) => (open ? conn.onClose(reason || `${code}`) : conn.onError(refused())))
-			return conn
 		},
 	}
 }
 
-/** An event stream through the client, Last-Event-ID the cursor; any other answer fails it. */
-function sseAdapter(at: Target): TransportAdapter {
-	return {
-		connect: (_url, opts) =>
-			httpConnection(at, async (conn, signal) => {
-				let stream = false
-				const events = at.http.streamOperation({
-					method: "GET",
-					onOpen: (response) => {
-						stream = isEventStream(response)
-						if (stream) conn.onFrame(ready(opts))
-					},
-					opts: { ...cursorOpts(at, opts, false), lastEventId: opts.lastEventId, signal },
-					path: at.path,
-					refreshes: false,
-				})
-				for await (const event of events)
-					if (stream) conn.onFrame(frameOf(payloadOf(event.data), event.id || undefined))
-				if (stream) conn.onClose("end")
-				else conn.onError(new RealtimeConnectError("the answer is no event stream", "not_event_stream"))
-			}),
-	}
+/**
+ * One request whose shape is decided by the answer: an event stream becomes an
+ * `AsyncIterable<SSEEvent>` (never buffered, exempt from the timeout once headers arrive);
+ * anything else is read as in `request`.
+ */
+export async function requestAuto(
+	http: HTTPClient,
+	method: string,
+	path: string,
+	opts: RequestOptions,
+): Promise<Answer> {
+	const sent = await http[SEND]({ method, opts, path }, "auto")
+	if (!sent.response.ok || !isEventStream(sent.response) || opts.raw)
+		return finishRequest(sent, { limits: http[CONFIG], method, raw: opts.raw })
+	sent.exemptFromTimeout()
+	return { data: iterate(http, sent), response: sent.response }
 }
 
-/** GETs through the client, the cursor in the query; a 204 polls again. */
-function pollAdapter(at: Target): TransportAdapter {
-	return {
-		connect: (_url, opts) =>
-			httpConnection(at, async (conn, signal) => {
-				const cursor = { ...opts }
-				for (let polls = 0; !signal.aborted; polls++) {
-					const poll = { ...cursorOpts(at, cursor, true), signal }
-					const { data } = await at.http.requestOperation({
-						method: "GET",
-						opts: poll,
-						path: at.path,
-						refreshes: false,
-					})
-					if (polls === 0) conn.onFrame(ready(opts))
-					if (data === null || data === undefined || data === "") continue
-					const frame = frameOf(data)
-					cursor.lastEventId = frame.id ?? cursor.lastEventId
-					cursor.reconnectToken = frame.reconnectToken || cursor.reconnectToken
-					conn.onFrame(frame)
-				}
-			}),
-	}
+export function requestStream(
+	http: HTTPClient,
+	method: string,
+	path: string,
+	opts: RequestOptions,
+): AsyncIterable<SSEEvent> {
+	return streamOperation(http, { method, opts, path })
 }
 
-/** An x-realtime op's chain, as Go's: WebSocket, SSE, long-poll; no JSON keepalive unless set. */
-export function realtimeConnection(http: HTTPClient, path: string, input: RequestOptions & RealtimeOptions) {
-	const { baseURL, cookies, headers, params, search, signal, ...opts } = input
-	const at = { http, opts: { baseURL, cookies, headers, params, search }, path }
-	const transports = [wsAdapter(at), sseAdapter(at), pollAdapter(at)]
-	return new Resumable({ keepaliveInterval: 0, ...opts, signal, transports, url: path }, () => http[REFRESH_AUTH]())
+/** An event stream, sent when iteration starts; `onOpen` runs once the answer is ok. */
+export function streamOperation(http: HTTPClient, op: StreamCall): AsyncIterable<SSEEvent> {
+	return later(() => openStream(http, op))
+}
+
+/** An event stream opened: its non-2xx thrown as its ClientError, `onOpen` run, its events read as they arrive. */
+export async function openStream(
+	http: HTTPClient,
+	op: StreamCall,
+): Promise<{ data: AsyncIterable<SSEEvent>; response: Response }> {
+	const sent = await http[SEND](op, "stream", op.meta)
+	/* the timeout bounded the open; the stream itself is never cut by it */
+	sent.exemptFromTimeout()
+	if (!sent.response.ok) {
+		try {
+			throw await errorFromResponse(sent.response, http[CONFIG])
+		} finally {
+			sent.done()
+		}
+	}
+	op.onOpen?.(sent.response)
+	return { data: iterate(http, sent), response: sent.response }
 }
 
 /**
@@ -2544,298 +1712,6 @@ export class StaleIndex {
 	}
 }
 
-/**
- * The app-typed client's types. They read the app's `$routes` phantom structurally, so the
- * emitted client imports nothing from honey (D3): `InferRoutes`, the path params and a schema's
- * output type are spelled here as honey spells them.
- */
-
-/** An app's routes: the `$routes` phantom its type carries. */
-export type InferRoutes<T> = T extends { readonly $routes: infer R } ? R : never
-
-/** One problem with one input field, as the error envelope lists it. */
-export type FieldError = { error_key: string; message: string; path: string }
-
-/** The type a Standard schema produces once it validated a value. */
-type SchemaOutput<T> = T extends { readonly "~standard": { readonly types?: infer TTypes } }
-	? NonNullable<TTypes> extends { readonly output: infer O }
-		? O
-		: unknown
-	: unknown
-
-type ParamKey<T extends string> = T extends `${infer Name}?` ? Name : T
-
-/** A route pattern's param names: `:name` (optional or not), a named wildcard, an unnamed one as `*`. */
-type ParamKeys<Path extends string> = Path extends `${string}:${infer Param}/${infer Rest}`
-	? ParamKey<Param> | ParamKeys<`/${Rest}`>
-	: Path extends `${string}:${infer Param}`
-		? ParamKey<Param>
-		: Path extends `${string}*${infer Name}`
-			? Name extends ""
-				? "*"
-				: Name
-			: never
-
-/** Paths that register `M`. */
-export type PathsForMethod<TRoutes, M extends string> = {
-	[P in keyof TRoutes & string]: M extends keyof TRoutes[P] ? P : never
-}[keyof TRoutes & string]
-
-/** One route's record, when the app has it. */
-type RouteOf<TRoutes, P extends string, M extends string> = P extends keyof TRoutes
-	? M extends keyof TRoutes[P]
-		? TRoutes[P][M]
-		: never
-	: never
-
-/** What a call sends: the route's `request` (each source's schema input, `readableStream()` unwrapped). */
-export type InputFor<TRoutes, P extends string, M extends string> =
-	RouteOf<TRoutes, P, M> extends { request: infer I } ? ([I] extends [never] ? {} : I) : {}
-
-export type OutputDefFor<TRoutes, P extends string, M extends string> =
-	RouteOf<TRoutes, P, M> extends { output: infer O } ? O : never
-
-/** Statuses whose answer never carries a body (204, 205, 304): the client reads each as null. */
-type NullBodyStatus = "no_content" | "not_modified" | "reset_content"
-
-/** The statuses a declaration names under each key (a media type, `headers`, `redirect`). */
-type StatusesOf<O> = { [K in keyof O]: keyof NonNullable<O[K]> }[keyof O]
-
-/** Media type `CT`'s statuses that carry a body. */
-type BodyStatuses<O, CT extends string> = CT extends keyof O ? Exclude<keyof O[CT], NullBodyStatus> : never
-
-/** Whether media type `CT` declares a status that carries a body. */
-type Answers<O, CT extends string> = [BodyStatuses<O, CT>] extends [never] ? false : true
-
-/**
- * A body's value: JSON by its schemas, text types as text, octet-stream as bytes (A1); `unknown`
- * when a status carries a body no media type here types; `never` when none carries one.
- */
-type BodyValue<O> =
-	Answers<O, "application/json"> extends true
-		? O extends { "application/json": infer JsonMap }
-			? SchemaOutput<JsonMap[BodyStatuses<O, "application/json"> & keyof JsonMap]>
-			: never
-		: true extends
-					| Answers<O, "text/plain">
-					| Answers<O, "text/html">
-					| Answers<O, "text/csv">
-					| Answers<O, "application/xml">
-			? string
-			: Answers<O, "application/octet-stream"> extends true
-				? Uint8Array<ArrayBuffer>
-				: [Exclude<StatusesOf<O>, NullBodyStatus>] extends [never]
-					? never
-					: unknown
-
-/** What a declaration answers with: its body's value, `null` for each declared no-content status. */
-type DeclaredValue<O> = BodyValue<O> | ([Extract<StatusesOf<O>, NullBodyStatus>] extends [never] ? never : null)
-
-/**
- * The value a route answers with, `unknown` when it declares no status: undeclared is not empty,
- * the handler's body comes back.
- */
-export type OutputFor<TRoutes, P extends string, M extends string> =
-	OutputDefFor<TRoutes, P, M> extends infer O
-		? [O] extends [never]
-			? unknown
-			: [DeclaredValue<O>] extends [never]
-				? unknown
-				: DeclaredValue<O>
-		: unknown
-
-/** Whether a route answers an event stream. */
-export type IsSSE<TRoutes, P extends string, M extends string> =
-	OutputDefFor<TRoutes, P, M> extends infer O ? (O extends { "text/event-stream": unknown } ? true : false) : false
-
-type ErrorsByStatusFor<TRoutes, P extends string, M extends string> =
-	RouteOf<TRoutes, P, M> extends { errorsByStatus: infer S } ? S : never
-
-/** honey's error envelope, as a route without a schema of its own answers an error. */
-export type ErrorEnvelope<TStatus extends number = number, TKey extends string = string> = {
-	error_key: TKey
-	fields: Record<string, FieldError[]>
-	message: string
-	status: TStatus
-	status_key: string
-	success: false
-}
-
-/** `null` in a route's errorsByStatus means the default envelope, not a null body. */
-type ResolveErrorBody<S extends number, T> = T extends null ? ErrorEnvelope<S> : T
-
-/** Each declared status's error body, honey's envelope where the route names none. */
-type ErrorBodies<S> = { [K in keyof S]: ResolveErrorBody<StatusOf<K>, S[K]> }
-
-/** What a call resolves to, by transport. */
-export type ReturnFor<TRoutes, P extends string, M extends string> =
-	IsSSE<TRoutes, P, M> extends true ? AsyncIterable<SSEEvent> : Promise<OutputFor<TRoutes, P, M>>
-
-/** What a safe call resolves to: its value, an event stream opened, or the answer's error; never a thrown answer. */
-export type SafeReturnFor<TRoutes, P extends string, M extends string> = Promise<
-	Result<
-		IsSSE<TRoutes, P, M> extends true ? AsyncIterable<SSEEvent> : OutputFor<TRoutes, P, M>,
-		ErrorBodies<ErrorsByStatusFor<TRoutes, P, M>>
-	>
->
-
-/** A path's params, required whenever the pattern names one. */
-type ParamsInput<P extends string> = [ParamKeys<P>] extends [never] ? {} : { params: { [K in ParamKeys<P>]: string } }
-
-/** The call input: the route's declared input with the path's params. */
-export type ClientInput<TRoutes, P extends string, M extends string> = InputFor<TRoutes, P, M> & ParamsInput<P>
-
-export type ErrorsFor<TRoutes, P extends string, M extends string> =
-	RouteOf<TRoutes, P, M> extends { errors: infer E extends string } ? E : never
-
-type RequiresAllOptional<T> = {
-	[K in keyof T]-?: undefined extends T[K] ? true : false
-}[keyof T] extends true
-	? true
-	: Partial<T> extends T
-		? true
-		: false
-
-/** The input is optional when it is empty or every key is optional. */
-type OptionalInput<T> = keyof T extends never
-	? [input?: T]
-	: [RequiresAllOptional<T>] extends [true]
-		? [input?: T]
-		: [input: T]
-
-type Method<TRoutes, M extends string> = <P extends PathsForMethod<TRoutes, M>>(
-	path: P,
-	...input: OptionalInput<ClientInput<TRoutes, P, M>>
-) => ReturnFor<TRoutes, P, M>
-
-type SafeMethod<TRoutes, M extends string> = <P extends PathsForMethod<TRoutes, M>>(
-	path: P,
-	...input: OptionalInput<ClientInput<TRoutes, P, M>>
-) => SafeReturnFor<TRoutes, P, M>
-
-type PathHelper<TRoutes> = <P extends keyof TRoutes & string>(
-	path: P,
-	input?: { params?: Record<string, string>; search?: Record<string, unknown> },
-) => string
-
-/** The typed client: each call resolves to its value and throws an error status; `safe`'s answer a Result. */
-export type HoneyClient<TRoutes> = {
-	$isClientError: (e: unknown) => e is ClientError
-	$path: PathHelper<TRoutes>
-	$url: PathHelper<TRoutes>
-	delete: Method<TRoutes, "delete">
-	get: Method<TRoutes, "get">
-	patch: Method<TRoutes, "patch">
-	post: Method<TRoutes, "post">
-	put: Method<TRoutes, "put">
-	/** the same calls, each answering a Result instead of throwing an API answer (bit 21 i) */
-	safe: { [M in "delete" | "get" | "patch" | "post" | "put"]: SafeMethod<TRoutes, M> }
-	ws(
-		path: string,
-		input?: {
-			params?: Record<string, string>
-			protocols?: string | string[]
-			reconnectToken?: string
-			search?: Record<string, unknown>
-		},
-	): TypedWebSocket
-}
-
-const HTTP_METHODS: readonly string[] = ["delete", "get", "patch", "post", "put"]
-
-/** What a path-addressed helper (`$url`, `$path`, `ws`) reads of its input. */
-type PathInput = {
-	params?: Record<string, string>
-	protocols?: string | string[]
-	reconnectToken?: string
-	search?: Record<string, unknown>
-}
-
-function isAsyncIterable(value: unknown): value is AsyncIterable<SSEEvent> {
-	return typeof value === "object" && value !== null && Symbol.asyncIterator in value
-}
-
-/**
- * One call, one request, consumed either way:
- * - `await api.get(...)` sends it; an event-stream response resolves to an
- *   `AsyncIterable<SSEEvent>` (never buffered), anything else to the parsed body.
- * - `for await (... of api.get(...))` before the call has started sends it as a stream request
- *   (`accept: text/event-stream`, no timeout).
- * - iterating after awaiting reuses the same response instead of sending again.
- */
-function lazyCall(http: HTTPClient, call: { method: string; opts: RequestOptions; path: string }) {
-	const { method, opts, path } = call
-	let mode: "auto" | "idle" | "sse" = "idle"
-	let auto: Promise<unknown> | undefined
-	const runAuto = (): Promise<unknown> => {
-		auto ??= http.requestAuto(method, path, opts).then((answer) => answer.data)
-		return auto
-	}
-	const lazy = new Promise((resolve, reject) => {
-		queueMicrotask(() => {
-			if (mode === "sse") return
-			mode = "auto"
-			runAuto().then(resolve, reject)
-		})
-	})
-	Object.defineProperty(lazy, Symbol.asyncIterator, {
-		value() {
-			if (mode === "idle") {
-				mode = "sse"
-				return http.requestStream(method, path, opts)[Symbol.asyncIterator]()
-			}
-			return (async function* () {
-				const data = await runAuto()
-				if (!isAsyncIterable(data)) throw new TypeError(`${method} ${path} did not respond with an event stream`)
-				yield* data
-			})()
-		},
-	})
-	return lazy
-}
-
-/** The helpers that sit beside the methods: `$isClientError`, `$url`, `$path` and `ws`. */
-function helper(http: HTTPClient, prop: string): unknown {
-	if (prop === "$isClientError") return isClientError
-	if (prop === "$url") return (path: string, input?: PathInput) => http.buildUrl(path, input ?? {})
-	if (prop === "$path") return (path: string, input?: PathInput) => http.buildPath(path, input ?? {})
-	if (prop !== "ws") return undefined
-	return (path: string, input?: PathInput): TypedWebSocket => {
-		let url = http.buildWSUrl(path, { params: input?.params, search: input?.search })
-		if (input?.reconnectToken)
-			url += `${url.includes("?") ? "&" : "?"}reconnect_token=${encodeURIComponent(input.reconnectToken)}`
-		return createTypedWebSocket(url, { protocols: input?.protocols })
-	}
-}
-
-/** `client.safe`: each method's call answering a Result, an event stream's opened before it resolves. */
-function safeMethods(http: HTTPClient): object {
-	return Object.fromEntries(
-		HTTP_METHODS.map((method) => [
-			method,
-			(path: string, input?: RequestOptions) => resultOf(http.requestAuto(method.toUpperCase(), path, input ?? {})),
-		]),
-	)
-}
-
-/** The app-typed client: each call throws an error status, and `client.safe`'s calls answer it as a Result. */
-export function createClient<T>(config: ClientConfig): HoneyClient<InferRoutes<T>> {
-	const http = new HTTPClient(config)
-	const safe = safeMethods(http)
-	return new Proxy({} as HoneyClient<InferRoutes<T>>, {
-		get(_target, prop: string | symbol) {
-			/* not a thenable, and printable: `await client` and `String(client)` must not hit the method table */
-			if (prop === Symbol.toStringTag) return "HoneyClient"
-			if (typeof prop === "symbol" || prop === "then") return undefined
-			if (prop === "toString" || prop === "toJSON") return () => "[object HoneyClient]"
-			if (prop === "safe") return safe
-			if (!HTTP_METHODS.includes(prop)) return helper(http, prop)
-			return (path: string, input?: RequestOptions) =>
-				lazyCall(http, { method: prop.toUpperCase(), opts: input ?? {}, path })
-		},
-	})
-}
-
 /** One operation as the service map holds it: where it goes and how its answer is read. */
 export type ServiceEntry = {
 	/** the declared non-JSON media type, sent as `Accept` */
@@ -2856,6 +1732,8 @@ export type ServiceEntry = {
 	/** the param that spans segments (`x-honey-wildcard`) */
 	wildcard?: string
 	ws?: boolean
+	/** how a stream, WebSocket or realtime operation is called; a REST one has none */
+	call?: OperationCall
 }
 
 export type ServiceMapNode = ServiceEntry | { readonly [key: string]: ServiceMapNode }
@@ -2873,10 +1751,13 @@ export type InvalidationConfig = {
 
 export type SDKConfig = ClientConfig & { invalidation?: InvalidationConfig }
 
-/** What a call takes beyond `RequestOptions`: a WebSocket's protocols and resume token. */
-type CallInput = RequestOptions & RealtimeOptions & { protocols?: string | string[] }
+/** What a REST call takes; a stream, WebSocket or realtime operation's own call types its input further. */
+export type CallInput = RequestOptions
 
-type OperationFn = (input?: CallInput) => unknown
+export type OperationFn<I = CallInput> = (input?: I) => unknown
+
+/** The function a non-REST entry is called through: its own adapter, which the service map names. */
+export type OperationCall = (core: SdkCore, entry: ServiceEntry, safe: boolean) => OperationFn<never>
 
 const isEntry = (node: unknown): node is ServiceEntry =>
 	typeof node === "object" &&
@@ -2889,7 +1770,7 @@ const childOf = (node: ServiceMapNode, key: string): ServiceMapNode | undefined 
 	Object.hasOwn(node, key) ? (node as Record<string, ServiceMapNode>)[key] : undefined
 
 /** The template the runtime interpolates: a wildcard param's `{name}` becomes the rest-of-path `*name`. */
-function templateOf(entry: ServiceEntry): string {
+export function templateOf(entry: ServiceEntry): string {
 	return entry.wildcard === undefined ? entry.path : entry.path.replace(`{${entry.wildcard}}`, `*${entry.wildcard}`)
 }
 
@@ -2904,7 +1785,7 @@ function pathError(e: PathParamError, entry: ServiceEntry): ClientError {
 }
 
 /** The per-call options an entry adds: its `Accept` and an `Idempotency-Key`. */
-function optionsFor(entry: ServiceEntry, input: CallInput): RequestOptions {
+export function optionsFor(entry: ServiceEntry, input: CallInput): RequestOptions {
 	const headers: Record<string, string | undefined> = {}
 	if (entry.accept) headers["accept"] = entry.accept
 	Object.assign(headers, input.headers)
@@ -2913,27 +1794,8 @@ function optionsFor(entry: ServiceEntry, input: CallInput): RequestOptions {
 	return { ...input, headers }
 }
 
-/** Each event with its `data` parsed as JSON; an event that does not parse fails the stream, naming it. */
-function jsonEvents(events: AsyncIterable<SSEEvent>): AsyncIterable<SSEEvent<unknown>> {
-	return {
-		async *[Symbol.asyncIterator]() {
-			for await (const event of events) {
-				let data: unknown
-				try {
-					data = JSON.parse(event.data)
-				} catch (e) {
-					const name = event.id === undefined ? "an event" : `event ${JSON.stringify(event.id)}`
-					const message = `SSE ${name} is not valid JSON: ${e instanceof Error ? e.message : String(e)}`
-					throw new ClientError({ body: event.data, message, response: Response.error(), status: 0 })
-				}
-				yield { ...event, data }
-			}
-		},
-	}
-}
-
 /** The client behind a generated SDK class: operations from the service map, read-after-write tracking, dispose. */
-class SdkCore {
+export class SdkCore {
 	readonly http: HTTPClient
 	readonly #config: SDKConfig
 	readonly #disposal = new AbortController()
@@ -2959,14 +1821,14 @@ class SdkCore {
 	}
 
 	/** The stale view of the read `selector` before it is sent. */
-	#meta(selector: string, path: string, method: string): RequestMeta | undefined {
+	meta(selector: string, path: string, method: string): RequestMeta | undefined {
 		if (!this.#stale) return undefined
 		const { by, isStale } = this.#stale.lookup(selector, path, method, Date.now())
 		return { invalidatedBy: by, isStale, selector, seqSnapshot: this.#seq }
 	}
 
 	/** Mark what a successful mutation `selector` invalidates. */
-	#mark(entry: ServiceEntry, params: Record<string, string> | undefined, selector: string): void {
+	mark(entry: ServiceEntry, params: Record<string, string> | undefined, selector: string): void {
 		if (!this.#stale || !entry.invalidate?.length) return
 		const now = Date.now()
 		const at = { now, seq: ++this.#seq, until: now + (this.#config.invalidation?.staleTime ?? 0) }
@@ -2983,11 +1845,11 @@ class SdkCore {
 			throw e instanceof PathParamError ? pathError(e, entry) : e
 		}
 		const selector = `${entry.method} ${path}`
-		const meta = this.#meta(selector, path, entry.method)
+		const meta = this.meta(selector, path, entry.method)
 		const opts = optionsFor(entry, input)
 		const declared = entry.empty ? null : entry.accept
 		const settle = () => {
-			this.#mark(entry, input.params, selector)
+			this.mark(entry, input.params, selector)
 			if (meta?.isStale) this.#stale?.clear(selector, path, entry.method, meta.seqSnapshot)
 		}
 		try {
@@ -3000,54 +1862,15 @@ class SdkCore {
 			throw e
 		}
 	}
-
-	/** An SSE op opened: its stale view for the hooks, and its `x-invalidate` targets marked once the answer is ok. */
-	async open(entry: ServiceEntry, input: CallInput): Promise<Answer> {
-		const opts = optionsFor(entry, input)
-		const template = templateOf(entry)
-		let selector: string | undefined
-		let meta: RequestMeta | undefined
-		try {
-			const path = interpolatePath(template, input.params)
-			selector = `${entry.method} ${path}`
-			meta = this.#meta(selector, path, entry.method)
-		} catch {
-			/* a bad param fails the stream when it is sent, as for any call */
-		}
-		const onOpen = () => {
-			if (selector !== undefined) this.#mark(entry, input.params, selector)
-		}
-		const { data, response } = await this.http.openStream({ meta, method: entry.method, onOpen, opts, path: template })
-		return { data: entry.sse === "json" ? jsonEvents(data) : data, response }
-	}
-
-	/** An x-realtime op: one resumable connection, dialed through the client. */
-	realtime(entry: ServiceEntry, input: CallInput): ResumableConnection {
-		return realtimeConnection(this.http, templateOf(entry), input)
-	}
-
-	connect(entry: ServiceEntry, input: CallInput): TypedWebSocket {
-		const url = new URL(this.http.buildWSUrl(templateOf(entry), { params: input.params, search: input.search }))
-		if (input.reconnectToken) url.searchParams.append("reconnect_token", input.reconnectToken)
-		const socket = createTypedWebSocket(url.toString(), { protocols: input.protocols })
-		if (entry.invalidate?.length) {
-			const selector = `WS ${interpolatePath(templateOf(entry), input.params)}`
-			socket.on("open", () => this.#mark(entry, input.params, selector))
-		}
-		return socket
-	}
 }
 
-/** The function an entry is called through, named by its member path; a safe one's REST or SSE answer a Result. */
-function callable(core: SdkCore, entry: ServiceEntry, name: string, safe: boolean): OperationFn {
-	let fn: OperationFn
-	const open = (input?: CallInput) => core.open(entry, input ?? {})
-	/* a realtime op is one resumable connection; any other dispatches by its transport */
-	if (entry.realtime) fn = (input) => core.realtime(entry, input ?? {})
-	else if (entry.ws) fn = (input) => core.connect(entry, input ?? {})
-	else if (entry.sse) fn = safe ? (input) => resultOf(open(input)) : (input) => later(() => open(input))
-	else if (safe) fn = (input) => resultOf(core.request(entry, input ?? {}), entry.headers)
-	else fn = async (input) => (await core.request(entry, input ?? {})).data
+/** The function an entry is called through, named by its member path; a safe one's REST answer a Result. */
+function callable(core: SdkCore, entry: ServiceEntry, name: string, safe: boolean): OperationFn<never> {
+	let fn: OperationFn<never>
+	/* a stream, WebSocket or realtime op is called through the adapter its entry names */
+	if (entry.call) fn = entry.call(core, entry, safe)
+	else if (safe) fn = (input?: CallInput) => resultOf(core.request(entry, input ?? {}), entry.headers)
+	else fn = async (input?: CallInput) => (await core.request(entry, input ?? {})).data
 	Object.defineProperty(fn, "name", { value: name })
 	return fn
 }
@@ -3122,4 +1945,51 @@ export class SDKClient {
 	dispose(): void {
 		this.#core.dispose()
 	}
+}
+
+/** Each event with its `data` parsed as JSON; an event that does not parse fails the stream, naming it. */
+function jsonEvents(events: AsyncIterable<SSEEvent>): AsyncIterable<SSEEvent<unknown>> {
+	return {
+		async *[Symbol.asyncIterator]() {
+			for await (const event of events) {
+				let data: unknown
+				try {
+					data = JSON.parse(event.data)
+				} catch (e) {
+					const name = event.id === undefined ? "an event" : `event ${JSON.stringify(event.id)}`
+					const message = `SSE ${name} is not valid JSON: ${e instanceof Error ? e.message : String(e)}`
+					throw new ClientError({ body: event.data, message, response: Response.error(), status: 0 })
+				}
+				yield { ...event, data }
+			}
+		},
+	}
+}
+
+/** An SSE op opened: its stale view for the hooks, and its `x-invalidate` targets marked once the answer is ok. */
+async function open(core: SdkCore, entry: ServiceEntry, input: RequestOptions): Promise<Answer> {
+	const opts = optionsFor(entry, input)
+	const template = templateOf(entry)
+	let selector: string | undefined
+	let meta: RequestMeta | undefined
+	try {
+		const path = interpolatePath(template, input.params)
+		selector = `${entry.method} ${path}`
+		meta = core.meta(selector, path, entry.method)
+	} catch {
+		/* a bad param fails the stream when it is sent, as for any call */
+	}
+	const onOpen = () => {
+		if (selector !== undefined) core.mark(entry, input.params, selector)
+	}
+	const { data, response } = await openStream(core.http, { meta, method: entry.method, onOpen, opts, path: template })
+	return { data: entry.sse === "json" ? jsonEvents(data) : data, response }
+}
+
+/** An event stream: sent when iterated, or opened into a Result by the safe twin. */
+export const sseOp: OperationCall = (core, entry, safe) => {
+	const opened = (input?: RequestOptions) => open(core, entry, input ?? {})
+	return safe
+		? (input?: RequestOptions) => resultOf(opened(input))
+		: (input?: RequestOptions) => later(() => opened(input))
 }

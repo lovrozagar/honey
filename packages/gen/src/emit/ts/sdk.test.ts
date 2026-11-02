@@ -1,7 +1,7 @@
 import { describe, expect, expectTypeOf, it } from "vitest"
 import { type OpenApiDocument, toIR } from "../../ir/build.ts"
 import { emittedSdk, recordingFetch } from "./__fixtures__/emitted.ts"
-import { runtimeSource } from "./http.ts"
+import { runtimeFeatures, runtimeSource } from "./http.ts"
 import { generateSdk, sdkMemberPaths, serviceMapOf } from "./sdk.ts"
 
 type Json = Record<string, unknown>
@@ -56,7 +56,7 @@ describe("generateSdk: the emitted file set", () => {
 			"mock.types.gen.ts",
 		])
 		expect(Object.values(files).filter((text) => text.length === 0)).toEqual([])
-		expect(files["mock.runtime.gen.ts"]).toContain(runtimeSource())
+		expect(files["mock.runtime.gen.ts"]).toBe(runtimeSource(runtimeFeatures(ir(USERS))))
 	})
 
 	it("adds the TanStack Query adapter only when it is asked for (bit 22)", () => {

@@ -44,11 +44,11 @@ function patched(text: string, [from, to]: readonly [string, string], where = "t
 }
 
 /** `runtimeSource` with each `[from, to]` applied to the text; a patch that no longer matches throws (a stale mutant is red). */
-export function patchedRuntime(
-	runtimeSource: () => string,
+export function patchedRuntime<A extends readonly unknown[]>(
+	runtimeSource: (...args: A) => string,
 	patches: readonly (readonly [string, string])[],
-): () => string {
-	return () => patches.reduce((text, patch) => patched(text, patch), runtimeSource())
+): (...args: A) => string {
+	return (...args) => patches.reduce((text, patch) => patched(text, patch), runtimeSource(...args))
 }
 
 /** `runtimeFiles` with each `[file, from, to]` applied to that file; a patch whose file is not shipped or whose text is gone throws. */

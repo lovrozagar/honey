@@ -8,7 +8,7 @@ import type { IRAuth } from "../../ir/model.ts"
 import { tsString } from "../shared/escape.ts"
 import { compareCodeUnits, words } from "../shared/lang.ts"
 import { MIRROR, mirrorNotice } from "../shared/mirror.ts"
-import { runtimeSource } from "./http.ts"
+import { runtimeFeatures, runtimeSource, type TsRuntimeFeatures } from "./http.ts"
 import { sdkTypesText } from "./sdk-types.ts"
 import { tanstackQueryText } from "./tanstack-query.ts"
 import { memberTree, serviceMapText } from "./service-map.ts"
@@ -33,54 +33,66 @@ export type GeneratedSdk = {
 
 const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/
 
-/* the error classes and helpers a consumer imports from the SDK beside the class */
-const RUNTIME_EXPORTS = [
-	"APIConnectionError",
-	"BadGatewayError",
-	"BadRequestError",
-	"ClientError",
-	"ConflictError",
-	"createFallbackChain",
-	"createKeepaliveLoop",
-	"createResumableConnection",
-	"DecodeError",
-	"ForbiddenError",
-	"GatewayTimeoutError",
-	"HTTPClient",
-	"InternalServerError",
-	"isClientError",
-	"newClientRequestId",
-	"NotFoundError",
-	"parseSSEStream",
-	"PathParamError",
-	"RateLimitError",
-	"RealtimeAbortError",
-	"RealtimeConnectError",
-	"RealtimeError",
-	"RealtimeKickedError",
-	"ServiceUnavailableError",
-	"UnauthorizedError",
-	"UnprocessableEntityError",
-]
+/* the error classes and helpers a consumer imports from the SDK beside the class, by the transport that ships them */
+const RUNTIME_EXPORTS = {
+	core: [
+		"APIConnectionError",
+		"BadGatewayError",
+		"BadRequestError",
+		"ClientError",
+		"ConflictError",
+		"DecodeError",
+		"ForbiddenError",
+		"GatewayTimeoutError",
+		"HTTPClient",
+		"InternalServerError",
+		"isClientError",
+		"newClientRequestId",
+		"NotFoundError",
+		"PathParamError",
+		"RateLimitError",
+		"ServiceUnavailableError",
+		"UnauthorizedError",
+		"UnprocessableEntityError",
+	],
+	realtime: [
+		"createFallbackChain",
+		"createKeepaliveLoop",
+		"createResumableConnection",
+		"RealtimeAbortError",
+		"RealtimeConnectError",
+		"RealtimeError",
+		"RealtimeKickedError",
+	],
+	sse: ["parseSSEStream"],
+	ws: [],
+} as const satisfies Record<"core" | "realtime" | "sse" | "ws", readonly string[]>
 
-const RUNTIME_TYPES = [
-	"ClientConfig",
-	"ConnectionState",
-	"InvalidationConfig",
-	"LogEntry",
-	"RealtimeOptions",
-	"RequestOptions",
-	"Result",
-	"ResumableConnection",
-	"ResumableConnectionOpts",
-	"ServerFrame",
-	"SSEEvent",
-	"Transport",
-	"TransportAdapter",
-	"TransportConnection",
-	"TransportOpts",
-	"TypedWebSocket",
-]
+const RUNTIME_TYPES = {
+	core: ["ClientConfig", "InvalidationConfig", "LogEntry", "RequestOptions", "Result"],
+	realtime: [
+		"ConnectionState",
+		"RealtimeOptions",
+		"ResumableConnection",
+		"ResumableConnectionOpts",
+		"ServerFrame",
+		"Transport",
+		"TransportAdapter",
+		"TransportConnection",
+		"TransportOpts",
+	],
+	sse: ["SSEEvent"],
+	ws: ["TypedWebSocket"],
+} as const satisfies Record<"core" | "realtime" | "sse" | "ws", readonly string[]>
+
+/** The names of `lists` a runtime with `features` ships, ignoring case in their order. */
+function shipped(lists: Record<"core" | "realtime" | "sse" | "ws", readonly string[]>, features: TsRuntimeFeatures) {
+	const realtime = features.realtime
+	const groups = [lists.core, features.sse || realtime ? lists.sse : [], features.ws || realtime ? lists.ws : []]
+	return [...groups, realtime ? lists.realtime : []]
+		.flat()
+		.sort((a, b) => compareCodeUnits(a.toLowerCase(), b.toLowerCase()))
+}
 
 /** `TestSDK` → `test-sdk`: the words of the name, lower case, joined by `-`. */
 const kebab = (name: string) =>
@@ -127,12 +139,12 @@ export interface ${name} extends ${name}Operations {
 `
 }
 
-function indexText(name: string, stem: string): string {
+function indexText(name: string, stem: string, features: TsRuntimeFeatures): string {
 	return `export { ${name} } from "./${stem}.client.gen"
 export { serviceMap } from "./${stem}.map.gen"
 export type * from "./${stem}.types.gen"
-export { ${RUNTIME_EXPORTS.join(", ")} } from "./${stem}.runtime.gen"
-export type { ${RUNTIME_TYPES.join(", ")} } from "./${stem}.runtime.gen"
+export { ${shipped(RUNTIME_EXPORTS, features).join(", ")} } from "./${stem}.runtime.gen"
+export type { ${shipped(RUNTIME_TYPES, features).join(", ")} } from "./${stem}.runtime.gen"
 `
 }
 
@@ -141,15 +153,16 @@ export function generateSdk(document: Record<string, unknown>, options: SdkOptio
 	const { name, stem } = validated(options)
 	const ir = toIR(document as OpenApiDocument, { deriveOperationIds: true, duplicateOperationIds: "throw" })
 	const runtime = `${stem}.runtime.gen`
+	const features = runtimeFeatures(ir)
 	/* memberTree emits the root groups in code-unit order, each renamed in place */
 	const emitted = [...memberTree(ir.tree).entries.keys()]
 	const groups = [...ir.tree.entries.keys()].sort(compareCodeUnits)
 	const notices = groups.flatMap((group, i) => mirrorNotice("ts", MIRROR, group, emitted[i] as string) ?? [])
 	const files: Record<string, string> = {
 		[`${stem}.client.gen.ts`]: clientText(name, stem, ir.servers[0], ir.auth),
-		[`${stem}.index.gen.ts`]: indexText(name, stem),
+		[`${stem}.index.gen.ts`]: indexText(name, stem, features),
 		[`${stem}.map.gen.ts`]: serviceMapText(ir, runtime),
-		[`${stem}.runtime.gen.ts`]: runtimeSource(),
+		[`${stem}.runtime.gen.ts`]: runtimeSource(features),
 		[`${stem}.types.gen.ts`]: sdkTypesText(ir, name, runtime),
 	}
 	/* the index never names it: its text must not vary by option, and it must never name query-core */

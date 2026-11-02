@@ -268,7 +268,7 @@ createResumableConnection({ transports, keepaliveInterval: 20_000 })
 ```
 
 ```ts sdk
-import { createResumableConnection, type TransportAdapter } from "./kitchen"
+import { createResumableConnection, type TransportAdapter } from "./live"
 
 declare const transports: TransportAdapter[]
 const connection = createResumableConnection({
@@ -289,7 +289,7 @@ connection.on("error", () => connection.reconnect())
 ```
 
 ```ts sdk
-import { RealtimeConnectError, type ResumableConnection } from "./kitchen"
+import { RealtimeConnectError, type ResumableConnection } from "./live"
 
 declare const connection: ResumableConnection
 try {
@@ -330,7 +330,7 @@ const socket = client.prices.subscribe()
 ```
 
 ```ts sdk
-import type { ResumableConnection } from "./kitchen"
+import type { ResumableConnection } from "./live"
 
 type Price = { eur: number }
 declare const prices: ResumableConnection<Price>
@@ -347,7 +347,7 @@ connection.send({ text: "hi" })
 ```
 
 ```ts sdk
-import type { RealtimeOptions, ResumableConnection } from "./kitchen"
+import type { RealtimeOptions, ResumableConnection } from "./live"
 
 declare const connection: ResumableConnection<{ text: string }>
 const options: RealtimeOptions = {}
@@ -364,7 +364,7 @@ createResumableConnection({ transports, lastId: 41 })
 ```
 
 ```ts sdk
-import { createResumableConnection, type TransportAdapter } from "./kitchen"
+import { createResumableConnection, type TransportAdapter } from "./live"
 
 declare const transports: TransportAdapter[]
 createResumableConnection({ url: "https://api.example.com/prices", transports, lastEventId: "41" })
@@ -380,10 +380,29 @@ connection.send(JSON.stringify("plain words"))
 ```
 
 ```ts sdk
-import type { ResumableConnection } from "./kitchen"
+import type { ResumableConnection } from "./live"
 
 declare const connection: ResumableConnection
 await connection.sendText("plain words")
+```
+
+## A TS SDK ships only the transports its operations use
+
+An SDK's runtime carries the SSE parser only when the document has an event stream, the WebSocket only when it has
+an `x-websocket` or `x-realtime` operation, and the resumable connection only when it has an `x-realtime` one. The
+index exports those helpers the same way: `parseSSEStream` and `SSEEvent` with an event stream, `TypedWebSocket` with
+a WebSocket, and `createResumableConnection`, `createFallbackChain`, `createKeepaliveLoop`, the `Realtime*Error`
+classes and the connection types with a realtime operation. A plain HTTP SDK is about a third smaller once bundled.
+The realtime examples on this page import from `./live`, an SDK whose document has an `x-realtime` operation.
+
+```ts v0
+import { createResumableConnection } from "./kitchen"
+```
+
+```ts sdk
+import { createResumableConnection } from "./live"
+
+createResumableConnection({ transports: [], url: "https://api.example.com/feed" })
 ```
 
 ## A TS network failure is `APIConnectionError`

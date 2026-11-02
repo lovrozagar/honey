@@ -1,7 +1,7 @@
 /**
  * The emitted TS client, executed: the files an emitter writes land under
  * `$HOME/.cache/honey-tmp/gen-ts/<content hash>/` (never /tmp, 00-rules) and are imported from
- * there, so a behavior test drives exactly the text an SDK ships, `runtimeSource()` included: a
+ * there, so a behavior test drives exactly the text an SDK ships, `runtimeSource` included: a
  * mutant of the runtime reaches every behavior test. Driven by an injected recording `fetch`.
  */
 import { createHash } from "node:crypto"

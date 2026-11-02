@@ -20,7 +20,12 @@ type Adapter = { connect(url: string, opts: object): Conn }
 type Resumable = AsyncIterable<unknown> & { close(): void; readonly state: string }
 type Create = (opts: { reconnectDelayMs?: number; transports: Adapter[]; url: string }) => Resumable
 
-const DOC = { info: { title: "T", version: "1" }, openapi: "3.1.0", paths: {} }
+/* an x-realtime operation, so the SDK ships the resumable connection it exports */
+const DOC = {
+	info: { title: "T", version: "1" },
+	openapi: "3.1.0",
+	paths: { "/feed": { get: { operationId: "feed", responses: {}, "x-realtime": true } } },
+}
 
 /** A dial's script: a refusal's status, an error without one, or a stream of messages that then drops. */
 type Step = number | "network" | { drop?: number; msgs: number[] }

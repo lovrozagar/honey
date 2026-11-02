@@ -29,10 +29,16 @@ describe("the types file's runtime import", () => {
 		expect(plain).not.toContain("SSEEvent")
 	})
 
-	/* the shared vocabulary names these whatever the document serves, so importing them is right */
-	it("still imports what it does read", () => {
-		const plain = imported(doc({ "/ping": { get: { operationId: "ping.retrieve", responses: { 200: ok } } } }))
-		expect(plain).toEqual(["RealtimeOptions", "Result", "ResumableConnection", "SDKConfig", "TypedWebSocket"])
+	/* the shared vocabulary names a connection's types only when the document has one (plan 32) */
+	it("imports the connection types only for the transports the document serves", () => {
+		const ping = { "/ping": { get: { operationId: "ping.retrieve", responses: { 200: ok } } } }
+		const socket = { "/socket": { get: { operationId: "socket", responses: {}, "x-websocket": true } } }
+		const feed = { "/feed": { get: { operationId: "feed", responses: {}, "x-realtime": true } } }
+		expect([imported(doc(ping)), imported(doc({ ...ping, ...socket })), imported(doc({ ...ping, ...feed }))]).toEqual([
+			["Result", "SDKConfig"],
+			["Result", "SDKConfig", "TypedWebSocket"],
+			["RealtimeOptions", "Result", "ResumableConnection", "SDKConfig", "TypedWebSocket"],
+		])
 	})
 
 	it("names SSEEvent for a document that streams", () => {

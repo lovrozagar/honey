@@ -1,7 +1,8 @@
 /**
  * The docs' TypeScript SDK code compiles against an SDK generated from the docs' API (bit 20): every `ts sdk` block
  * on a docs page and docs/examples/ts/example.ts, each importing the client from `./kitchen`, type-checked by tsc
- * beside the generated files.
+ * beside the generated files. A realtime block imports from `./live`, an SDK whose document has an `x-realtime`
+ * operation, since an SDK ships the realtime helpers only then (plan 32).
  */
 import { spawnSync } from "node:child_process"
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
@@ -28,11 +29,21 @@ mkdirSync(join(GEN, ".tmp"), { recursive: true })
 const scratch = mkdtempSync(join(GEN, ".tmp/docs-sdk-"))
 afterAll(() => rmSync(scratch, { force: true, recursive: true }))
 
+/** The API the realtime blocks call: one `x-realtime` operation. */
+const LIVE = {
+	info: { title: "Live", version: "1" },
+	openapi: "3.1.0",
+	paths: { "/feed": { get: { operationId: "feed", responses: {}, "x-realtime": true } } },
+}
+
 /** tsc's errors for `sources` (name → code, each a module beside the generated SDK), by source and line. */
 export function sdkTypeErrors(sources: Readonly<Record<string, string>>, dir: string): string[] {
 	for (const [path, text] of Object.entries(generateSdk(docsDocument(), { name: "Kitchen" }).files))
 		writeFileSync(join(dir, path), text)
 	writeFileSync(join(dir, "kitchen.ts"), 'export * from "./kitchen.index.gen"\n')
+	for (const [path, text] of Object.entries(generateSdk(LIVE, { name: "Live" }).files))
+		writeFileSync(join(dir, path), text)
+	writeFileSync(join(dir, "live.ts"), 'export * from "./live.index.gen"\n')
 	for (const [name, code] of Object.entries(sources)) writeFileSync(join(dir, name), `${code}export {}\n`)
 	writeFileSync(join(dir, "tsconfig.json"), JSON.stringify({ compilerOptions: OPTIONS, files: Object.keys(sources) }))
 	const out = spawnSync("node", [TSC, "-p", "tsconfig.json"], { cwd: dir, encoding: "utf8" }).stdout

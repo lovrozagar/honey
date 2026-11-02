@@ -8,6 +8,7 @@ import type { CSharpRuntimeFeatures } from "../../src/emit/csharp/transport.ts"
 import type { GoRuntimeFeatures } from "../../src/emit/go/http.ts"
 import type { PythonRuntimeFeatures } from "../../src/emit/python/transport.ts"
 import type { RustRuntimeFeatures } from "../../src/emit/rust/http.ts"
+import type { TsRuntimeFeatures } from "../../src/emit/ts/http.ts"
 import {
 	bypassedEscapes,
 	CSHARP_KEEP_CROSS_ORIGIN_HEADERS,
@@ -241,7 +242,7 @@ export const GUARDS: readonly Guard[] = [
 ]
 
 /** The emitted runtime's reader, as the guarded module exports it. */
-const runtime = (original: Record<string, unknown>) => original.runtimeSource as () => string
+const runtime = (original: Record<string, unknown>) => original.runtimeSource as (features: TsRuntimeFeatures) => string
 
 /** The MCP server's vendored runtime reader, as runtime.ts exports it. */
 const mcpRuntime = (original: Record<string, unknown>) => original.mcpRuntimeSource as () => string

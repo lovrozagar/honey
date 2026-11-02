@@ -2,6 +2,9 @@
  * An operation's WebSocket. Its dial runs no onRequest or onResponse hook, and a refused handshake's 401 is its error,
  * with no onAuthExpired refresh. The platform WebSocket exposes no ping and no message cap, so this socket has neither.
  */
+import type { HTTPClient } from "./http.ts"
+import type { RequestOptions } from "./request.ts"
+
 export type TypedWebSocket = {
 	close(code?: number, reason?: string): void
 	off(event: "binary" | "close" | "error" | "message" | "open", handler: (...args: never[]) => void): void
@@ -121,6 +124,14 @@ class TypedSocket {
 		if (this.#state === "connecting") this.#queue.push(payload)
 		else this.#ws.send(payload)
 	}
+}
+
+/** The WebSocket URL of `path`: its HTTP URL under the ws: or wss: scheme. */
+export function wsUrl(http: HTTPClient, path: string, opts: RequestOptions): string {
+	const url = new URL(http.buildUrl(path, opts))
+	if (url.protocol === "https:") url.protocol = "wss:"
+	else if (url.protocol === "http:") url.protocol = "ws:"
+	return url.toString()
 }
 
 export function createTypedWebSocket(

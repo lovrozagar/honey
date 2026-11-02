@@ -5,7 +5,8 @@ import { HTTPClient } from "./http.ts"
 import type { RequestOptions } from "./request.ts"
 import { resultOf } from "./response.ts"
 import type { SSEEvent } from "./sse.ts"
-import { createTypedWebSocket, type TypedWebSocket } from "./ws.ts"
+import { requestAuto, requestStream } from "./stream.ts"
+import { createTypedWebSocket, type TypedWebSocket, wsUrl } from "./ws.ts"
 
 const HTTP_METHODS: readonly string[] = ["delete", "get", "patch", "post", "put"]
 
@@ -34,7 +35,7 @@ function lazyCall(http: HTTPClient, call: { method: string; opts: RequestOptions
 	let mode: "auto" | "idle" | "sse" = "idle"
 	let auto: Promise<unknown> | undefined
 	const runAuto = (): Promise<unknown> => {
-		auto ??= http.requestAuto(method, path, opts).then((answer) => answer.data)
+		auto ??= requestAuto(http, method, path, opts).then((answer) => answer.data)
 		return auto
 	}
 	const lazy = new Promise((resolve, reject) => {
@@ -48,7 +49,7 @@ function lazyCall(http: HTTPClient, call: { method: string; opts: RequestOptions
 		value() {
 			if (mode === "idle") {
 				mode = "sse"
-				return http.requestStream(method, path, opts)[Symbol.asyncIterator]()
+				return requestStream(http, method, path, opts)[Symbol.asyncIterator]()
 			}
 			return (async function* () {
 				const data = await runAuto()
@@ -67,7 +68,7 @@ function helper(http: HTTPClient, prop: string): unknown {
 	if (prop === "$path") return (path: string, input?: PathInput) => http.buildPath(path, input ?? {})
 	if (prop !== "ws") return undefined
 	return (path: string, input?: PathInput): TypedWebSocket => {
-		let url = http.buildWSUrl(path, { params: input?.params, search: input?.search })
+		let url = wsUrl(http, path, { params: input?.params, search: input?.search })
 		if (input?.reconnectToken)
 			url += `${url.includes("?") ? "&" : "?"}reconnect_token=${encodeURIComponent(input.reconnectToken)}`
 		return createTypedWebSocket(url, { protocols: input?.protocols })
@@ -79,7 +80,7 @@ function safeMethods(http: HTTPClient): object {
 	return Object.fromEntries(
 		HTTP_METHODS.map((method) => [
 			method,
-			(path: string, input?: RequestOptions) => resultOf(http.requestAuto(method.toUpperCase(), path, input ?? {})),
+			(path: string, input?: RequestOptions) => resultOf(requestAuto(http, method.toUpperCase(), path, input ?? {})),
 		]),
 	)
 }

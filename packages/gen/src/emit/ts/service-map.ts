@@ -3,7 +3,14 @@
  * by: the resource tree with every member name a client can expose, and one entry per operation.
  */
 import type { IR, IRNamespace, IROperation, IRSchema, IRTreeEntry } from "../../ir/model.ts"
-import { isJsonMedia, mediaEssence, type SdkSuccess, sdkModel, sseEventSchema } from "../../ir/sdk-model.ts"
+import {
+	isJsonMedia,
+	mediaEssence,
+	type SdkStream,
+	type SdkSuccess,
+	sdkModel,
+	sseEventSchema,
+} from "../../ir/sdk-model.ts"
 import { openApiPathParams } from "../../ir/slots.ts"
 import { tsString } from "../shared/escape.ts"
 import { compareCodeUnits } from "../shared/lang.ts"
@@ -118,42 +125,71 @@ function entryOf(op: IROperation, success: SdkSuccess, resolve: (schema: IRSchem
 	return entry
 }
 
-/**
- * The nested service map of `ir`: a dotted id's segments as nested keys, renamed as on the client.
- * Null-prototype nodes: an id of `__proto__.x` must never reach `Object.prototype`.
- */
-export function serviceMapOf(ir: IR): Record<string, ServiceMapNode> {
+/** The runtime adapter each non-REST transport is called through (`runtime/ts/sdk-*.ts`). */
+const OPERATION_CALLS: Readonly<Record<Exclude<SdkStream, null>, string>> = {
+	realtime: "realtimeOp",
+	sse: "sseOp",
+	ws: "wsOp",
+}
+
+/** A name the map text writes bare: an entry's adapter, imported from the runtime. */
+class Identifier {
+	constructor(readonly name: string) {}
+}
+
+/** The nested map of `ir`, each entry with its adapter's `call` when `calls`. */
+function mapOf(ir: IR, calls: boolean): Record<string, ServiceMapNode> {
 	const model = sdkModel(ir)
-	const success = new Map(model.ops.map((op) => [op.id, op.success]))
+	const ops = model.opsById
 	const walk = (ns: IRNamespace): Record<string, ServiceMapNode> => {
 		const node: Record<string, ServiceMapNode> = Object.create(null)
 		for (const [key, entry] of ns.entries) {
-			node[key] =
-				entry.kind === "namespace"
-					? walk(entry.ns)
-					: entryOf(entry.op, success.get(entry.op.id) as SdkSuccess, model.resolve)
+			if (entry.kind === "namespace") {
+				node[key] = walk(entry.ns)
+				continue
+			}
+			const op = ops.get(entry.op.id) as (typeof model.ops)[number]
+			const value: ServiceEntry & { call?: Identifier } = entryOf(entry.op, op.success, model.resolve)
+			if (calls && op.stream !== null) value.call = new Identifier(OPERATION_CALLS[op.stream])
+			node[key] = value
 		}
 		return node
 	}
 	return walk(memberTree(ir.tree))
 }
 
-/** A service map value as TS literal text. */
-function valueText(value: unknown, indent: string): string {
+/**
+ * The nested service map of `ir`: a dotted id's segments as nested keys, renamed as on the client.
+ * Null-prototype nodes: an id of `__proto__.x` must never reach `Object.prototype`.
+ */
+export function serviceMapOf(ir: IR): Record<string, ServiceMapNode> {
+	return mapOf(ir, false)
+}
+
+/** A service map value as TS literal text; each adapter's name is collected into `used`. */
+function valueText(value: unknown, indent: string, used: Set<string>): string {
+	if (value instanceof Identifier) {
+		used.add(value.name)
+		return value.name
+	}
 	if (typeof value === "string") return tsString(value)
 	if (typeof value === "boolean") return String(value)
-	if (Array.isArray(value)) return `[${value.map((item) => valueText(item, indent)).join(", ")}]`
+	if (Array.isArray(value)) return `[${value.map((item) => valueText(item, indent, used)).join(", ")}]`
 	const inner = `${indent}\t`
 	const lines = Object.entries(value as Record<string, unknown>)
 		.sort(([a], [b]) => compareCodeUnits(a, b))
-		.map(([key, item]) => `${inner}${quoteKey(key)}: ${valueText(item, inner)},`)
+		.map(([key, item]) => `${inner}${quoteKey(key)}: ${valueText(item, inner, used)},`)
 	return lines.length === 0 ? "{}" : `{\n${lines.join("\n")}\n${indent}}`
 }
 
-/** The `${stem}.map.gen.ts` text: the service map as a `const`. */
+/** The `${stem}.map.gen.ts` text: the service map as a `const`, importing the adapters its entries name. */
 export function serviceMapText(ir: IR, runtime: string): string {
-	return `import type { ServiceMap } from "./${runtime}"
+	const used = new Set<string>()
+	const map = valueText(mapOf(ir, true), "", used)
+	const calls = [...used].sort(compareCodeUnits)
+	const names = calls.length === 0 ? "type { ServiceMap }" : `{ ${calls.join(", ")}, type ServiceMap }`
+	return `import ${names} from "./${runtime}"
 
-export const serviceMap: ServiceMap = ${valueText(serviceMapOf(ir), "")}
+export const serviceMap: ServiceMap = ${map}
 `
 }

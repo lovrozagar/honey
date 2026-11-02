@@ -10,7 +10,8 @@ import { blockCommentText, tsString } from "../shared/escape.ts"
 import { compareCodeUnits, NameTable, pascalWords } from "../shared/lang.ts"
 import { quoteKey } from "../shared/literals.ts"
 import { irToTs, type TypeOptions } from "../shared/type-emitter.ts"
-import { importText, RESERVED, SHARED } from "./sdk-types-preamble.ts"
+import { runtimeFeatures } from "./http.ts"
+import { importText, RESERVED, shared } from "./sdk-types-preamble.ts"
 import { memberTree } from "./service-map.ts"
 
 /** One field of an input object: required or not, by whether any of its members is. */
@@ -199,7 +200,7 @@ export function sdkTypesText(ir: IR, name: string, runtime: string): string {
 	const schemas = model.schemaNames.map(
 		(schema) => `export type ${types.refName?.(schema)} = ${irToTs(ir.schemas[schema] as IRSchema, types)}`,
 	)
-	const body = `${schemas.length === 0 ? "" : `${schemas.join("\n")}\n\n`}${SHARED}
+	const body = `${schemas.length === 0 ? "" : `${schemas.join("\n")}\n\n`}${shared(runtimeFeatures(ir))}
 ${configText(name, ir.servers[0])}
 
 /** Every operation of the SDK, by its member path. */

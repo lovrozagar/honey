@@ -35,10 +35,6 @@ export type Result<T, TErrors = never, THeaders = never> =
 			: { ok: true; data: T; headers: THeaders; response: Response })
 	| { ok: false; error: StatusErrors<TErrors> | DecodeError; response: Response }
 
-export function isEventStream(response: Response): boolean {
-	return parseMediaType(response.headers.get("content-type"))?.essence === "text/event-stream"
-}
-
 /** How a REST answer is read: parsed or raw, by its declared media type, within the client's limits. */
 export type Reading = {
 	/**
