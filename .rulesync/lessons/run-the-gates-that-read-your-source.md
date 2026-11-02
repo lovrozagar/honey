@@ -1,9 +1,9 @@
 ---
 name: run-the-gates-that-read-your-source
 paths: ["packages/gen/src/**","packages/core/src/**","packages/core/lint/**","packages/gen/tests/structure/**","blueprint/files.tsv"]
-hits: 1
-last-hit: 2026-11-01
-evidence: ["plan 21"]
+hits: 2
+last-hit: 2026-11-02
+evidence: ["plan 21","roadmap 2"]
 ---
 
 # Changed source reds the gates that read it, not only its own tests
