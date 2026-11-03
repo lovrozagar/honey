@@ -5,10 +5,9 @@
  */
 import type { ERROR_META } from "../errors/errors.ts"
 import { compileInput, type InputSchemas, type InputStep, type InputTypes } from "../input/input.ts"
-import type { KnownStatusKeys, OutputSchemas } from "./output-types.ts"
+import type { DeclaredAnswer, KnownStatusKeys, OutputSchemas } from "./output-types.ts"
 import type { ErrorFactories } from "./settings.ts"
 import type { MaybePromise, MiddlewareFn, RuntimeMiddleware } from "../middleware/middleware.ts"
-import type { TypedResponse } from "../response/response.ts"
 import type { Honey } from "./app.ts"
 import type {
 	ApplyScoped,
@@ -368,7 +367,7 @@ export class RouteBuilder<B extends BuilderTypes> {
 	 * Register the route, once per method, and return the app typed with it. Keys `fn.errors` names, as `proxy()`'s
 	 * handler does, count as the route's own. Throws on a route already registered.
 	 */
-	handler(fn: (ctx: RouteHandlerCtx<B>) => MaybePromise<TypedResponse>): HandlerReturn<B> {
+	handler(fn: (ctx: RouteHandlerCtx<B>) => MaybePromise<DeclaredAnswer<B["output"]>>): HandlerReturn<B> {
 		const s = this.#s
 		settle(s.graph, s.pending, s.view.node)
 		const source: RouteSource = {

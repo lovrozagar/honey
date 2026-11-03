@@ -12,6 +12,7 @@ import { createHash, randomBytes } from "node:crypto"
 import { join } from "node:path"
 import { written } from "../../../../gen/src/emit/mcp/__fixtures__/written.ts"
 import { generateMcpHandler } from "../../../../gen/src/emit/mcp/mounted.ts"
+import { HoneyError } from "../../../src/errors/error.ts"
 import { type McpHandler, mcp } from "../../../src/mcp/mount.ts"
 import { oauth } from "../../../src/mcp/oauth.ts"
 import { generateOpenApi } from "../../../src/openapi/generate.ts"
@@ -143,30 +144,32 @@ function authorizationServer(issuer: () => string, tokens: Map<string, Token>, l
 function ordersApp(endpoint: () => string, tokens: Map<string, Token>) {
 	/* an error the app answers 500 for reaches stderr, whatever NODE_ENV silences; stdout stays the leg's protocol */
 	const app = honey().logger(createLogger({ level: "error", write: (line) => void process.stderr.write(`${line}\n`) }))
-	/** The refusal of `request` for `needed`, or undefined when its token carries it. */
-	const refused = (request: Request, needed: string) => {
+	/** Throws the refusal of `request` for `needed`, its challenge in `www-authenticate`, unless its token carries it. */
+	const authorize = (request: Request, needed: string) => {
 		const token = tokens.get(/^Bearer (\S+)$/.exec(request.headers.get("authorization") ?? "")?.[1] ?? "")
-		if (token === undefined || token.audience !== endpoint())
-			return new Response(null, { headers: { "www-authenticate": 'Bearer error="invalid_token"' }, status: 401 })
-		if (token.scope.includes(needed)) return undefined
-		const challenge = `Bearer error="insufficient_scope", scope="orders:read ${needed}"`
-		return new Response(null, { headers: { "www-authenticate": challenge }, status: 403 })
+		if (token === undefined || token.audience !== endpoint()) {
+			const headers = { "www-authenticate": 'Bearer error="invalid_token"' }
+			throw new HoneyError({ errorKey: "invalid_token", headers, status: "unauthorized" })
+		}
+		if (token.scope.includes(needed)) return
+		const headers = { "www-authenticate": `Bearer error="insufficient_scope", scope="orders:read ${needed}"` }
+		throw new HoneyError({ errorKey: "insufficient_scope", headers, status: "forbidden" })
 	}
 	app
 		.get("/orders")
 		.meta({ mcp: true, security: [{ oauth: ["orders:read"] }] })
 		.output({ "application/json": { ok: z.object({ orders: z.array(z.string()) }) } })
 		.handler((ctx) => {
-			const refusal = refused(ctx.req, "orders:read")
-			return refusal ? ctx.res.raw(refusal) : ctx.res.json("ok", { orders: ["o-1"] })
+			authorize(ctx.req, "orders:read")
+			return ctx.res.json("ok", { orders: ["o-1"] })
 		})
 	app
 		.post("/orders")
 		.meta({ mcp: true, security: [{ oauth: ["orders:write"] }] })
 		.output({ "application/json": { created: z.object({ created: z.string() }) } })
 		.handler((ctx) => {
-			const refusal = refused(ctx.req, "orders:write")
-			return refusal ? ctx.res.raw(refusal) : ctx.res.json("created", { created: "o-2" })
+			authorize(ctx.req, "orders:write")
+			return ctx.res.json("created", { created: "o-2" })
 		})
 	return app
 }

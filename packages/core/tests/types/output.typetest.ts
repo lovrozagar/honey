@@ -7,12 +7,12 @@
 import { describe, expectTypeOf, it } from "vitest"
 import * as z from "zod"
 import { createMiddleware } from "../../src/middleware/middleware.ts"
-import type { TypedResponse } from "../../src/response/response.ts"
+import type { HoneyRes, TypedResponse } from "../../src/response/response.ts"
 import { honey } from "../../src/routing/app.ts"
 import { defineErrors } from "../../src/errors/errors.ts"
 import type { HoneyMeta, InferRouteInput, InferRouteOutput, InferRoutes } from "../../src/routing/app-types.ts"
 import type { RouteSelectorOf, SelectorOf, WithOutput } from "../../src/routing/codegen-types.ts"
-import type { AllowedResMethods, ApplyOutput, OutputSchemas } from "../../src/routing/output-types.ts"
+import type { AllowedResMethods, ApplyOutput, DeclaredAnswer, OutputSchemas } from "../../src/routing/output-types.ts"
 
 const withDb = createMiddleware((_ctx, next) => next({ db: "test-db" }))
 
@@ -87,7 +87,7 @@ describe("ctx.res under .output(): what stays and what goes", () => {
 	// v0: 0da51d81f1
 	// v0: 864b2b279f
 	// v0: 51f229a974
-	it("an undeclared helper is gone; noContent, raw, redirect and stream always stay", () => {
+	it("an undeclared helper is gone, raw too; noContent, redirect and stream stay", () => {
 		honey<{}>()
 			.get("/report")
 			.output({ "application/json": { ok: z.object({ data: z.array(z.string()) }) }, "text/html": { ok: z.string() } })
@@ -100,7 +100,7 @@ describe("ctx.res under .output(): what stays and what goes", () => {
 				expectTypeOf(ctx.res).not.toHaveProperty("sse")
 				expectTypeOf(ctx.res).not.toHaveProperty("generate")
 				expectTypeOf(ctx.res.noContent).toBeFunction()
-				expectTypeOf(ctx.res.raw).toBeFunction()
+				expectTypeOf(ctx.res).not.toHaveProperty("raw")
 				expectTypeOf(ctx.res.redirect).toBeFunction()
 				expectTypeOf(ctx.res.stream).toBeFunction()
 				return ctx.res.json("ok", { data: ["a"] })
@@ -117,6 +117,55 @@ describe("ctx.res under .output(): what stays and what goes", () => {
 				expectTypeOf(ctx.res).not.toHaveProperty("json")
 				return ctx.res.sse(async () => {})
 			})
+	})
+})
+
+describe("the handler's return under .output(): only what the route declares", () => {
+	const out = { "application/json": { ok: z.object({ id: z.string() }) } } as const
+
+	it("refuses a raw Response, an undeclared media type and an undeclared status", () => {
+		const app = honey<{}>()
+		app
+			.get("/a")
+			.output(out)
+			// @ts-expect-error a Response that is no declared answer
+			.handler(() => new Response('{"id":"1"}'))
+		app
+			.get("/b")
+			.output(out)
+			// @ts-expect-error stream() answers application/octet-stream, which the route does not declare
+			.handler((c) => c.res.stream(async () => {}))
+		app
+			.get("/c")
+			.output(out)
+			// @ts-expect-error a created answer: the route declares only ok
+			.handler((c) => (c.res as unknown as HoneyRes).json("created", { id: "1" }))
+		app.get("/d").handler((c) => c.res.raw(new Response("x")))
+		expectTypeOf<DeclaredAnswer<typeof out>>().toEqualTypeOf<
+			TypedResponse<"application/json", "ok"> | TypedResponse<"none">
+		>()
+	})
+
+	it("takes a streamed body through a declared type's helper", () => {
+		const body = () => new ReadableStream<Uint8Array>()
+		const app = honey<{}>()
+		app
+			.get("/csv")
+			.output({ "text/csv": { ok: true } })
+			.handler((c) => c.res.csv("ok", body()))
+		app
+			.get("/bin")
+			.output({ "application/octet-stream": { ok: true } })
+			.handler((c) => c.res.binary("ok", body()))
+		app
+			.get("/png")
+			.output({ "image/png": { ok: true } })
+			.handler((c) => c.res.binary("ok", body(), { contentType: "image/png" }))
+		app
+			.get("/stream")
+			.output({ "application/octet-stream": { ok: true } })
+			.handler((c) => c.res.stream(async () => {}))
+		expectTypeOf<Parameters<HoneyRes["csv"]>[1]>().toEqualTypeOf<string | ReadableStream<Uint8Array>>()
 	})
 })
 

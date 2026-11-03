@@ -12,6 +12,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest"
 import * as z from "zod"
 import { written } from "../../../../gen/src/emit/mcp/__fixtures__/written.ts"
 import { generateMcpHandler } from "../../../../gen/src/emit/mcp/mounted.ts"
+import { HoneyError } from "../../../src/errors/error.ts"
 import { bodyLimit } from "../../../src/input/body-limit.ts"
 import { type McpHandler, mcp } from "../../../src/mcp/mount.ts"
 import { memoryUploadStore, type UploadStore, uploads } from "../../../src/mcp/uploads.ts"
@@ -56,8 +57,10 @@ function shop(seen: Saw[], limit?: number) {
 			.input({ form })
 			.output({ "application/json": { ok: z.object({ saved: z.number() }) } })
 			.handler(async (ctx) => {
-				if (!KEYS.has(ctx.req.headers.get("authorization") ?? ""))
-					return ctx.res.raw(new Response(null, { headers: { "www-authenticate": "ApiKey" }, status: 401 }))
+				if (!KEYS.has(ctx.req.headers.get("authorization") ?? "")) {
+					const headers = { "www-authenticate": "ApiKey" }
+					throw new HoneyError({ errorKey: "unauthorized", headers, status: "unauthorized" })
+				}
 				const { file, note } = ctx.input.form
 				const sha256 = createHash("sha256")
 					.update(new Uint8Array(await file.arrayBuffer()))

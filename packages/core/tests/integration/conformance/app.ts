@@ -23,6 +23,10 @@ import { createReferenceServer } from "./reference-server.ts"
 import { realtimeRoutes } from "./app-realtime.ts"
 import { secureRoutes } from "./app-secure.ts"
 import { ws } from "../../../src/ws/route.ts"
+import type { HoneyRes } from "../../../src/response/response.ts"
+
+/** A Response the route does not declare: a fault injected on purpose, past the handler's typed return. */
+const undeclared = (ctx: { readonly res: object }, response: Response) => (ctx.res as HoneyRes).raw(response) as never
 
 /** The app's origins, known once every listener is up: the drop origin cuts each answer at its end (drop-front.ts). */
 export type Origins = { readonly alt: string; readonly drop: string; readonly url: string }
@@ -284,7 +288,7 @@ function faultRoutes(app: ConformanceApp): void {
 		.meta({ operationId: "faults.undecodable" })
 		.output({ "application/json": { ok: Item } })
 		.handler((ctx) =>
-			ctx.res.raw(new Response("not json", { headers: { "content-type": "application/json" }, status: 200 })),
+			undeclared(ctx, new Response("not json", { headers: { "content-type": "application/json" }, status: 200 })),
 		)
 }
 

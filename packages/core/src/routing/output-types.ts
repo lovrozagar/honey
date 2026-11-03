@@ -2,11 +2,12 @@
  * The `.output()` type algebra: what a route declares it answers (a media type's bodies by status
  * key, its redirects, the headers of each status), and ctx.res narrowed to it. A declared helper
  * takes only the declared status keys, each body typed by its status's schema and its options
- * carrying the status's declared headers; an undeclared one is gone; noContent, raw, redirect and
- * stream are always there; sse only for an event stream; binary for octet-stream or an open type.
+ * carrying the status's declared headers; an undeclared one is gone, and so is raw; noContent,
+ * redirect and stream stay; sse only for an event stream; binary for octet-stream or an open type.
+ * The handler's return is narrowed the same way: a declared media type at one of its status keys.
  */
 import type { BinaryBody } from "../response/binary.ts"
-import type { HoneyRes, ResponseOptions, TypedResponse } from "../response/response.ts"
+import type { HoneyRes, ResponseOptions, StreamBody, TypedResponse } from "../response/response.ts"
 import type { StatusKey } from "../response/status.ts"
 import type { InferInput, StandardSchemaLike } from "../validation/standard-schema.ts"
 
@@ -66,8 +67,21 @@ export type AllowedResMethods<TOutput> =
 	| { [CT in keyof HelperOf]: CT extends keyof TOutput ? HelperOf[CT] : never }[keyof HelperOf]
 	| ([BinaryTypes<TOutput>] extends [never] ? never : "binary")
 
-/** The helpers every route keeps, whatever it declares. */
-type UniversalRes = Pick<HoneyRes, "noContent" | "raw" | "redirect" | "stream">
+/** The helpers a route that declares an output keeps; `raw` is gone, since a raw Response declares nothing. */
+type UniversalRes = Pick<HoneyRes, "noContent" | "redirect" | "stream">
+
+/** The media types a declaration names. */
+type MediaTypes<TOutput> = Extract<keyof TOutput, `${string}/${string}`>
+
+/**
+ * What a handler may return: any typed answer without `.output()`; with one, a declared media type at one of its
+ * status keys, or a bodiless answer (no content, a redirect).
+ */
+export type DeclaredAnswer<TOutput> = [TOutput] extends [never]
+	? TypedResponse
+	:
+			| { [CT in MediaTypes<TOutput>]: TypedResponse<CT, Extract<keyof TOutput[CT], StatusKey>> }[MediaTypes<TOutput>]
+			| TypedResponse<"none">
 
 /** A declared body's type: its schema's input, what output validation accepts; `unknown` without a schema. */
 type BodyOf<S> = S extends StandardSchemaLike ? InferInput<S> : unknown
@@ -99,7 +113,7 @@ type Narrowed<TOutput, CT extends keyof HelperOf, TText extends boolean> = CT ex
 	? {
 			[M in HelperOf[CT]]: <K extends keyof TOutput[CT] & StatusKey>(
 				statusKey: K,
-				body: TText extends true ? string : BodyOf<TOutput[CT][K]>,
+				body: TText extends true ? string | StreamBody : BodyOf<TOutput[CT][K]>,
 				...opts: OptsFor<TOutput, K>
 			) => TypedResponse<CT, K>
 		}
@@ -108,7 +122,7 @@ type Narrowed<TOutput, CT extends keyof HelperOf, TText extends boolean> = CT ex
 /** `binary` for a declared open type, its content type named; octet-stream may leave it out. */
 type BinaryCall<TOutput> = (<CT extends BinaryTypes<TOutput>, K extends keyof TOutput[CT] & StatusKey>(
 	statusKey: K,
-	body: BinaryBody,
+	body: BinaryBody | StreamBody,
 	opts: ResponseOptions &
 		HeaderOpt<TOutput, K> & {
 			/** The media type of the body, one the route declares; only `application/octet-stream` may be left out. */ contentType: CT
@@ -117,7 +131,7 @@ type BinaryCall<TOutput> = (<CT extends BinaryTypes<TOutput>, K extends keyof TO
 	("application/octet-stream" extends keyof TOutput
 		? <K extends keyof TOutput["application/octet-stream"] & StatusKey>(
 				statusKey: K,
-				body: BinaryBody,
+				body: BinaryBody | StreamBody,
 				...opts: OptsFor<
 					TOutput,
 					K,

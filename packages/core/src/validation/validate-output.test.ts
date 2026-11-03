@@ -10,6 +10,9 @@ import { recorder } from "../telemetry/__fixtures__/recording-tracer.ts"
 import type { StandardSchemaLike } from "./standard-schema.ts"
 import { compileOutput, outputValidationOn, validateOutput, withOutput } from "./validate-output.ts"
 
+/** A Response the route does not declare: a fault injected on purpose, past the handler's typed return. */
+const undeclared = (ctx: { readonly res: object }, response: Response) => (ctx.res as HoneyRes).raw(response) as never
+
 afterEach(() => {
 	vi.restoreAllMocks()
 })
@@ -180,7 +183,10 @@ describe("output validation through the app: the status key", () => {
 			.get("/partial")
 			.output(strict)
 			.handler((ctx) =>
-				ctx.res.raw(new Response('{"partial":true}', { headers: { "content-type": "application/json" }, status: 206 })),
+				undeclared(
+					ctx,
+					new Response('{"partial":true}', { headers: { "content-type": "application/json" }, status: 206 }),
+				),
 			)
 		expect([
 			(await app.fetch(new Request("http://localhost/gone", { method: "DELETE" }), {})).status,
@@ -199,15 +205,15 @@ describe("output validation through the app: the content type", () => {
 		app
 			.get("/text")
 			.output(out)
-			.handler((ctx) => ctx.res.raw(foreign("text/plain")))
+			.handler((ctx) => undeclared(ctx, foreign("text/plain")))
 		app
 			.get("/json5")
 			.output(out)
-			.handler((ctx) => ctx.res.raw(foreign("application/json5")))
+			.handler((ctx) => undeclared(ctx, foreign("application/json5")))
 		app
 			.get("/charset")
 			.output(out)
-			.handler((ctx) => ctx.res.raw(foreign("Application/JSON; charset=utf-8")))
+			.handler((ctx) => undeclared(ctx, foreign("Application/JSON; charset=utf-8")))
 		app
 			.get("/redirect")
 			.output({ ...out, redirect: { found: true } })
@@ -284,11 +290,13 @@ describe("output validation through the app: where the body is read from", () =>
 		app
 			.get("/good")
 			.output(out)
-			.handler((ctx) => ctx.res.raw(rangeResponse(ctx.req, bytes('{"id":"a"}'), { contentType: "application/json" })))
+			.handler((ctx) =>
+				undeclared(ctx, rangeResponse(ctx.req, bytes('{"id":"a"}'), { contentType: "application/json" })),
+			)
 		app
 			.get("/bad")
 			.output(out)
-			.handler((ctx) => ctx.res.raw(rangeResponse(ctx.req, bytes('{"id":1}'), { contentType: "application/json" })))
+			.handler((ctx) => undeclared(ctx, rangeResponse(ctx.req, bytes('{"id":1}'), { contentType: "application/json" })))
 		expect([
 			await answer(app.fetch(get("/good"), {})),
 			(await answer(app.fetch(get("/bad"), {})))[1].error_key,
@@ -317,7 +325,9 @@ describe("output validation through the app: where the body is read from", () =>
 		app
 			.get("/t")
 			.output({ "application/json": { ok: z.object({ id: z.string() }) } })
-			.handler((ctx) => ctx.res.raw(new Response('{"id":"raw"}', { headers: { "content-type": "application/json" } })))
+			.handler((ctx) =>
+				undeclared(ctx, new Response('{"id":"raw"}', { headers: { "content-type": "application/json" } })),
+			)
 		expect(await answer(app.fetch(get("/t"), {}))).toEqual([200, { id: "raw" }])
 	})
 })
@@ -330,14 +340,15 @@ describe("output validation through the app: a stream honey produced", () => {
 		app
 			.get("/stream")
 			.output({ "application/json": { ok: { "~standard": { validate, vendor: "test", version: 1 } } } })
-			.handler((ctx) =>
-				/* generate() is not on a ctx.res narrowed to json; the runtime one has it */
-				(ctx.res as unknown as HoneyRes).generate(
-					(function* () {
-						for (;;) yield `${++produced}\n`
-					})(),
-					{ contentType: "application/json" },
-				),
+			.handler(
+				(ctx) =>
+					/* generate() is not on a ctx.res narrowed to json, nor is its answer a declared one; the runtime has both */
+					(ctx.res as unknown as HoneyRes).generate(
+						(function* () {
+							for (;;) yield `${++produced}\n`
+						})(),
+						{ contentType: "application/json" },
+					) as never,
 			)
 		const res = await app.fetch(get("/stream"), {})
 		const reader = (res.body as ReadableStream<Uint8Array>).getReader()
@@ -441,7 +452,7 @@ describe("output validation beside the rest of the request", () => {
 			.get("/t")
 			.output({ "application/json": { ok: z.object({ id: z.string() }) } })
 			.handler((ctx) =>
-				ctx.res.raw(new Response('{"wrong":true}', { headers: { "content-type": "application/json" } })),
+				undeclared(ctx, new Response('{"wrong":true}', { headers: { "content-type": "application/json" } })),
 			)
 		expect((await app.fetch(get("/t"), {})).status).toBe(500)
 		expect(seen).toEqual(["output_validation_failed", "telemetry:output_validation_failed"])
@@ -483,7 +494,7 @@ describe("output validation over real HTTP", () => {
 		app
 			.get("/bad")
 			.output(out)
-			.handler((ctx) => ctx.res.raw(foreign("application/json")))
+			.handler((ctx) => undeclared(ctx, foreign("application/json")))
 		const server = createNodeServer(app, { env: {}, hostname: "127.0.0.1", port: 0 })
 		await new Promise((resolve) => server.once("listening", resolve))
 		const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`

@@ -114,7 +114,9 @@ describe("the runtime bundle of an installed core (bit 19 i)", () => {
 			 * its original's private state: the SELF field, read once in each of the context's nine accessors.
 			 * Locked at 26,300. The generated tree's body gate added 58 bytes (26,237 to 26,295): every leaf
 			 * carries its declared body as data, and a delegated leaf checks it. The pin's move to bun 1.4.4 measured
-			 * the same tree 25,815 (its --minify, not the code): locked at 25,900.
+			 * the same tree 25,815 (its --minify, not the code): locked at 25,900. Plan 39 5.1 added 35 bytes (25,894 to
+			 * 25,929) so text, html, csv, xml and binary stream a typed body: one ReadableStream branch in the body
+			 * helpers. Locked at 26,000.
 			 */
 			const gzipped = gzipSync(js, { level: 9 }).length
 			const builtBy = run(BUN as string, ["--version"], full).out.trim()
@@ -123,7 +125,7 @@ describe("the runtime bundle of an installed core (bit 19 i)", () => {
 					leaked,
 					features,
 					routeModules("minimal", entry, [...WS_ROUTE, ...MCP_ROUTE, ...GENERATION_ONLY]),
-					gzipped < 25_900,
+					gzipped < 26_000,
 					builtBy,
 				],
 				`${gzipped} bytes gzipped`,

@@ -154,6 +154,33 @@ describe("status", () => {
 	})
 })
 
+describe("body helpers: a streamed body", () => {
+	it("sends the stream as it comes, at the status and content type of the helper", async () => {
+		const stream = () =>
+			new ReadableStream<Uint8Array>({
+				start(controller) {
+					controller.enqueue(new TextEncoder().encode("a,b\n"))
+					controller.enqueue(new TextEncoder().encode("1,2\n"))
+					controller.close()
+				},
+			})
+		const answers = [
+			res.csv("created", stream()),
+			res.text("ok", stream(), { headers: { "x-a": "1" } }),
+			res.binary("ok", stream(), { contentType: "image/png" }),
+		]
+		expect(
+			await Promise.all(
+				answers.map(async (r) => [r.status, r.headers.get("content-type"), r.headers.get("x-a"), await r.text()]),
+			),
+		).toEqual([
+			[201, "text/csv; charset=utf-8", null, "a,b\n1,2\n"],
+			[200, "text/plain; charset=utf-8", "1", "a,b\n1,2\n"],
+			[200, "image/png", null, "a,b\n1,2\n"],
+		])
+	})
+})
+
 describe("noContent and redirect", () => {
 	// v0: f0c7183d59
 	// v0: 4bb2aaa052

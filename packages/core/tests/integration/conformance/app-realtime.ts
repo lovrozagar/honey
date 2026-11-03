@@ -5,6 +5,10 @@
 import * as z from "zod"
 import type { SSEStream } from "../../../src/response/sse.ts"
 import type { ConformanceApp, errors } from "./app.ts"
+import type { HoneyRes } from "../../../src/response/response.ts"
+
+/** A Response the route does not declare: a fault injected on purpose, past the handler's typed return. */
+const undeclared = (ctx: { readonly res: object }, response: Response) => (ctx.res as HoneyRes).raw(response) as never
 
 /**
  * The realtime feeds every transport dials (bit 19 e): `realtime.refused` refuses each with 403; `realtime.mixed`
@@ -25,9 +29,9 @@ export function realtimeRoutes(app: ConformanceApp, streams: { dialed: number },
 		.meta({ extensions: { "x-realtime": true }, operationId: "realtime.mixed", mcp: true })
 		.output(feed)
 		.handler((ctx) => {
-			if (ctx.req.headers.get("upgrade") !== null) return ctx.res.raw(new Response(null, { status: 404 }))
+			if (ctx.req.headers.get("upgrade") !== null) return undeclared(ctx, new Response(null, { status: 404 }))
 			const stream = ctx.req.headers.get("accept")?.includes("text/event-stream") === true
-			if (!stream || streams.dialed++ === 0) return ctx.res.raw(new Response(null, { status: 503 }))
+			if (!stream || streams.dialed++ === 0) return undeclared(ctx, new Response(null, { status: 503 }))
 			return ctx.res.sse(async (sse) => {
 				await sse.send({ data: { n: 1 }, event: "message", id: "1" })
 				sse.close()
@@ -49,9 +53,9 @@ function cappedRoutes(app: ConformanceApp, feed: { "text/event-stream": { ok: z.
 		.meta({ extensions: { "x-realtime": true }, operationId: "realtime.capped" })
 		.output(feed)
 		.handler((ctx) => {
-			if (ctx.req.headers.get("upgrade") !== null) return ctx.res.raw(new Response(null, { status: 404 }))
+			if (ctx.req.headers.get("upgrade") !== null) return undeclared(ctx, new Response(null, { status: 404 }))
 			if (ctx.req.headers.get("accept")?.includes("text/event-stream") !== true)
-				return ctx.res.raw(new Response(null, { status: 503 }))
+				return undeclared(ctx, new Response(null, { status: 503 }))
 			return ctx.res.sse(
 				async (sse) => {
 					open.add(sse)

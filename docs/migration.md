@@ -1065,3 +1065,27 @@ app
 	.meta({ extensions: { "x-before": "table.delete" } })
 	.handler((ctx) => ctx.res.text("ok", "deleted"))
 ```
+
+## A handler returns only what `.output()` declares
+
+On a route with `.output()` the handler's return is narrowed to a declared media type at one of its status keys, or a
+bodiless answer (`noContent`, `redirect`). `ctx.res.raw` is gone there, since a raw `Response` declares nothing; it
+stays on a route without `.output()`. To stream a declared type, pass a `ReadableStream` to its helper (`text`,
+`html`, `csv`, `xml`, `binary`). To refuse a request, throw a `HoneyError`, `headers` included.
+
+```ts v0
+app
+	.get("/assets/:id")
+	.output({ "application/json": { ok: asset } })
+	.handler(async (ctx) => ctx.res.raw(await readAsset(ctx)))
+```
+
+```ts
+import { honey } from "@lovrozagar/honey"
+
+const app = honey()
+app
+	.get("/assets/:id")
+	.output({ "application/octet-stream": { ok: true } })
+	.handler((ctx) => ctx.res.binary("ok", new Blob(["bytes"]).stream()))
+```

@@ -13,6 +13,10 @@ import { resolve as resolvePath } from "node:path"
 import { describe, expect, it, vi } from "vitest"
 import * as z from "zod"
 import { guardNamed } from "../../structure/mutation-harness.ts"
+import type { HoneyRes } from "../../../src/response/response.ts"
+
+/** A Response the route does not declare: a fault injected on purpose, past the handler's typed return. */
+const undeclared = (ctx: { readonly res: object }, response: Response) => (ctx.res as HoneyRes).raw(response) as never
 
 const REPO = resolvePath(import.meta.dirname, "../../../../..")
 
@@ -196,7 +200,9 @@ describe("v1 adversarial: an answer's contract", () => {
 		app
 			.get("/wrong-type")
 			.output(out)
-			.handler((ctx) => ctx.res.raw(new Response('{"id":"1"}', { headers: { "content-type": "application/json5" } })))
+			.handler((ctx) =>
+				undeclared(ctx, new Response('{"id":"1"}', { headers: { "content-type": "application/json5" } })),
+			)
 		app
 			.get("/wrong-body")
 			.output(out)

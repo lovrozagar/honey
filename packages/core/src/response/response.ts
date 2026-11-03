@@ -56,6 +56,9 @@ type Generated = AsyncGenerator<string | Uint8Array, void, unknown> | Generator<
 declare const CONTENT_TYPE: unique symbol
 declare const STATUS_KEY: unique symbol
 
+/** A body the handler streams: sent as it comes, never buffered, at the helper's status and content type. */
+export type StreamBody = ReadableStream<Uint8Array>
+
 /** A native Response branded with its content type and status key at the type level. */
 export type TypedResponse<CT extends string = string, SK extends string = string> = Response & {
 	readonly [CONTENT_TYPE]: CT
@@ -173,16 +176,21 @@ export class HoneyRes {
 	}
 
 	/** A streamed body under `base` headers plus the options' headers and cookies. */
-	#streamed(body: ReadableStream<Uint8Array>, base: Readonly<Record<string, string>>, opts?: ResponseOptions) {
+	#streamed(
+		body: ReadableStream<Uint8Array>,
+		base: Readonly<Record<string, string>>,
+		opts?: ResponseOptions,
+		status = opts?.status ?? 200,
+	) {
 		const headers = hasOptions(opts) ? applyNative(new Headers(base), opts) : base
-		return withProducedBody(new Response(body, { headers, status: opts?.status ?? 200 }))
+		return withProducedBody(new Response(body, { headers, status }))
 	}
 
 	/** A response with a body and no extra headers. */
 	#known<CT extends string, SK extends string>(
 		code: number,
 		headers: Readonly<Record<string, string>>,
-		raw: RawBody,
+		raw: RawBody | StreamBody,
 		opts?: ResponseOptions,
 	): TypedResponse<CT, SK> {
 		const status = opts?.status ?? code
@@ -190,6 +198,7 @@ export class HoneyRes {
 		if (isNullBodyStatus(status)) {
 			throw new TypeError(`A ${status} response cannot have a body; use ctx.res.noContent() or another status`)
 		}
+		if (raw instanceof ReadableStream) return typed(this.#streamed(raw, headers, opts, status))
 		if (this.nodeOut) {
 			const map = hasOptions(opts) ? applyPlain({ ...headers }, opts) : (headers as HeaderMap)
 			return typed(createHoneyResponse({ headers: map, raw, status }))
@@ -204,22 +213,31 @@ export class HoneyRes {
 		return new Response(null, { headers: applyNative(new Headers(headers), opts), status })
 	}
 
-	/** Bytes as `opts.contentType` (`application/octet-stream` by default), kept as the raw body. */
+	/** Bytes as `opts.contentType` (`application/octet-stream` by default), kept as the raw body; a stream goes out as it comes. */
 	binary<SK extends StatusKey, CT extends string = "application/octet-stream">(
 		statusKey: SK,
-		body: BinaryBody,
+		body: BinaryBody | StreamBody,
 		opts?: BinaryOptions<CT>,
 	): TypedResponse<CT, SK> {
-		return this.#known(statusKeyToCode[statusKey], binaryHeaders(opts?.contentType), binaryBytes(body), opts)
+		const bytes = body instanceof ReadableStream ? body : binaryBytes(body)
+		return this.#known(statusKeyToCode[statusKey], binaryHeaders(opts?.contentType), bytes, opts)
 	}
 
-	/** A `text/csv; charset=utf-8` answer; `body` goes out as written. */
-	csv<SK extends StatusKey>(statusKey: SK, body: string, opts?: ResponseOptions): TypedResponse<"text/csv", SK> {
+	/** A `text/csv; charset=utf-8` answer; `body` goes out as written, a stream as it comes. */
+	csv<SK extends StatusKey>(
+		statusKey: SK,
+		body: string | StreamBody,
+		opts?: ResponseOptions,
+	): TypedResponse<"text/csv", SK> {
 		return this.#known(statusKeyToCode[statusKey], CSV_HEADERS, body, opts)
 	}
 
-	/** A `text/html; charset=utf-8` answer; `body` goes out as written, with no escaping. */
-	html<SK extends StatusKey>(statusKey: SK, body: string, opts?: ResponseOptions): TypedResponse<"text/html", SK> {
+	/** A `text/html; charset=utf-8` answer; `body` goes out as written (a stream as it comes), with no escaping. */
+	html<SK extends StatusKey>(
+		statusKey: SK,
+		body: string | StreamBody,
+		opts?: ResponseOptions,
+	): TypedResponse<"text/html", SK> {
 		return this.#known(statusKeyToCode[statusKey], HTML_HEADERS, body, opts)
 	}
 
@@ -300,12 +318,20 @@ export class HoneyRes {
 	}
 
 	/** A `text/plain; charset=utf-8` answer. */
-	text<SK extends StatusKey>(statusKey: SK, body: string, opts?: ResponseOptions): TypedResponse<"text/plain", SK> {
+	text<SK extends StatusKey>(
+		statusKey: SK,
+		body: string | StreamBody,
+		opts?: ResponseOptions,
+	): TypedResponse<"text/plain", SK> {
 		return this.#known(statusKeyToCode[statusKey], TEXT_HEADERS, body, opts)
 	}
 
-	/** An `application/xml` answer; `body` goes out as written, with no escaping. */
-	xml<SK extends StatusKey>(statusKey: SK, body: string, opts?: ResponseOptions): TypedResponse<"application/xml", SK> {
+	/** An `application/xml` answer; `body` goes out as written (a stream as it comes), with no escaping. */
+	xml<SK extends StatusKey>(
+		statusKey: SK,
+		body: string | StreamBody,
+		opts?: ResponseOptions,
+	): TypedResponse<"application/xml", SK> {
 		return this.#known(statusKeyToCode[statusKey], XML_HEADERS, body, opts)
 	}
 }
