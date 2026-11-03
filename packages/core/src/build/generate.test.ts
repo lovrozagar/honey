@@ -60,14 +60,10 @@ async function generate(config: HoneyVitePluginConfig, dir: string) {
 const read = (dir: string, path: string) => readFileSync(join(dir, path), "utf8")
 const ALL = { manifest: true, openApi: { title: "Gen", version: "1.0.0" }, tree: true } as const
 
-/** Every `[honey:invalidate]` report the app's logger printed (production: its sink is stdout) while `run` ran. */
-async function invalidateReports(run: () => Promise<unknown>): Promise<number> {
-	let printed = ""
-	vi.stubEnv("NODE_ENV", "production")
-	vi.spyOn(process.stdout, "write").mockImplementation((chunk) => ((printed += String(chunk)), true))
-	await run()
-	vi.restoreAllMocks()
-	return printed.split("[honey:invalidate]").length - 1
+/** How many `[honey:invalidate]` reports one generation of `config` in `dir` made through its report channel. */
+async function invalidateReports(config: HoneyVitePluginConfig, dir: string): Promise<number> {
+	const { reports } = await generate(config, dir)
+	return reports.filter((line) => line.includes("[honey:invalidate]")).length
 }
 
 // v0: 62e871b032
@@ -222,7 +218,7 @@ describe("generateAndWrite (bit 19 h2), continued (3)", () => {
 				{ path: "b.json", title: "T", version: "1" },
 			]
 			const config = { app: "src/app.ts", codegen: { openApi, tree: false, types: true } }
-			expect(await invalidateReports(() => generate(config, dir))).toBe(1)
+			expect(await invalidateReports(config, dir)).toBe(1)
 		},
 		SLOW,
 	)
@@ -235,7 +231,7 @@ describe("generateAndWrite (bit 19 h2), continued (3)", () => {
 				"src/app.ts": appSource({ extra: ['\t.get("/items").handler((c) => c.res.text("ok", "ok"))'] }),
 			})
 			const config = { app: "src/app.ts", codegen: { tree: false, types: true } }
-			expect(await invalidateReports(() => generate(config, dir))).toBe(1)
+			expect(await invalidateReports(config, dir)).toBe(1)
 			expect(read(dir, "src/_gen/types.gen.d.ts")).toContain('export type RouteSelector = "GET /health" | "GET /items"')
 		},
 		SLOW,

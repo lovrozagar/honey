@@ -27,7 +27,6 @@ import {
 	type JsonSchemaOptions,
 	jsonSchemaOf,
 } from "../schema/to-json-schema.ts"
-import type { Logger } from "../telemetry/logger.ts"
 import { type CollectedRoute, type CollectedRoutes, type CollectedWsRoute, collectRoutes } from "./collect.ts"
 import { createComponents } from "./components.ts"
 import { assembleDocument, type OpenApiDocument, type OpenApiInfo } from "./document.ts"
@@ -65,8 +64,11 @@ export type GenerateOpenApiOptions = {
 	readonly info: OpenApiInfo
 	/** mutations that declare no `invalidate`: reported at `"warn"` (the default), failing at `"error"` */
 	readonly invalidate?: InvalidateCheckConfig
-	/** where warnings go; the app's logger by default */
-	readonly logger?: Logger
+	/** where warnings go, one line each; the app's logger by default */
+	readonly logger?: {
+		/** Hears one warning line. */
+		readonly warn: (message: string) => void
+	}
 	/** a schema no converter can describe: fail the document (`"throw"`, the default) or document it `{}` */
 	readonly onSchemaError?: "throw" | "warn"
 	/** the metaSpec profile this document carries */
@@ -195,7 +197,12 @@ function responsesOf(errors: ErrorSettings): PathsContext["responses"] {
 }
 
 /** The checks over the whole document: ids, security, invalidate selectors, then every diagnostic out. */
-function check(run: Run, operations: readonly EmittedOperation[], routes: CollectedRoutes, logger: Logger): void {
+function check(
+	run: Run,
+	operations: readonly EmittedOperation[],
+	routes: CollectedRoutes,
+	logger: { readonly warn: (message: string) => void },
+): void {
 	const { diagnostics, options } = run
 	assignOperationIds(operations, (message) => diagnostics.add("DUPLICATE_OPERATION_ID", "error", message))
 	checkSecurity(operations, options.securitySchemes, (level, message) =>

@@ -4,7 +4,7 @@
  * included; the virtual modules' code; and the app imported here sharing this core.
  */
 import { join } from "node:path"
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import * as codegen from "../../../gen/src/index.ts"
 import { honey } from "../routing/app.ts"
 import { appSource, type Project, project } from "./__fixtures__/project.ts"
@@ -55,15 +55,15 @@ const output = (entry: object) => ({ path: "x.json", title: "T", version: "1", .
 describe("documentOf: each output its own (bit 19 h2)", () => {
 	it("filters by the route's meta, declares only its own schemes, and sanitizes only itself", () => {
 		const served = app()
-		const all = documentOf(served, output({ securitySchemes: SCHEMES }), "off", undefined) as Document
+		const off = { effect: undefined, invalidate: "off" } as const
+		const all = documentOf(served, output({ securitySchemes: SCHEMES }), off) as Document
 		const contract = documentOf(
 			served,
 			output({
 				filterRoutes: (route: { meta: { contract?: boolean } }) => route.meta.contract === true,
 				securitySchemes: { jwt: SCHEMES.jwt },
 			}),
-			"off",
-			undefined,
+			off,
 		) as Document
 		const sanitize = { stripSecurityRequirements: ["jwt"], stripSecuritySchemes: ["iaKey"], stripXExtensions: true }
 		const published = documentOf(
@@ -73,8 +73,7 @@ describe("documentOf: each output its own (bit 19 h2)", () => {
 				sanitize,
 				securitySchemes: SCHEMES,
 			}),
-			"off",
-			undefined,
+			off,
 		) as Document
 		expect([Object.keys(all.paths), Object.keys(contract.paths), Object.keys(published.paths)]).toEqual([
 			["/public", "/internal", "/contract"],
@@ -117,6 +116,14 @@ const WITH_HIDDEN_ADDITION = [
 ]
 
 /* a ws route after the app's chain; the import hoists */
+const WITH_UNCONVERTIBLE = [
+	'\t.logger(createLogger({ level: "warn", write: (line) => void (globalThis as { appLines?: string[] }).appLines?.push(line) }))',
+	'\t.post("/custom")',
+	'\t.input({ json: { "~standard": { validate: (value: unknown) => ({ value }), vendor: "custom", version: 1 } } })',
+	'\t.handler((c) => c.res.text("ok", "c"))',
+	'import { createLogger } from "@lovrozagar/honey/logger"',
+]
+
 const WITH_SECURED = [
 	'\t.get("/secured")',
 	'\t.meta({ security: "jwt" } as never)',
@@ -187,6 +194,26 @@ describe("artifactsOf (bit 19 h2)", () => {
 })
 
 describe("artifactsOf (bit 19 h2), continued (2)", () => {
+	it(
+		"reports a diagnostic once per generation through the report channel, never through the app's logger",
+		async () => {
+			const { dir } = fresh({ "src/app.ts": appSource({ extra: WITH_UNCONVERTIBLE }) })
+			const openApi = [
+				{ path: "a.json", title: "A", version: "1" },
+				{ path: "b.json", title: "B", version: "1" },
+			]
+			const logged = ((globalThis as { appLines?: string[] }).appLines = [])
+			const { reports } = await artifacts({ app: "src/app.ts", codegen: { openApi, tree: false, types: true } }, dir)
+			const degraded = reports.filter((line) => line.includes("SCHEMA_DEGRADED"))
+			expect([degraded, logged]).toEqual([
+				[
+					'[honey:openapi] SCHEMA_DEGRADED: POST /custom: no JSON Schema converter for vendor "custom" (input); documented unconstrained',
+				],
+				[],
+			])
+		},
+		SLOW,
+	)
 	it(
 		"builds types alone for routes naming a security scheme no OpenAPI output declares",
 		async () => {
@@ -270,6 +297,21 @@ describe("virtualCode (bit 19 h2)", () => {
 			{ title: "First", version: "1" },
 		])
 	})
+
+	it(
+		"reports none of the document's diagnostics on a module load, since the generation already did",
+		async () => {
+			const { dir } = fresh({ "src/app.ts": appSource({ extra: WITH_UNCONVERTIBLE }) })
+			const config = resolveHoneyConfig({ app: "src/app.ts", codegen: { openApi: [output({ title: "T" })] } })
+			const logged = ((globalThis as { appLines?: string[] }).appLines = [])
+			let printed = ""
+			vi.spyOn(process.stderr, "write").mockImplementation((chunk) => ((printed += String(chunk)), true))
+			const code = await virtualCode("openApi", config, { codegen: async () => codegen, root: dir })
+			vi.restoreAllMocks()
+			expect([code.includes('"/custom"'), printed, logged]).toEqual([true, "", []])
+		},
+		SLOW,
+	)
 })
 
 describe("sourceOf, natively (bit 19 h2)", () => {

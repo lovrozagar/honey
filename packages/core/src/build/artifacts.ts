@@ -34,18 +34,40 @@ export type Clients = typeof import("@lovrozagar/honey-clients")
 /** Where a generation's diagnostics go, one line each. */
 export type Report = (message: string) => void
 
+/** Where a document's warnings go: the generation's report, each line once; the app's logger without one. */
+type Warnings = { readonly warn: Report } | undefined
+
+/** `report`, saying each line once: one generation builds several documents over the same routes. */
+function onceEach(report: Report): { readonly warn: Report } {
+	const said = new Set<string>()
+	return {
+		warn: (message) => {
+			if (said.has(message)) return
+			said.add(message)
+			report(message)
+		},
+	}
+}
+
+/** How a document is built: its invalidate check, the effect converter, and where its warnings go. */
+type DocumentRun = {
+	readonly effect: EffectConverter | undefined
+	readonly invalidate: InvalidateCheckConfig | undefined
+	readonly warnings?: Warnings
+}
+
 /** The document `entry` describes, sanitized as it asks. */
 export function documentOf(
 	app: Parameters<typeof generateOpenApi>[0],
 	entry: ResolvedOpenApiOutput,
-	invalidate: InvalidateCheckConfig | undefined,
-	effect: EffectConverter | undefined,
+	{ effect, invalidate, warnings }: DocumentRun,
 ): object {
 	const document = generateOpenApi(app, {
 		converters: { effect },
 		filterRoutes: entry.filterRoutes,
 		info: { description: entry.description, title: entry.title, version: entry.version },
 		invalidate,
+		logger: warnings,
 		profile: entry.profile,
 		securitySchemes: entry.securitySchemes,
 	})
@@ -56,11 +78,14 @@ const json = (value: unknown) => `${JSON.stringify(value, null, 2)}\n`
 
 type Run = { codegen: Clients; report: Report; root: string }
 
+/** A generation's run, its documents' warnings said once each through its report. */
+type Generation = Run & { readonly warnings: { readonly warn: Report } }
+
 /** The types file: the unfiltered document (built once, its check already reported) joined with the extracted ctx. */
 async function typesOf(
 	config: ResolvedHoneyConfig,
 	source: Documented & { tree: RouteTree },
-	run: Run,
+	run: Generation,
 	path: string,
 ): Promise<string> {
 	if (source.exportName === undefined)
@@ -72,6 +97,7 @@ async function typesOf(
 		converters: { effect: await effectConverter() },
 		info: { title: outputs[0]?.title ?? "API", version: outputs[0]?.version ?? "0.0.0" },
 		invalidate: outputs.length > 0 ? "off" : config.codegen.invalidate,
+		logger: run.warnings,
 		/* the first output's scheme wins a name, so a route naming any declared scheme is not reported; with no output
 		   nothing declares a scheme, and a named one is no error */
 		securitySchemes:
@@ -113,13 +139,14 @@ function mcpFiles(
 	app: Parameters<typeof generateOpenApi>[0],
 	mcp: ResolvedMcpOutput,
 	outputs: readonly ResolvedOpenApiOutput[],
-	{ codegen, effect }: { codegen: Clients; effect: EffectConverter | undefined },
+	{ codegen, effect, warnings }: Pick<Generation, "codegen" | "warnings"> & { effect: EffectConverter | undefined },
 ): [string, string][] {
 	const document = generateOpenApi(app, {
 		converters: { effect },
 		filterRoutes: mcp.filterRoutes,
 		info: { title: outputs[0]?.title ?? "API", version: outputs[0]?.version ?? "0.0.0" },
 		invalidate: "off",
+		logger: warnings,
 		/* the first output's scheme wins a name, as the types' document has it */
 		securitySchemes:
 			mcp.securitySchemes ?? Object.assign({}, ...outputs.map((entry) => entry.securitySchemes ?? {}).reverse()),
@@ -134,6 +161,7 @@ function mcpFiles(
 
 /** Every artifact `config` asks for from `source`, by its path from the project root. */
 export async function artifactsOf(config: ResolvedHoneyConfig, run: Run, source: Source): Promise<[string, string][]> {
+	const generation: Generation = { ...run, warnings: onceEach(run.report) }
 	const { manifest, mcp, openApi, tree, types } = config.codegen
 	const files: [string, string][] = []
 	if (tree !== false) files.push([tree, run.codegen.generateRouteTree(source.tree)])
@@ -141,17 +169,20 @@ export async function artifactsOf(config: ResolvedHoneyConfig, run: Run, source:
 	if (manifest !== false) files.push([manifest, json(generateManifest(documented.app))])
 	const effect = openApi.length > 0 || mcp !== false ? await effectConverter() : undefined
 	for (const [index, entry] of openApi.entries()) {
-		/* one report per generation, not one per document */
-		const published = documentOf(documented.app, entry, index === 0 ? config.codegen.invalidate : "off", effect)
+		/* one invalidate check per generation, not one per document */
+		const invalidate = index === 0 ? config.codegen.invalidate : "off"
+		const published = documentOf(documented.app, entry, { effect, invalidate, warnings: generation.warnings })
 		const { json: jsonPath, yaml } = openApiOutputPaths(entry.path)
 		if (jsonPath !== null) files.push([jsonPath, json(published)])
 		files.push([yaml, toYaml(published)])
 	}
-	if (mcp !== false) files.push(...mcpFiles(documented.app, mcp, openApi, { codegen: run.codegen, effect }))
+	if (mcp !== false) files.push(...mcpFiles(documented.app, mcp, openApi, { ...generation, effect }))
 	if (types !== false)
-		files.push([types.path, await typesOf(config, { ...documented, tree: source.tree }, run, types.path)])
+		files.push([types.path, await typesOf(config, { ...documented, tree: source.tree }, generation, types.path)])
 	return files
 }
+
+const SILENT: { readonly warn: Report } = { warn: () => {} }
 
 /** A virtual module's code: the route tree, the manifest, or the first OpenAPI document. */
 export async function virtualCode(
@@ -162,10 +193,14 @@ export async function virtualCode(
 	const source = await sourceOf(config, run.root)
 	if (kind === "routes") return (await run.codegen()).generateRouteTree(source.tree)
 	const { app } = await source.documented()
-	/* the generation reported the invalidate check; a module load must not again */
+	/* the generation reported the document's warnings; a module load must not again */
 	const value =
 		kind === "manifest"
 			? generateManifest(app)
-			: documentOf(app, config.codegen.openApi[0] as ResolvedOpenApiOutput, "off", await effectConverter())
+			: documentOf(app, config.codegen.openApi[0] as ResolvedOpenApiOutput, {
+					effect: await effectConverter(),
+					invalidate: "off",
+					warnings: SILENT,
+				})
 	return `export default ${JSON.stringify(value)}`
 }
