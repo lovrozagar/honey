@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import * as z from "zod"
 import { HoneyError } from "../errors/error.ts"
 import { defineErrors } from "../errors/errors.ts"
-import { createMiddleware, defineMiddleware } from "../middleware/middleware.ts"
+import { createMiddleware, namedMiddleware, type NextFn } from "../middleware/middleware.ts"
 import { honey } from "../routing/app.ts"
 import { generateManifest, type ManifestRoute } from "./manifest.ts"
 
@@ -221,7 +221,13 @@ describe("generateManifest: the middleware a route runs", () => {
 	// v0: bcdf605127
 	it("gives a mounted route's keys, meta and middleware exactly as its request sees them", async () => {
 		const errors = defineErrors({ gone: "gone", nope: "bad_request" })
-		const scoped = defineMiddleware({ errors: [errors, "nope"], fn: async (_c, next) => next(), meta: { area: "s" } })
+		const scoped = createMiddleware(
+			namedMiddleware("area", async (_c: object, next: NextFn) => next()),
+			{
+				errors: [errors, "nope"],
+				meta: { area: "s" },
+			},
+		)
 		const seen: { errorKeys: string[]; meta: unknown }[] = []
 		const sub = honey<{}>().errorFactory(errors).defaultErrors("gone")
 		sub.use("/s", scoped)
@@ -232,7 +238,7 @@ describe("generateManifest: the middleware a route runs", () => {
 		const app = honey<{}>().route(sub)
 		await app.fetch(new Request("http://x/s/x"), {})
 		const [route] = generateManifest(app).routes
-		expect([route?.errors, route?.meta, route?.middleware]).toEqual([seen[0]?.errorKeys, { area: "s" }, ["fn"]])
+		expect([route?.errors, route?.meta, route?.middleware]).toEqual([seen[0]?.errorKeys, { area: "s" }, ["area"]])
 		expect(seen[0]?.meta).toEqual({ area: "s" })
 	})
 })

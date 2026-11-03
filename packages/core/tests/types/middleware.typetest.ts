@@ -1,13 +1,13 @@
 /**
  * Middleware, as typed: what createMiddleware infers (requirements from the ctx annotation,
  * additions from next()), requirements checked where use() is called, what a chain accumulates
- * for its handlers, defineMiddleware's error keys, and the route builder's one-shot methods.
+ * for its handlers, createMiddleware's error keys and meta, and the route builder's one-shot methods.
  * Scoped use(path, mw) types are in middleware-scoped.typetest.ts. Checked by typecheck.
  */
 import { describe, expectTypeOf, it } from "vitest"
 import * as z from "zod"
 import { defineErrors } from "../../src/errors/errors.ts"
-import { createMiddleware, defineMiddleware, type MiddlewareFn } from "../../src/middleware/middleware.ts"
+import { createMiddleware, type MiddlewareFn } from "../../src/middleware/middleware.ts"
 import { honey } from "../../src/routing/app.ts"
 import type { InferBasePath, InferCtx, InferEnv } from "../../src/routing/app-types.ts"
 
@@ -176,23 +176,56 @@ describe("what a chain accumulates", () => {
 	})
 })
 
-describe("defineMiddleware and its error keys", () => {
+describe("createMiddleware's errors and meta", () => {
 	const errs = defineErrors({ auth_failed: "unauthorized", rate_limited: "too_many_requests" })
 
 	// v0: 4b010a3373
 	// v0: a2e207352a
 	// v0: ca64679a30
-	it("types the keys it names from the factory, readonly, and none when it names none", () => {
-		const named = defineMiddleware({
-			errors: [errs, "auth_failed"],
-			fn: createMiddleware((_ctx, next) => next({ userId: "u-1" })),
-		})
-		expectTypeOf(named).toMatchTypeOf<MiddlewareFn<{}, { userId: string }, "auth_failed">>()
-		expectTypeOf(named.errors).toMatchTypeOf<readonly string[] | undefined>()
-		const plain = defineMiddleware({ fn: createMiddleware((_ctx, next) => next({ x: 1 })) })
-		expectTypeOf(plain).toMatchTypeOf<MiddlewareFn<{}, { x: number }>>()
+	it("types the union of its additions and the keys it names from the factory, readonly; none when it names none", () => {
+		const auth = createMiddleware(
+			(ctx: { req: Request }, next) =>
+				ctx.req.headers.has("x-key") ? next({ keyId: "k-1" }) : next({ userId: "u-1" }),
+			{ errors: [errs, "auth_failed"] },
+		)
+		expectTypeOf(auth).toMatchTypeOf<
+			MiddlewareFn<{ req: Request }, { keyId: string } | { userId: string }, "auth_failed">
+		>()
+		expectTypeOf(auth.errors).toEqualTypeOf<readonly "auth_failed"[] | undefined>()
+		expectTypeOf(createMiddleware((_ctx, next) => next({ x: 1 })).errors).toEqualTypeOf<readonly never[] | undefined>()
 		// @ts-expect-error a key the factory does not have
-		defineMiddleware({ errors: [errs, "missing"], fn: createMiddleware((_ctx, next) => next()) })
+		createMiddleware((_ctx, next) => next(), { errors: [errs, "missing"] })
+	})
+
+	it("checks its meta against the meta its ctx reads, literals kept", () => {
+		type Ctx = { meta: { captcha?: boolean; worker?: string } }
+		const tagged = createMiddleware((_ctx: Ctx, next) => next(), { meta: { worker: "extract" } })
+		expectTypeOf(tagged.meta).toEqualTypeOf<Readonly<{ worker: "extract" }> | undefined>()
+		// @ts-expect-error a key the ctx's meta does not have
+		createMiddleware((_ctx: Ctx, next) => next(), { meta: { captch: true } })
+		// @ts-expect-error a value of the wrong type
+		createMiddleware((_ctx: Ctx, next) => next(), { meta: { worker: 1 } })
+	})
+
+	it("its meta counts as chain meta: a route may leave out what a mounted middleware supplies", () => {
+		const captcha = createMiddleware((_ctx, next) => next(), { meta: { captcha: true } })
+		const app = honey<{}>().meta<{ captcha: boolean; worker: string }>()
+		app
+			.use(captcha)
+			.get("/with")
+			.meta({ worker: "a" })
+			.handler((c) => c.res.text("ok", "x"))
+		app
+			.get("/route-level")
+			.use(captcha)
+			.meta({ worker: "a" })
+			.handler((c) => c.res.text("ok", "x"))
+		expectTypeOf(app.use(captcha)).not.toEqualTypeOf(app)
+		app
+			.get("/without")
+			// @ts-expect-error captcha is required and nothing supplies it
+			.meta({ worker: "a" })
+			.handler((c) => c.res.text("ok", "x"))
 	})
 })
 

@@ -9,7 +9,7 @@ The full **request lifecycle** — everything that turns a matched route into a 
 **Response/error core moved here from bit 08 (dependency re-cut).** Dispatch cannot produce a response or turn a thrown value into one without them, so this bit owns `response/response.ts` (`HoneyRes` core + `json`/`text`/`html`/`redirect` helper dispatch), `response/builder.ts` (response construction), and `errors/{error,errors,projector}.ts` (`HoneyError`, `defineErrors`/`ERROR_META`, thrown-value → response projector). **Bit 08 adds cases to these born-here files** — RAW_BODY (H18.1), output validation + exact-essence content-type (H18.2), media-type affinity — alongside the rest of io; adding cases to an earlier-born file is allowed (H13). The edge/security middlewares are bit 07; this bit is the mechanism they plug into.
 
 ## Files (from files.tsv)
-- `src/middleware/middleware.ts` (+test) — `createMiddleware`/`defineMiddleware`, order, short-circuit, per-mw telemetry.
+- `src/middleware/middleware.ts` (+test) — `createMiddleware` (errors and meta as options; `defineMiddleware` deleted, plan 39 3.3), order, short-circuit, per-mw telemetry.
 - `src/routing/middleware-chain.ts` (+test) — `scopeGuard`, `timedMiddleware`, `commonPrefix`, `errorsOf`, `describeMw` (dispatch-side: scope guards + chain compilation live with routing, not the `middleware/` primitive).
 - `src/context/context.ts` (+test) — `HoneyContext`, `ctx` extension via `.context(fn)`, typed input access.
 - `src/context/cookie.ts` (+test), `src/context/cookie-sign.ts` (+test).

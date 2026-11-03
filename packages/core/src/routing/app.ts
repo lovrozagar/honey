@@ -5,7 +5,14 @@
  */
 import { type ExecutionCtx, type HoneyContext, isReservedCtxKey } from "../context/context.ts"
 import type { MaybePromise, MiddlewareFn, RuntimeMiddleware } from "../middleware/middleware.ts"
-import type { AllChainMeta, DeclaredMeta, DefaultMeta, ScopedMwEntry, WithChainMeta } from "./app-types.ts"
+import type {
+	AllChainMeta,
+	DeclaredMeta,
+	DefaultMeta,
+	ScopedMwEntry,
+	WithChainMeta,
+	WithMiddlewareMeta,
+} from "./app-types.ts"
 import { dispatch } from "./dispatch.ts"
 import { joinPatterns } from "./pattern.ts"
 import {
@@ -197,9 +204,19 @@ export class Honey<
 	 * Chain middleware: a new handle whose routes run `mw`; this handle is unchanged. It also runs on a 404 or 405 when
 	 * every route starts with it. If nothing registers, mounts or serves through the new handle, the first request throws.
 	 */
-	use<TAdds>(
-		mw: MiddlewareFn<TCtx, TAdds>,
-	): Honey<TEnv, TCtx & TAdds, TRoutes, TMeta, TErrorFactory, TDefaultErrors, TBasePath, TTaps, TScopedMw>
+	use<TAdds, TMwMeta = {}>(
+		mw: MiddlewareFn<TCtx, TAdds, string, TMwMeta>,
+	): Honey<
+		TEnv,
+		TCtx & TAdds,
+		TRoutes,
+		WithMiddlewareMeta<TMeta, TMwMeta>,
+		TErrorFactory,
+		TDefaultErrors,
+		TBasePath,
+		TTaps,
+		TScopedMw
+	>
 	/**
 	 * Scoped middleware: runs for every request path under `path`, rebased on this handle's base path and matched by whole
 	 * segments, whichever handle registered the route and whether before or after this call. A 404 or 405 under it runs it

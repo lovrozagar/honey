@@ -5,7 +5,7 @@
 import { describe, expect, it } from "vitest"
 import { HoneyError } from "../errors/error.ts"
 import { defineErrors } from "../errors/errors.ts"
-import { createMiddleware, defineMiddleware } from "../middleware/middleware.ts"
+import { createMiddleware } from "../middleware/middleware.ts"
 import { GRAPH, type Honey, honey } from "./app.ts"
 import { finalTable } from "./dispatch.ts"
 
@@ -298,7 +298,7 @@ describe("errors and meta come from the chain that runs", () => {
 
 	// v0: 8d2d900785
 	it("defaultErrors applies to routes registered before the call", () => {
-		const scopedGuard = defineMiddleware({ errors: [errors, "nope"], fn: async (_c, next) => next() })
+		const scopedGuard = createMiddleware(async (_c, next) => next(), { errors: [errors, "nope"] })
 		const app = honey<{}>().errorFactory(errors)
 		app.get("/early").handler((ctx) => ctx.res.text("ok", "x"))
 		app.defaultErrors("gone")
@@ -381,7 +381,7 @@ describe("finalize reports middleware and routes that would silently be missing"
 describe("ctx.errors holds the declared keys the factory has", () => {
 	it("a declared key the factory lacks is left out of ctx.errors", async () => {
 		const errors = defineErrors({ gone: "gone" })
-		const foreign = defineMiddleware({ errors: [{ elsewhere: () => null }, "elsewhere"], fn: (_c, next) => next() })
+		const foreign = createMiddleware((_c, next) => next(), { errors: [{ elsewhere: () => null }, "elsewhere"] })
 		const app = honey<{}>().errorFactory(errors)
 		app
 			.get("/e")

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest"
 import * as z from "zod"
 import { defineErrors } from "../errors/errors.ts"
-import { defineMiddleware } from "../middleware/middleware.ts"
+import { createMiddleware } from "../middleware/middleware.ts"
 import { honey } from "../routing/app.ts"
 import type { RouteTree } from "../routing/tree.ts"
 import { SILENT } from "../telemetry/logger.ts"
@@ -445,7 +445,7 @@ describe("serving across composed and loaded apps (F15)", () => {
 	// v0: b415d83716
 	it("documents a scoped middleware's keys on the routes it covers only, a served route among them still answering", async () => {
 		const errors = defineErrors({ blocked: "forbidden", teapot: "bad_request" })
-		const block = defineMiddleware({ errors: [errors, "blocked"], fn: async (_c, next) => next() })
+		const block = createMiddleware(async (_c, next) => next(), { errors: [errors, "blocked"] })
 		const app = honey<{}>().errorFactory(errors).defaultErrors("teapot")
 		serveOpenApi(app, { title: "t", version: "1" })
 		app.use("/openapi.json", block)

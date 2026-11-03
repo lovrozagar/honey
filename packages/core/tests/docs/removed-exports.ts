@@ -94,6 +94,7 @@ export const REMOVED_NAMES: Readonly<Record<string, Verdict>> = {
 	WSRouteHandler: { kind: "internal", why: TREE },
 	clientInfo: { kind: "guide" },
 	createProxyHandler: { kind: "guide" },
+	defineMiddleware: { kind: "guide" },
 	enableI18n: { kind: "guide" },
 	enableOpenApi: { kind: "guide" },
 	enableServe: { kind: "guide" },

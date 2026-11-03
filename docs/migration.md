@@ -960,3 +960,23 @@ bun resolved "@lovrozagar/honey" to src/index.ts
 ```sh
 bun add @lovrozagar/honey@next @lovrozagar/honey-clients@next
 ```
+
+## `defineMiddleware` is `createMiddleware(fn, { errors, meta })`
+
+One factory makes every middleware. `createMiddleware` infers what each `next({...})` call adds, and its options name
+the error keys the middleware answers with (each route that mounts it declares them) and the meta it gives those
+routes, checked against the meta type its ctx reads. `defineMiddleware` typed only the first `next()` it saw.
+
+```ts v0
+import { defineMiddleware } from "@lovrozagar/honey"
+const withAuth = defineMiddleware({ errors: [errors, "unauthorized"], fn: (ctx: AuthCtx, next) => next({ user }) })
+```
+
+```ts
+import { createMiddleware, defineErrors } from "@lovrozagar/honey"
+
+const errors = defineErrors({ unauthorized: "unauthorized" })
+const withAuth = createMiddleware((_ctx: { req: Request }, next) => next({ user: { id: "u1" } }), {
+	errors: [errors, "unauthorized"],
+})
+```

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import * as z from "zod"
 import { defineErrors } from "../errors/errors.ts"
-import { createMiddleware, defineMiddleware } from "../middleware/middleware.ts"
+import { createMiddleware } from "../middleware/middleware.ts"
 import { collectRoutes } from "../openapi/collect.ts"
 import { honey } from "./app.ts"
 import { gatewayTree } from "./gateway-tree.ts"
@@ -223,9 +223,8 @@ describe("toRouteTree(): what a snapshot knows of errors", () => {
 	it("records each declared key's status key, from the factory the route named, a middleware's own or its app's, and keeps it as data in a gateway's tree", () => {
 		const named = defineErrors({ teapot: { schema: z.object({ brew: z.string() }), status: "bad_request" } })
 		const app = honey<{}>().errorFactory(defineErrors({ column_name_taken: "conflict" }))
-		const audited = defineMiddleware({
+		const audited = createMiddleware(async (_c, next) => next(), {
 			errors: [defineErrors({ audit_failed: "bad_gateway" }), "audit_failed"],
-			fn: async (_c, next) => next(),
 		})
 		app
 			.post("/columns")

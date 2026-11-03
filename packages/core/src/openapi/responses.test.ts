@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import * as z from "zod"
 import { defineErrors } from "../errors/errors.ts"
-import { defineMiddleware } from "../middleware/middleware.ts"
+import { createMiddleware } from "../middleware/middleware.ts"
 import { honey } from "../routing/app.ts"
 import { gatewayTree, overlaySchemas } from "../routing/gateway-tree.ts"
 import { createNode, insertRoute, type RouteTree } from "../routing/tree.ts"
@@ -285,7 +285,7 @@ describe("errors: a custom envelope schema", () => {
 			.errors("unauthorized")
 			.handler((c) => c.res.json("ok", {}))
 		app
-			.use(defineMiddleware({ fn: async (_c, next) => next() }))
+			.use(createMiddleware(async (_c, next) => next()))
 			.get("/b")
 			.errors("unauthorized")
 			.handler((c) => c.res.json("ok", {}))
@@ -453,7 +453,7 @@ describe("errors: where a key's status comes from", () => {
 describe("errors: what a route declares, and nothing more", () => {
 	it("documents a scoped middleware's keys on the routes it covers only", () => {
 		const errors = defineErrors({ blocked: "forbidden" })
-		const block = defineMiddleware({ errors: [errors, "blocked"], fn: async (_c, next) => next() })
+		const block = createMiddleware(async (_c, next) => next(), { errors: [errors, "blocked"] })
 		const app = honey<{}>().errorFactory(errors)
 		app.use("/admin", block)
 		app.get("/admin/x").handler((c) => c.res.json("ok", {}))

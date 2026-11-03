@@ -7,7 +7,7 @@
 import { describe, expect, it } from "vitest"
 import { HoneyError } from "../../src/errors/error.ts"
 import { defineErrors } from "../../src/errors/errors.ts"
-import { createMiddleware, defineMiddleware } from "../../src/middleware/middleware.ts"
+import { createMiddleware } from "../../src/middleware/middleware.ts"
 import { honey } from "../../src/routing/app.ts"
 import { ws } from "../../src/ws/route.ts"
 
@@ -195,12 +195,12 @@ describe("errors keep their shape through the chain", () => {
 	// v0: ae9c81026f
 	it("M-chain-errors: chain-level use(mw) contributes the middleware's declared errors", async () => {
 		const errors = defineErrors({ blocked: "forbidden", teapot: "bad_request" })
-		const block = defineMiddleware({
-			errors: [errors, "blocked"],
-			fn: () => {
+		const block = createMiddleware(
+			() => {
 				throw errors.blocked()
 			},
-		})
+			{ errors: [errors, "blocked"] },
+		)
 		const app = honey<{}>().errorFactory(errors).defaultErrors("teapot").use(block)
 		app.get("/b").handler((ctx) => ctx.res.json("ok", {}))
 		expect(await send(app, "/b")).toEqual(envelope("blocked", 403, "forbidden"))
@@ -273,11 +273,7 @@ describe("registration fails loudly, and stays fast", () => {
 	// v0: 30a7badae6
 	it("M-mount-perf: mounting 200 sub-apps under scoped middleware with meta stays fast", async () => {
 		const errors = defineErrors({ blocked: "forbidden" })
-		const scoped = defineMiddleware({
-			errors: [errors, "blocked"],
-			fn: (_ctx, next) => next(),
-			meta: { area: "admin" },
-		})
+		const scoped = createMiddleware((_ctx, next) => next(), { errors: [errors, "blocked"], meta: { area: "admin" } })
 		const started = performance.now()
 		const parent = honey<{}>().errorFactory(errors)
 		for (let i = 0; i < 200; i++) {

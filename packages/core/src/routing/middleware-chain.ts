@@ -6,12 +6,12 @@
 import type { RuntimeMiddleware } from "../middleware/middleware.ts"
 import { pathInScope, type Segment } from "./pattern.ts"
 
-/** The error keys a middleware declares (`defineMiddleware`). */
+/** The error keys a middleware declares (`createMiddleware(fn, { errors })`). */
 export function errorsOf(mw: RuntimeMiddleware): readonly string[] | undefined {
 	return (mw as { errors?: readonly string[] }).errors
 }
 
-/** The factory a middleware's error keys come from (`defineMiddleware`). */
+/** The factory a middleware's error keys come from (`createMiddleware(fn, { errors })`). */
 export function errorFactoryOf(mw: RuntimeMiddleware): Readonly<Record<string, unknown>> | undefined {
 	return (mw as { errorFactory?: Readonly<Record<string, unknown>> }).errorFactory
 }

@@ -13,6 +13,16 @@ declare const CHAIN_META: unique symbol
 export type WithChainMeta<TMeta, TValues> = InitAccMeta<TMeta> & { readonly [CHAIN_META]?: TValues }
 
 /**
+ * The handle's meta after `.use(mw)`: the meta the middleware gives its routes counts as chain meta; a middleware
+ * that gives none (or none known, a plain `Record<string, unknown>`) leaves it as it was.
+ */
+export type WithMiddlewareMeta<TMeta, TMwMeta> = string extends keyof TMwMeta
+	? TMeta
+	: [keyof TMwMeta] extends [never]
+		? TMeta
+		: WithChainMeta<TMeta, TMwMeta>
+
+/**
  * What a route under this handle must still pass to `.meta()`: the handle's meta with the keys chain
  * `.meta(values)` already supplied turned optional. A key no chain value sets stays as declared, so a required one
  * is still required: the chain's values are defaults, not a way to drop the declaration.

@@ -8,7 +8,7 @@ generator.
 
 | Export                              | What it holds                                                                                                                                       |
 | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@lovrozagar/honey`                 | `honey`, `HoneyError`, `defineErrors`, `createMiddleware`, `defineMiddleware`, `mergeTree`, `detectRuntime`, and the type helpers below             |
+| `@lovrozagar/honey`                 | `honey`, `HoneyError`, `defineErrors`, `createMiddleware`, `mergeTree`, `detectRuntime`, and the type helpers below                                 |
 | `@lovrozagar/honey/serve`           | `serve(app, options)`: Node or Bun, whichever runs it                                                                                               |
 | `@lovrozagar/honey/node`            | `serve` for `node:http` directly                                                                                                                    |
 | `@lovrozagar/honey/ws`              | `ws(app, path)`, a WebSocket route                                                                                                                  |

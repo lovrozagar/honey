@@ -5,7 +5,7 @@
  */
 import { createHash } from "node:crypto"
 import * as z from "zod"
-import { defineMiddleware } from "../../../src/middleware/middleware.ts"
+import { createMiddleware } from "../../../src/middleware/middleware.ts"
 import type { ConformanceApp, errors } from "./app.ts"
 
 type User = { readonly email: string; readonly id: string; readonly name: string }
@@ -25,13 +25,13 @@ function missingFields(body: { email?: string; name?: string }) {
 
 /** The `/secure` handle: every route behind the bearer check. */
 function secured(root: ConformanceApp, factory: typeof errors) {
-	const auth = defineMiddleware({
-		errors: [factory, "unauthorized"],
-		fn: (ctx: { readonly req: Request }, proceed) => {
+	const auth = createMiddleware(
+		(ctx: { readonly req: Request }, proceed) => {
 			if (ctx.req.headers.get("authorization") !== "Bearer valid-token") throw factory.unauthorized()
 			return proceed()
 		},
-	})
+		{ errors: [factory, "unauthorized"] },
+	)
 	return root.basePath("/secure").use(auth)
 }
 

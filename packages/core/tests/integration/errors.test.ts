@@ -6,7 +6,7 @@
 import { describe, expect, it } from "vitest"
 import { HoneyError } from "../../src/errors/error.ts"
 import { defineErrors } from "../../src/errors/errors.ts"
-import { createMiddleware, defineMiddleware } from "../../src/middleware/middleware.ts"
+import { createMiddleware } from "../../src/middleware/middleware.ts"
 import { honey } from "../../src/routing/app.ts"
 
 type Fetchable = { fetch: (r: Request, env: never) => Response | Promise<Response> }
@@ -361,13 +361,13 @@ describe("which errors reach the client under an errorFactory", () => {
 	// v0: cc8702d138
 	it("a middleware's declared errors reach the client on the routes that use it", async () => {
 		const own = defineErrors({ auth_required: "unauthorized", rate_limited: "too_many_requests" })
-		const auth = defineMiddleware({
-			errors: [own, "auth_required"],
-			fn: (ctx: { req: Request }, next) => {
+		const auth = createMiddleware(
+			(ctx: { req: Request }, next) => {
 				if (!ctx.req.headers.get("authorization")) throw own.auth_required()
 				return next()
 			},
-		})
+			{ errors: [own, "auth_required"] },
+		)
 		const app = honey<{}>().errorFactory(own)
 		app
 			.get("/p")

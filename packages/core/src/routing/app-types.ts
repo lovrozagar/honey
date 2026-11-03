@@ -212,6 +212,7 @@ export type {
 	RouteMeta,
 	SkipRouteRecord,
 	WithChainMeta,
+	WithMiddlewareMeta,
 } from "./meta-types.ts"
 
 /** The status codes `errorsByStatus` is keyed by; another status key falls back to `number`. */

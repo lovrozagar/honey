@@ -4,7 +4,6 @@ import {
 	collectMiddlewareMeta,
 	compileChain,
 	createMiddleware,
-	defineMiddleware,
 	type MiddlewareFn,
 	namedMiddleware,
 	type RuntimeMiddleware,
@@ -275,22 +274,23 @@ describe("middleware factories and meta", () => {
 
 	// v0: 989f510b71
 	it("middleware meta may not set internal, to either value", () => {
-		expect(() => createMiddleware((_ctx, next) => next(), { meta: { internal: true } })).toThrow(
+		expect(() => createMiddleware((_ctx, next) => next(), { meta: { internal: true } as never })).toThrow(
 			'cannot set "internal"',
 		)
-		expect(() => defineMiddleware({ fn: (_ctx, next) => next(), meta: { internal: false } })).toThrow(
+		expect(() => createMiddleware((_ctx, next) => next(), { meta: { internal: false } as never })).toThrow(
 			'cannot set "internal"',
 		)
 	})
 
 	// v0: e83975eeb1
 	// v0: dcf1d551cf
-	it("defineMiddleware stores the error keys it names and its meta", () => {
+	it("createMiddleware stores the error keys it names, their factory, and its meta", () => {
 		const factory = { gone: () => new HoneyError({ errorKey: "gone", status: "gone" }), nope: () => null }
-		const mw = defineMiddleware({ errors: [factory, "gone"], fn: (_ctx, next) => next(), meta: { a: 1 } })
+		const mw = createMiddleware((_ctx, next) => next(), { errors: [factory, "gone"], meta: { a: 1 } })
 		expect(mw.errors).toEqual(["gone"])
+		expect((mw as { errorFactory?: unknown }).errorFactory).toBe(factory)
 		expect(mw.meta).toEqual({ a: 1 })
-		const bare = defineMiddleware({ fn: (_ctx, next) => next() })
+		const bare = createMiddleware((_ctx, next) => next())
 		expect(bare.errors).toBeUndefined()
 		expect(bare.meta).toBeUndefined()
 	})

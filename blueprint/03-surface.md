@@ -6,7 +6,7 @@ Every public export of both packages, tagged **KEEP** (re-homed and split, behav
 
 | export | disposition | note |
 | --- | --- | --- |
-| `.` (`honey()`, `Honey`, `HoneyContext`, `HoneyCtx`, `defineErrors`, `HoneyError`, `createMiddleware`/`defineMiddleware`, `HoneyRes`/`createErrorResponse`, `mergeTree`, `detectRuntime`, `toFetchRequest`, the `Infer*`/meta types) | KEEP | the `Honey` class (~2,600 lines in v0) is split into route-model / finalize / dispatch / registration files under the limits; the public type stays |
+| `.` (`honey()`, `Honey`, `HoneyContext`, `HoneyCtx`, `defineErrors`, `HoneyError`, `createMiddleware`, `HoneyRes`/`createErrorResponse`, `mergeTree`, `detectRuntime`, `toFetchRequest`, the `Infer*`/meta types) | KEEP | the `Honey` class (~2,600 lines in v0) is split into route-model / finalize / dispatch / registration files under the limits; the public type stays |
 | `./accepts` | KEEP | |
 | `./body-limit` | KEEP | |
 | `./build` | MODIFY [H15] | Deno build target removed |

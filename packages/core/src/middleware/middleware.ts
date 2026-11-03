@@ -28,16 +28,17 @@ export type NextFn = {
 
 /**
  * A middleware: a function of the context and `next`, returning the answer. `TCtx` is what it
- * reads from the context, `TAdds` what it adds, `TErrors` the error keys it can answer with.
+ * reads from the context, `TAdds` what it adds, `TErrors` the error keys it can answer with,
+ * `TMeta` the meta it gives every route that mounts it.
  */
-export type MiddlewareFn<TCtx = {}, TAdds = {}, TErrors extends string = string> = ((
+export type MiddlewareFn<TCtx = {}, TAdds = {}, TErrors extends string = string, TMeta = Record<string, unknown>> = ((
 	ctx: TCtx,
 	next: NextFn,
 ) => MaybePromise<MiddlewareResult<TAdds>>) & {
 	/** Error keys this middleware can answer with. A route mounting it counts them as declared, and generated documents list them. */
 	errors?: readonly TErrors[]
-	/** Meta this middleware contributes to every route that mounts it. */
-	meta?: Readonly<Record<string, unknown>>
+	/** Meta this middleware contributes to every route that mounts it; the route's own meta wins over it. */
+	meta?: Readonly<TMeta>
 }
 
 /** A stored middleware, generics erased. */
@@ -69,46 +70,53 @@ function attachMiddlewareMeta(fn: object, meta: Record<string, unknown>): void {
 	Object.defineProperty(fn, "meta", { value: Object.freeze({ ...meta }) })
 }
 
-/** A middleware whose error keys are constrained to a factory; `.use()` accumulates them. */
-export function defineMiddleware<
-	TReqs,
-	TAdds,
-	TFactory extends Record<string, (...args: never[]) => unknown>,
-	TKeys extends keyof TFactory & string,
->(opts: {
-	/** The error factory, then the keys from it this middleware can answer with. */
-	errors?: [TFactory, ...TKeys[]]
-	/** The middleware. This same function is returned, with `errors` and `meta` set on it. */
-	fn: MiddlewareFn<TReqs, TAdds>
-	/** Meta every route mounting this middleware gets; the route's own meta wins over it. Setting `internal` throws. */
-	meta?: Record<string, unknown>
-}): MiddlewareFn<TReqs, TAdds, TKeys> {
-	const fn = opts.fn as MiddlewareFn<TReqs, TAdds, TKeys>
-	if (opts.errors) {
-		Object.defineProperty(fn, "errors", { value: opts.errors.slice(1) })
-		/* the factory the keys come from, off the type: a document reads their statuses off it */
-		Object.defineProperty(fn, "errorFactory", { value: opts.errors[0] })
-	}
-	if (opts.meta) attachMiddlewareMeta(fn, opts.meta)
-	return fn
-}
-
 /** The additions a middleware's return type carries; distributes over unions. */
 type ExtractAdds<T> = Awaited<T> extends MiddlewareResult<infer A> ? A : never
 
 /**
- * A middleware: annotate `ctx` for what it requires; what it adds is inferred from `next({...})`.
- *   createMiddleware((ctx: { env: { DB: D1Database } }, next) => next({ db }))
+ * `TMeta` checked against the meta the middleware's ctx reads: each key one that meta has, its value of that key's type;
+ * any key when the ctx reads no meta. `internal` is never one: it would hide routes.
  */
-export function createMiddleware<TReqs = {}, TRet extends MaybePromise<Response> = MaybePromise<MiddlewareResult<{}>>>(
+type MiddlewareMeta<TReqs, TMeta> = {
+	[K in keyof TMeta]: K extends "internal"
+		? never
+		: TReqs extends { readonly meta: infer M }
+			? K extends keyof M
+				? M[K]
+				: never
+			: TMeta[K]
+}
+
+/** What a middleware declares beside its function: the errors it can answer with and the meta it gives its routes. */
+export type MiddlewareOptions<TReqs, TFactory, TKeys, TMeta> = {
+	/** The error factory, then the keys from it this middleware can answer with: every route mounting it declares them. */
+	errors?: [TFactory, ...TKeys[]]
+	/** Meta every route mounting this middleware gets; the route's own meta wins over it. Setting `internal` throws. */
+	meta?: MiddlewareMeta<TReqs, TMeta>
+}
+
+/**
+ * A middleware: annotate `ctx` for what it requires; what it adds is inferred from `next({...})`, every call's shape.
+ * `errors` names the keys it can answer with from a factory, and `meta` is checked against the meta its ctx reads.
+ *   createMiddleware((ctx: { env: { DB: D1Database } }, next) => next({ db }), { errors: [errors, "db_down"] })
+ */
+export function createMiddleware<
+	TReqs = {},
+	TRet extends MaybePromise<Response> = MaybePromise<MiddlewareResult<{}>>,
+	TFactory extends Record<string, (...args: never[]) => unknown> = never,
+	TKeys extends keyof TFactory & string = never,
+	const TMeta extends Record<string, unknown> = {},
+>(
 	fn: (ctx: TReqs, next: NextFn) => TRet,
-	opts?: {
-		/** Meta every route mounting this middleware gets; the route's own meta wins over it. Setting `internal` throws. */
-		meta?: Record<string, unknown>
-	},
-): MiddlewareFn<TReqs, ExtractAdds<TRet>> {
-	if (opts?.meta) attachMiddlewareMeta(fn, opts.meta)
-	return fn as unknown as MiddlewareFn<TReqs, ExtractAdds<TRet>>
+	opts?: MiddlewareOptions<TReqs, TFactory, TKeys, TMeta>,
+): MiddlewareFn<TReqs, ExtractAdds<TRet>, TKeys, TMeta> {
+	if (opts?.errors) {
+		Object.defineProperty(fn, "errors", { value: opts.errors.slice(1) })
+		/* the factory the keys come from, off the type: a document reads their statuses off it */
+		Object.defineProperty(fn, "errorFactory", { value: opts.errors[0] })
+	}
+	if (opts?.meta) attachMiddlewareMeta(fn, opts.meta as Record<string, unknown>)
+	return fn as unknown as MiddlewareFn<TReqs, ExtractAdds<TRet>, TKeys, TMeta>
 }
 
 /** Merge the meta a chain contributes, in run order (later wins). Resolved once at finalize. */

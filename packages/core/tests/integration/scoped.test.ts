@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from "vitest"
 import { defineErrors } from "../../src/errors/errors.ts"
-import { createMiddleware, defineMiddleware } from "../../src/middleware/middleware.ts"
+import { createMiddleware } from "../../src/middleware/middleware.ts"
 import { honey } from "../../src/routing/app.ts"
 
 type Fetchable = { fetch: (r: Request, env: never) => Response | Promise<Response> }
@@ -129,7 +129,7 @@ describe("scopes on unknown paths and wrong methods", () => {
 	// v0: a0fcac9713
 	it("a scope's declared errors reach the routes it covers, and only those", async () => {
 		const errors = defineErrors({ admin_only: "forbidden", internal_server_error: "internal_server_error" })
-		const declares = defineMiddleware({ errors: [errors, "admin_only"], fn: (_ctx, next) => next() })
+		const declares = createMiddleware((_ctx, next) => next(), { errors: [errors, "admin_only"] })
 		const app = honey<{}>().errorFactory(errors).defaultBoundary("internal_server_error").use("/admin", declares)
 		for (const path of ["/admin/x", "/public"])
 			app.get(path).handler(() => {

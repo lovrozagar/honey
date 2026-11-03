@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { defineMiddleware, type RuntimeMiddleware } from "../middleware/middleware.ts"
+import { createMiddleware, type RuntimeMiddleware } from "../middleware/middleware.ts"
 import { GRAPH, honey } from "./app.ts"
 import { parsePattern } from "./pattern.ts"
 import {
@@ -96,11 +96,8 @@ describe("the graph: mounting", () => {
 
 	it("chainErrorKeys lists the keys a chain declares, in run order", () => {
 		const factory = { a: () => null, b: () => null }
-		const first = defineMiddleware({ errors: [factory, "b"], fn: (_c, next) => next() }) as unknown as RuntimeMiddleware
-		const second = defineMiddleware({
-			errors: [factory, "a"],
-			fn: (_c, next) => next(),
-		}) as unknown as RuntimeMiddleware
+		const first = createMiddleware((_c, next) => next(), { errors: [factory, "b"] }) as unknown as RuntimeMiddleware
+		const second = createMiddleware((_c, next) => next(), { errors: [factory, "a"] }) as unknown as RuntimeMiddleware
 		expect(chainErrorKeys([first, pass, second])).toEqual(["b", "a"])
 	})
 })

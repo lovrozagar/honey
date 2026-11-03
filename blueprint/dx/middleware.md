@@ -4,7 +4,7 @@
 
 | value | required | default | outcome | pitfall | test |
 | --- | --- | --- | --- | --- | --- |
-| `createMiddleware` / `defineMiddleware` | — | — | a typed middleware that can extend `ctx` and short-circuit | extending `ctx` changes the handler type downstream | `middleware/middleware.test.ts` |
+| `createMiddleware(fn, { errors, meta })` | — | — | a typed middleware that can extend `ctx` and short-circuit | extending `ctx` changes the handler type downstream | `middleware/middleware.test.ts` |
 | `next()` | — | — | runs the rest of the chain and returns the downstream response; typed `MaybePromise<MiddlewareResult>` — synchronous when everything downstream ran sync (the sync-spine win, bit 02) | **always `await next()`** (works sync or async); `next().then(...)` is now a compile error, not a runtime crash | `middleware/middleware.test.ts` |
 | `cors(options)` | no | — | CORS headers + preflight | credential reflection with `*` origin is rejected under the adversarial gate [F1] | `middleware/cors.test.ts`, `integration/security/middleware-adversarial.test.ts` |
 | `secureHeaders(options)` | no | sane set | HSTS, X-Content-Type-Options, frame, referrer, etc. | overriding a header to a weaker value is the user's choice, documented | `middleware/secure-headers.test.ts` |

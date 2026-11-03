@@ -21,6 +21,7 @@ import type {
 	RouteMeta,
 	ScopedMwEntry,
 	SkipRouteRecord,
+	WithMiddlewareMeta,
 } from "./app-types.ts"
 import { joinPatterns, parsePattern } from "./pattern.ts"
 import { addRoute, type HandleView, type HoneyGraph, type PendingRoute, type RouteSource, settle } from "./register.ts"
@@ -346,12 +347,16 @@ export class RouteBuilder<B extends BuilderTypes> {
 		return this.#next({ output: schemas })
 	}
 
-	/** Route-level middleware, after the chain and the scopes. */
-	use<TAdds>(mw: MiddlewareFn<B["ctx"], TAdds>): BuilderChain<
+	/** Route-level middleware, after the chain and the scopes; the meta it gives counts as supplied for `.meta()`. */
+	use<TAdds, TMwMeta = {}>(
+		mw: MiddlewareFn<B["ctx"], TAdds, string, TMwMeta>,
+	): BuilderChain<
 		Next<
 			B,
 			{
 				/** The ctx plus what the middleware adds. */ ctx: B["ctx"] & TAdds
+				/** The handle's meta, with what the middleware gives counted as supplied. */
+				meta: WithMiddlewareMeta<B["meta"], TMwMeta>
 			}
 		>
 	> {

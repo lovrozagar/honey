@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { defineMiddleware, type RuntimeMiddleware } from "../middleware/middleware.ts"
+import { createMiddleware, type RuntimeMiddleware } from "../middleware/middleware.ts"
 import { commonPrefix, describeMw, errorsOf, scopeGuard } from "./middleware-chain.ts"
 import { parsePattern } from "./pattern.ts"
 
@@ -28,7 +28,7 @@ describe("scopeGuard", () => {
 
 	it("keeps the middleware's name, error keys and meta", () => {
 		const factory = { gone: () => null }
-		const named = defineMiddleware({ errors: [factory, "gone"], fn: (_c, next) => next(), meta: { a: 1 } })
+		const named = createMiddleware((_c, next) => next(), { errors: [factory, "gone"], meta: { a: 1 } })
 		Object.defineProperty(named, "name", { value: "auth" })
 		const guard = scopeGuard(parsePattern("/x"), named as unknown as RuntimeMiddleware)
 		expect(guard.name).toBe("auth")

@@ -24,7 +24,7 @@ export type {
 	MetaSpecSingle,
 	MetaSpecStrictness,
 } from "./meta/meta-spec-merge.ts"
-export { createMiddleware, defineMiddleware, type MiddlewareFn } from "./middleware/middleware.ts"
+export { createMiddleware, type MiddlewareFn, type MiddlewareOptions } from "./middleware/middleware.ts"
 export type { ProxyConfig } from "./proxy/proxy.ts"
 export type { RealtimeBus } from "./realtime/bus.ts"
 export type { ConnContext, RealtimeLimits } from "./realtime/route.ts"

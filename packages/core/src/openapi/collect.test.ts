@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import * as z from "zod"
 import { defineErrors } from "../errors/errors.ts"
 import { readableStream } from "../input/input.ts"
-import { createMiddleware, defineMiddleware } from "../middleware/middleware.ts"
+import { createMiddleware } from "../middleware/middleware.ts"
 import { honey } from "../routing/app.ts"
 import { createNode, insertRoute } from "../routing/tree.ts"
 import { collectRoutes } from "./collect.ts"
@@ -253,8 +253,8 @@ describe("collectRoutes: each error key's status, for the document", () => {
 describe("collectRoutes: a middleware's keys, from the factory it brings", () => {
 	it("reads a middleware's keys off its own factory, scoped or on the route, before the app's", () => {
 		const audit = defineErrors({ audit_failed: "bad_gateway", conflict_seen: "service_unavailable" })
-		const audited = defineMiddleware({ errors: [audit, "audit_failed"], fn: async (_c, next) => next() })
-		const seen = defineMiddleware({ errors: [audit, "conflict_seen"], fn: async (_c, next) => next() })
+		const audited = createMiddleware(async (_c, next) => next(), { errors: [audit, "audit_failed"] })
+		const seen = createMiddleware(async (_c, next) => next(), { errors: [audit, "conflict_seen"] })
 		const app = honey<{}>().errorFactory(defineErrors({ conflict_seen: "conflict" }))
 		app.use("/admin", audited)
 		app.get("/admin/x").handler((c) => c.res.text("ok", "x"))
