@@ -7,6 +7,7 @@
  * required, naming the install. The default run runs on JDK 21; 17 and 25 run in CI's matrix. CI reads the same pins
  * file with `jq`, in every job that runs gen's Java, beside the `-java-` cache.
  */
+import { spawn } from "node:child_process"
 import { createHash, randomUUID } from "node:crypto"
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
@@ -15,6 +16,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import { HARNESS, JAVA, RUST, TOOLCHAIN_PROJECTS } from "../../vitest.config.ts"
 import { GRADLE_RUN, leftAfter } from "../../src/emit/java/__fixtures__/compiled.ts"
 import * as env from "../../src/emit/java/__fixtures__/java-env.ts"
+import { SPAWN_TIMEOUT } from "../../src/gen/__fixtures__/spawn-timeout.ts"
 
 const { execJava, gjfJava, javaCacheDir, javaEnv, javaHome, javaInstall, runGjf, runGradle, runJava, withJava } = env
 
@@ -347,7 +349,7 @@ describe("what a run never does", () => {
 })
 
 describe.skipIf(!PRESENT)("the pinned toolchains a run uses", () => {
-	it("runs each pinned JDK at its pinned version, from the cache", () => {
+	it("runs each pinned JDK at its pinned version, from the cache", { timeout: SPAWN_TIMEOUT }, () => {
 		for (const major of ["17", "21", "25"] as const) {
 			expect(javaHome(Number(major)).startsWith(cache())).toBe(true)
 			expect(runJava(Number(major), ["-version"]).stderr).toContain(`version "${pins().jdk[major].version}"`)
@@ -356,16 +358,20 @@ describe.skipIf(!PRESENT)("the pinned toolchains a run uses", () => {
 
 	/* a JVM writes its own warnings to stdout by default, where a driver's JSON goes: under load a thread warning
 	   broke a driver's parse ("[0.004s][warning]..."). NewSize over MaxNewSize warns on any host. */
-	it("keeps a JVM's own warning off stdout, the program's channel, and on stderr, on each pinned JDK", async () => {
-		const WARNS = ["-XX:NewSize=64m", "-XX:MaxNewSize=8m", "-version"]
-		for (const major of [17, 21, 25]) {
-			const runs = [runJava(major, WARNS), await execJava(major, WARNS)]
-			expect(runs.map((ran) => [ran.stdout, ran.stderr.includes("[warning][gc,ergo] NewSize")])).toEqual([
-				["", true],
-				["", true],
-			])
-		}
-	})
+	it(
+		"keeps a JVM's own warning off stdout, the program's channel, and on stderr, on each pinned JDK",
+		{ timeout: SPAWN_TIMEOUT },
+		async () => {
+			const WARNS = ["-XX:NewSize=64m", "-XX:MaxNewSize=8m", "-version"]
+			for (const major of [17, 21, 25]) {
+				const runs = [runJava(major, WARNS), await execJava(major, WARNS)]
+				expect(runs.map((ran) => [ran.stdout, ran.stderr.includes("[warning][gc,ergo] NewSize")])).toEqual([
+					["", true],
+					["", true],
+				])
+			}
+		},
+	)
 
 	it("hold every pinned Jackson artifact in the repo to its sha1 and sha256", () => {
 		const repo = join(cache(), "repo")
@@ -379,47 +385,78 @@ describe.skipIf(!PRESENT)("the pinned toolchains a run uses", () => {
 			.map((row) => row.path)
 		expect(mismatched).toEqual([])
 	})
+})
 
-	it("runs the pinned Gradle from the cache", () => {
+describe.skipIf(!PRESENT)("the pinned build tools a run uses", () => {
+	it("runs the pinned Gradle from the cache", { timeout: SPAWN_TIMEOUT }, () => {
 		expect(runGradle(["--version"]).stdout).toContain(`Gradle ${PINNED.gradle.version}`)
 	})
 
-	it("runs google-java-format on the 21 JDK alone, listing only the file it would change", () => {
-		const dir = mkdtempSync(join(javaCacheDir("tmp"), "gjf-"))
-		try {
-			writeFileSync(join(dir, "Canon.java"), "public class Canon {}\n")
-			writeFileSync(join(dir, "Loose.java"), "public class Loose{}\n")
-			expect(gjfJava()).toBe(join(javaHome(21), "bin/java"))
-			const listed = runGjf(["--dry-run", join(dir, "Canon.java"), join(dir, "Loose.java")])
-			expect([listed.status, listed.stdout.includes("Loose.java"), listed.stdout.includes("Canon.java")]).toEqual([
-				0,
-				true,
-				false,
-			])
-		} finally {
-			rmSync(dir, { force: true, recursive: true })
-		}
-	})
+	it(
+		"runs google-java-format on the 21 JDK alone, listing only the file it would change",
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			const dir = mkdtempSync(join(javaCacheDir("tmp"), "gjf-"))
+			try {
+				writeFileSync(join(dir, "Canon.java"), "public class Canon {}\n")
+				writeFileSync(join(dir, "Loose.java"), "public class Loose{}\n")
+				expect(gjfJava()).toBe(join(javaHome(21), "bin/java"))
+				const listed = runGjf(["--dry-run", join(dir, "Canon.java"), join(dir, "Loose.java")])
+				expect([listed.status, listed.stdout.includes("Loose.java"), listed.stdout.includes("Canon.java")]).toEqual([
+					0,
+					true,
+					false,
+				])
+			} finally {
+				rmSync(dir, { force: true, recursive: true })
+			}
+		},
+	)
 })
 
 describe.skipIf(!PRESENT)("a Gradle build's daemon", () => {
-	it("leaves no Gradle daemon alive after an offline build, its own processes found by their mark", () => {
-		/* the mark keeps another file's Gradle out: the java project runs its files side by side */
-		const mark = randomUUID()
-		const dir = mkdtempSync(join(javaCacheDir("tmp"), "gradle-"))
+	/* the build's start, then leftAfter's own wait of up to 60 s for a single-use daemon to exit: past one bound, so a
+	   leaked daemon fails on its listing rather than on the timeout */
+	it(
+		"leaves no Gradle daemon alive after an offline build, its own processes found by their mark",
+		{ timeout: 2 * SPAWN_TIMEOUT },
+		() => {
+			/* the mark keeps another file's Gradle out: the java project runs its files side by side */
+			const mark = randomUUID()
+			const dir = mkdtempSync(join(javaCacheDir("tmp"), "gradle-"))
+			try {
+				writeFileSync(join(dir, "settings.gradle"), "rootProject.name = 'probe'\n")
+				writeFileSync(join(dir, "build.gradle"), "plugins { id 'java-library' }\n")
+				mkdirSync(join(dir, "src", "main", "java"), { recursive: true })
+				writeFileSync(join(dir, "src", "main", "java", "P.java"), "public class P {}\n")
+				const built = runGradle(["--offline", "--no-daemon", "build"], { cwd: dir, env: { [GRADLE_RUN]: mark } })
+				expect([built.status, existsSync(join(dir, "build", "libs", "probe.jar")), leftAfter(mark)]).toEqual([
+					0,
+					true,
+					[],
+				])
+			} finally {
+				rmSync(dir, { force: true, recursive: true })
+			}
+		},
+	)
+})
+
+describe("a Gradle daemon another run started", () => {
+	/* plan 39: lanes build side by side under one GRADLE_USER_HOME; only this build's mark may count */
+	it("is not counted as this build's: its mark is another", { timeout: SPAWN_TIMEOUT }, async () => {
+		const [ours, theirs] = [randomUUID(), randomUUID()]
+		const daemon = spawn("bash", ["-c", "exec -a GradleDaemon sleep 60"], {
+			env: { ...process.env, [GRADLE_RUN]: theirs },
+			stdio: "ignore",
+		})
 		try {
-			writeFileSync(join(dir, "settings.gradle"), "rootProject.name = 'probe'\n")
-			writeFileSync(join(dir, "build.gradle"), "plugins { id 'java-library' }\n")
-			mkdirSync(join(dir, "src", "main", "java"), { recursive: true })
-			writeFileSync(join(dir, "src", "main", "java", "P.java"), "public class P {}\n")
-			const built = runGradle(["--offline", "--no-daemon", "build"], { cwd: dir, env: { [GRADLE_RUN]: mark } })
-			expect([built.status, existsSync(join(dir, "build", "libs", "probe.jar")), leftAfter(mark)]).toEqual([
-				0,
-				true,
-				[],
-			])
+			await new Promise((started) => daemon.once("spawn", started))
+			const listed = () => readFileSync(`/proc/${daemon.pid}/cmdline`, "utf8").startsWith("GradleDaemon")
+			for (let tries = 0; !listed() && tries < 100; tries++) await new Promise((wait) => setTimeout(wait, 50))
+			expect([listed(), leftAfter(ours)]).toEqual([true, []])
 		} finally {
-			rmSync(dir, { force: true, recursive: true })
+			daemon.kill()
 		}
 	})
 })

@@ -18,6 +18,7 @@ import { FIXTURES } from "../../src/emit/python/__fixtures__/documents.ts"
 import * as env from "../../src/emit/python/__fixtures__/python-env.ts"
 import { HTTPX2_FLOOR, PYTHON_REQUIRES } from "../../src/emit/python/sdk-pyproject.ts"
 import { callsOf } from "./compile-calls.ts"
+import { SPAWN_TIMEOUT } from "../../src/gen/__fixtures__/spawn-timeout.ts"
 
 const { PY_FLOOR, pinnedPython, pinnedUv, pythonCacheDir, pythonInstall, runPython, uvInstall, venv, withPython } = env
 
@@ -219,13 +220,13 @@ describe("the uv and interpreters a run uses", () => {
 		["pinned", pinnedPython(), PIN],
 		["floor", PY_FLOOR, FLOOR],
 	] as const)
-		it.skipIf(!present)(`runs the ${name} interpreter by name, whatever the cwd`, () => {
+		it.skipIf(!present)(`runs the ${name} interpreter by name, whatever the cwd`, { timeout: SPAWN_TIMEOUT }, () => {
 			const dir = venv({ python: version, requirements: [] })
 			const ran = runPython(dir, ["-c", "import sys; print(sys.version.split()[0])"], { cwd: pythonCacheDir("tmp") })
 			expect(ran.stdout).toBe(`${version}\n`)
 		})
 
-	it.skipIf(!PIN)("runs ruff and mypy at the versions tools.txt pins", () => {
+	it.skipIf(!PIN)("runs ruff and mypy at the versions tools.txt pins", { timeout: SPAWN_TIMEOUT }, () => {
 		const pins = Object.fromEntries(
 			readFileSync(TOOLS, "utf8")
 				.split("\n")
@@ -238,6 +239,7 @@ describe("the uv and interpreters a run uses", () => {
 
 	it.skipIf(!PIN)(
 		"runs a program that never reads its stdin, however large the input, its exit status the answer",
+		{ timeout: SPAWN_TIMEOUT },
 		async () => {
 			const dir = venv({ python: pinnedPython(), requirements: [] })
 			/* more than a pipe holds: the program exits before the write ends, which must not surface as EPIPE */
@@ -255,22 +257,30 @@ describe("what a run never does", () => {
 		vi.unstubAllEnvs()
 	})
 
-	it("never installs a missing interpreter: it skips, or fails naming the install where Python is required", () => {
-		vi.stubEnv("HONEY_REQUIRE_TOOLCHAINS", "")
-		vi.stubEnv("HONEY_REQUIRE_PYTHON", "")
-		expect(withPython("0.0.1")).toBe(false)
-		vi.stubEnv("HONEY_REQUIRE_PYTHON", "1")
-		expect(() => withPython("0.0.1")).toThrow(pythonInstall(["0.0.1"]))
-	})
+	it(
+		"never installs a missing interpreter: it skips, or fails naming the install where Python is required",
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			vi.stubEnv("HONEY_REQUIRE_TOOLCHAINS", "")
+			vi.stubEnv("HONEY_REQUIRE_PYTHON", "")
+			expect(withPython("0.0.1")).toBe(false)
+			vi.stubEnv("HONEY_REQUIRE_PYTHON", "1")
+			expect(() => withPython("0.0.1")).toThrow(pythonInstall(["0.0.1"]))
+		},
+	)
 
-	it("never runs another uv: without the pinned one it skips, or fails naming its install", () => {
-		vi.stubEnv("HONEY_REQUIRE_TOOLCHAINS", "")
-		vi.stubEnv("HONEY_REQUIRE_PYTHON", "")
-		vi.stubEnv("HOME", pythonCacheDir("tmp", "no-uv"))
-		expect(withPython()).toBe(false)
-		vi.stubEnv("HONEY_REQUIRE_TOOLCHAINS", "1")
-		expect(() => withPython()).toThrow(uvInstall(pinnedUv()))
-	})
+	it(
+		"never runs another uv: without the pinned one it skips, or fails naming its install",
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			vi.stubEnv("HONEY_REQUIRE_TOOLCHAINS", "")
+			vi.stubEnv("HONEY_REQUIRE_PYTHON", "")
+			vi.stubEnv("HOME", pythonCacheDir("tmp", "no-uv"))
+			expect(withPython()).toBe(false)
+			vi.stubEnv("HONEY_REQUIRE_TOOLCHAINS", "1")
+			expect(() => withPython()).toThrow(uvInstall(pinnedUv()))
+		},
+	)
 
 	it("links nothing into ~/.local/bin: interpreters install with --no-bin, uv's links stay in the cache", () => {
 		expect(PY_INSTALL).toContain(" python install --no-bin ")
@@ -330,9 +340,14 @@ describe("the fixture documents a default run gates", () => {
 		expect(Object.keys(FIXTURES).length).toBeLessThanOrEqual(FIXTURE_BUDGET)
 	})
 
-	it("come only from the registry, except the harness files' served document, and never resolve online", () => {
-		expect(strayCompiles(others())).toEqual([])
-	})
+	/* parses every gen file with the TS compiler: seconds of CPU, so a bound like a process start's */
+	it(
+		"come only from the registry, except the harness files' served document, and never resolve online",
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			expect(strayCompiles(others())).toEqual([])
+		},
+	)
 
 	it("flag Python's served document anywhere but the harness files, and Python's any-fixture gate anywhere but its own files", () => {
 		expect(

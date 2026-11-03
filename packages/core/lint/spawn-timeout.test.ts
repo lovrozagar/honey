@@ -64,6 +64,22 @@ describe("honey/spawn-timeout: a test that spawns", () => {
 	})
 })
 
+describe("honey/spawn-timeout: a helper module imported as a namespace", () => {
+	it("is found through a listed helper module imported as a namespace: called on it, or destructured from it", () => {
+		/* plan 39: gen's toolchain structure tests took their env this way and ran their spawns at the 5 s default */
+		const namespace = 'import * as packed from "../../tests/build/fixture/packed.ts"\n'
+		const ways = [
+			'it("a", () => { packed.run("git", [], ".") })',
+			'const { run } = packed\nit("b", () => { run("git", [], ".") })',
+			'const { run: start } = packed\nit("c", () => { start("git", [], ".") })',
+		]
+		expect(messages(`${VITEST}${namespace}${ways.join("\n")}\n`)).toEqual(Array(3).fill(MESSAGES.test))
+		const quiet =
+			'it("d", () => { expect(packed.TARBALL).toBeDefined() })\nconst { TARBALL } = packed\nit("e", () => TARBALL)\n'
+		expect(messages(`${VITEST}${namespace}${quiet}`)).toEqual([])
+	})
+})
+
 describe("honey/spawn-timeout: an inherited bound", () => {
 	it("covers a test under a describe whose timeout is SPAWN_TIMEOUT", () => {
 		const code = `${VITEST}${CHILD}${SHARED_IMPORT}describe("d", { timeout: SPAWN_TIMEOUT }, () => {\n\tit("a", ${SPAWNS})\n})\n`

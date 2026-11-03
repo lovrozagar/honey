@@ -14,6 +14,7 @@ import { FIXTURES } from "../../src/emit/rust/__fixtures__/documents.ts"
 import * as env from "../../src/emit/rust/__fixtures__/rust-env.ts"
 import { RUST_VERSION } from "../../src/emit/rust/sdk-cargo.ts"
 import { callsOf } from "./compile-calls.ts"
+import { SPAWN_TIMEOUT } from "../../src/gen/__fixtures__/spawn-timeout.ts"
 
 const { RUST_FLOOR, pinnedRust, runRustc, withRust } = env
 
@@ -151,23 +152,27 @@ describe("the toolchains a run compiles with", () => {
 		vi.unstubAllEnvs()
 	})
 
-	it.skipIf(!PIN)("runs the pinned channel by name, whatever the cwd", () => {
+	it.skipIf(!PIN)("runs the pinned channel by name, whatever the cwd", { timeout: SPAWN_TIMEOUT }, () => {
 		expect(runRustc(["--version"], { cwd: env.rustCacheDir("tmp") }).stdout).toMatch(
 			new RegExp(`^rustc ${pinnedRust()} `),
 		)
 	})
 
-	it.skipIf(!FLOOR)("runs the floor toolchain by name", () => {
+	it.skipIf(!FLOOR)("runs the floor toolchain by name", { timeout: SPAWN_TIMEOUT }, () => {
 		expect(runRustc(["--version"], { toolchain: RUST_FLOOR }).stdout).toMatch(new RegExp(`^rustc ${RUST_FLOOR} `))
 	})
 
-	it("never installs a missing toolchain: it skips, or fails naming the install where Rust is required", () => {
-		vi.stubEnv("HONEY_REQUIRE_TOOLCHAINS", "")
-		vi.stubEnv("HONEY_REQUIRE_RUST", "")
-		expect(withRust("0.0.0")).toBe(false)
-		vi.stubEnv("HONEY_REQUIRE_RUST", "1")
-		expect(() => withRust("0.0.0")).toThrow("rustup toolchain install 0.0.0 --profile minimal")
-	})
+	it(
+		"never installs a missing toolchain: it skips, or fails naming the install where Rust is required",
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			vi.stubEnv("HONEY_REQUIRE_TOOLCHAINS", "")
+			vi.stubEnv("HONEY_REQUIRE_RUST", "")
+			expect(withRust("0.0.0")).toBe(false)
+			vi.stubEnv("HONEY_REQUIRE_RUST", "1")
+			expect(() => withRust("0.0.0")).toThrow("rustup toolchain install 0.0.0 --profile minimal")
+		},
+	)
 
 	it("floors at the x.y.0 of the rust-version every emitted crate declares", () => {
 		expect(RUST_FLOOR).toBe(`${RUST_VERSION}.0`)
@@ -216,7 +221,8 @@ describe("the fixture documents a default run compiles", () => {
 		expect(Object.keys(FIXTURES).length).toBeLessThanOrEqual(FIXTURE_BUDGET)
 	})
 
-	it("come only from the registry, except the harness files' served document", () => {
+	/* parses every gen file with the TS compiler: seconds of CPU, so a bound like a process start's */
+	it("come only from the registry, except the harness files' served document", { timeout: SPAWN_TIMEOUT }, () => {
 		expect(strayCompiles(others())).toEqual([])
 	})
 

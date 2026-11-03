@@ -1,6 +1,6 @@
 /* What spawns a process, for honey/spawn-timeout: node:child_process's spawn, spawnSync, exec*, execFile* and fork,
  * Bun.spawn, Bun.spawnSync and Bun.$, a function of the same file that reaches one of them, and the repo helpers named
- * in SPAWNING_HELPERS. A rule sees one file, so that list carries what another module's helper does; spawners.test.ts
+ * in SPAWNING_HELPERS, imported by name or through a namespace (called on it, or destructured from it). A rule sees one file, so that list carries what another module's helper does; spawners.test.ts
  * derives the set from the code and holds the list equal to it, so it cannot rot either way. */
 import { dirname, join, normalize } from "node:path"
 
@@ -87,21 +87,53 @@ function resolveImport(from, source) {
 	return source.startsWith(".") ? normalize(join(dirname(from), source)).replaceAll("\\", "/") : undefined
 }
 
+/** The spawning names a file imports, and each namespace it imports mapped to the names on it that spawn. */
 function importsOf(program, from, helpers) {
 	const names = new Set()
-	const namespaces = new Set()
+	const namespaces = new Map()
 	for (const statement of program.body) {
 		if (statement.type !== "ImportDeclaration" || statement.importKind === "type") continue
 		const source = statement.source.value
-		const child = CHILD_PROCESS.has(source)
-		const listed = child ? PRIMITIVES : new Set(helpers.get(resolveImport(from, source) ?? "") ?? [])
+		const listed = CHILD_PROCESS.has(source)
+			? PRIMITIVES
+			: new Set(helpers.get(resolveImport(from, source) ?? "") ?? [])
 		for (const specifier of statement.specifiers) {
-			if (specifier.type !== "ImportSpecifier") {
-				if (child) namespaces.add(specifier.local.name)
-			} else if (listed.has(specifier.imported.name ?? specifier.imported.value)) names.add(specifier.local.name)
+			if (specifier.type === "ImportNamespaceSpecifier") {
+				if (listed.size > 0) namespaces.set(specifier.local.name, listed)
+			} else if (
+				specifier.type === "ImportSpecifier" &&
+				listed.has(specifier.imported.name ?? specifier.imported.value)
+			)
+				names.add(specifier.local.name)
 		}
 	}
 	return { names, namespaces }
+}
+
+/** The local names `declarator` (`const { a, b: c } = ns`) takes off a spawning namespace: `a` and `c` when they spawn. */
+function takenFrom(declarator, namespaces) {
+	const listed = declarator.init?.type === "Identifier" ? namespaces.get(declarator.init.name) : undefined
+	if (listed === undefined || declarator.id.type !== "ObjectPattern") return []
+	return declarator.id.properties.flatMap((property) =>
+		property.type === "Property" &&
+		!property.computed &&
+		property.value.type === "Identifier" &&
+		listed.has(property.key.name ?? property.key.value)
+			? [property.value.name]
+			: [],
+	)
+}
+
+/** Every name the file's destructurings take off a spawning namespace, at any depth. */
+function destructuredFrom(node, namespaces, out = new Set()) {
+	if (typeof node !== "object" || node === null) return out
+	if (Array.isArray(node)) {
+		for (const child of node) destructuredFrom(child, namespaces, out)
+		return out
+	}
+	if (node.type === "VariableDeclarator") for (const name of takenFrom(node, namespaces)) out.add(name)
+	for (const [key, child] of Object.entries(node)) if (key !== "parent") destructuredFrom(child, namespaces, out)
+	return out
 }
 
 /** Every named function of the file: declarations and functions bound to a const, at any depth. */
@@ -122,7 +154,7 @@ function functionsOf(node, out = new Map()) {
 function isSpawnMember(node, namespaces) {
 	if (node.type !== "MemberExpression" || node.computed || node.object.type !== "Identifier") return false
 	const name = node.property.name
-	return node.object.name === "Bun" ? BUN_SPAWN.has(name) : namespaces.has(node.object.name) && PRIMITIVES.has(name)
+	return node.object.name === "Bun" ? BUN_SPAWN.has(name) : (namespaces.get(node.object.name)?.has(name) ?? false)
 }
 
 /* a function kept as a property or method (a Vite plugin's hook) is a callback for later: the call that builds
@@ -146,6 +178,7 @@ export function spawnsIn(node, scope) {
 /** The names that spawn when called in the file at repo path `from`, its own spawning functions included. */
 export function spawnScope(program, from, helpers = SPAWNING_HELPERS) {
 	const scope = importsOf(program, from, helpers)
+	for (const name of destructuredFrom(program.body, scope.namespaces)) scope.names.add(name)
 	const functions = functionsOf(program.body)
 	for (let grew = true; grew;) {
 		grew = false

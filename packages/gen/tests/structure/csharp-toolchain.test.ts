@@ -202,19 +202,20 @@ function toolsIntoCache(): string[] {
 describe("the SDK a run uses", () => {
 	const DOTNET = withDotnet()
 
-	it.skipIf(!DOTNET)("runs the pinned SDK from the honey cache, the only SDK there", () => {
+	it.skipIf(!DOTNET)("runs the pinned SDK from the honey cache, the only SDK there", { timeout: SPAWN_TIMEOUT }, () => {
 		expect(runDotnet(["--version"]).stdout.trim()).toBe(pinnedDotnet())
 		const sdks = runDotnet(["--list-sdks"]).stdout.trim().split("\n")
 		expect(sdks).toEqual([`${pinnedDotnet()} [${join(dotnetRoot(), "sdk")}]`])
 	})
 
-	it.skipIf(!DOTNET)("keeps the CLI's first-use state in the cache's CLI home", () => {
+	it.skipIf(!DOTNET)("keeps the CLI's first-use state in the cache's CLI home", { timeout: SPAWN_TIMEOUT }, () => {
 		runDotnet(["--version"], { cwd: csharpCacheDir("tmp") })
 		expect(existsSync(join(csharpCacheDir("home"), ".dotnet", `${pinnedDotnet()}.dotnetFirstUseSentinel`))).toBe(true)
 	})
 
 	it.skipIf(!DOTNET)(
 		"runs a program that never reads its stdin, however large the input, its exit status the answer",
+		{ timeout: SPAWN_TIMEOUT },
 		async () => {
 			const dir = mkdtempSync(join(csharpCacheDir("tmp"), "stdin-"))
 			try {
@@ -246,14 +247,18 @@ describe("what a run never does", () => {
 		vi.unstubAllEnvs()
 	})
 
-	it("never installs a missing SDK: it skips, or fails naming the install where .NET is required", () => {
-		vi.stubEnv("HONEY_REQUIRE_TOOLCHAINS", "")
-		vi.stubEnv("HONEY_REQUIRE_DOTNET", "")
-		vi.stubEnv("HOME", csharpCacheDir("tmp", "no-dotnet"))
-		expect(withDotnet()).toBe(false)
-		vi.stubEnv("HONEY_REQUIRE_DOTNET", "1")
-		expect(() => withDotnet()).toThrow(dotnetInstall(pinnedDotnet()))
-	})
+	it(
+		"never installs a missing SDK: it skips, or fails naming the install where .NET is required",
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			vi.stubEnv("HONEY_REQUIRE_TOOLCHAINS", "")
+			vi.stubEnv("HONEY_REQUIRE_DOTNET", "")
+			vi.stubEnv("HOME", csharpCacheDir("tmp", "no-dotnet"))
+			expect(withDotnet()).toBe(false)
+			vi.stubEnv("HONEY_REQUIRE_DOTNET", "1")
+			expect(() => withDotnet()).toThrow(dotnetInstall(pinnedDotnet()))
+		},
+	)
 
 	it("sets every dir under the cache and leaves HOME the caller's, with no tool linked into ~/.dotnet/tools", () => {
 		const cache = `${join(process.env.HOME ?? homedir(), ".cache/honey-tmp/dotnet")}/`
@@ -296,9 +301,7 @@ function buildServers(): string[] {
 		})
 }
 
-describe("lean builds", () => {
-	const DOTNET = withDotnet()
-
+describe("lean build settings", () => {
 	it("run with no MSBuild node reuse, no MSBuild server and no compiler server", () => {
 		expect(dotnetEnv()).toMatchObject({
 			DOTNET_CLI_USE_MSBUILD_SERVER: "0",
@@ -307,38 +310,46 @@ describe("lean builds", () => {
 		})
 		expect(LEAN_BUILD).toEqual(["-nodeReuse:false", "-maxcpucount:1", "-p:UseSharedCompilation=false"])
 	})
+})
+
+describe("lean builds", () => {
+	const DOTNET = withDotnet()
 
 	/* the defaults leave VBCSCompiler (and reusable MSBuild nodes) alive, reparented away from the build once it
 	 * exits (P2-C): so a fresh build is made here, and every server of the pinned SDK it could leave is looked
 	 * for, by its command line, never killed */
-	it.skipIf(!DOTNET)("leave no compiler server or MSBuild node behind a fresh build", async () => {
-		const before = new Set(buildServers())
-		const dir = mkdtempSync(join(csharpCacheDir("tmp"), "lean-"))
-		try {
-			const tfm = `net${pinnedDotnet().split(".")[0]}.0`
-			writeFileSync(
-				join(dir, "Lean.csproj"),
-				`<Project Sdk="Microsoft.NET.Sdk">\n  <PropertyGroup>\n    <TargetFramework>${tfm}</TargetFramework>\n  </PropertyGroup>\n</Project>\n`,
-			)
-			writeFileSync(join(dir, "One.cs"), "public static class One { public static int Value => 1; }\n")
-			writeFileSync(
-				join(dir, "NuGet.Config"),
-				"<configuration><packageSources><clear /></packageSources></configuration>\n",
-			)
-			writeFileSync(join(dir, "global.json"), readFileSync(join(REPO, "global.json")))
-			const args = ["build", "Lean.csproj", "-c", "Release", "--artifacts-path", "art", ...LEAN_BUILD, "-v", "q"]
-			const built = runDotnet(args, { cwd: dir })
-			const diagnostics = built.stdout.split("\n").filter((line) => /: (?:error|warning) [A-Z]+\d+/.test(line))
-			expect({ diagnostics, status: built.status }).toEqual({ diagnostics: [], status: 0 })
-			expect(existsSync(join(dir, "art/bin/Lean/release/Lean.dll"))).toBe(true)
-			await vi.waitFor(() => expect(buildServers().filter((line) => !before.has(line))).toEqual([]), {
-				interval: 100,
-				timeout: 3_000,
-			})
-		} finally {
-			rmSync(dir, { force: true, recursive: true })
-		}
-	})
+	it.skipIf(!DOTNET)(
+		"leave no compiler server or MSBuild node behind a fresh build",
+		{ timeout: SPAWN_TIMEOUT },
+		async () => {
+			const before = new Set(buildServers())
+			const dir = mkdtempSync(join(csharpCacheDir("tmp"), "lean-"))
+			try {
+				const tfm = `net${pinnedDotnet().split(".")[0]}.0`
+				writeFileSync(
+					join(dir, "Lean.csproj"),
+					`<Project Sdk="Microsoft.NET.Sdk">\n  <PropertyGroup>\n    <TargetFramework>${tfm}</TargetFramework>\n  </PropertyGroup>\n</Project>\n`,
+				)
+				writeFileSync(join(dir, "One.cs"), "public static class One { public static int Value => 1; }\n")
+				writeFileSync(
+					join(dir, "NuGet.Config"),
+					"<configuration><packageSources><clear /></packageSources></configuration>\n",
+				)
+				writeFileSync(join(dir, "global.json"), readFileSync(join(REPO, "global.json")))
+				const args = ["build", "Lean.csproj", "-c", "Release", "--artifacts-path", "art", ...LEAN_BUILD, "-v", "q"]
+				const built = runDotnet(args, { cwd: dir })
+				const diagnostics = built.stdout.split("\n").filter((line) => /: (?:error|warning) [A-Z]+\d+/.test(line))
+				expect({ diagnostics, status: built.status }).toEqual({ diagnostics: [], status: 0 })
+				expect(existsSync(join(dir, "art/bin/Lean/release/Lean.dll"))).toBe(true)
+				await vi.waitFor(() => expect(buildServers().filter((line) => !before.has(line))).toEqual([]), {
+					interval: 100,
+					timeout: 3_000,
+				})
+			} finally {
+				rmSync(dir, { force: true, recursive: true })
+			}
+		},
+	)
 
 	/* the gates' own build step (compiled.ts) passes LEAN_BUILD under dotnetEnv: a cold gate builds here, a warm
 	 * one spawns nothing, and neither leaves a server; the fresh project above is the leg a warm cache cannot skip */
@@ -400,7 +411,8 @@ describe("the fixture documents a default run gates", () => {
 		expect(Object.keys(FIXTURES).length).toBeLessThanOrEqual(FIXTURE_BUDGET)
 	})
 
-	it("come only from the registry, except the harness files' served document", () => {
+	/* parses every gen file with the TS compiler: seconds of CPU, so a bound like a process start's */
+	it("come only from the registry, except the harness files' served document", { timeout: SPAWN_TIMEOUT }, () => {
 		expect(strayCompiles(others())).toEqual([])
 	})
 

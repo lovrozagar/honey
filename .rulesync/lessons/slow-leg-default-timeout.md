@@ -1,9 +1,9 @@
 ---
 name: slow-leg-default-timeout
-paths: ["packages/gen/src/**/*.test.ts","packages/gen/scripts/*.test.ts","packages/core/tests/**/*.test.ts"]
-hits: 1
-last-hit: 2026-11-01
-evidence: ["plan 21"]
+paths: ["packages/gen/src/**/*.test.ts","packages/gen/tests/**/*.test.ts","packages/gen/scripts/*.test.ts","packages/core/tests/**/*.test.ts"]
+hits: 2
+last-hit: 2026-11-03
+evidence: ["plan 21","plan 39"]
 ---
 
 # A heavy leg without an explicit timeout reds only under load
