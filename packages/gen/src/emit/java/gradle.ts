@@ -3,9 +3,12 @@
  * `--release 17` with `-Xlint:all -Werror`, Maven Central, the one Jackson 3 dependency and the `mavenJava` publication;
  * no toolchain block, since auto-provisioning would fetch, and no wrapper, a binary the consumer's own Gradle 9
  * replaces. Every name the build and the sources spell comes from a validated option, never from spec text; the POM's
- * name and description are the document's words, written only as escaped single-quoted Groovy strings.
+ * name and description are the document's words, written only as escaped single-quoted Groovy strings. The rest of
+ * what Maven Central requires of a POM (its URL, license, developers and scm) comes from options, each validated and
+ * written the same way, and is left out when not given.
  */
 import { escapeText } from "../shared/escape.ts"
+import { checked, HTTPS_URL, PERSON, personOf, SPDX_ID, TEXT } from "../shared/metadata.ts"
 
 /** The package's identity, each part validated. */
 export type JavaPackage = {
@@ -115,8 +118,51 @@ export const validateClientName = (value: string): string =>
 /** A SemVer 2 version. */
 export const validateVersion = (value: string): string => (SEMVER.test(value) ? value : refuse("version", value))
 
-/** The document's own words a POM carries; spec text, so the build writes it only through `groovyString`. */
-export type JavaPom = { readonly name?: string; readonly description?: string }
+/** What Maven Central requires of a POM beyond its name and description, each part the caller gave, validated. */
+export type JavaPomMetadata = {
+	/** the POM's description, over the document's */
+	readonly description?: string
+	/** the project's https home page, the POM's `url` */
+	readonly homepage?: string
+	/** one SPDX license id */
+	readonly license?: string
+	/** the https URL of its git repository, without a trailing `/` or `.git` */
+	readonly repository?: string
+	/** `Name <email>` */
+	readonly developer?: string
+}
+
+/* a repository is a path on its host: `https://host/owner/name` */
+const REPOSITORY_PATH = /^https:\/\/[^/]+\/[^/]/
+
+/**
+ * The metadata options, each validated; the repository's trailing `/` and `.git` dropped, as the scm block adds `.git`
+ * to its connections and shows the rest as its web URL.
+ */
+function pomMetadata(options: JavaPomMetadata): JavaPomMetadata {
+	const repository = checked("repository", options.repository, HTTPS_URL)
+	return {
+		description: checked("description", options.description, TEXT),
+		developer: checked("developer", options.developer, PERSON),
+		homepage: checked("homepage", options.homepage, HTTPS_URL),
+		license: checked("license", options.license, SPDX_ID),
+		repository: checked("repository", repository, REPOSITORY_PATH)
+			?.replace(/\/+$/, "")
+			.replace(/\.git$/, ""),
+	}
+}
+
+/** The POM's words: the document's name and description (spec text, written only through `groovyString`), the rest. */
+export type JavaPom = JavaPomMetadata & { readonly name?: string }
+
+/** The POM for `options` over the document's `info`: the metadata validated, its description over the document's. */
+export function pomOf(
+	options: JavaPomMetadata,
+	info: { readonly title?: string; readonly description?: string },
+): JavaPom {
+	const metadata = pomMetadata(options)
+	return { ...metadata, description: metadata.description ?? info.description, name: info.title }
+}
 
 /**
  * `text` as a single-quoted Groovy string: Java's escapes (Groovy reads the same ones) and the apostrophe's, so spec
@@ -124,15 +170,69 @@ export type JavaPom = { readonly name?: string; readonly description?: string }
  */
 const groovyString = (text: string) => `'${escapeText(text, "java").replaceAll("'", "\\'")}'`
 
+/* the indent of the `pom { … }` block's members, and of one level in */
+const POM = "                "
+const IN = "    "
+
+/** `key = '…'` lines at `indent`, each value a Groovy string. */
+const assignments = (indent: string, entries: readonly (readonly [key: string, value: string])[]) =>
+	entries.map(([key, value]) => `${indent}${key} = ${groovyString(value)}\n`).join("")
+
+/** A `key { … }` block at `indent` around `body`. */
+const nested = (indent: string, key: string, body: string) => `${indent}${key} {\n${body}${indent}}\n`
+
+/** The POM's url, license, developer and scm lines, each only when its option was given. */
+function pomMetadataLines(pom: JavaPomMetadata): string {
+	const developer = pom.developer === undefined ? undefined : personOf(pom.developer)
+	const member = (key: string, entries: readonly (readonly [key: string, value: string])[]) =>
+		nested(POM + IN, key, assignments(POM + IN + IN, entries))
+	const connection = `scm:git:${pom.repository}.git`
+	return [
+		pom.homepage === undefined ? "" : assignments(POM, [["url", pom.homepage]]),
+		pom.license === undefined
+			? ""
+			: nested(
+					POM,
+					"licenses",
+					member("license", [
+						["name", pom.license],
+						["url", `https://spdx.org/licenses/${pom.license}.html`],
+					]),
+				),
+		developer === undefined
+			? ""
+			: nested(
+					POM,
+					"developers",
+					member("developer", [
+						["name", developer.name],
+						["email", developer.email],
+					]),
+				),
+		pom.repository === undefined
+			? ""
+			: nested(
+					POM,
+					"scm",
+					assignments(POM + IN, [
+						["url", pom.repository],
+						["connection", connection],
+						["developerConnection", connection],
+					]),
+				),
+	].join("")
+}
+
 /**
  * The `build.gradle`: the coordinates, `--release 17` under `-Xlint:all -Werror`, Maven Central, Jackson, and the
  * publication Maven Central takes: `maven-publish`'s `mavenJava` from the Java component with its sources and javadoc
- * jars, its POM named and described by the document (the artifact id and the name when it has none). Javadoc fails
- * on every doclint finding but a missing comment (C#'s doc build waives CS1591 alone); signing and the POM's license,
- * scm and developers are the publisher's.
+ * jars, its POM named and described by the document (the artifact id and the name when it has none), with the URL,
+ * license, developer and scm the options give. Javadoc fails on every doclint finding but a missing comment (C#'s doc
+ * build waives CS1591 alone); signing is the publisher's.
  */
 export const buildGradle = (pkg: JavaPackage, pom: JavaPom): string => {
 	const name = pom.name ?? pkg.artifactId
+	const metadata = pomMetadataLines(pom)
 	return `plugins {
     id 'java-library'
     id 'maven-publish'
@@ -171,7 +271,7 @@ publishing {
             pom {
                 name = ${groovyString(name)}
                 description = ${groovyString(pom.description ?? name)}
-            }
+${metadata}            }
         }
     }
 }

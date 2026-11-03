@@ -2,16 +2,74 @@
  * The C# package's manifest and format rules (contract 45 §4.3): a net10.0 `.csproj` with nullable on, warnings as
  * errors, the AOT and trim analyzers, and the XML doc file with only CS1591 off (Fb4); a root `.editorconfig`, so
  * no parent file reaches the emitted sources (R6). Every name the manifest and the sources spell comes from a
- * validated option, never from spec text (Fb3).
+ * validated option, never from spec text (Fb3). The metadata nuget.org shows (the description, the authors, the SPDX
+ * license expression, the project and repository URLs) is written when its option is given, each value validated and
+ * then escaped twice: for MSBuild, which would expand a `$(…)` or `@(…)` in it, and for XML.
  */
 import { isCsReserved } from "../shared/lang.ts"
+import { checked, HTTPS_URL, SPDX_EXPRESSION, TEXT } from "../shared/metadata.ts"
 import { BCL, RUNTIME_BCL } from "./types-names.ts"
 
 /** The one target framework: the pinned SDK's major (R1). */
 export const TARGET_FRAMEWORK = "net10.0"
 
-/** The package's identity, each part validated. */
-export type CSharpPackage = { readonly packageId: string; readonly rootNamespace: string; readonly version: string }
+/** What nuget.org shows about the package, each part the caller gave, validated. */
+export type CSharpMetadata = {
+	readonly description?: string
+	readonly authors?: string
+	readonly license?: string
+	readonly homepage?: string
+	readonly repository?: string
+}
+
+/** The package's identity, each part validated, and its metadata. */
+export type CSharpPackage = {
+	readonly packageId: string
+	readonly rootNamespace: string
+	readonly version: string
+	readonly metadata?: CSharpMetadata
+}
+
+/* authors: names joined by commas, each with a character other than a space, none with a control character */
+const AUTHORS = /^(?=[^\p{Cc}]{1,4000}$)[^,]*[^,\s][^,]*(?:,[^,]*[^,\s][^,]*)*$/u
+
+/** The metadata options, each validated: the description and authors as text, the license as SPDX, the URLs https. */
+export function packageMetadata(options: CSharpMetadata): CSharpMetadata {
+	return {
+		authors: checked("authors", options.authors, AUTHORS),
+		description: checked("description", options.description, TEXT),
+		homepage: checked("homepage", options.homepage, HTTPS_URL),
+		license: checked("license", options.license, SPDX_EXPRESSION),
+		repository: checked("repository", options.repository, HTTPS_URL),
+	}
+}
+
+/* the characters MSBuild expands or splits on in a property, written as its own %XX escapes, which it reads back */
+const MSBUILD_SPECIAL = /[%*?@$();']/g
+
+/** `text` as a `.csproj` property value: MSBuild's escapes first, then XML's. */
+const propertyText = (text: string) =>
+	text
+		.replace(MSBUILD_SPECIAL, (ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase()}`)
+		.replaceAll("&", "&amp;")
+		.replaceAll("<", "&lt;")
+		.replaceAll(">", "&gt;")
+
+/** The metadata's property lines, in the order the options name them; none for an option not given. */
+function metadataLines(metadata: CSharpMetadata | undefined): string {
+	const entries: readonly (readonly [element: string, value: string | undefined])[] = [
+		["Description", metadata?.description],
+		["Authors", metadata?.authors],
+		["PackageLicenseExpression", metadata?.license],
+		["PackageProjectUrl", metadata?.homepage],
+		["RepositoryUrl", metadata?.repository],
+	]
+	const lines = entries.flatMap(([element, value]) =>
+		value === undefined ? [] : [`    <${element}>${propertyText(value)}</${element}>\n`],
+	)
+	if (metadata?.repository !== undefined) lines.push("    <RepositoryType>git</RepositoryType>\n")
+	return lines.join("")
+}
 
 /* NuGet's id rule; a namespace segment is an identifier; a client is a PascalCase type */
 const PACKAGE_ID = /^[A-Za-z0-9_]+(?:[.-][A-Za-z0-9_]+)*$/
@@ -50,8 +108,9 @@ export function validateVersion(value: string): string {
 	return parts?.every((part) => Number(part) <= ASSEMBLY_PART_MAX) === true ? value : refuse("version", value)
 }
 
-/** The `.csproj`: the package id as the assembly name, no package reference (H11). */
+/** The `.csproj`: the package id as the assembly name, the metadata given, no package reference (H11). */
 export const csproj = ({
+	metadata,
 	packageId,
 	rootNamespace,
 	version,
@@ -63,7 +122,7 @@ export const csproj = ({
     <RootNamespace>${rootNamespace}</RootNamespace>
     <PackageId>${packageId}</PackageId>
     <Version>${version}</Version>
-    <Nullable>enable</Nullable>
+${metadataLines(metadata)}    <Nullable>enable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <IsAotCompatible>true</IsAotCompatible>

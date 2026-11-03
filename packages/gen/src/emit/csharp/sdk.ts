@@ -20,6 +20,7 @@ import { clientDecls } from "./sdk-client.ts"
 import {
 	csproj,
 	EDITORCONFIG,
+	packageMetadata,
 	validateClientName,
 	validatePackageId,
 	validateRootNamespace,
@@ -40,6 +41,16 @@ export type CSharpSdkOptions = {
 	readonly clientName?: string
 	/** the package version; `0.1.0` by default */
 	readonly version?: string
+	/** what nuget.org shows: one line of text; none by default */
+	readonly description?: string
+	/** the package's authors, comma separated; none by default */
+	readonly authors?: string
+	/** its SPDX license expression (`MIT`, `Apache-2.0 OR MIT`); none by default */
+	readonly license?: string
+	/** the https home page nuget.org links; none by default */
+	readonly homepage?: string
+	/** the https URL of its git repository; none by default */
+	readonly repository?: string
 }
 
 /** The package's files by path, and what the generation reports: a component or a root group renamed (never silently). */
@@ -59,7 +70,14 @@ function identity(options: CSharpSdkOptions) {
 		options.clientName ?? `${csTypeName(rootNamespace.split(".").at(-1) as string)}Client`,
 	)
 	const version = validateVersion(options.version ?? "0.1.0")
-	return { client, context: `${client.replace(/Client$/, "")}JsonContext`, packageId, rootNamespace, version }
+	return {
+		client,
+		context: `${client.replace(/Client$/, "")}JsonContext`,
+		metadata: packageMetadata(options),
+		packageId,
+		rootNamespace,
+		version,
+	}
 }
 
 /** A `.cs` file: the marker, the usings its code needs, the namespace, then the code. */

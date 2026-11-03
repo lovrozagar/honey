@@ -4,14 +4,17 @@
  * named and described by the document's `info`. The Javadoc task fails on any doclint finding but a missing comment
  * (`-Xdoclint:all,-missing -Werror`, C#'s `TreatWarningsAsErrors` with only CS1591 waived). An offline
  * `publishToMavenLocal` on Gradle's JDK 21 writes the four artifacts; spec text reaches the POM as written, never as
- * Groovy; a broken `{@link}` fails the build. Signing and the POM's license, scm and developers stay the publisher's.
+ * Groovy; a broken `{@link}` fails the build. What else Central requires of a POM comes from options:
+ * `--java-homepage` (its url), `--java-license` (an SPDX id, linked to spdx.org), `--java-developer` (`Name <email>`) and
+ * `--java-repository` (scm's url, connection and developer connection), each left out when not given and refused at
+ * generate when invalid; `--java-description` replaces the document's. Signing stays the publisher's.
  */
 import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { describe, expect, it } from "vitest"
 import { compiledJavaSdk } from "./__fixtures__/compiled.ts"
 import { runGradle, withJava } from "./__fixtures__/java-env.ts"
-import { generateJavaSdk } from "./sdk.ts"
+import { generateJavaSdk, type JavaSdkOptions } from "./sdk.ts"
 
 /** Whether Java is pinned here: a missing toolchain fails where it is required and skips these legs elsewhere. */
 const JAVA = withJava()
@@ -22,7 +25,15 @@ const SLOW = { timeout: 600_000 }
 const HOSTILE = { description: 'It\'s "one" line\nand ${System.exit(1)} \\u0041 another', title: "Anyrow's API" }
 const DOCUMENT = { info: { ...HOSTILE, version: "1" }, openapi: "3.1.0", paths: {} }
 
-const build = () => generateJavaSdk(DOCUMENT).files["build.gradle"] ?? ""
+const build = (options: JavaSdkOptions = {}) => generateJavaSdk(DOCUMENT, options).files["build.gradle"] ?? ""
+
+/** The POM metadata a Central publication needs, a developer whose name Groovy would read as code unescaped. */
+const METADATA = {
+	developer: "Ada O'Brien ${x} <ada@example.com>",
+	homepage: "https://shop.example.com",
+	license: "Apache-2.0",
+	repository: "https://github.com/acme/shop-java.git/",
+} as const satisfies JavaSdkOptions
 
 describe("build.gradle: the publication (item 6)", () => {
 	/* new: red before item 6, when the build had no publication */
@@ -58,10 +69,62 @@ describe("build.gradle: the publication (item 6)", () => {
 	})
 })
 
+describe("build.gradle: the POM metadata Central requires", () => {
+	it("writes the url, the license, the developer and the scm the options give, as escaped Groovy strings", () => {
+		expect(build(METADATA))
+			.toContain(`                description = 'It\\'s \\"one\\" line\\nand \${System.exit(1)} \\\\u0041 another'
+                url = 'https://shop.example.com'
+                licenses {
+                    license {
+                        name = 'Apache-2.0'
+                        url = 'https://spdx.org/licenses/Apache-2.0.html'
+                    }
+                }
+                developers {
+                    developer {
+                        name = 'Ada O\\'Brien \${x}'
+                        email = 'ada@example.com'
+                    }
+                }
+                scm {
+                    url = 'https://github.com/acme/shop-java'
+                    connection = 'scm:git:https://github.com/acme/shop-java.git'
+                    developerConnection = 'scm:git:https://github.com/acme/shop-java.git'
+                }
+            }`)
+	})
+
+	it("writes none of them when no option is given", () => {
+		expect(["url = ", "licenses {", "developers {", "scm {"].filter((line) => build().includes(line))).toEqual([])
+	})
+
+	it("describes the POM by --java-description over the document's", () => {
+		expect(build({ description: "Shop's Java client" })).toContain("description = 'Shop\\'s Java client'\n")
+	})
+
+	it.each<[keyof typeof METADATA | "description", string]>([
+		["description", ""],
+		["description", "two\nlines"],
+		["homepage", "http://shop.example.com"],
+		["homepage", "https://shop.example.com/a b"],
+		["license", "MIT OR Apache-2.0"],
+		["license", "LicenseRef-Acme"],
+		["license", "MIT'"],
+		["repository", "https://github.com"],
+		["repository", "git@github.com:acme/shop.git"],
+		["developer", "Ada"],
+		["developer", "<ada@example.com>"],
+		["developer", "Ada <ada>"],
+		["developer", "Ada <ada@example.com> x"],
+	])("refuses %s %j at generate", (option, value) => {
+		expect(() => build({ [option]: value })).toThrow(`Invalid ${option}: ${JSON.stringify(value)}`)
+	})
+})
+
 describe.skipIf(!JAVA)("the publication, built offline on Gradle's JDK 21 (item 6)", SLOW, () => {
 	/* new: Central requires the jar, the sources and javadoc jars and the POM; spec text reaches the POM as written */
-	it("writes the jar, the sources jar, the javadoc jar and the POM to a local repository, info as written", () => {
-		const sdk = compiledJavaSdk(generateJavaSdk(DOCUMENT).files)
+	it("writes the jar, the sources jar, the javadoc jar and the POM to a local repository, info and metadata as written", () => {
+		const sdk = compiledJavaSdk(generateJavaSdk(DOCUMENT, METADATA).files)
 		const repo = join(dirname(sdk.out), "m2")
 		const ran = runGradle(["-q", `-Dmaven.repo.local=${repo}`, "publishToMavenLocal"], { cwd: dirname(sdk.out) })
 		const base = join(repo, "ai/anyrow/anyrow/0.1.0/anyrow-0.1.0")
@@ -72,6 +135,9 @@ describe.skipIf(!JAVA)("the publication, built offline on Gradle's JDK 21 (item 
 				artifacts: [".jar", "-sources.jar", "-javadoc.jar", ".pom"].map((suffix) => existsSync(`${base}${suffix}`)),
 				coordinates: [tag("groupId"), tag("artifactId"), tag("version")],
 				info: [tag("name"), tag("description")],
+				metadata: [tag("url"), tag("licenses"), tag("developers"), tag("scm")].map((block) =>
+					block?.replace(/\s+/g, ""),
+				),
 				status: ran.status,
 			},
 			ran.stderr,
@@ -79,6 +145,12 @@ describe.skipIf(!JAVA)("the publication, built offline on Gradle's JDK 21 (item 
 			artifacts: [true, true, true, true],
 			coordinates: ["ai.anyrow", "anyrow", "0.1.0"],
 			info: ["Anyrow's API", 'It\'s "one" line\nand ${System.exit(1)} \\u0041 another'],
+			metadata: [
+				"https://shop.example.com",
+				"<license><name>Apache-2.0</name><url>https://spdx.org/licenses/Apache-2.0.html</url></license>",
+				"<developer><name>AdaO'Brien${x}</name><email>ada@example.com</email></developer>",
+				"<connection>scm:git:https://github.com/acme/shop-java.git</connection><developerConnection>scm:git:https://github.com/acme/shop-java.git</developerConnection><url>https://github.com/acme/shop-java</url>",
+			],
 			status: 0,
 		})
 	})

@@ -26,7 +26,7 @@ A first-class Java SDK emitter + vendored runtime in `gen/emit/java/`. Java sour
 - `gen/emit/java/http.stale.test.ts` — stale tracking (contract 47 §5.7: `x-invalidate`, the stale window, `staleMaxEntries`, `maxSourcesPerTarget`) at sibling parity, always shipped with the exchange; the O(1) selector lookup is proven against the O(n) exact-key-scan mutant by in-process CPU time (added at c2: the four siblings ship it and the grid is complete-or-red). Part of the cross-SDK auth-on-redirect conformance case.
 
 - `gen/emit/java/sdk.pagination.test.ts` — C1 is CUT (H20): no pager or auto-paging surface in any Java SDK.
-- `gen/emit/java/gradle.publish.test.ts` — the Maven Central publication (sources + javadoc jars, the POM from `info`, javadoc `-Xdoclint:all,-missing -Werror` at C#'s CS1591-waived parity); signing and the POM's license/scm/developers are the publisher's.
+- `gen/emit/java/gradle.publish.test.ts` — the Maven Central publication (sources + javadoc jars, the POM from `info`, javadoc `-Xdoclint:all,-missing -Werror` at C#'s CS1591-waived parity); signing is the publisher's. Since rc.19 the rest of what Central's Portal requires of a POM comes from validated options: `--java-homepage` (url), `--java-license` (one SPDX id, linked to `https://spdx.org/licenses/<id>.html`), `--java-developer` (`Name <email>`), `--java-repository` (scm url, connection and developerConnection) and `--java-description` (over `info`'s), each a `groovyString`, none written when unset.
 
 ## Budget
 - token: per-operation size within budget. Closed at f: 144 surfaces (the five e2e apps × both modes; the widest overload plus its `<Op>Params` record header), max 60, median 30, ceiling `ceilingOf([60], 0.2)` = 72.

@@ -133,11 +133,21 @@ One table, since a flag that is not written down is a flag nobody finds:
 | `--csharp-package-id`     | csharp | the NuGet package id                                                              |
 | `--csharp-root-namespace` | csharp | the root namespace                                                                |
 | `--csharp-version`        | csharp | the package's version                                                             |
+| `--csharp-description`    | csharp | what nuget.org shows                                                              |
+| `--csharp-authors`        | csharp | its authors, comma separated                                                      |
+| `--csharp-license`        | csharp | its SPDX license expression                                                       |
+| `--csharp-homepage`       | csharp | the https home page nuget.org links                                               |
+| `--csharp-repository`     | csharp | the https URL of its git repository                                               |
 | `--java-artifact-id`      | java   | the Maven artifact id                                                             |
 | `--java-group-id`         | java   | the Maven group id                                                                |
 | `--java-package-name`     | java   | the Java package name                                                             |
 | `--java-client-name`      | java   | the client class's name                                                           |
 | `--java-version`          | java   | the publication's version                                                         |
+| `--java-description`      | java   | the POM's description; the document's by default                                  |
+| `--java-homepage`         | java   | the POM's https project URL                                                       |
+| `--java-license`          | java   | its SPDX license id, linked to spdx.org                                           |
+| `--java-repository`       | java   | the https URL of its git repository, the POM's scm                                |
+| `--java-developer`        | java   | `Name <email>`, the POM's developer                                               |
 | `--cli-binary-name`       | cli    | the command's own name (`shop`)                                                   |
 | `--cli-base-url`          | cli    | the base URL it calls by default; the document's server by default                |
 | `--cli-module-path`       | cli    | the Go module path the CLI is built from                                          |
@@ -323,6 +333,10 @@ A .NET project with its own `HttpClient` pipeline, `IAsyncDisposable` streams, a
 honey-clients generate --spec openapi.json --target csharp --out generated --csharp-package-id Acme.Shop
 ```
 
+nuget.org shows a package's description, authors, license and links: give them with `--csharp-description`,
+`--csharp-authors`, `--csharp-license`, `--csharp-homepage` and `--csharp-repository`, and the `.csproj` carries them
+into `dotnet pack`.
+
 ```csharp
     public static async Task<string> Listing(HoneySdkClient client, string id)
     {
@@ -346,6 +360,9 @@ A Java 17 library on Jackson 3, with builders, `try`-with-resources streams, `cl
 ```sh
 honey-clients generate --spec openapi.json --target java --out generated --java-group-id com.acme
 ```
+
+Maven Central refuses a POM without a URL, a license, a developer and scm: give them with `--java-homepage`,
+`--java-license`, `--java-developer "Name <email>"` and `--java-repository`. Signing the publication stays yours.
 
 ```java
   static String listing(KitchenClient client) {

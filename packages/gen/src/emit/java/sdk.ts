@@ -9,6 +9,8 @@ import { compareCodeUnits } from "../shared/lang.ts"
 import {
 	buildGradle,
 	type JavaPackage,
+	type JavaPomMetadata,
+	pomOf,
 	settingsGradle,
 	validateArtifactId,
 	validateClientName,
@@ -41,7 +43,7 @@ export type JavaSdkOptions = {
 	readonly clientName?: string
 	/** the package version; `0.1.0` by default */
 	readonly version?: string
-}
+} & JavaPomMetadata
 
 /**
  * The SDK's files by path, and what the generation reports (bit 21 i6): a root member renamed off the safe mirror, a
@@ -230,6 +232,7 @@ function emitJava(document: Record<string, unknown>, options: JavaSdkOptions) {
 	const dir = `src/main/java/${pkg.packageName.replaceAll(".", "/")}`
 	/* an operation without an operationId is named by the IR's derivation, as every sibling emitter asks */
 	const ir = toIR(document as OpenApiDocument, { deriveOperationIds: true })
+	const pom = pomOf(options, ir.info)
 	const model = sdkModel(ir)
 	const ctx = javaTypeContext(ir, [pkg.clientName])
 	const isArray = (schema: Parameters<typeof model.resolve>[0]) => model.resolve(schema).kind === "array"
@@ -258,7 +261,7 @@ function emitJava(document: Record<string, unknown>, options: JavaSdkOptions) {
 	)
 	const client = operations ? mirror[`${pkg.clientName}.java`] : `${MARKER}\n${clientJava(pkg)}`
 	const entries: [string, string][] = [
-		["build.gradle", `${MARKER}\n${buildGradle(pkg, { description: ir.info.description, name: ir.info.title })}`],
+		["build.gradle", `${MARKER}\n${buildGradle(pkg, pom)}`],
 		["settings.gradle", `${MARKER}\n${settingsGradle(pkg)}`],
 		[`${dir}/${pkg.clientName}.java`, client as string],
 		...runtime,

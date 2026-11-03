@@ -28,6 +28,7 @@ A first-class C# SDK emitter + vendored runtime in `gen/emit/csharp/`. Models as
 ## Files (from files.tsv — `gen/emit/csharp`, names aligned to the shipped Rust/Python pattern at phase a)
 - `gen/emit/csharp/{index,sdk,sdk-client,sdk-method,sdk-plan,sdk-doc,sdk-csproj,sdk-body,sdk-answer,types,types-record,types-enum,types-union,types-names,json,errors,transport}.ts`, plus `{sse,ws,realtime}.ts` (phase d); `runtimeFiles()` in `transport.ts`.
 - `gen/runtime/csharp/*.cs` — vendored BCL runtime template (≤300 lines/file), source-gen JSON contexts.
+- rc.19: `sdk-csproj.ts` writes the metadata nuget.org shows from validated options (`--csharp-description`, `--csharp-authors`, `--csharp-license` as an SPDX expression, `--csharp-homepage`, `--csharp-repository`) as `Description`, `Authors`, `PackageLicenseExpression`, `PackageProjectUrl` and `RepositoryUrl` with `RepositoryType` git, MSBuild- then XML-escaped, none when unset; `sdk.pack.test.ts` packs it offline and reads the nuspec back.
 - `global.json` (repo-root pin file), `gen/emit/csharp/__fixtures__/csharp-env.ts` (toolchain parity, lean build switches mandatory — defaults leave `VBCSCompiler` alive), `tests/structure/csharp-toolchain.test.ts`.
 
 ## Tests (named, written first — bit-14 phase shape)
