@@ -39,9 +39,4 @@ describe("cookiesInput: the Cookie header, validated", () => {
 			"cookies.session",
 		])
 	})
-
-	it("without a schema (a readableStream entry) the cookies pass as they are", () => {
-		const cookies = parseCookieHeader("a=1")
-		expect(cookiesInput(null, cookies)).toBe(cookies)
-	})
 })

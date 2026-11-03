@@ -10,14 +10,12 @@ function* pairs(searchAll: Readonly<Record<string, readonly string[]>>): Generat
 /**
  * The query (ctx.searchAll, parsed once per request) validated by `schema`. Repeated keys follow
  * `shape` (the schema's, computed once per route), and `__proto__`, `constructor` and `prototype`
- * never reach it (H18.13). Without a schema (a `readableStream()` entry) the query passes
- * unvalidated.
+ * never reach it (H18.13).
  */
 export function searchInput(
-	schema: StandardSchemaLike | null,
+	schema: StandardSchemaLike,
 	searchAll: Readonly<Record<string, readonly string[]>>,
-	shape: Shape | null = schema === null ? null : shapeOf(schema),
+	shape: Shape | null = shapeOf(schema),
 ): unknown {
-	const record = shapedRecord(pairs(searchAll), shape)
-	return schema === null ? record : runSchema(schema, record, "search")
+	return runSchema(schema, shapedRecord(pairs(searchAll), shape), "search")
 }

@@ -311,7 +311,7 @@ describe("v1 adversarial: a proxied path never leaves the upstream's origin (SSR
 					return new Response("ok")
 				},
 				/* a gateway strips its own prefix: what is left must still be a path */
-				rewriteUrl: (url) => url.slice("/api".length),
+				rewriteUrl: (_ctx, url) => url.slice("/api".length),
 			}),
 		)
 		const statuses = []

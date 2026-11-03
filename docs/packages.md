@@ -36,7 +36,7 @@ generator.
 | `@lovrozagar/honey/openapi/swagger` | `swagger`, the Swagger UI page                                                                                                                      |
 | `@lovrozagar/honey/errors`          | `defineErrors` (also on the root)                                                                                                                   |
 | `@lovrozagar/honey/i18n`            | `createErrorTranslator`, `translateError`                                                                                                           |
-| `@lovrozagar/honey/input`           | `readableStream()`, a streamed request body as input                                                                                                |
+| `@lovrozagar/honey/input`           | `streamed()`, a request body left unread for the handler                                                                                            |
 | `@lovrozagar/honey/range`           | `rangeResponse`, a `Range` request answered from bytes                                                                                              |
 | `@lovrozagar/honey/cache-control`   | `cacheControl`, `httpDate`                                                                                                                          |
 | `@lovrozagar/honey/compress`        | `compress`                                                                                                                                          |

@@ -46,7 +46,7 @@ type RouteOf<TRoutes, P extends string, M extends string> = P extends keyof TRou
 		: never
 	: never
 
-/** What a call sends: the route's `request` (each source's schema input, `readableStream()` unwrapped). */
+/** What a call sends: the route's `request` (each source's schema input, `streamed()` unwrapped). */
 export type InputFor<TRoutes, P extends string, M extends string> =
 	RouteOf<TRoutes, P, M> extends { request: infer I } ? ([I] extends [never] ? {} : I) : {}
 

@@ -55,7 +55,7 @@ export type ProxyConfig<TCtx> = {
 	/** Run last on the forwarded headers, so it may set any of them: a record of entries, or an edit. */
 	requestHeaders?: Record<string, string> | ((ctx: TCtx, headers: Headers) => void)
 	/** Rewrite the normalized path and query before destination sees it. */
-	rewriteUrl?: (url: string, ctx: TCtx) => string
+	rewriteUrl?: (ctx: TCtx, url: string) => string
 	/**
 	 * Most milliseconds to wait for the answer's headers; later is a 504. Default 60 000; not
 	 * positive is no limit. The body is `idleTimeout`'s. Off for a WebSocket upgrade.
@@ -129,7 +129,7 @@ export function proxy<TCtx>(config: ProxyConfig<TCtx>): (ctx: TCtx) => Promise<T
 		const { ip, path, req, signal } = ctx as unknown as ProxyCtx
 		const websocket = req.headers.get("upgrade")?.trim().toLowerCase() === "websocket"
 		const pathQuery = path + searchOfUrl(req.url)
-		const url = config.rewriteUrl ? config.rewriteUrl(pathQuery, ctx) : pathQuery
+		const url = config.rewriteUrl ? config.rewriteUrl(ctx, pathQuery) : pathQuery
 		const headers = upstreamHeaders(req, { client: forwarded ? ip : undefined, websocket })
 		/* requestHeaders below still has the last word on these */
 		const requestId = (ctx as unknown as HoneyContext)[REQUEST].requestId

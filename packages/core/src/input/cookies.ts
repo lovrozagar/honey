@@ -4,8 +4,8 @@ import { runSchema } from "../validation/validate-input.ts"
 
 /**
  * The cookies (ctx.cookies: the first of a repeated name, as RFC 6265 sends the most specific one
- * first) validated by `schema`. Without a schema (a `readableStream()` entry) they pass as they are.
+ * first) validated by `schema`.
  */
-export function cookiesInput(schema: StandardSchemaLike | null, cookies: Record<string, string>): unknown {
-	return schema === null ? cookies : runSchema(schema, cookies, "cookies")
+export function cookiesInput(schema: StandardSchemaLike, cookies: Record<string, string>): unknown {
+	return runSchema(schema, cookies, "cookies")
 }

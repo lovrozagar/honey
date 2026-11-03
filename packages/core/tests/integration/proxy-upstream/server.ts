@@ -45,7 +45,7 @@ app.all("/up/*rest").handler(
 	proxy({
 		destination: (_ctx, url, init) => fetch(base + url, init),
 		idleTimeout: (ctx: { path: string }) => (ctx.path === "/up/stall" ? 300 : 0),
-		rewriteUrl: (url) => url.slice("/up".length),
+		rewriteUrl: (_ctx, url) => url.slice("/up".length),
 		timeout: (ctx: { path: string }) => (ctx.path === "/up/hang" ? 300 : 500),
 	}),
 )

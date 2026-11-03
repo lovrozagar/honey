@@ -831,8 +831,9 @@ describe("the C# runtime within its byte budget (bit 15, G14)", () => {
  * package's .d.ts and JSR's no-slow-types check read the runtime without a type checker (`: unique symbol` on the
  * three internal symbols, `: number` on MAX_RESPONSE_BYTES, the stale maps' field types, realtimeConnection's
  * `: Resumable`), and `@internal` on the three symbol-keyed HTTPClient members the declarations leave out.
+ * Plan 39 5.5, -6 B to 132,251: InputFor's doc names `streamed()`, core's new name for `readableStream()`.
  */
-const TS_RUNTIME_BYTES = 132_257
+const TS_RUNTIME_BYTES = 132_251
 
 describe("the TS runtime within its byte budget (bit 11, G14)", () => {
 	it(

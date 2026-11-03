@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import * as z from "zod"
-import { readableStream } from "../input/input.ts"
+import { streamed } from "../input/input.ts"
 import { honey } from "../routing/app.ts"
 import type { ConversionIssue } from "../schema/to-json-schema.ts"
 import { extractSchemas } from "./extract-schemas.ts"
@@ -25,7 +25,7 @@ describe("extractSchemas: each route's schemas as JSON Schema", () => {
 	})
 
 	// v0: 379c32b952
-	it("converts each input source on its input side, a readableStream() body by the schema it documents", () => {
+	it("converts each input source on its input side, a streamed() body by the schema it documents", () => {
 		const app = honey<{}>()
 		app
 			.post("/items")
@@ -33,7 +33,7 @@ describe("extractSchemas: each route's schemas as JSON Schema", () => {
 			.handler((ctx) => ctx.res.text("ok", "ok"))
 		app
 			.put("/raw")
-			.input({ form: readableStream(z.object({ file: z.string() })) })
+			.input({ form: streamed(z.object({ file: z.string() })) })
 			.handler((ctx) => ctx.res.text("ok", "ok"))
 		const schemas = extractSchemas(app)
 		expect([schemas["POST /items"], schemas["PUT /raw"]]).toEqual([

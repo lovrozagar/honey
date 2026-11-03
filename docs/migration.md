@@ -1162,3 +1162,39 @@ app
 	.input({ params: { provider: z.enum(["github", "google"]) } })
 	.handler((ctx) => ctx.res.text("ok", ctx.params.provider))
 ```
+
+## `readableStream()` is `streamed()`, for a body only
+
+`readableStream()` and `ReadableStreamSchema` are `streamed()` and `StreamedSchema`. The wrapper leaves a json or form
+body unread for the handler to stream from `ctx.req`, and the schema still documents it. `search`, `headers` and
+`cookies` take a schema only, which always runs: a wrapper there no longer hands on the raw record, and is a type
+error. Read `ctx.searchAll`, `ctx.headers` or `ctx.cookies` for the unvalidated values. `proxy`'s `rewriteUrl` takes
+`(ctx, url)`, ctx first like `destination`, `onResponse` and `requestHeaders`.
+
+```ts v0
+app
+	.post("/ingest")
+	.input({ json: readableStream(manifest), search: readableStream(filters) })
+	.handler((ctx) => ctx.res.json("accepted", { search: ctx.input.search }))
+app.all("/api/*rest").handler(proxy({ destination, rewriteUrl: (url) => url.slice("/api".length) }))
+```
+
+```ts
+import { honey } from "@lovrozagar/honey"
+import { streamed } from "@lovrozagar/honey/input"
+import { proxy } from "@lovrozagar/honey/proxy"
+import * as z from "zod"
+
+const manifest = z.object({ chunks: z.number(), fileName: z.string() })
+const app = honey()
+app
+	.post("/ingest")
+	.input({ json: streamed(manifest) })
+	.handler((ctx) => ctx.res.json("accepted", { search: ctx.searchAll }))
+app.all("/api/*rest").handler(
+	proxy({
+		destination: (_ctx, url) => fetch(`https://upstream.test${url}`),
+		rewriteUrl: (_ctx, url) => url.slice(4),
+	}),
+)
+```

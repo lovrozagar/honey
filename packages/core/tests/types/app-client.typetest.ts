@@ -1,7 +1,7 @@
 /**
  * The app-typed client (`createClient<typeof app>`, gen's runtime template) as typed over a real
  * app's $routes: the paths each verb takes, the input each call takes (sources, params, a
- * readableStream() entry as its plain schema), what it resolves per media type and status, SSE as
+ * streamed() body as its plain schema), what it resolves per media type and status, SSE as
  * an async iterable, result mode against throw mode, and the declared errors. Checked by typecheck.
  */
 import { describe, expectTypeOf, it } from "vitest"
@@ -11,7 +11,7 @@ import type { ErrorsFor, OutputDefFor } from "../../../gen/src/runtime/ts/app-ty
 import type { Result } from "../../../gen/src/runtime/ts/response.ts"
 import type { SSEEvent } from "../../../gen/src/runtime/ts/sse.ts"
 import { defineErrors } from "../../src/errors/errors.ts"
-import { readableStream } from "../../src/input/input.ts"
+import { streamed } from "../../src/input/input.ts"
 import { honey } from "../../src/routing/app.ts"
 import type { InferRoutes } from "../../src/routing/app-types.ts"
 
@@ -19,7 +19,7 @@ const user = z.object({ email: z.string(), id: z.string(), name: z.string() })
 const row = z.object({ id: z.string(), name: z.string() })
 const notFound = defineErrors({ not_found: "not_found" })
 
-/** v0's client fixture: each input source, plain and readableStream(), each output media type, each verb. */
+/** v0's client fixture: each input source, a body plain and streamed(), each output media type, each verb. */
 const app = honey<{}>()
 	.get("/health")
 	.handler((ctx) => ctx.res.text("ok", "ok"))
@@ -73,26 +73,17 @@ const app = honey<{}>()
 	.get("/input/none")
 	.handler((ctx) => ctx.res.text("ok", "ok"))
 	.post("/input/rs-json")
-	.input({ json: readableStream(z.object({ data: z.string(), size: z.number() })) })
+	.input({ json: streamed(z.object({ data: z.string(), size: z.number() })) })
 	.handler((ctx) => ctx.res.text("ok", "ok"))
 	.post("/input/rs-form")
-	.input({ form: readableStream(z.object({ field: z.string() })) })
+	.input({ form: streamed(z.object({ field: z.string() })) })
 	.handler((ctx) => ctx.res.text("ok", "ok"))
 	.post("/input/rs-json-mixed")
 	.input({
 		headers: z.object({ "x-trace": z.string() }),
-		json: readableStream(z.object({ payload: z.string() })),
+		json: streamed(z.object({ payload: z.string() })),
 		search: z.object({ async: z.boolean().optional() }),
 	})
-	.handler((ctx) => ctx.res.text("ok", "ok"))
-	.get("/input/rs-search")
-	.input({ search: readableStream(z.object({ filter: z.string() })) })
-	.handler((ctx) => ctx.res.text("ok", "ok"))
-	.get("/input/rs-headers")
-	.input({ headers: readableStream(z.object({ "x-token": z.string() })) })
-	.handler((ctx) => ctx.res.text("ok", "ok"))
-	.get("/input/rs-cookies")
-	.input({ cookies: readableStream(z.object({ session: z.string() })) })
 	.handler((ctx) => ctx.res.text("ok", "ok"))
 	.get("/output/json")
 	.output({ "application/json": { ok: user } })
@@ -200,9 +191,6 @@ describe("the paths each verb takes", () => {
 			| "/input/headers"
 			| "/input/none"
 			| "/input/params/:userId"
-			| "/input/rs-cookies"
-			| "/input/rs-headers"
-			| "/input/rs-search"
 			| "/input/search"
 			| "/methods/resource"
 			| "/output/binary"
@@ -292,14 +280,11 @@ describe("the input each call takes", () => {
 	})
 })
 
-describe("the input of readableStream(), combined and deep routes", () => {
+describe("the input of streamed(), combined and deep routes", () => {
 	// v0: 5fc98a6dfd
 	// v0: bce2673b8f
 	// v0: 9f48f0e3e4
-	// v0: 124924980a
-	// v0: 57dfdbb604
-	// v0: 2e068c2591
-	it("types a readableStream()-wrapped entry as its plain schema, beside plain ones", () => {
+	it("types a streamed() body as its plain schema, beside plain sources", () => {
 		expectTypeOf<PostIn<"/input/rs-json">>().toExtend<{ json: { data: string; size: number } }>()
 		expectTypeOf<PostIn<"/input/rs-form">>().toExtend<{ form: { field: string } }>()
 		expectTypeOf<PostIn<"/input/rs-json-mixed">>().toExtend<{
@@ -307,9 +292,6 @@ describe("the input of readableStream(), combined and deep routes", () => {
 			json: { payload: string }
 			search: { async?: boolean }
 		}>()
-		expectTypeOf<GetIn<"/input/rs-search">>().toExtend<{ search: { filter: string } }>()
-		expectTypeOf<GetIn<"/input/rs-headers">>().toExtend<{ headers: { "x-token": string } }>()
-		expectTypeOf<GetIn<"/input/rs-cookies">>().toExtend<{ cookies: { session: string } }>()
 	})
 
 	// v0: 16f2b537be

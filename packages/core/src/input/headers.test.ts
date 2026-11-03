@@ -40,9 +40,4 @@ describe("headersInput: the request headers, validated", () => {
 			missing.fields.authorization?.[0]?.path,
 		]).toEqual([400, "headers.authorization", 400, "headers.authorization"])
 	})
-
-	it("without a schema (a readableStream entry) the headers pass as they are", () => {
-		const headers = headersOf({ a: "1" })
-		expect(headersInput(null, headers)).toBe(headers)
-	})
 })

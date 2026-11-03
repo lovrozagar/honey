@@ -2,7 +2,7 @@ import { type } from "arktype"
 import { describe, expect, it } from "vitest"
 import * as v from "valibot"
 import * as z from "zod"
-import { readableStream } from "../input/input.ts"
+import { streamed } from "../input/input.ts"
 import { honey } from "../routing/app.ts"
 import { SILENT } from "../telemetry/logger.ts"
 import { generateOpenApi } from "./generate.ts"
@@ -223,11 +223,11 @@ describe("form bodies: urlencoded, and multipart when a part is binary", () => {
 	// v0: 520636424a
 	// v0: 9e9462a7a5
 	// v0: 1499d2378e
-	it("adds multipart for a file or a byte part, unwraps a readableStream form, and keeps a scalar-only form urlencoded", () => {
+	it("adds multipart for a file or a byte part, unwraps a streamed form, and keeps a scalar-only form urlencoded", () => {
 		const app = honey<{}>()
 		app
 			.post("/extract")
-			.input({ form: readableStream(z.object({ columns: z.string(), file: z.file() })) })
+			.input({ form: streamed(z.object({ columns: z.string(), file: z.file() })) })
 			.handler((c) => c.res.text("ok", "ok"))
 		app
 			.post("/upload")
@@ -239,7 +239,7 @@ describe("form bodies: urlencoded, and multipart when a part is binary", () => {
 			.handler((c) => c.res.text("ok", "ok"))
 		app
 			.post("/notes")
-			.input({ form: readableStream(z.object({ title: z.string() })) })
+			.input({ form: streamed(z.object({ title: z.string() })) })
 			.handler((c) => c.res.text("ok", "ok"))
 		const doc = generateOpenApi(app, { info: INFO })
 		const multipart = (path: string) =>

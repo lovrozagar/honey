@@ -70,7 +70,7 @@ function pathParameters(route: CollectedRoute | CollectedWsRoute): Operation[] {
 const isRecord = (value: unknown): value is JsonSchema =>
 	value !== null && typeof value === "object" && !Array.isArray(value)
 
-/** The schema an input entry documents: a `readableStream()` wrapper by the schema it wraps. */
+/** The schema an input entry documents: a `streamed()` body by the schema it wraps. */
 const schemaOf = (entry: InputEntry): unknown => ("_tag" in entry ? entry.schema : entry)
 
 /** Whether a form part carries bytes: a binary format, a file, or an array of them. */

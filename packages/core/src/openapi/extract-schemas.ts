@@ -18,7 +18,7 @@ export type RouteSchemas = {
 /** The keys of `.output()` that are no media type. */
 const NOT_MEDIA: readonly string[] = ["headers", "redirect"]
 
-/** The schema an input entry documents: a `readableStream()` wrapper by the schema it wraps. */
+/** The schema an input entry documents: a `streamed()` body by the schema it wraps. */
 function schemaOf(entry: InputEntry): unknown {
 	return "_tag" in entry ? entry.schema : entry
 }

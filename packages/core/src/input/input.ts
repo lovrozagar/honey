@@ -21,23 +21,23 @@ import { parsePattern, patternParams } from "../routing/pattern.ts"
 import type { ParamKeys, ParamsFromPath } from "../routing/types.ts"
 
 /**
- * A source whose schema documents the shape (for the client and docs) but is not run: a body is
- * left unread for the handler to stream from `ctx.req`, a non-body source passes as parsed.
+ * A body whose schema documents the shape (for the client and docs) but is not run: the body is left unread for the
+ * handler to stream from `ctx.req`.
  */
-export type ReadableStreamSchema<S> = {
-	/** Marks the entry as a `readableStream()` wrapper. */
-	readonly _tag: "readableStream"
-	/** The schema that documents the source without being run. */
+export type StreamedSchema<S> = {
+	/** Marks the entry as a `streamed()` wrapper. */
+	readonly _tag: "streamed"
+	/** The schema that documents the body without being run. */
 	readonly schema: S
 }
 
-/** Hand the source on unvalidated: see {@link ReadableStreamSchema}. */
-export function readableStream<S extends StandardSchemaLike>(schema: S): ReadableStreamSchema<S> {
-	return { _tag: "readableStream", schema }
+/** Leave a json or form body unread for the handler to stream: see {@link StreamedSchema}. */
+export function streamed<S extends StandardSchemaLike>(schema: S): StreamedSchema<S> {
+	return { _tag: "streamed", schema }
 }
 
-/** A source's schema, or its `readableStream()` wrapper. */
-export type InputEntry = StandardSchemaLike | ReadableStreamSchema<StandardSchemaLike>
+/** A source's schema, or a body's `streamed()` wrapper. */
+export type InputEntry = StandardSchemaLike | StreamedSchema<StandardSchemaLike>
 
 /**
  * The non-body sources: all a WebSocket route may declare, since an upgrade has no body. A value its schema rejects
@@ -45,9 +45,9 @@ export type InputEntry = StandardSchemaLike | ReadableStreamSchema<StandardSchem
  */
 export type NonBodyInput = {
 	/** Schema for the request's cookies, a record by name holding the first value of a repeated name. */
-	readonly cookies?: InputEntry
+	readonly cookies?: StandardSchemaLike
 	/** Schema for the request headers, a record with lower-case names. */
-	readonly headers?: InputEntry
+	readonly headers?: StandardSchemaLike
 	/**
 	 * A schema for each path param that needs one, by name, validated onto `ctx.params`; every other param stays the
 	 * string the path carried. A name the path does not have is a type error and throws at registration.
@@ -57,7 +57,7 @@ export type NonBodyInput = {
 	 * Schema for the query string. A repeated key follows the schema: a key it types as an array gets every value, a
 	 * key it types as a scalar the first.
 	 */
-	readonly search?: InputEntry
+	readonly search?: StandardSchemaLike
 }
 
 /** What `.input()` takes: json, form and binary are exclusive, as a request carries one body. */
@@ -94,15 +94,8 @@ type BinaryTypeOf<T> = (T extends readonly (infer U)[] ? U : T) extends infer E
 		: E
 	: never
 
-/** What an unvalidated non-body source carries: the record as parsed. */
-type RawSource<K> = K extends "search" ? Record<string, string | string[]> : Record<string, string>
-
-/** One source on ctx.input: the schema's output, or the raw record a `readableStream()` entry passes. */
-type SourceValue<K, E> = K extends "binary"
-	? BinaryBody<Extract<BinaryTypeOf<E>, string>>
-	: E extends ReadableStreamSchema<unknown>
-		? RawSource<K>
-		: InferOutput<E>
+/** One source on ctx.input: the schema's output. */
+type SourceValue<K, E> = K extends "binary" ? BinaryBody<Extract<BinaryTypeOf<E>, string>> : InferOutput<E>
 
 /** The keys ctx.input carries: every declared source except the params (on `ctx.params`) and a body left unread. */
 type InputKey<T> = {
@@ -111,7 +104,7 @@ type InputKey<T> = {
 		: K extends "params"
 			? never
 			: K extends "form" | "json"
-				? NonNullable<T[K]> extends ReadableStreamSchema<unknown>
+				? NonNullable<T[K]> extends StreamedSchema<unknown>
 					? never
 					: K
 				: K
@@ -131,17 +124,17 @@ type WithParamSchemas<TPathParams, TSchemas, TOutput extends boolean> = {
 			: never
 }
 
-/** One source as a client sends it: the schema's input type, a `readableStream()` entry by the schema it wraps. */
+/** One source as a client sends it: the schema's input type, a `streamed()` body by the schema it wraps. */
 type RequestValue<K, E, TPathParams> = K extends "binary"
 	? BinaryBody<Extract<BinaryTypeOf<E>, string>>
 	: K extends "params"
 		? WithParamSchemas<TPathParams, E, false>
-		: InferInput<E extends ReadableStreamSchema<infer S> ? S : E>
+		: InferInput<E extends StreamedSchema<infer S> ? S : E>
 
 /** The keys a client sends: every declared source, a body left unread included. */
 type RequestKey<T> = { [K in keyof T]-?: [NonNullable<T[K]>] extends [never] ? never : K }[keyof T]
 
-/** What a client sends for a declaration (the route record's `request`): `readableStream()` entries unwrapped. */
+/** What a client sends for a declaration (the route record's `request`): a `streamed()` body unwrapped. */
 export type InferRequestMap<T, TPathParams = {}> = {
 	readonly [K in RequestKey<T>]: RequestValue<K, NonNullable<T[K]>, TPathParams>
 }
@@ -188,13 +181,13 @@ type InputCtx = {
 	readonly searchAll: Record<string, string[]>
 }
 
-/** One compiled source: its schema (`null` for a readableStream entry) and, for search and form, its shape. */
-type Compiled = { readonly schema: StandardSchemaLike | null; readonly shape: Shape | null }
+/** The compiled body: its schema (`null` for a streamed() body) and its shape, for a form's repeated keys. */
+type CompiledBody = { readonly schema: StandardSchemaLike | null; readonly shape: Shape | null }
 
 /** The compiled step: sets ctx.input, or a promise of having set it when something had to wait. */
 export type InputStep = (ctx: InputCtx) => Promise<void> | undefined
 
-function compile(entry: InputEntry | undefined): Compiled | null {
+function compileBody(entry: InputEntry | undefined): CompiledBody | null {
 	if (entry === undefined) return null
 	const schema = "_tag" in entry ? null : entry
 	return { schema, shape: schema === null ? null : shapeOf(schema) }
@@ -203,8 +196,8 @@ function compile(entry: InputEntry | undefined): Compiled | null {
 /** A source with no ctx.input key: a body left unread for the handler, or the params, put on ctx.params. */
 const UNREAD: unique symbol = /* @__PURE__ */ Symbol("honey.unread")
 
-/** The body source, read once, or UNREAD for a `readableStream()` body. */
-function readBody(body: Compiled, ctx: InputCtx, parser: BodyParser): unknown {
+/** The body source, read once, or UNREAD for a `streamed()` body. */
+function readBody(body: CompiledBody, ctx: InputCtx, parser: BodyParser): unknown {
 	if (body.schema === null) return UNREAD
 	return parser === "json" ? jsonInput(body.schema, ctx.req) : formInput(body.schema, ctx.req, parser, body.shape)
 }
@@ -240,16 +233,17 @@ function paramsRead(schemas: ParamSchemas): (ctx: InputCtx) => unknown {
 export function compileInput(schemas: InputSchemas, methods: readonly string[], path: string): InputStep {
 	assertBodySchemaAllowed(schemas, methods, path)
 	if (schemas.params !== undefined) assertParamsNamed(schemas.params, methods, path)
-	const search = compile(schemas.search)
-	const headers = compile(schemas.headers)
-	const cookies = compile(schemas.cookies)
-	const json = compile(schemas.json)
-	const form = compile(schemas.form)
+	const { search, headers, cookies } = schemas
+	const json = compileBody(schemas.json)
+	const form = compileBody(schemas.form)
 	const reads: Array<[string, (ctx: InputCtx) => unknown]> = []
 	if (schemas.params !== undefined) reads.push(["params", paramsRead(schemas.params)])
-	if (search !== null) reads.push(["search", (ctx) => searchInput(search.schema, ctx.searchAll, search.shape)])
-	if (headers !== null) reads.push(["headers", (ctx) => headersInput(headers.schema, ctx.headers)])
-	if (cookies !== null) reads.push(["cookies", (ctx) => cookiesInput(cookies.schema, ctx.cookies)])
+	if (search !== undefined) {
+		const shape = shapeOf(search)
+		reads.push(["search", (ctx) => searchInput(search, ctx.searchAll, shape)])
+	}
+	if (headers !== undefined) reads.push(["headers", (ctx) => headersInput(headers, ctx.headers)])
+	if (cookies !== undefined) reads.push(["cookies", (ctx) => cookiesInput(cookies, ctx.cookies)])
 	const body = json ?? form
 	if (schemas.binary !== undefined) {
 		const ranges = binaryRanges(schemas.binary, methods[0] as string, path)

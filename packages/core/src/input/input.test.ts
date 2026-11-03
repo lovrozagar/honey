@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest"
 import * as z from "zod"
 import { createMiddleware } from "../middleware/middleware.ts"
 import { honey } from "../routing/app.ts"
-import { readableStream } from "./input.ts"
+import { streamed } from "./input.ts"
 import { ws } from "../ws/route.ts"
 
 /** A POST of `body` with `type`, to `path`. */
@@ -21,7 +21,7 @@ async function answer(res: Response | Promise<Response>): Promise<[number, unkno
 	return [r.status, await r.json()]
 }
 
-/** A schema that must never run: readableStream entries hand the request on unvalidated. */
+/** A schema that must never run: a streamed() body is handed on unread. */
 const untouchable = {
 	"~standard": {
 		validate: (): never => {
@@ -32,21 +32,17 @@ const untouchable = {
 	},
 }
 
-describe("readableStream(schema)", () => {
+describe("streamed(schema)", () => {
 	// v0: 26174519c6
 	// v0: 7200d6bba4
 	// v0: 194cc2eaa7
 	it("wraps the schema itself, a fresh wrapper per call", () => {
-		const [a, b] = [readableStream(untouchable), readableStream(untouchable)]
-		expect([a, a.schema === untouchable, a === b]).toEqual([
-			{ _tag: "readableStream", schema: untouchable },
-			true,
-			false,
-		])
+		const [a, b] = [streamed(untouchable), streamed(untouchable)]
+		expect([a, a.schema === untouchable, a === b]).toEqual([{ _tag: "streamed", schema: untouchable }, true, false])
 	})
 })
 
-describe("readableStream(schema) on a route", () => {
+describe("streamed(schema) on a route", () => {
 	// v0: 73fca81de4
 	// v0: 03c3f0ae27
 	// v0: bbe8d88382
@@ -57,11 +53,11 @@ describe("readableStream(schema) on a route", () => {
 		const app = honey<{}>()
 		app
 			.post("/json")
-			.input({ json: readableStream(untouchable) })
+			.input({ json: streamed(untouchable) })
 			.handler(async (ctx) => ctx.res.json("created", { body: (await ctx.req.json()) as unknown, input: ctx.input }))
 		app
 			.post("/form")
-			.input({ form: readableStream(untouchable) })
+			.input({ form: streamed(untouchable) })
 			.handler(async (ctx) =>
 				ctx.res.json("created", { title: (await ctx.req.formData()).get("title"), input: ctx.input }),
 			)

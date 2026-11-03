@@ -3,7 +3,7 @@ import * as z from "zod"
 import type { HoneyError } from "../errors/error.ts"
 import { honey } from "../routing/app.ts"
 import { formInput } from "./form.ts"
-import { readableStream } from "./input.ts"
+import { streamed } from "./input.ts"
 
 /** A POST carrying `body` as an urlencoded form. */
 const urlencoded = (body: string) =>
@@ -142,7 +142,7 @@ describe("formInput: dangerous keys", () => {
 
 describe("a form's file on a route, beside a body left to the handler", () => {
 	// v0: 9a8fa7b812
-	it("a multipart File reaches the handler whole beside its fields; a readableStream body as it was sent", async () => {
+	it("a multipart File reaches the handler whole beside its fields; a streamed body as it was sent", async () => {
 		const app = honey<{}>()
 		app
 			.post("/upload")
@@ -153,13 +153,13 @@ describe("a form's file on a route, beside a body left to the handler", () => {
 			})
 		app
 			.post("/stream")
-			.input({ json: readableStream(passing) })
+			.input({ json: streamed(passing) })
 			.handler(async (ctx) => ctx.res.text("ok", await ctx.req.text()))
 		const form = new FormData()
 		form.set("title", "pic")
 		form.set("blob", new File(["PNGDATA"], "a.png", { type: "image/png" }))
 		const upload = await app.fetch(new Request("http://localhost/upload", { body: form, method: "POST" }), {})
-		const streamed = await app.fetch(
+		const unread = await app.fetch(
 			new Request("http://localhost/stream", {
 				body: '{"raw":true}',
 				headers: { "content-type": "application/json" },
@@ -167,7 +167,7 @@ describe("a form's file on a route, beside a body left to the handler", () => {
 			}),
 			{},
 		)
-		expect([upload.status, await upload.json(), streamed.status, await streamed.text()]).toEqual([
+		expect([upload.status, await upload.json(), unread.status, await unread.text()]).toEqual([
 			201,
 			{ name: "a.png", size: 7, title: "pic", type: "image/png" },
 			200,

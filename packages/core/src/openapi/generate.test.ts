@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest"
 import * as v from "valibot"
 import * as z from "zod"
 import { defineErrors } from "../errors/errors.ts"
-import { readableStream } from "../input/input.ts"
+import { streamed } from "../input/input.ts"
 import { createMiddleware } from "../middleware/middleware.ts"
 import { honey } from "../routing/app.ts"
 import { gatewayTree } from "../routing/gateway-tree.ts"
@@ -433,7 +433,7 @@ describe("generateOpenApi: schema-derived meta over every shape a route takes", 
 			.handler((c) => c.res.text("ok", "ok"))
 		app
 			.post("/stream")
-			.input({ json: readableStream(named("stream")) })
+			.input({ json: streamed(named("stream")) })
 			.handler((c) => c.res.text("ok", "ok"))
 		app
 			.get("/missing")

@@ -52,7 +52,7 @@ describe("searchInput: the query, validated", () => {
 	})
 })
 
-describe("searchInput: dangerous keys and readableStream entries", () => {
+describe("searchInput: dangerous keys", () => {
 	// v0: 4259eb4c23
 	it("never hands the schema __proto__, constructor or prototype (H18.13), and keeps its prototype", () => {
 		const seen: unknown[] = []
@@ -72,11 +72,5 @@ describe("searchInput: dangerous keys and readableStream entries", () => {
 			null,
 			undefined,
 		])
-	})
-
-	// v0: 17a60fd180
-	// v0: 5ad44d5815
-	it("without a schema (a readableStream entry) the parsed query passes unvalidated", () => {
-		expect({ ...(searchInput(null, searchAll("tag=a&tag=b&x=1")) as object) }).toEqual({ tag: ["a", "b"], x: "1" })
 	})
 })

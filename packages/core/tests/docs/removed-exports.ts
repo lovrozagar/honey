@@ -82,6 +82,7 @@ export const REMOVED_NAMES: Readonly<Record<string, Verdict>> = {
 	Overwrite: { kind: "internal", why: SHAPE },
 	PendingTap: { kind: "internal", why: "the tap queue's own entry, filled by tap() and read by the dispatcher" },
 	RawSocket: { kind: "internal", why: ADAPTER },
+	ReadableStreamSchema: { kind: "guide" },
 	RealtimeRouteOpts: { kind: "guide" },
 	ResolvedGoCliConfig: { kind: "internal", why: PLUGIN },
 	ResolvedHoneyConfig: { kind: "internal", why: PLUGIN },
@@ -122,6 +123,7 @@ export const REMOVED_NAMES: Readonly<Record<string, Verdict>> = {
 	matchWsRoute: { kind: "internal", why: TREE },
 	mergeInto: { kind: "internal", why: TREE },
 	overlaySchemas: { kind: "internal", why: TREE },
+	readableStream: { kind: "guide" },
 	resolveFieldName: {
 		kind: "internal",
 		why: "the i18n lookup core calls; an app passes createErrorTranslator() instead",

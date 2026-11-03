@@ -1,7 +1,7 @@
 import type { WSAdapter } from "@lovrozagar/honey"
 import type { RouteTree } from "@lovrozagar/honey/tree"
 import { createMiddleware, defineErrors, honey } from "@lovrozagar/honey"
-import { readableStream } from "@lovrozagar/honey/input"
+import { streamed } from "@lovrozagar/honey/input"
 import { serveManifest, serveOpenApi } from "@lovrozagar/honey/openapi"
 import { scalar } from "@lovrozagar/honey/openapi/scalar"
 import { ws } from "@lovrozagar/honey/ws"
@@ -210,7 +210,7 @@ export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
 		)
 
 		.post("/rs/upload")
-		.input({ json: readableStream(z.object({ chunks: z.number(), fileName: z.string() })) })
+		.input({ json: streamed(z.object({ chunks: z.number(), fileName: z.string() })) })
 		.output({ "application/json": { accepted: z.object({ uploadId: z.string() }) } })
 		.handler((ctx) => ctx.res.json("accepted", { uploadId: "up-1" }))
 

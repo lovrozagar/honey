@@ -46637,6 +46637,11 @@
 		}
 	},
 	"retired": {
+		"124924980a": "plan 39 5.5: streamed() (was readableStream()) wraps a json or form body only, which it leaves unread for the handler; search, headers and cookies are read before the handler, so they always run their schema and a wrapper there is a type error (input.typetest)",
+		"57dfdbb604": "plan 39 5.5: streamed() (was readableStream()) wraps a json or form body only, which it leaves unread for the handler; search, headers and cookies are read before the handler, so they always run their schema and a wrapper there is a type error (input.typetest)",
+		"2e068c2591": "plan 39 5.5: streamed() (was readableStream()) wraps a json or form body only, which it leaves unread for the handler; search, headers and cookies are read before the handler, so they always run their schema and a wrapper there is a type error (input.typetest)",
+		"17a60fd180": "plan 39 5.5: streamed() (was readableStream()) wraps a json or form body only, which it leaves unread for the handler; search, headers and cookies are read before the handler, so they always run their schema and a wrapper there is a type error (input.typetest)",
+		"5ad44d5815": "plan 39 5.5: streamed() (was readableStream()) wraps a json or form body only, which it leaves unread for the handler; search, headers and cookies are read before the handler, so they always run their schema and a wrapper there is a type error (input.typetest)",
 		"2488556684": "v0 drops a `constructor` cookie (result.constructor === Object); v1 keeps prototype-named cookies as plain keys on a null-prototype record (587b90b244), as ruled for 78c407f3ba",
 		"011b51b268": "covered-by: asserts only {} extends object as a drift guard; the @ts-expect-error cases in middleware-scoped.typetest.ts fail typecheck if they drift",
 		"05533ac9c0": "H23: trustProxy is cut; ctx.ip is the platform peer and no forwarding header is ever trusted",

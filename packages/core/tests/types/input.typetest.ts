@@ -1,7 +1,7 @@
 /**
  * `.input()` as typed: ctx.input carries each declared source as its schema produced it, beside
- * what middleware and context() add; a readableStream() body is left off it and a readableStream()
- * non-body source is the raw record; json and form are exclusive; a ws route takes the non-body
+ * what middleware and context() add; a streamed() body is left off it, and no other source takes
+ * streamed(); json and form are exclusive; a ws route takes the non-body
  * sources only; and the route map and InferRouteCtx carry the input. Checked by typecheck.
  */
 import { describe, expectTypeOf, it } from "vitest"
@@ -11,8 +11,8 @@ import {
 	type InferInputMap,
 	type InputEntry,
 	type InputSchemas,
-	type ReadableStreamSchema,
-	readableStream,
+	type StreamedSchema,
+	streamed,
 } from "../../src/input/input.ts"
 import { createMiddleware } from "../../src/middleware/middleware.ts"
 import { honey } from "../../src/routing/app.ts"
@@ -114,34 +114,55 @@ describe("ctx.input: a form body", () => {
 	})
 })
 
-describe("ctx.input: readableStream() entries and the body", () => {
+describe("ctx.input: streamed() bodies", () => {
 	// v0: 0262e59589
 	// v0: ab11da732c
-	it("readableStream() keeps the schema's own type on its wrapper, read-only", () => {
+	it("streamed() keeps the schema's own type on its wrapper, read-only", () => {
 		const schema = z.object({ a: z.string() })
-		expectTypeOf(readableStream(schema)).toEqualTypeOf<ReadableStreamSchema<typeof schema>>()
-		expectTypeOf<ReadableStreamSchema<typeof schema>>().toEqualTypeOf<{
-			readonly _tag: "readableStream"
+		expectTypeOf(streamed(schema)).toEqualTypeOf<StreamedSchema<typeof schema>>()
+		expectTypeOf<StreamedSchema<typeof schema>>().toEqualTypeOf<{
+			readonly _tag: "streamed"
 			readonly schema: typeof schema
 		}>()
-		expectTypeOf<ReadableStreamSchema<typeof schema>>().not.toEqualTypeOf<{
-			_tag: "readableStream"
+		expectTypeOf<StreamedSchema<typeof schema>>().not.toEqualTypeOf<{
+			_tag: "streamed"
 			schema: typeof schema
 		}>()
-		expectTypeOf<ReadableStreamSchema<typeof schema>["_tag"]>().toEqualTypeOf<"readableStream">()
 	})
 
-	it("leaves a readableStream() body off ctx.input, and types a non-body one as the raw record", () => {
+	it("leaves a streamed() body off ctx.input, json or form", () => {
 		honey<{}>()
 			.post("/t")
-			.input({ json: readableStream(z.object({ a: z.string() })), search: readableStream(z.object({ q: z.number() })) })
+			.input({ json: streamed(z.object({ a: z.string() })) })
 			.handler((ctx) => {
 				expectTypeOf(ctx.input).not.toHaveProperty("json")
-				expectTypeOf(ctx.input.search).toEqualTypeOf<Record<string, string | string[]>>()
+				return ctx.res.text("ok", "ok")
+			})
+		honey<{}>()
+			.post("/t")
+			.input({ form: streamed(z.object({ a: z.string() })) })
+			.handler((ctx) => {
+				expectTypeOf(ctx.input).not.toHaveProperty("form")
 				return ctx.res.text("ok", "ok")
 			})
 	})
 
+	it("refuses streamed() on a source that is no body", () => {
+		const route = honey<{}>().post("/t/:id")
+		const wrapped = streamed(z.object({ q: z.string() }))
+		expectTypeOf(wrapped).not.toExtend<StandardSchemaLike>()
+		// @ts-expect-error search is read before the handler; only a body can be left unread
+		route.input({ search: wrapped })
+		// @ts-expect-error headers are read before the handler
+		route.input({ headers: wrapped })
+		// @ts-expect-error cookies are read before the handler
+		route.input({ cookies: wrapped })
+		// @ts-expect-error a param is validated onto ctx.params
+		route.input({ params: { id: streamed(z.string()) } })
+	})
+})
+
+describe("ctx.input: the body and its schemas", () => {
 	it("takes json or form, never both", () => {
 		const route = honey<{}>().post("/t")
 		const both = { form: z.object({}), json: z.object({}) }
@@ -201,7 +222,8 @@ describe("InputSchemas: what .input() takes", () => {
 	// v0: 11b375a687
 	it("InputSchemas: one body at most, beside any non-body source; nothing at all is a declaration too", () => {
 		const entry = {} as InputEntry
-		const nonBody = { cookies: entry, headers: entry, params: { id: entry as StandardSchemaLike }, search: entry }
+		const schema = {} as StandardSchemaLike
+		const nonBody = { cookies: schema, headers: schema, params: { id: schema }, search: schema }
 		expectTypeOf({}).toExtend<InputSchemas>()
 		expectTypeOf(nonBody).toExtend<InputSchemas>()
 		expectTypeOf({ json: entry }).toExtend<InputSchemas>()
@@ -214,6 +236,7 @@ describe("InputSchemas: what .input() takes", () => {
 		}).toExtend<InputSchemas>()
 		expectTypeOf({ json: z.object({ name: z.string() }), search: z.object({ q: z.string() }) }).toExtend<InputSchemas>()
 		expectTypeOf({ form: entry, json: entry }).not.toExtend<InputSchemas>()
+		expectTypeOf({ search: entry }).not.toExtend<InputSchemas>()
 	})
 })
 

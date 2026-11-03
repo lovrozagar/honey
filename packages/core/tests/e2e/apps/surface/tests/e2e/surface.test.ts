@@ -206,7 +206,7 @@ test.describe("streams and uploads", () => {
 		expect(await res.text()).toContain("news")
 	})
 
-	test("POST /rs/upload readableStream json", async ({ request }) => {
+	test("POST /rs/upload streamed json", async ({ request }) => {
 		const res = await request.post("/rs/upload", {
 			data: { chunks: 3, fileName: "a.bin" },
 		})

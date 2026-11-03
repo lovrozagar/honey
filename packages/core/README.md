@@ -243,18 +243,18 @@ app
 	)
 ```
 
-A body you do not want in memory is input too: `readableStream()` hands the handler the stream itself.
+A body you do not want in memory is input too: `streamed()` leaves a json or form body unread for the handler to stream.
 
 ```ts
 import { honey } from "@lovrozagar/honey"
-import { readableStream } from "@lovrozagar/honey/input"
+import { streamed } from "@lovrozagar/honey/input"
 import * as z from "zod"
 
 const app = honey()
 
 app
 	.post("/ingest")
-	.input({ json: readableStream(z.object({ chunks: z.number(), fileName: z.string() })) })
+	.input({ json: streamed(z.object({ chunks: z.number(), fileName: z.string() })) })
 	.handler(async (ctx) => {
 		/* the schema is what the document and the clients promise; the body itself stays on the request */
 		const reader = (ctx.req.body as ReadableStream<Uint8Array>).getReader()
@@ -1275,7 +1275,7 @@ generator.
 | `@lovrozagar/honey/openapi/swagger` | `swagger`, the Swagger UI page                                                                                           |
 | `@lovrozagar/honey/errors`          | `defineErrors` (also on the root)                                                                                        |
 | `@lovrozagar/honey/i18n`            | `createErrorTranslator`, `translateError`, `interpolate`, `createInterpolator`                                           |
-| `@lovrozagar/honey/input`           | `readableStream()`, a streamed request body as input                                                                     |
+| `@lovrozagar/honey/input`           | `streamed()`, a request body left unread for the handler                                                                 |
 | `@lovrozagar/honey/range`           | `rangeResponse`, a `Range` request answered from bytes                                                                   |
 | `@lovrozagar/honey/cache-control`   | `cacheControl`, `httpDate`                                                                                               |
 | `@lovrozagar/honey/compress`        | `compress`                                                                                                               |

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import * as z from "zod"
 import { defineErrors } from "../errors/errors.ts"
-import { readableStream } from "../input/input.ts"
+import { streamed } from "../input/input.ts"
 import { createMiddleware } from "../middleware/middleware.ts"
 import { honey } from "../routing/app.ts"
 import { createNode, insertRoute } from "../routing/tree.ts"
@@ -116,9 +116,9 @@ describe("collectRoutes: what each route declares", () => {
 })
 
 describe("collectRoutes: what each route declares for its body", () => {
-	it("hands over the input and output declarations as written, a readableStream() wrapper included", () => {
+	it("hands over the input and output declarations as written, a streamed() wrapper included", () => {
 		const json = z.object({ name: z.string() })
-		const body = readableStream(z.string())
+		const body = streamed(z.string())
 		const answer = { "application/json": { ok: z.object({ id: z.string() }) } }
 		const app = honey<{}>()
 		app

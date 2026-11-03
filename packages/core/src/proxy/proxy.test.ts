@@ -152,12 +152,12 @@ describe("proxy: the request id", () => {
 describe("proxy: rewriteUrl", () => {
 	// v0: 51729d5f0e
 	// v0: b6fb8591d7
-	it("rewrites the path and query before destination, with ctx", async () => {
+	it("rewrites the path and query before destination, ctx first like its sibling hooks", async () => {
 		const app = honey<{}>()
 		app.all("/v1/*rest").handler(
 			proxy({
 				destination: (_ctx, url) => new Response(url),
-				rewriteUrl: (url, ctx: { path: string }) => `${url.replace("/v1", "/v2")}#${ctx.path}`,
+				rewriteUrl: (ctx: { path: string }, url) => `${url.replace("/v1", "/v2")}#${ctx.path}`,
 			}),
 		)
 		expect(await (await app.fetch(req("/v1/users/123?foo=bar"), {})).text()).toBe("/v2/users/123?foo=bar#/v1/users/123")
