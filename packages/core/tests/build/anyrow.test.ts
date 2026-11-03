@@ -3,7 +3,7 @@
  * services merged by `mergeTree`; a served gateway app with its own routes and errors that loads its own generated
  * tree, stale in one service's leaves as on a new downstream route; and its Vite config's three OpenAPI outputs
  * (internal: every route and scheme; contract: a filterRoutes subset reading `route.meta`, two schemes; public: the
- * API-key routes, sanitized of the internal schemes, the jwt requirements and every x- key). `honey generate` writes
+ * API-key routes, sanitized of the internal schemes, the jwt requirements and every x- key but honey's own x-honey-*). `honey generate` writes
  * the tree (the services' routes plus the gateway's) and the documents from the served gateway; each document's
  * operations, schemes and keys are its own; and `honey-clients generate --spec` builds an SDK from a filtered one.
  */
@@ -136,11 +136,11 @@ type Document = {
 
 const read = (dir: string, path: string) => readFileSync(join(dir, path), "utf8")
 const documentAt = (dir: string, name: string) => JSON.parse(read(dir, `src/_gen/${name}`)) as Document
-/** Each operation's path, security and whether it carries any x- key, by path (a document lists them in tree order). */
+/** Each operation's path, security and x- keys, by path (a document lists them in tree order). */
 const operations = (document: Document) =>
 	Object.entries(document.paths)
 		.map(
-			([path, item]) => [path, item.get.security, Object.keys(item.get).some((key) => key.startsWith("x-"))] as const,
+			([path, item]) => [path, item.get.security, Object.keys(item.get).filter((key) => key.startsWith("x-"))] as const,
 		)
 		.sort(([a], [b]) => (a < b ? -1 : 1))
 const schemes = (document: Document) => Object.keys(document.components?.securitySchemes ?? {})
@@ -182,14 +182,14 @@ describe("an Anyrow-shaped gateway (bit 19 h2)", () => {
 			"openapi.public.gen.json",
 		].map((name) => documentAt(made.dir, name)) as [Document, Document, Document]
 		expect(operations(internal)).toEqual([
-			["/extract/admin", [{ iaKey: [] }], true],
-			["/extract/jobs", [{ apiKey: [] }, { jwt: [] }], true],
-			["/growth/actors", [{ iaActor: [] }], true],
-			["/growth/contracts", [{ jwt: [] }], true],
-			["/health", undefined, true],
-			["/robots.txt", undefined, true],
-			["/saas/billing", [{ jwt: [] }], true],
-			["/saas/projects", [{ apiKey: [] }], true],
+			["/extract/admin", [{ iaKey: [] }], ["x-kind", "x-honey-route"]],
+			["/extract/jobs", [{ apiKey: [] }, { jwt: [] }], ["x-kind", "x-honey-route"]],
+			["/growth/actors", [{ iaActor: [] }], ["x-kind", "x-honey-route"]],
+			["/growth/contracts", [{ jwt: [] }], ["x-kind", "x-honey-route"]],
+			["/health", undefined, ["x-honey-route", "x-honey-errors"]],
+			["/robots.txt", undefined, ["x-honey-route"]],
+			["/saas/billing", [{ jwt: [] }], ["x-kind", "x-honey-route"]],
+			["/saas/projects", [{ apiKey: [] }], ["x-kind", "x-honey-route"]],
 		])
 		/* the gateway's own errors and its own metaSpec, which only the served gateway carries */
 		expect(Object.keys(internal.paths["/health"]?.get.responses ?? {})).toEqual(["503"])
@@ -198,12 +198,12 @@ describe("an Anyrow-shaped gateway (bit 19 h2)", () => {
 			"contract",
 		])
 		expect(operations(contract)).toEqual([
-			["/growth/contracts", [{ jwt: [] }], true],
-			["/saas/billing", [{ jwt: [] }], true],
+			["/growth/contracts", [{ jwt: [] }], ["x-kind", "x-honey-route"]],
+			["/saas/billing", [{ jwt: [] }], ["x-kind", "x-honey-route"]],
 		])
 		expect(operations(published)).toEqual([
-			["/extract/jobs", [{ apiKey: [] }], false],
-			["/saas/projects", [{ apiKey: [] }], false],
+			["/extract/jobs", [{ apiKey: [] }], ["x-honey-route"]],
+			["/saas/projects", [{ apiKey: [] }], ["x-honey-route"]],
 		])
 		expect([internal, contract, published].map(schemes)).toEqual([
 			["apiKey", "iaActor", "iaKey", "jwt"],
