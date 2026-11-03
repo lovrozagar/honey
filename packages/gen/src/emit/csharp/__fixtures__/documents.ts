@@ -96,6 +96,15 @@ function lenient(): Readonly<Record<string, unknown>> {
 	}
 }
 
+/** The nuget.org metadata the `pack` fixture carries: text MSBuild would expand or split, and XML would read as markup. */
+export const PACKAGE_METADATA = {
+	authors: "Acme Co, O'Brien & Partners",
+	description: "Shop's <API> client: $(NoWarn) @(Compile) 100% done; a*b?",
+	homepage: "https://shop.example.com/docs",
+	license: "Apache-2.0 OR MIT",
+	repository: "https://github.com/acme/shop-dotnet",
+} as const satisfies CSharpSdkOptions
+
 /** Every SDK a default run gates: at most 16 (G17; tests/structure/csharp-toolchain.test.ts). */
 export const FIXTURES = {
 	/** the gate cache's self-test and the lean-build leg: a dependency-free project */
@@ -126,6 +135,8 @@ export const FIXTURES = {
 	lenient: { document: lenient },
 	/** every name spelled at lengths 20..110, no formatter after the emitter (bit 21 i7a) */
 	long: { document: longNames },
+	/** the package metadata, packed by `dotnet pack` and read back from the nuspec (sdk.pack.test.ts) */
+	pack: { document: errors, options: PACKAGE_METADATA },
 	/** the resumable connections (contract 50 §4.1): bit 13's `realtime` document, shared, and the C#-only `clash.feed` */
 	realtime: { document: csharpRealtime },
 	/** a relative first server: a client needs an absolute `BaseUrl` (R7) */
