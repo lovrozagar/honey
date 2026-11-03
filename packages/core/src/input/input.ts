@@ -15,8 +15,10 @@ import { cookiesInput } from "./cookies.ts"
 import { formInput } from "./form.ts"
 import { headersInput } from "./headers.ts"
 import { jsonInput } from "./json.ts"
-import { paramsInput } from "./params.ts"
+import { type ParamSchemas, paramsStep } from "./params.ts"
 import { searchInput } from "./query.ts"
+import { parsePattern, patternParams } from "../routing/pattern.ts"
+import type { ParamKeys, ParamsFromPath } from "../routing/types.ts"
 
 /**
  * A source whose schema documents the shape (for the client and docs) but is not run: a body is
@@ -46,8 +48,11 @@ export type NonBodyInput = {
 	readonly cookies?: InputEntry
 	/** Schema for the request headers, a record with lower-case names. */
 	readonly headers?: InputEntry
-	/** Schema for the route's path parameters, a record by name. */
-	readonly params?: InputEntry
+	/**
+	 * A schema for each path param that needs one, by name, validated onto `ctx.params`; every other param stays the
+	 * string the path carried. A name the path does not have is a type error and throws at registration.
+	 */
+	readonly params?: ParamSchemas
 	/**
 	 * Schema for the query string. A repeated key follows the schema: a key it types as an array gets every value, a
 	 * key it types as a scalar the first.
@@ -99,37 +104,72 @@ type SourceValue<K, E> = K extends "binary"
 		? RawSource<K>
 		: InferOutput<E>
 
-/** The keys ctx.input carries: every declared source except a body left unread. */
+/** The keys ctx.input carries: every declared source except the params (on `ctx.params`) and a body left unread. */
 type InputKey<T> = {
 	[K in keyof T]-?: [NonNullable<T[K]>] extends [never]
 		? never
-		: K extends "form" | "json"
-			? NonNullable<T[K]> extends ReadableStreamSchema<unknown>
-				? never
+		: K extends "params"
+			? never
+			: K extends "form" | "json"
+				? NonNullable<T[K]> extends ReadableStreamSchema<unknown>
+					? never
+					: K
 				: K
-			: K
 }[keyof T]
 
 /** ctx.input for a declaration: each source as validated, typed by its schema. */
 export type InferInputMap<T> = { readonly [K in InputKey<T>]: SourceValue<K, NonNullable<T[K]>> }
 
+/** `TPathParams` with each param `TSchemas` declares typed by `TSchema`'s side of its schema. */
+type WithParamSchemas<TPathParams, TSchemas, TOutput extends boolean> = {
+	[K in keyof TPathParams | keyof TSchemas]: K extends keyof TSchemas
+		? TOutput extends true
+			? InferOutput<TSchemas[K]>
+			: InferInput<TSchemas[K]>
+		: K extends keyof TPathParams
+			? TPathParams[K]
+			: never
+}
+
 /** One source as a client sends it: the schema's input type, a `readableStream()` entry by the schema it wraps. */
-type RequestValue<K, E> = K extends "binary"
+type RequestValue<K, E, TPathParams> = K extends "binary"
 	? BinaryBody<Extract<BinaryTypeOf<E>, string>>
-	: InferInput<E extends ReadableStreamSchema<infer S> ? S : E>
+	: K extends "params"
+		? WithParamSchemas<TPathParams, E, false>
+		: InferInput<E extends ReadableStreamSchema<infer S> ? S : E>
 
 /** The keys a client sends: every declared source, a body left unread included. */
 type RequestKey<T> = { [K in keyof T]-?: [NonNullable<T[K]>] extends [never] ? never : K }[keyof T]
 
 /** What a client sends for a declaration (the route record's `request`): `readableStream()` entries unwrapped. */
-export type InferRequestMap<T> = { readonly [K in RequestKey<T>]: RequestValue<K, NonNullable<T[K]>> }
+export type InferRequestMap<T, TPathParams = {}> = {
+	readonly [K in RequestKey<T>]: RequestValue<K, NonNullable<T[K]>, TPathParams>
+}
 
-/** What `.input()` records at the type level: the handler's ctx.input and the client's request. */
-export type InputTypes<T> = {
+/** `ctx.params` for a route at `TPath` declaring `T`: the declared params as their schemas produce them. */
+export type InferParams<T, TPath extends string> = T extends { readonly params?: infer P }
+	? [NonNullable<P>] extends [never]
+		? ParamsFromPath<TPath>
+		: WithParamSchemas<ParamsFromPath<TPath>, NonNullable<P>, true>
+	: ParamsFromPath<TPath>
+
+/** `T` with each declared params key the path at `TPath` does not name mapped to `never`: a typo is an error there. */
+export type KnownParams<T, TPath extends string> = T extends { readonly params?: infer P }
+	? {
+			/** The declared params, each one a param of the path. */ readonly params?: {
+				readonly [K in keyof NonNullable<P>]: K extends ParamKeys<TPath> ? NonNullable<P>[K] : never
+			}
+		}
+	: unknown
+
+/** What `.input()` records at the type level: the handler's ctx.input and ctx.params, and the client's request. */
+export type InputTypes<T, TPath extends string = string> = {
 	/** The handler's `ctx.input`. */
 	input: InferInputMap<T>
+	/** The handler's `ctx.params`. */
+	params: InferParams<T, TPath>
 	/** What a client sends. */
-	request: InferRequestMap<T>
+	request: InferRequestMap<T, ParamsFromPath<TPath>>
 }
 
 /** What the input step reads off a request context. */
@@ -140,8 +180,8 @@ type InputCtx = {
 	readonly headers: Record<string, string>
 	/** Set by the input step once every source has passed; a body left unread has no key in it. */
 	input?: unknown
-	/** The path parameters by name. */
-	readonly params: Record<string, string>
+	/** The path parameters by name: the input step puts the validated ones in place. */
+	params: Record<string, unknown>
 	/** The request, whose body the step reads. */
 	readonly req: Request
 	/** Every query string value, repeated keys included. */
@@ -160,7 +200,7 @@ function compile(entry: InputEntry | undefined): Compiled | null {
 	return { schema, shape: schema === null ? null : shapeOf(schema) }
 }
 
-/** A body left unread for the handler: no ctx.input key. */
+/** A source with no ctx.input key: a body left unread for the handler, or the params, put on ctx.params. */
 const UNREAD: unique symbol = /* @__PURE__ */ Symbol("honey.unread")
 
 /** The body source, read once, or UNREAD for a `readableStream()` body. */
@@ -169,20 +209,44 @@ function readBody(body: Compiled, ctx: InputCtx, parser: BodyParser): unknown {
 	return parser === "json" ? jsonInput(body.schema, ctx.req) : formInput(body.schema, ctx.req, parser, body.shape)
 }
 
+/** Throws, naming the route, for a declared param `path` does not have. */
+function assertParamsNamed(schemas: ParamSchemas, methods: readonly string[], path: string): void {
+	const names = patternParams(parsePattern(path))
+	for (const key of Object.keys(schemas))
+		if (!names.includes(key))
+			throw new Error(
+				`${methods.join(",")} ${path}: .input() params key "${key}" is no param of the path (${names.join(", ")})`,
+			)
+}
+
+/** The params read: validated onto ctx.params, which code after the step reads as it does without a schema. */
+function paramsRead(schemas: ParamSchemas): (ctx: InputCtx) => unknown {
+	const step = paramsStep(schemas)
+	const place = (ctx: InputCtx, params: unknown): typeof UNREAD => {
+		ctx.params = params as Record<string, unknown>
+		return UNREAD
+	}
+	return (ctx) => {
+		const params = step(ctx.params as Record<string, string>)
+		return params instanceof Promise ? params.then((settled) => place(ctx, settled)) : place(ctx, params)
+	}
+}
+
 /**
  * Compile `schemas` for a route at `path` reached by `methods`. A body schema on a route only GET
- * or HEAD reach, more than one body source, or a malformed binary type throws here, at registration.
+ * or HEAD reach, more than one body source, a malformed binary type, or a params key the path does not have throws
+ * here, at registration.
  */
 export function compileInput(schemas: InputSchemas, methods: readonly string[], path: string): InputStep {
 	assertBodySchemaAllowed(schemas, methods, path)
-	const params = compile(schemas.params)
+	if (schemas.params !== undefined) assertParamsNamed(schemas.params, methods, path)
 	const search = compile(schemas.search)
 	const headers = compile(schemas.headers)
 	const cookies = compile(schemas.cookies)
 	const json = compile(schemas.json)
 	const form = compile(schemas.form)
 	const reads: Array<[string, (ctx: InputCtx) => unknown]> = []
-	if (params !== null) reads.push(["params", (ctx) => paramsInput(params.schema, ctx.params)])
+	if (schemas.params !== undefined) reads.push(["params", paramsRead(schemas.params)])
 	if (search !== null) reads.push(["search", (ctx) => searchInput(search.schema, ctx.searchAll, search.shape)])
 	if (headers !== null) reads.push(["headers", (ctx) => headersInput(headers.schema, ctx.headers)])
 	if (cookies !== null) reads.push(["cookies", (ctx) => cookiesInput(cookies.schema, ctx.cookies)])
@@ -215,7 +279,7 @@ function run(
 		const value = read(ctx)
 		if (value instanceof Promise) {
 			return value.then((settled: unknown) => {
-				input[key] = settled
+				if (settled !== UNREAD) input[key] = settled
 				return run(reads, i + 1, ctx, input)
 			})
 		}

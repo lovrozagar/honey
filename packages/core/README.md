@@ -69,12 +69,12 @@ const app = honey()
 
 app
 	.get("/books/:id")
-	.input({ params: z.object({ id: z.string() }), search: z.object({ lang: z.string().optional() }) })
+	.input({ search: z.object({ lang: z.string().optional() }) })
 	.output({ "application/json": { ok: z.object({ id: z.string(), title: z.string() }) } })
 	.errors(errors, "not_found")
 	.handler((ctx) => {
-		if (ctx.input.params.id === "0") throw errors.not_found()
-		return ctx.res.json("ok", { id: ctx.input.params.id, title: "Dune" })
+		if (ctx.params.id === "0") throw errors.not_found()
+		return ctx.res.json("ok", { id: ctx.params.id, title: "Dune" })
 	})
 
 app
@@ -1321,8 +1321,8 @@ import * as z from "zod"
 
 const app = honey()
 	.get("/books/:id")
-	.input({ params: z.object({ id: z.string() }) })
-	.handler((ctx) => ctx.res.json("ok", { id: ctx.input.params.id }))
+	.input({ params: { id: z.string().min(1) }, search: z.object({ edition: z.string().optional() }) })
+	.handler((ctx) => ctx.res.json("ok", { edition: ctx.input.search.edition, id: ctx.params.id }))
 
 type Paths = InferRoutePaths<typeof app>
 type Routes = InferRoutes<typeof app>
@@ -1330,7 +1330,7 @@ type BookInput = InferRouteInput<typeof app, "/books/:id", "get">
 
 const path: Paths = "/books/:id"
 declare const input: BookInput
-const id: string = input.params.id
+const edition: string | undefined = input.search.edition
 ```
 
 | Type                                         | What it describes                                                |

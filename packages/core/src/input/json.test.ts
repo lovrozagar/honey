@@ -115,8 +115,8 @@ describe("a json body on a route: every method that may carry one", () => {
 		const app = honey<{}>()
 		app
 			.on(["DELETE", "OPTIONS", "POST"], "/d/:id")
-			.input({ json: z.object({ reason: z.string() }), params: z.object({ id: z.coerce.number() }) })
-			.handler((ctx) => ctx.res.json("ok", { id: ctx.input.params.id, reason: ctx.input.json.reason }))
+			.input({ json: z.object({ reason: z.string() }), params: { id: z.coerce.number() } })
+			.handler((ctx) => ctx.res.json("ok", { id: ctx.params.id, reason: ctx.input.json.reason }))
 		const send = (method: string, path: string, body: string) =>
 			app.fetch(
 				new Request(`http://localhost${path}`, { body, headers: { "content-type": "application/json" }, method }),

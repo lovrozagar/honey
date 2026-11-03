@@ -84,9 +84,9 @@ export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
 		.handler((ctx) => ctx.res.json("ok", { locale: ctx.input.cookies.locale, valid: true }))
 
 		.get("/in/params/:orgId/members/:memberId")
-		.input({ params: z.object({ memberId: z.string().min(1), orgId: z.string().min(1) }) })
+		.input({ params: { memberId: z.string().min(1), orgId: z.string().min(1) } })
 		.output({ "application/json": { ok: z.object({ memberId: z.string(), orgId: z.string() }) } })
-		.handler((ctx) => ctx.res.json("ok", { memberId: ctx.input.params.memberId, orgId: ctx.input.params.orgId }))
+		.handler((ctx) => ctx.res.json("ok", { memberId: ctx.params.memberId, orgId: ctx.params.orgId }))
 
 		.get("/in/none")
 		.meta({ operationId: "input.none", tags: ["input"] })
@@ -165,18 +165,18 @@ export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
 
 		.put("/methods/resource/:id")
 		.meta({ operationId: "resources.update", tags: ["methods"] })
-		.input({ json: z.object({ name: z.string() }), params: z.object({ id: z.string().min(1) }) })
+		.input({ json: z.object({ name: z.string() }), params: { id: z.string().min(1) } })
 		.output({ "application/json": { ok: z.object({ id: z.string(), name: z.string() }) } })
-		.handler((ctx) => ctx.res.json("ok", { id: ctx.input.params.id, name: ctx.input.json.name }))
+		.handler((ctx) => ctx.res.json("ok", { id: ctx.params.id, name: ctx.input.json.name }))
 
 		.patch("/methods/resource/:id")
 		.meta({ operationId: "resources.patch", tags: ["methods"] })
 		.input({
 			json: z.object({ name: z.string().optional() }),
-			params: z.object({ id: z.string().min(1) }),
+			params: { id: z.string().min(1) },
 		})
 		.output({ "application/json": { ok: z.object({ id: z.string() }) } })
-		.handler((ctx) => ctx.res.json("ok", { id: ctx.input.params.id }))
+		.handler((ctx) => ctx.res.json("ok", { id: ctx.params.id }))
 
 		.delete("/methods/resource/:id")
 		.meta({ operationId: "resources.delete", tags: ["methods"] })

@@ -1,8 +1,11 @@
 # Input and output
 
 `.input()` declares what a route reads, each source validated by a Standard Schema (zod, valibot, arktype):
-`params`, `search`, `headers`, `cookies`, and one body, `json`, `form` or `binary`. A request that fails validation is
-answered 400 with the failing fields, and `ctx.input` holds the parsed values, typed.
+`search`, `headers`, `cookies`, and one body, `json`, `form` or `binary`, plus the path params that need more than a
+string. A request that fails validation is answered 400 with the failing fields, and `ctx.input` holds the parsed
+values, typed. Path params are strings by default and need no schema; `params` takes a schema per param, by name
+(`{ params: { provider: z.enum(["github", "google"]) } }`), validated onto `ctx.params` beside the undeclared ones.
+A name the path does not have is a type error and throws at registration.
 
 `.output()` declares what it answers, the media type as the outer key and the status as the inner one. Any media
 type works, `image/gif` or `application/zip` included, and a status may declare its response headers, which reach the
@@ -32,12 +35,12 @@ const app = honey()
 
 app
 	.get("/books/:id")
-	.input({ params: z.object({ id: z.string() }), search: z.object({ lang: z.string().optional() }) })
+	.input({ search: z.object({ lang: z.string().optional() }) })
 	.output({ ok: z.object({ id: z.string(), title: z.string() }) })
 	.errors(errors, "not_found")
 	.handler((ctx) => {
-		if (ctx.input.params.id === "0") throw errors.not_found()
-		return { id: ctx.input.params.id, title: "Dune" }
+		if (ctx.params.id === "0") throw errors.not_found()
+		return { id: ctx.params.id, title: "Dune" }
 	})
 
 app
@@ -50,7 +53,7 @@ app
 
 | Value                                                                                                                                                                      | Default                                                                                                                             | What it does                                                                                                                                                                                                                                                                                                                                   | Watch for                                                                                                                                               |
 | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.input({ params })`                                                                                                                                                       | —                                                                                                                                   | typed, validated path params                                                                                                                                                                                                                                                                                                                   | validation runs after match; a bad value is a 4xx, not a miss                                                                                           |
+| `.input({ params })`, `{ [name]: schema }`                                                                                                                                 | every param a string                                                                                                                | a schema per path param that needs one, validated onto `ctx.params`; the others stay strings                                                                                                                                                                                                                                                   | validation runs after match, so a bad value is a 4xx, not a miss; a name the path does not have is a type error and throws at registration              |
 | `.input({ search })`                                                                                                                                                       | —                                                                                                                                   | typed, validated query                                                                                                                                                                                                                                                                                                                         | arrays/coercion follow the schema, not ad-hoc parsing                                                                                                   |
 | `.input({ headers })`                                                                                                                                                      | —                                                                                                                                   | typed, validated request headers                                                                                                                                                                                                                                                                                                               | header names are case-insensitive                                                                                                                       |
 | `.input({ json })`                                                                                                                                                         | —                                                                                                                                   | validated JSON body; asserts content-type                                                                                                                                                                                                                                                                                                      | a wrong content-type is a 415 before validation                                                                                                         |

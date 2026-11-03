@@ -152,11 +152,11 @@ export type Routes = {
 	}
 	"/in/params/:orgId/members/:memberId": {
 		get: {
-			ctx: WithOutput<Omit<BaseCtx, "errors"> & { readonly input: { params: { memberId: string; orgId: string } }; readonly params: { orgId: string; memberId: string }; readonly errors: { unauthorized: (opts?: { cause?: unknown; fields?: Record<string, { error_key: string; message: string; path: string }[]>; headers?: Record<string, string>; vars?: Record<string, number | string> }) => HoneyError; validation_error: (opts?: { cause?: unknown; fields?: Record<string, { error_key: string; message: string; path: string }[]>; headers?: Record<string, string>; vars?: Record<string, number | string> }) => HoneyError }; readonly meta: Readonly<Partial<Omit<HoneyMeta, keyof { auth?: "public" | "required"; rateLimit?: "default" | "strict" }>> & { auth?: "public" | "required"; rateLimit?: "default" | "strict" }>; readonly routePattern: "/in/params/:orgId/members/:memberId" }, { "application/json": { ok: GetInParamsMemberResponse200 } }>
+			ctx: WithOutput<Omit<BaseCtx, "errors"> & { readonly params: { orgId: string; memberId: string }; readonly errors: { unauthorized: (opts?: { cause?: unknown; fields?: Record<string, { error_key: string; message: string; path: string }[]>; headers?: Record<string, string>; vars?: Record<string, number | string> }) => HoneyError; validation_error: (opts?: { cause?: unknown; fields?: Record<string, { error_key: string; message: string; path: string }[]>; headers?: Record<string, string>; vars?: Record<string, number | string> }) => HoneyError }; readonly meta: Readonly<Partial<Omit<HoneyMeta, keyof { auth?: "public" | "required"; rateLimit?: "default" | "strict" }>> & { auth?: "public" | "required"; rateLimit?: "default" | "strict" }>; readonly routePattern: "/in/params/:orgId/members/:memberId" }, { "application/json": { ok: GetInParamsMemberResponse200 } }>
 			errors: "unauthorized" | "validation_error"
 			errorShapes: { unauthorized: null; validation_error: null }
 			errorsByStatus: { 400: null; 401: null }
-			input: { params: { memberId: string; orgId: string } }
+			input: {}
 			meta: {}
 			output: { "application/json": { ok: GetInParamsMemberResponse200 } }
 		}
@@ -203,20 +203,20 @@ export type Routes = {
 			output: {}
 		}
 		patch: {
-			ctx: WithOutput<Omit<BaseCtx, "errors"> & { readonly input: { json: { name?: string }; params: { id: string } }; readonly params: { id: string }; readonly errors: { unauthorized: (opts?: { cause?: unknown; fields?: Record<string, { error_key: string; message: string; path: string }[]>; headers?: Record<string, string>; vars?: Record<string, number | string> }) => HoneyError; validation_error: (opts?: { cause?: unknown; fields?: Record<string, { error_key: string; message: string; path: string }[]>; headers?: Record<string, string>; vars?: Record<string, number | string> }) => HoneyError }; readonly meta: Readonly<Partial<Omit<HoneyMeta, keyof { auth?: "public" | "required"; rateLimit?: "default" | "strict" }>> & { auth?: "public" | "required"; rateLimit?: "default" | "strict" }>; readonly routePattern: "/methods/resource/:id" }, { "application/json": { ok: CreateInJsonResponse201 } }>
+			ctx: WithOutput<Omit<BaseCtx, "errors"> & { readonly input: { json: { name?: string } }; readonly params: { id: string }; readonly errors: { unauthorized: (opts?: { cause?: unknown; fields?: Record<string, { error_key: string; message: string; path: string }[]>; headers?: Record<string, string>; vars?: Record<string, number | string> }) => HoneyError; validation_error: (opts?: { cause?: unknown; fields?: Record<string, { error_key: string; message: string; path: string }[]>; headers?: Record<string, string>; vars?: Record<string, number | string> }) => HoneyError }; readonly meta: Readonly<Partial<Omit<HoneyMeta, keyof { auth?: "public" | "required"; rateLimit?: "default" | "strict" }>> & { auth?: "public" | "required"; rateLimit?: "default" | "strict" }>; readonly routePattern: "/methods/resource/:id" }, { "application/json": { ok: CreateInJsonResponse201 } }>
 			errors: "unauthorized" | "validation_error"
 			errorShapes: { unauthorized: null; validation_error: null }
 			errorsByStatus: { 400: null; 401: null }
-			input: { json: { name?: string }; params: { id: string } }
+			input: { json: { name?: string } }
 			meta: { operationId: "resources.patch"; tags: ["methods"] }
 			output: { "application/json": { ok: CreateInJsonResponse201 } }
 		}
 		put: {
-			ctx: WithOutput<Omit<BaseCtx, "errors"> & { readonly input: { json: { name: string }; params: { id: string } }; readonly params: { id: string }; readonly errors: { unauthorized: (opts?: { cause?: unknown; fields?: Record<string, { error_key: string; message: string; path: string }[]>; headers?: Record<string, string>; vars?: Record<string, number | string> }) => HoneyError; validation_error: (opts?: { cause?: unknown; fields?: Record<string, { error_key: string; message: string; path: string }[]>; headers?: Record<string, string>; vars?: Record<string, number | string> }) => HoneyError }; readonly meta: Readonly<Partial<Omit<HoneyMeta, keyof { auth?: "public" | "required"; rateLimit?: "default" | "strict" }>> & { auth?: "public" | "required"; rateLimit?: "default" | "strict" }>; readonly routePattern: "/methods/resource/:id" }, { "application/json": { ok: ReplaceMethodsResourceResponse200 } }>
+			ctx: WithOutput<Omit<BaseCtx, "errors"> & { readonly input: { json: { name: string } }; readonly params: { id: string }; readonly errors: { unauthorized: (opts?: { cause?: unknown; fields?: Record<string, { error_key: string; message: string; path: string }[]>; headers?: Record<string, string>; vars?: Record<string, number | string> }) => HoneyError; validation_error: (opts?: { cause?: unknown; fields?: Record<string, { error_key: string; message: string; path: string }[]>; headers?: Record<string, string>; vars?: Record<string, number | string> }) => HoneyError }; readonly meta: Readonly<Partial<Omit<HoneyMeta, keyof { auth?: "public" | "required"; rateLimit?: "default" | "strict" }>> & { auth?: "public" | "required"; rateLimit?: "default" | "strict" }>; readonly routePattern: "/methods/resource/:id" }, { "application/json": { ok: ReplaceMethodsResourceResponse200 } }>
 			errors: "unauthorized" | "validation_error"
 			errorShapes: { unauthorized: null; validation_error: null }
 			errorsByStatus: { 400: null; 401: null }
-			input: { json: { name: string }; params: { id: string } }
+			input: { json: { name: string } }
 			meta: { operationId: "resources.update"; tags: ["methods"] }
 			output: { "application/json": { ok: ReplaceMethodsResourceResponse200 } }
 		}

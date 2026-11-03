@@ -92,13 +92,20 @@ export type ApplyScoped<
 			ApplyScoped<Rest, TFullPath>
 	: {}
 
-/** Typed `ctx.params` when the route pattern names params. */
+/**
+ * Typed `ctx.params` when the route pattern names params. A param a schema types as no string replaces the context's
+ * string record instead of meeting it, which would make the param `never`.
+ */
 export type ApplyParams<TCtx, TParams> = [keyof TParams] extends [string]
 	? string extends keyof TParams
 		? TCtx
-		: TCtx & {
-				/** The route's path params by name, percent-decoded. */ readonly params: TParams
-			}
+		: [TParams] extends [Record<string, string>]
+			? TCtx & {
+					/** The route's path params by name, percent-decoded. */ readonly params: TParams
+				}
+			: Omit<TCtx, "params"> & {
+					/** The route's path params by name, each one `.input({ params })` declares as its schema produced it. */ readonly params: TParams
+				}
 	: TCtx
 
 /** The handler ctx: params, meta, pattern, declared errors (as at runtime), input, ctx.res narrowed by output. */

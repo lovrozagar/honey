@@ -5,7 +5,7 @@
  * caller's converters; a schema that cannot be converted at all fails the document under
  * `onSchemaError: "throw"` (the default) and is documented unconstrained, with a warning, under `"warn"`.
  */
-import type { InputEntry } from "../input/input.ts"
+import { inputSourceSchema } from "./extract-schemas.ts"
 import { applyMetaSpec } from "../meta/meta-spec-apply.ts"
 import { compileMetaSpec, resolveProfile } from "../meta/meta-spec.ts"
 import { metaSpecOf } from "../meta/meta-spec-merge.ts"
@@ -124,8 +124,7 @@ function rootsOf(route: CollectedRoute | CollectedWsRoute, options: JsonSchemaOp
 	if (primary !== undefined && primary !== true) roots.output = jsonSchemaOf(primary, "output", options)
 	for (const [source, entry] of Object.entries(route.input ?? {})) {
 		if (source === "binary") continue
-		const schema = "_tag" in (entry as InputEntry) ? (entry as { schema: unknown }).schema : entry
-		roots[`input.${source}`] = jsonSchemaOf(schema, "input", options)
+		roots[`input.${source}`] = inputSourceSchema(source, entry, (schema) => jsonSchemaOf(schema, "input", options))
 	}
 	return schemaMetaLookup(roots)
 }

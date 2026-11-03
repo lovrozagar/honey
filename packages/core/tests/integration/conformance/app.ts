@@ -329,9 +329,9 @@ function harnessRoutes(app: ConformanceApp): void {
 	app
 		.get("/errors/:status")
 		.meta({ operationId: "errors.status", mcp: true })
-		.input({ params: z.object({ status: z.coerce.number().int().min(200).max(599) }) })
+		.input({ params: { status: z.coerce.number().int().min(200).max(599) } })
 		.handler((ctx) => {
-			const { status } = ctx.input.params
+			const { status } = ctx.params
 			return ctx.res.raw(Response.json({ message: `status ${status}`, status }, { status }))
 		})
 	app

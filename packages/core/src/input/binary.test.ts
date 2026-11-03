@@ -144,12 +144,12 @@ describe(".input({ binary }) beside the rest of the request", () => {
 			.post("/upload/:name")
 			.input({
 				binary: "image/png",
-				params: z.object({ name: z.string() }),
+				params: { name: z.string() },
 				search: z.object({ v: z.coerce.number() }),
 			})
 			.handler((ctx) =>
 				ctx.res.json("ok", {
-					name: ctx.input.params.name,
+					name: ctx.params.name,
 					size: ctx.input.binary.bytes.byteLength,
 					used: ctx.req.bodyUsed,
 					v: ctx.input.search.v,

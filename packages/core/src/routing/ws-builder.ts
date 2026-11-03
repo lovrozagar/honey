@@ -11,16 +11,43 @@ import type { MiddlewareFn, RuntimeMiddleware } from "../middleware/middleware.t
 import type { WSAdapter, WSHandler } from "../ws/contract.ts"
 import { originAllowed, validateOriginPolicy, type WSOriginPolicy } from "../ws/origin.ts"
 import { createWsSession } from "../ws/session.ts"
-import { compileInput, type InferInputMap, type NonBodyInput, type InputStep } from "../input/input.ts"
+import {
+	compileInput,
+	type InferInputMap,
+	type InferParams,
+	type InputStep,
+	type KnownParams,
+	type NonBodyInput,
+} from "../input/input.ts"
 import { joinPatterns, parsePattern } from "./pattern.ts"
 import { addRoute, type HandleView, type HoneyGraph, type PendingRoute, settle } from "./register.ts"
 import type { HoneyMeta } from "./app-types.ts"
 import type { ErrorFactories } from "./settings.ts"
 import type { ParamsFromPath } from "./types.ts"
 
-/** The ctx a ws route's callbacks receive: the chain's ctx with the route's params. */
-export type WSRouteCtx<TCtx, TPath extends string> = TCtx & {
-	/** The matched route's path params, typed from its pattern. */ readonly params: ParamsFromPath<TPath>
+/** The ctx a ws route's callbacks receive: the chain's ctx with the route's params, unless `.input()` typed them. */
+export type WSRouteCtx<TCtx, TPath extends string> = TCtx extends { readonly params: infer P }
+	? string extends keyof P
+		? TCtx & {
+				/** The matched route's path params, typed from its pattern. */ readonly params: ParamsFromPath<TPath>
+			}
+		: TCtx
+	: TCtx & {
+			/** The matched route's path params, typed from its pattern. */ readonly params: ParamsFromPath<TPath>
+		}
+
+/** The ctx after `.input()`: ctx.input, and ctx.params with each param the declaration types by its schema. */
+type WithInput<TCtx, TSchemas, TPath extends string> = (TSchemas extends { readonly params?: infer P }
+	? [NonNullable<P>] extends [never]
+		? TCtx
+		: Omit<TCtx, "params"> & {
+				/** The path's params, each one `.input({ params })` declares as its schema produced it. */ readonly params: InferParams<
+					TSchemas,
+					TPath
+				>
+			}
+	: TCtx) & {
+	/** Validated search, headers and cookies of the upgrade request. */ readonly input: InferInputMap<TSchemas>
 }
 
 /** What a WebSocket route builder carries at runtime. */
@@ -119,17 +146,11 @@ export class WSRouteBuilder<TCtx, TPath extends string, TParent> {
 		return this.#next({ errorKeys: new Set([...this.#s.errorKeys, ...keys]), errorSource: named })
 	}
 
-	/** Validate the upgrade request's params, search, headers and cookies onto ctx.input. */
+	/** Validate the upgrade request's search, headers and cookies onto ctx.input, and the params it names onto ctx.params. */
 	input<const TSchemas extends NonBodyInput>(
-		schemas: TSchemas,
-	): WSRouteBuilder<
-		TCtx & {
-			/** Validated params, search, headers and cookies of the upgrade request. */ readonly input: InferInputMap<TSchemas>
-		},
-		TPath,
-		TParent
-	> {
-		return this.#next<TCtx & { readonly input: InferInputMap<TSchemas> }>({
+		schemas: TSchemas & KnownParams<TSchemas, TPath>,
+	): WSRouteBuilder<WithInput<TCtx, TSchemas, TPath>, TPath, TParent> {
+		return this.#next<WithInput<TCtx, TSchemas, TPath>>({
 			input: { schemas, step: compileInput(schemas, ["GET"], this.#s.path) },
 		})
 	}

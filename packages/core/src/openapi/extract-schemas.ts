@@ -3,6 +3,7 @@
  * output side by media type and status. What generated code and the manifest read of a route's shapes.
  */
 import type { InputEntry } from "../input/input.ts"
+import type { ParamSchemas } from "../input/params.ts"
 import type { GRAPH } from "../routing/app.ts"
 import type { StatusSchemas } from "../routing/output-types.ts"
 import type { HoneyGraph } from "../routing/register.ts"
@@ -22,6 +23,22 @@ function schemaOf(entry: InputEntry): unknown {
 	return "_tag" in entry ? entry.schema : entry
 }
 
+/** The JSON Schema of one input source, each schema through `convert`: the params as the object of those declared. */
+export function inputSourceSchema(
+	source: string,
+	entry: unknown,
+	convert: (schema: unknown) => JsonSchema,
+): JsonSchema {
+	if (source !== "params") return convert(schemaOf(entry as InputEntry))
+	const params = Object.entries(entry as ParamSchemas)
+	/* in the order a vendor's object schema comes out in, so the shape reads the same as one written whole */
+	return {
+		type: "object",
+		properties: Object.fromEntries(params.map(([name, schema]) => [name, convert(schema)])),
+		required: params.map(([name]) => name),
+	}
+}
+
 /** Every route's schemas, keyed `METHOD /pattern`; a route that declares none has `{}`. */
 export function extractSchemas(
 	app: { readonly [GRAPH]: HoneyGraph },
@@ -33,7 +50,10 @@ export function extractSchemas(
 		if (route.input !== null) {
 			const sources = Object.entries(route.input).filter(([source]) => source !== "binary")
 			schemas.input = Object.fromEntries(
-				sources.map(([source, entry]) => [source, jsonSchemaOf(schemaOf(entry as InputEntry), "input", options)]),
+				sources.map(([source, entry]) => [
+					source,
+					inputSourceSchema(source, entry, (schema) => jsonSchemaOf(schema, "input", options)),
+				]),
 			)
 		}
 		if (route.output !== null) {

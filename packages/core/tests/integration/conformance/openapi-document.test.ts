@@ -95,7 +95,7 @@ function cornerCases() {
 		.input({
 			cookies: z.object({ session: z.string().optional() }),
 			headers: z.object({ "x-trace": z.string().optional() }),
-			params: z.object({ id: z.string().uuid() }),
+			params: { id: z.string().uuid() },
 			search: z.object({ at: z.date().optional(), expand: z.array(z.string()).optional() }),
 		})
 		.output({ "application/json": { ok: z.object({ id: z.string(), joined: z.date() }) } })

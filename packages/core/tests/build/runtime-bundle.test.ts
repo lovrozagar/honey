@@ -118,7 +118,11 @@ describe("the runtime bundle of an installed core (bit 19 i)", () => {
 			 * 25,929) so text, html, csv, xml and binary stream a typed body: one ReadableStream branch in the body
 			 * helpers. Locked at 26,000. Plan 39 5.2 added 251 (25,929 to 26,180) so a handler may return its sole
 			 * declared body and status keys alone declare JSON: the body wrap, the media type to helper map and the
-			 * shorthand's normalization, all reached from RouteBuilder methods. Locked at 26,200.
+			 * shorthand's normalization, all reached from RouteBuilder methods. Locked at 26,200. Plan 39 5.3 took 23 off
+			 * (26,157): no numeric status. Plan 39 5.4 added 272 (26,157 to 26,429) so params take a schema per param onto
+			 * ctx.params: the per-param validation with one 400 naming every refused param and an async validator
+			 * awaited, the registration check that a key is a param of the path, and the read that places the values.
+			 * Locked at 26,500.
 			 */
 			const gzipped = gzipSync(js, { level: 9 }).length
 			const builtBy = run(BUN as string, ["--version"], full).out.trim()
@@ -127,7 +131,7 @@ describe("the runtime bundle of an installed core (bit 19 i)", () => {
 					leaked,
 					features,
 					routeModules("minimal", entry, [...WS_ROUTE, ...MCP_ROUTE, ...GENERATION_ONLY]),
-					gzipped < 26_200,
+					gzipped < 26_500,
 					builtBy,
 				],
 				`${gzipped} bytes gzipped`,

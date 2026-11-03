@@ -4,7 +4,7 @@
  * returns the app typed with the new route. A one-shot method disappears from the chain once called.
  */
 import type { ERROR_META } from "../errors/errors.ts"
-import { compileInput, type InputSchemas, type InputStep, type InputTypes } from "../input/input.ts"
+import { compileInput, type InputSchemas, type InputStep, type InputTypes, type KnownParams } from "../input/input.ts"
 import type { DeclaredAnswer, JsonShorthand, KnownStatusKeys, NormalizeOutput, OutputSchemas } from "./output-types.ts"
 import type { ErrorFactories } from "./settings.ts"
 import type { MaybePromise, MiddlewareFn, RuntimeMiddleware } from "../middleware/middleware.ts"
@@ -48,6 +48,8 @@ export type BuilderTypes = {
 	errorKeys: string
 	/** ctx.input once `.input()` ran, `never` before; `request` what a client sends, `{}` before */
 	input: unknown
+	/** ctx.params: the path's params, each one `.input({ params })` declares as its schema produces it. */
+	params: unknown
 	/** What a client sends, once `.input()` ran. */
 	request: unknown
 	/** what `.output()` declares; `never` before */
@@ -108,7 +110,7 @@ type NamedErrors<B extends BuilderTypes, TFactory, TKeys extends string> = {
 /** The handler's ctx for the route `B` describes. */
 export type RouteHandlerCtx<B extends BuilderTypes> = HandlerCtx<
 	B["ctx"],
-	ParamsFromPath<B["path"]>,
+	B["params"],
 	B["accMeta"],
 	B["errorFactory"],
 	B["errorKeys"] | B["defaultErrors"],
@@ -180,6 +182,8 @@ export type StartOf<H, TPath extends string, TMethod extends string> =
 				meta: TMeta
 				/** No `.output()` yet. */
 				output: never
+				/** The path's params, strings. */
+				params: ParamsFromPath<MergePath<TBase, TPath>>
 				/** No client input yet. */
 				request: {}
 				/** The route's HTTP method, or a union of them for `app.on()`. */
@@ -318,13 +322,16 @@ export class RouteBuilder<B extends BuilderTypes> {
 		return this.#next({ meta: merged })
 	}
 
-	/** Validate params, query, headers, cookies and one body onto ctx.input: the first failure is a 400 (415). */
+	/**
+	 * Validate query, headers, cookies and one body onto ctx.input, and the params a schema names onto ctx.params:
+	 * the first failure is a 400 (415).
+	 */
 	input<const TSchemas extends InputSchemas>(
-		schemas: TSchemas,
+		schemas: TSchemas & KnownParams<TSchemas, B["path"]>,
 	): BuilderChain<
 		Next<
 			B,
-			InputTypes<TSchemas> & {
+			InputTypes<TSchemas, B["path"]> & {
 				/** Records `.input()` as called. */ used: B["used"] | "input"
 			}
 		>

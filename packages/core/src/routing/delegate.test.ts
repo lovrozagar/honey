@@ -137,7 +137,7 @@ function proxied() {
 	const reached: string[] = []
 	const tree = treeOf([
 		["POST", "/items", { bd: "json", iv: { json: PASS } }],
-		["POST", "/items/:id/restore", { iv: { params: PASS } }],
+		["POST", "/items/:id/restore", { iv: { params: { id: PASS } } }],
 		["GET", "/items"],
 	])
 	const app = honey<{}>().routeTree(tree)

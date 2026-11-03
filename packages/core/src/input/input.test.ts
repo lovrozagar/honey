@@ -99,10 +99,10 @@ describe("route .input(): each source validated before the handler", () => {
 				cookies: z.object({ session: z.string() }),
 				headers: z.object({ "x-page": z.coerce.number() }),
 				json: z.object({ name: z.string() }),
-				params: z.object({ id: z.coerce.number() }),
+				params: { id: z.coerce.number() },
 				search: z.object({ tags: z.array(z.string()) }),
 			})
-			.handler((ctx) => ctx.res.json("ok", ctx.input))
+			.handler((ctx) => ctx.res.json("ok", { ...ctx.input, params: ctx.params }))
 		const req = new Request("http://localhost/orgs/7?tags=a&tags=b", {
 			body: '{"name":"Alice","extra":true}',
 			headers: { "content-type": "application/json", cookie: "session=abc", "x-page": "3" },
@@ -136,7 +136,7 @@ describe("route .input(): the first source that fails answers", () => {
 			.post("/api/:version")
 			.input({
 				json: z.object({ secret: z.string().min(8), toString: z.string() }),
-				params: z.object({ version: z.string().startsWith("v") }),
+				params: { version: z.string().startsWith("v") },
 			})
 			.handler((ctx) => {
 				ran = true
@@ -284,7 +284,7 @@ describe("the sync spine (F6): a request stays synchronous until something has t
 		app.get("/plain").handler((ctx) => ctx.res.text("ok", "plain"))
 		app
 			.get("/u/:id")
-			.input({ cookies: schema(), headers: schema(), params: schema(), search: schema() })
+			.input({ cookies: schema(), headers: schema(), params: { id: schema() }, search: schema() })
 			.handler((ctx) => ctx.res.json("ok", ctx.input))
 		const plain = app.fetch(new Request("http://localhost/plain"), {})
 		const validated = app.fetch(new Request("http://localhost/u/7?q=1", { headers: { cookie: "a=1" } }), {})
@@ -404,8 +404,8 @@ describe("route .input() across validators, methods and encodings", () => {
 			.handler((ctx) => ctx.res.json("created", ctx.input))
 		app
 			.delete("/item/:id")
-			.input({ params: z.object({ id: z.string() }) })
-			.handler((ctx) => ctx.res.json("ok", ctx.input))
+			.input({ params: { id: z.string() } })
+			.handler((ctx) => ctx.res.json("ok", { input: ctx.input, params: ctx.params }))
 		expect([
 			await answer(app.fetch(new Request("http://localhost/item/1?q=x"), {})),
 			await answer(app.fetch(post("/item/1", "name=Alice", "application/x-www-form-urlencoded"), {})),
@@ -413,7 +413,7 @@ describe("route .input() across validators, methods and encodings", () => {
 		]).toEqual([
 			[200, { search: { q: "x" } }],
 			[201, { form: { name: "Alice" } }],
-			[200, { params: { id: "42" } }],
+			[200, { input: {}, params: { id: "42" } }],
 		])
 	})
 })

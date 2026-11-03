@@ -5,6 +5,7 @@
  * id as `x-honey-route`, the key bit 11 joins extracted ctx types on.
  */
 import type { InputEntry, InputSchemas } from "../input/input.ts"
+import type { ParamSchemas } from "../input/params.ts"
 import { parsePattern, UNNAMED_WILDCARD } from "../routing/pattern.ts"
 import { deriveSchemaName } from "../schema/naming.ts"
 import type { JsonSchema } from "../schema/to-json-schema.ts"
@@ -108,6 +109,13 @@ function inputsOf(input: InputSchemas | null, convert: Convert, hint: string, pa
 			body = Object.fromEntries(types.map((t) => [t, {}]))
 			continue
 		}
+		if (source === "params") {
+			const declared = entry as unknown as ParamSchemas
+			for (const param of parameters)
+				if (Object.hasOwn(declared, param.name as string))
+					param.schema = convert(declared[param.name as string], "input", hint)
+			continue
+		}
 		const schema = convert(schemaOf(entry as InputEntry), "input", hint)
 		if (source === "json") body = { "application/json": { schema: withoutInternal(schema) } }
 		else if (source === "form") {
@@ -115,11 +123,6 @@ function inputsOf(input: InputSchemas | null, convert: Convert, hint: string, pa
 			const binary = Object.values(isRecord(schema.properties) ? schema.properties : {}).some(isBinaryPart)
 			body = binary ? { "multipart/form-data": { schema: stripped } } : {}
 			body["application/x-www-form-urlencoded"] = { schema: stripped }
-		} else if (source === "params") {
-			for (const param of parameters) {
-				const declared = isRecord(schema.properties) ? schema.properties[param.name as string] : undefined
-				if (declared !== undefined) param.schema = declared
-			}
 		} else parameters.push(...propertyParameters(schema, PROPERTY_SOURCES[source] as string))
 	}
 	return { body, parameters }

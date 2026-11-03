@@ -1138,3 +1138,27 @@ app
 	.output({ redirect: { moved_permanently: true } })
 	.handler((ctx) => ctx.res.redirect("moved_permanently", "/new"))
 ```
+
+## `params` is a schema per path param, onto `ctx.params`
+
+Path params are strings without any schema. `.input({ params })` takes a schema per param that needs one, keyed by
+the path's own names, and puts the validated values on `ctx.params` beside the undeclared ones; `ctx.input.params` is
+gone. A name the path does not have is a type error and throws at registration, so a typo can no longer pass.
+
+```ts v0
+app
+	.get("/oauth/:provider/authorize")
+	.input({ params: z.object({ provider: z.enum(["github", "google"]) }) })
+	.handler((ctx) => ctx.res.text("ok", ctx.input.params.provider))
+```
+
+```ts
+import { honey } from "@lovrozagar/honey"
+import * as z from "zod"
+
+const app = honey()
+app
+	.get("/oauth/:provider/authorize")
+	.input({ params: { provider: z.enum(["github", "google"]) } })
+	.handler((ctx) => ctx.res.text("ok", ctx.params.provider))
+```

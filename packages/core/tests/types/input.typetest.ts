@@ -40,12 +40,13 @@ describe("ctx.input: each declared source, as its schema produced it", () => {
 				cookies: z.object({ session: z.string() }),
 				headers: z.object({ authorization: z.string() }),
 				json: z.object({ age: z.number(), name: z.string() }),
-				params: z.object({ id: z.coerce.number() }),
+				params: { id: z.coerce.number() },
 				search: z.object({ page: z.coerce.number().default(1) }),
 			})
 			.handler((ctx) => {
 				expectTypeOf(ctx.input.json).toEqualTypeOf<{ age: number; name: string }>()
-				expectTypeOf(ctx.input.params.id).toEqualTypeOf<number>()
+				expectTypeOf(ctx.params.id).toEqualTypeOf<number>()
+				expectTypeOf(ctx.input).not.toHaveProperty("params")
 				expectTypeOf(ctx.input.search.page).toEqualTypeOf<number>()
 				expectTypeOf(ctx.input.headers.authorization).toEqualTypeOf<string>()
 				expectTypeOf(ctx.input.cookies.session).toEqualTypeOf<string>()
@@ -200,7 +201,7 @@ describe("InputSchemas: what .input() takes", () => {
 	// v0: 11b375a687
 	it("InputSchemas: one body at most, beside any non-body source; nothing at all is a declaration too", () => {
 		const entry = {} as InputEntry
-		const nonBody = { cookies: entry, headers: entry, params: entry, search: entry }
+		const nonBody = { cookies: entry, headers: entry, params: { id: entry as StandardSchemaLike }, search: entry }
 		expectTypeOf({}).toExtend<InputSchemas>()
 		expectTypeOf(nonBody).toExtend<InputSchemas>()
 		expectTypeOf({ json: entry }).toExtend<InputSchemas>()
@@ -289,19 +290,44 @@ describe("the validation types", () => {
 	})
 })
 
+describe(".input({ params }): a schema per path param, onto ctx.params", () => {
+	it("types a declared param by its schema and leaves the others strings", () => {
+		honey<{}>()
+			.get("/oauth/:provider/:step")
+			.input({ params: { provider: z.enum(["github", "google"]) } })
+			.handler((ctx) => {
+				expectTypeOf(ctx.params.provider).toEqualTypeOf<"github" | "google">()
+				expectTypeOf(ctx.params.step).toEqualTypeOf<string>()
+				expectTypeOf(ctx.input).not.toHaveProperty("params")
+				return ctx.res.text("ok", "ok")
+			})
+	})
+
+	it("refuses a key the path does not name, and a whole-object schema", () => {
+		const route = honey<{}>().get("/oauth/:provider")
+		expectTypeOf(route.input({ params: { provider: z.string() } })).toHaveProperty("handler")
+		// @ts-expect-error provder is no param of the path
+		route.input({ params: { provder: z.string() } })
+		// @ts-expect-error params take a schema per param, not one object schema
+		route.input({ params: z.object({ provider: z.string() }) })
+	})
+})
+
 describe("ws .input(): the non-body sources only", () => {
 	it("types ctx.input on the socket's callbacks; a body source is refused", () => {
 		const app = honey<{}>()
 		ws(app, "/live/:room")
-			.input({ params: z.object({ room: z.string() }), search: z.object({ token: z.string() }) })
+			.input({ params: { room: z.enum(["a", "b"]) }, search: z.object({ token: z.string() }) })
 			.handler({
 				onOpen: (ctx) => {
 					expectTypeOf(ctx.input.search.token).toEqualTypeOf<string>()
-					expectTypeOf(ctx.input.params.room).toEqualTypeOf<string>()
+					expectTypeOf(ctx.params.room).toEqualTypeOf<"a" | "b">()
 				},
 			})
 		// @ts-expect-error an upgrade has no body
 		ws(app, "/b").input({ json: z.object({}) })
+		// @ts-expect-error rooom is no param of the path
+		ws(app, "/live/:room").input({ params: { rooom: z.string() } })
 	})
 })
 

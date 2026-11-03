@@ -140,17 +140,16 @@ describe("path parameters", () => {
 		])
 	})
 
-	it("takes a param's schema from a declared params schema", () => {
+	it("takes a param's schema from its declared schema, and documents an undeclared one a string", () => {
 		const app = honey<{}>()
 		app
-			.get("/items/:id")
-			.input({ params: z.object({ id: z.string().uuid() }) })
+			.get("/items/:id/:slug")
+			.input({ params: { id: z.string().uuid() } })
 			.handler((c) => c.res.text("ok", "ok"))
-		expect(params(generateOpenApi(app, { info: INFO }), "/items/{id}")[0]?.schema).toEqual({
-			format: "uuid",
-			pattern: expect.any(String),
-			type: "string",
-		})
+		expect(params(generateOpenApi(app, { info: INFO }), "/items/{id}/{slug}").map((p) => p.schema)).toEqual([
+			{ format: "uuid", pattern: expect.any(String), type: "string" },
+			{ type: "string" },
+		])
 	})
 })
 
@@ -406,7 +405,7 @@ describe("what an operation leaves out", () => {
 })
 
 describe("bodies and parameters whose schema lists no properties", () => {
-	it("keeps a form urlencoded when no part is bytes, and documents a record's search or params as nothing more", () => {
+	it("keeps a form urlencoded when no part is bytes, and documents a record's search as nothing more", () => {
 		const app = honey<{}>()
 		app
 			.post("/form")
@@ -419,20 +418,15 @@ describe("bodies and parameters whose schema lists no properties", () => {
 		app
 			.get("/pair/:a/:b")
 			.input({
-				params: publishing({ properties: { a: { type: "integer" } }, type: "object" }) as never,
+				params: { a: publishing({ type: "integer" }) },
 				search: publishing({ additionalProperties: { type: "string" }, type: "object" }),
 			})
-			.handler((c) => c.res.text("ok", "ok"))
-		app
-			.get("/one/:id")
-			.input({ params: publishing({ type: "object" }) as never })
 			.handler((c) => c.res.text("ok", "ok"))
 		const doc = generateOpenApi(app, { info: INFO })
 		expect([
 			Object.keys(content(doc, "/form")),
 			Object.keys(content(doc, "/record")),
 			params(doc, "/pair/{a}/{b}").map((p) => [p.name, p.in, p.schema]),
-			params(doc, "/one/{id}").map((p) => p.schema),
 		]).toEqual([
 			["application/x-www-form-urlencoded"],
 			["application/x-www-form-urlencoded"],
@@ -440,7 +434,6 @@ describe("bodies and parameters whose schema lists no properties", () => {
 				["a", "path", { type: "integer" }],
 				["b", "path", { type: "string" }],
 			],
-			[{ type: "string" }],
 		])
 	})
 })

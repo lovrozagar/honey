@@ -46,6 +46,22 @@ describe("extractSchemas: each route's schemas as JSON Schema", () => {
 			{ input: { form: { properties: { file: STRING }, required: ["file"], type: "object" } } },
 		])
 	})
+	it("documents the params a route declares as one object of them, each required, the others left out", () => {
+		const app = honey<{}>()
+		app
+			.get("/oauth/:provider/:step")
+			.input({ params: { provider: z.enum(["github", "google"]) } })
+			.handler((ctx) => ctx.res.text("ok", "ok"))
+		expect(extractSchemas(app)["GET /oauth/:provider/:step"]).toEqual({
+			input: {
+				params: {
+					properties: { provider: { enum: ["github", "google"], type: "string" } },
+					required: ["provider"],
+					type: "object",
+				},
+			},
+		})
+	})
 })
 
 describe("extractSchemas: answers and options", () => {

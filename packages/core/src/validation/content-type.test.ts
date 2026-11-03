@@ -37,10 +37,10 @@ describe("assertRequestContentType: the request's media type against the declare
 
 	// v0: 5cd2919a23
 	it("is nothing to check when no body is declared, whatever the request sends", () => {
-		expect([assertRequestContentType({ params: schema }, null), assertRequestContentType({}, "text/plain")]).toEqual([
-			null,
-			null,
-		])
+		expect([
+			assertRequestContentType({ params: { id: schema } }, null),
+			assertRequestContentType({}, "text/plain"),
+		]).toEqual([null, null])
 	})
 
 	// v0: 9ac7557424
@@ -88,7 +88,11 @@ describe("assertBodySchemaAllowed: a body schema the route can never receive", (
 			assertBodySchemaAllowed({ json: schema }, ["DELETE"], "/x")
 			assertBodySchemaAllowed({ form: schema }, ["OPTIONS"], "/x")
 			assertBodySchemaAllowed({ json: schema }, ["GET", "POST"], "/x")
-			assertBodySchemaAllowed({ cookies: schema, headers: schema, params: schema, search: schema }, ["GET"], "/x")
+			assertBodySchemaAllowed(
+				{ cookies: schema, headers: schema, params: { id: schema }, search: schema },
+				["GET"],
+				"/x",
+			)
 		}).not.toThrow()
 	})
 
