@@ -210,7 +210,7 @@ describe("createMiddleware's errors and meta", () => {
 
 	it("its meta counts as chain meta: a route may leave out what a mounted middleware supplies", () => {
 		const captcha = createMiddleware((_ctx, next) => next(), { meta: { captcha: true } })
-		const app = honey<{}>().meta<{ captcha: boolean; worker: string }>()
+		const app = honey<{}>().metaType<{ captcha: boolean; worker: string }>()
 		app
 			.use(captcha)
 			.get("/with")
@@ -242,7 +242,7 @@ describe("HoneyCtx<TEnv, TMeta>: a middleware typed by the meta its routes decla
 
 	it("reads its meta typed, and its routes read the same meta typed", () => {
 		honey<Env>()
-			.meta<RouteMeta>()
+			.metaType<RouteMeta>()
 			.use(withWorker)
 			.get("/x")
 			.handler((c) => {
@@ -264,7 +264,7 @@ describe("HoneyCtx<TEnv, TMeta>: a middleware typed by the meta its routes decla
 				},
 			},
 		}
-		honey<Env>().meta<RouteMeta>().metaSpec(spec)
+		honey<Env>().metaType<RouteMeta>().metaSpec(spec)
 		expectTypeOf<MetaSpecContext["meta"]>().toEqualTypeOf<Readonly<HoneyMeta<Record<string, unknown>>>>()
 	})
 })

@@ -107,7 +107,7 @@ describe("app.tap(): registration", () => {
 	// v0: b399142eba
 	it(".taps<T>() is types only: the same handle, and taps fire as without it", async () => {
 		const received: unknown[] = []
-		const base = honey<{}>().meta<{ purge?: { key: string } }>()
+		const base = honey<{}>().metaType<{ purge?: { key: string } }>()
 		const typed = base.taps<{ purge: { key: string } }>()
 		typed.tap("purge", (_ctx, payload) => void received.push(payload.key))
 		typed
@@ -122,7 +122,7 @@ describe("app.tap(): registration", () => {
 /** An app with taps for `purge` and `audit`, whose route meta may carry either. */
 function metaApp() {
 	const { app, received, tap } = recording()
-	const withMeta = app.meta<{ audit?: unknown; purge?: unknown }>()
+	const withMeta = app.metaType<{ audit?: unknown; purge?: unknown }>()
 	tap("purge")
 	tap("audit")
 	return { app: withMeta, received }
@@ -208,7 +208,7 @@ function failingApp() {
 	const errors = defineErrors({ gone: "gone" })
 	const { app, received, tap } = recording()
 	tap("audit")
-	const withMeta = app.meta<{ audit?: unknown }>().errorFactory(errors)
+	const withMeta = app.metaType<{ audit?: unknown }>().errorFactory(errors)
 	const audited = withMeta.meta({ audit: { on: "chain" } })
 	audited.get("/honey").handler(
 		tapped(() => {

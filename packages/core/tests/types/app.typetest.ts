@@ -1,6 +1,6 @@
 /**
  * The app, as typed: the Infer* ladder (ctx, env, basePath, meta, error factory, methods, paths,
- * a route's ctx) through use(), context() and meta<T>(), the public surface, and services typed
+ * a route's ctx) through use(), context() and metaType<T>(), the public surface, and services typed
  * from the base app. Route-map types ($routes, MergeRoute, basePath registration) are in
  * app-routes.typetest.ts. Checked by typecheck.
  */
@@ -39,7 +39,7 @@ describe("HoneyMeta", () => {
 	it("is the built-in meta keys intersected with the consumer's own", () => {
 		expectTypeOf<HoneyMeta<{ worker: "extract" }>>().toExtend<{ summary?: string; worker: "extract" }>()
 		expectTypeOf<HoneyMeta["summary"]>().toEqualTypeOf<string | undefined>()
-		const app = honey<{}>().meta<HoneyMeta<{ worker: "extract" }>>().meta({ worker: "extract" })
+		const app = honey<{}>().metaType<HoneyMeta<{ worker: "extract" }>>().meta({ worker: "extract" })
 		app
 			.get("/tables")
 			.meta({ summary: "List tables" })
@@ -95,7 +95,7 @@ describe("InferCtx", () => {
 	})
 })
 
-describe("the rest of the ladder through use(), context() and meta<T>()", () => {
+describe("the rest of the ladder through use(), context() and metaType<T>()", () => {
 	// v0: 640a7466f5
 	// v0: 6077926dbd
 	// v0: 1c2b55f706
@@ -115,11 +115,11 @@ describe("the rest of the ladder through use(), context() and meta<T>()", () => 
 	// v0: 4c28e4b845
 	// v0: 12aa68c1c5
 	// v0: 46c948e313
-	it("InferMeta is the meta<T>() type wherever use() and context() sit, and never without it", () => {
+	it("InferMeta is the metaType<T>() type wherever use() and context() sit, and never without it", () => {
 		const auth = createMiddleware((_ctx, next) => next({ userId: "u-1" }))
 		expectTypeOf<InferMeta<ReturnType<typeof honey<TestEnv>>>>().toBeNever()
-		const after = honey<TestEnv>().meta<AppMeta>().use(auth).context({ db: "sqlite" })
-		const before = honey<TestEnv>().use(auth).context({ db: "sqlite" }).meta<AppMeta>()
+		const after = honey<TestEnv>().metaType<AppMeta>().use(auth).context({ db: "sqlite" })
+		const before = honey<TestEnv>().use(auth).context({ db: "sqlite" }).metaType<AppMeta>()
 		expectTypeOf<InferMeta<typeof after>>().toEqualTypeOf<AppMeta>()
 		expectTypeOf<InferMeta<typeof before>>().toEqualTypeOf<AppMeta>()
 	})
@@ -273,12 +273,12 @@ describe("chain meta and the types around it", () => {
 	// v0: 1179ee7a73
 	// v0: 2220f8b4e7
 	// v0: a783ced1ad
-	it("InferMeta stays the meta<T>() type through chain values, use, basePath and context, per sub-chain; never without it", () => {
-		const phantom = honey<{}>().meta<AppMeta>()
-		const valued = honey<{}>().meta<AppMeta>().meta({ tags: "Auth" })
+	it("InferMeta stays the metaType<T>() type through chain values, use, basePath and context, per sub-chain; never without it", () => {
+		const phantom = honey<{}>().metaType<AppMeta>()
+		const valued = honey<{}>().metaType<AppMeta>().meta({ tags: "Auth" })
 		const chained = phantom.meta({ auth: "public" }).meta({ tags: "Auth" })
 		const through = chained.use(trace).basePath("/api").context({ db: "sqlite" })
-		const other = honey<{}>().meta<{ version?: number }>().meta({ version: 1 })
+		const other = honey<{}>().metaType<{ version?: number }>().meta({ version: 1 })
 		const untyped = honey<{}>().meta({ summary: "hello", tags: "test" })
 		expectTypeOf<InferMeta<typeof phantom>>().toEqualTypeOf<AppMeta>()
 		expectTypeOf<InferMeta<typeof valued>>().toEqualTypeOf<AppMeta>()
@@ -295,7 +295,7 @@ describe("chain meta and the types around it", () => {
 	// v0: 872c60de41
 	// v0: c1b08aeb6d
 	it("leaves InferCtx, InferEnv and InferBasePath as they were", () => {
-		const app = honey<TestEnv>().basePath("/api").meta<AppMeta>().meta({ auth: "public" }).use(trace)
+		const app = honey<TestEnv>().basePath("/api").metaType<AppMeta>().meta({ auth: "public" }).use(trace)
 		expectTypeOf<InferCtx<typeof app>>().toMatchTypeOf<{ env: TestEnv; traceId: string }>()
 		expectTypeOf<InferEnv<typeof app>>().toEqualTypeOf<TestEnv>()
 		expectTypeOf<InferBasePath<typeof app>>().toEqualTypeOf<"/api">()
@@ -318,7 +318,7 @@ describe("ctx.meta beside chain meta", () => {
 	// v0: 28628ff81e
 	// v0: 81869ea9bd
 	it("ctx.meta beside chain meta: a route's values narrow it, HoneyMeta's keys beside TMeta's; a bare route gets the app type", () => {
-		const base = honey<TestEnv>().meta<AppMeta>().meta({ auth: "required" }).context({ region: "eu" }).use(trace)
+		const base = honey<TestEnv>().metaType<AppMeta>().meta({ auth: "required" }).context({ region: "eu" }).use(trace)
 		base
 			.post("/orgs/:orgId")
 			.meta({ invalidate: ["GET /orgs"] as const, summary: "Create", tags: "Orgs" })

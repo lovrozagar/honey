@@ -21,7 +21,7 @@ const withUser = createMiddleware(async (_ctx, next) => next({ user: { id: "u-1"
 
 type AppMeta = { permissions?: string[]; tenant?: string }
 
-const app = honey<{ SECRET: string }>().errorFactory(errors).meta<AppMeta>()
+const app = honey<{ SECRET: string }>().errorFactory(errors).metaType<AppMeta>()
 
 app.metaSpec({
 	meta: { permissions: "x-permissions", tenant: "x-tenant" },

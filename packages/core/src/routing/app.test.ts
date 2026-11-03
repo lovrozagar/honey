@@ -11,7 +11,7 @@ const makeRequest = (method: string, path: string) => req(path, { method })
 
 describe("the app handle", () => {
 	// v0: e52312b8b1
-	it("use, basePath, context and meta return a new handle on the same graph", () => {
+	it("use, basePath, context and meta return a new handle on the same graph; metaType returns the same handle", () => {
 		const app = honey<{}>()
 		const pass = createMiddleware((_ctx, next) => next({ db: "pg" }))
 		const handles = [app.use(pass), app.basePath("/v1"), app.context({ a: 1 }), app.meta({ summary: "s" })]
@@ -19,7 +19,7 @@ describe("the app handle", () => {
 			expect(handle).not.toBe(app)
 			expect(handle[GRAPH]).toBe(app[GRAPH])
 		}
-		expect(app.meta()).toBe(app)
+		expect(app.metaType<{ worker?: string }>()).toBe(app)
 	})
 
 	// v0: 87e5890e24

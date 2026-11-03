@@ -333,7 +333,7 @@ describe("errors and meta come from the chain that runs", () => {
 	it("contributed meta merges in run order and explicit meta wins; mounted routes get it too", async () => {
 		const a = createMiddleware(async (_c, next) => next(), { meta: { owner: "chain", tier: 1 } })
 		const s = createMiddleware(async (_c, next) => next(), { meta: { tier: 2 } })
-		const sub = honey<{}>().meta<{ owner: string }>()
+		const sub = honey<{}>().metaType<{ owner: string }>()
 		sub
 			.get("/s/x")
 			.meta({ owner: "route" })

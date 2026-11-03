@@ -5,14 +5,7 @@
  */
 import { type ExecutionCtx, type HoneyContext, isReservedCtxKey } from "../context/context.ts"
 import type { MaybePromise, MiddlewareFn, RuntimeMiddleware } from "../middleware/middleware.ts"
-import type {
-	AllChainMeta,
-	DeclaredMeta,
-	HoneyMeta,
-	ScopedMwEntry,
-	WithChainMeta,
-	WithMiddlewareMeta,
-} from "./app-types.ts"
+import type { DeclaredMeta, HoneyMeta, ScopedMwEntry, WithChainMeta, WithMiddlewareMeta } from "./app-types.ts"
 import { dispatch } from "./dispatch.ts"
 import { joinPatterns } from "./pattern.ts"
 import {
@@ -59,7 +52,7 @@ export class Honey<
 	declare readonly $env: TEnv
 	/** The type of the factory set with `errorFactory()`; `never` until then. Type only. */
 	declare readonly $errorFactory: TErrorFactory
-	/** The route meta type declared with `meta<T>()`; `never` until then. Type only. */
+	/** The route meta type declared with `metaType<T>()`; `never` until then. Type only. */
 	declare readonly $meta: TMeta
 	/** The routes registered so far, by path and method, without `internal` ones. Type only; the generated client reads it. */
 	declare readonly $routes: TRoutes
@@ -152,8 +145,11 @@ export class Honey<
 		this.#graph.epoch++
 	}
 
-	/** Type only: constrain what route `.meta()` accepts; declared tap keys stay allowed. */
-	meta<TNewMeta extends Record<string, unknown>>(): Honey<
+	/**
+	 * Type only: declare the route meta type, which constrains what route `.meta()` accepts (declared tap keys stay
+	 * allowed) and types `ctx.meta`. Returns this same handle; set values with `.meta({ … })`.
+	 */
+	metaType<TNewMeta extends Record<string, unknown>>(): Honey<
 		TEnv,
 		TCtx,
 		TRoutes,
@@ -163,21 +159,13 @@ export class Honey<
 		TBasePath,
 		TTaps,
 		TScopedMw
-	>
-	/**
-	 * Typed chain meta in one call (`meta<AppMeta>({ … })`): every declared key counts as set, so a route may omit
-	 * any of them. One call cannot know which it set (no partial type-argument inference), so `meta<AppMeta>()`
-	 * then `meta({ … })` is the precise form. `TNewMeta` defaults to `never`: a bare call takes the next overload.
-	 */
-	meta<
-		TNewMeta extends Record<string, unknown> = never,
-		TValues extends HoneyMeta & Partial<TNewMeta> = HoneyMeta & Partial<TNewMeta>,
-	>(
-		values: TValues,
-	): Honey<TEnv, TCtx, TRoutes, AllChainMeta<TNewMeta>, TErrorFactory, TDefaultErrors, TBasePath, TTaps, TScopedMw>
+	> {
+		return this as never
+	}
+
 	/**
 	 * Chain meta, merged into every route registered or mounted through the new handle; a route's own `.meta()` wins. Its
-	 * values reach the routes' types (`internal: true`).
+	 * values reach the routes' types with their literal types (`internal: true`, `worker: "extract"`).
 	 */
 	meta<
 		const TValues extends HoneyMeta &
@@ -194,10 +182,8 @@ export class Honey<
 		TBasePath,
 		TTaps,
 		TScopedMw
-	>
-	meta(values?: Record<string, unknown>): unknown {
-		if (values === undefined) return this
-		return this.#derive({ chainMeta: { ...this[VIEW].chainMeta, ...values } })
+	> {
+		return this.#derive({ chainMeta: { ...this[VIEW].chainMeta, ...values } }) as never
 	}
 
 	/**

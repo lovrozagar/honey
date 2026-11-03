@@ -84,7 +84,7 @@ const shard = createMiddleware(async (_ctx, next) => next({ shard: "s1" }), { me
 export type AppOptions = { routeTree?: RouteTree | null }
 
 export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
-	const app = honey().stripPrefix("/app").trailingSlash("enforce").meta<GatewayMeta>()
+	const app = honey().stripPrefix("/app").trailingSlash("enforce").metaType<GatewayMeta>()
 	const tree = options?.routeTree === undefined ? generatedTree : options.routeTree
 	if (tree !== null) app.routeTree(tree)
 	if (wsAdapter) app.wsAdapter(wsAdapter)

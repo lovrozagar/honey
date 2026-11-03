@@ -104,7 +104,7 @@ describe("serveOpenApi: one document per call", () => {
 	// v0: 024cb0334e
 	// v0: e850ba3c5f
 	it("serves each call's own document, profile and cache, its YAML and its docs page pointing at it", async () => {
-		const app = honey<{}>().meta<{ tenant?: string }>()
+		const app = honey<{}>().metaType<{ tenant?: string }>()
 		app.metaSpec({ meta: { tenant: "x-secret" }, profiles: { public: { exclude: ["x-secret"] } } })
 		app
 			.get("/a")

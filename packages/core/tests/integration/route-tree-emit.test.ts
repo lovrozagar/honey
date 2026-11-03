@@ -81,7 +81,7 @@ const maker =
 const usersApp = maker((app) => {
 	app.get("/users").handler((c) => c.res.text("ok", "list"))
 	app
-		.meta<{ auth?: boolean }>()
+		.metaType<{ auth?: boolean }>()
 		.get("/users/:id")
 		.meta({ auth: true })
 		.handler((c) => c.res.text("ok", `user ${c.params.id}`))

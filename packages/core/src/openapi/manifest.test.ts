@@ -106,7 +106,7 @@ describe("generateManifest: a route's meta", () => {
 	// v0: ab8fc55fcf
 	// v0: 3634311714
 	it("keeps every meta key as written, invalidate included, its selectors once each, and {} for none", () => {
-		const app = honey<{}>().meta<{ auth?: string; rateLimit?: string }>()
+		const app = honey<{}>().metaType<{ auth?: string; rateLimit?: string }>()
 		app.get("/v1/users").handler((c) => c.res.text("ok", "ok"))
 		app.get("/v1/users/:id").handler((c) => c.res.text("ok", "ok"))
 		app
@@ -147,7 +147,7 @@ describe("generateManifest: errors", () => {
 	// v0: 6fa210cc8c
 	it("lists each route's keys, and every key once across routes with the status its factory gives it", () => {
 		const errors = defineErrors({ custom_err: "conflict", not_found: "not_found", other_err: "forbidden" })
-		const app = honey<{}>().meta<{ auth?: boolean }>().errorFactory(errors)
+		const app = honey<{}>().metaType<{ auth?: boolean }>().errorFactory(errors)
 		app
 			.get("/items/:id")
 			.errors("not_found")

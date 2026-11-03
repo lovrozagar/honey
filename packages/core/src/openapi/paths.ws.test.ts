@@ -29,7 +29,7 @@ describe("WebSocket operations", () => {
 	// v0: d537e2ff0d
 	// v0: 8b32760001
 	it("document a WS route as a GET upgrade: its policy run as ws, its search fields as parameters bar x-internal ones", () => {
-		const app = honey<{}>().meta<{ tenant?: string }>()
+		const app = honey<{}>().metaType<{ tenant?: string }>()
 		app.metaSpec({ meta: { tenant: { key: "x-tenant", on: "http" } } })
 		app
 			.get("/a")

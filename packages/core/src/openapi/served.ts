@@ -16,7 +16,7 @@ import type { DocsConfig, DocsContext } from "./docs-page.ts"
 
 /**
  * The route meta a serving call puts on every route it mounts: honey's own keys and the ones handle `A`
- * declares (`meta<T>()`), each optional, as a route's own `.meta()` takes them. Never `internal` or SERVED,
+ * declares (`metaType<T>()`), each optional, as a route's own `.meta()` takes them. Never `internal` or SERVED,
  * the marking every served route keeps.
  */
 export type ServedMeta<A> = Partial<Omit<HoneyMeta<[InferMeta<A>] extends [never] ? {} : InferMeta<A>>, "internal">> & {

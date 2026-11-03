@@ -34,7 +34,7 @@ export type ChainSupplied<TAccMeta> = [TAccMeta] extends [never]
 				Partial<{ [K in keyof NonNullable<TValues>]: unknown } & RouteMeta<TAccMeta>>
 		: RouteMeta<TAccMeta>
 
-/** The meta type a handle declares (`meta<T>()`), chain values left out; `never` when none was declared. */
+/** The meta type a handle declares (`metaType<T>()`), chain values left out; `never` when none was declared. */
 export type DeclaredMeta<TMeta> = [TMeta] extends [never]
 	? never
 	: [keyof RouteMeta<TMeta>] extends [never]

@@ -39,7 +39,7 @@ export type ExtractedTypes = {
 	middleware: ExtractedProp[]
 	/** per route id, `ctx.input` as the handler gets it (the parsed type); a route without input has none */
 	inputs: Record<string, string>
-	/** the meta type the app declares (`meta<AppMeta>()`), or null when it declares none */
+	/** the meta type the app declares (`metaType<AppMeta>()`), or null when it declares none */
 	meta: string | null
 	/** per route id, what the route's middleware added beyond `middleware`; a route that added nothing has none */
 	routes: Record<string, ExtractedProp[]>
@@ -207,7 +207,7 @@ export function extractTypes(options: ExtractOptions): ExtractedTypes | null {
 	const found = registrations(entry)
 	const routes = routeAdditions(found, ser, { base, owner, report, routeId })
 	const taps = ser.serialize(tapsType as ts.Type)
-	/* what `meta<AppMeta>()` declared, written out: the ctx's meta is this and the OpenAPI keys, never the tree's
+	/* what `metaType<AppMeta>()` declared, written out: the ctx's meta is this and the OpenAPI keys, never the tree's
 	   literal values, so a handler may pass its own ctx to a function typed with the generated ctx (bit 22 a) */
 	const meta = metaType === undefined ? "{}" : ser.shape(metaType)
 

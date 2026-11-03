@@ -98,7 +98,7 @@ describe("app.metaSpec(): the policy an app declares and the ones it mounts", ()
 
 	// v0: c796a9bd41
 	it("refuses a second declaration, and types an entry for every key the app's meta adds", () => {
-		const app = honey<{}>().meta<{ team: string }>()
+		const app = honey<{}>().metaType<{ team: string }>()
 		app.metaSpec({ meta: { team: "x-team" } })
 		expect(() => app.metaSpec({})).toThrow("metaSpec() was already called on this app")
 		expectTypeOf<HoneyMetaSpec<{ summary?: string; team: string }>>().toExtend<{ meta?: { team: unknown } }>()

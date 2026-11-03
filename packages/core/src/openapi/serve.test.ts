@@ -77,7 +77,7 @@ describe("serveOpenApi: where it serves, and what", () => {
 	// v0: 26ef508dca
 	// v0: 6b8c24e9ee
 	it("serves under the handle's basePath and its own stem, filtered, its options kept out of info", async () => {
-		const app = honey<{}>().meta<{ auth?: string }>()
+		const app = honey<{}>().metaType<{ auth?: string }>()
 		app.get("/public").handler((c) => c.res.text("ok", "ok"))
 		app
 			.get("/dashboard")

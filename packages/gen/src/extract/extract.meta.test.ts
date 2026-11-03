@@ -1,5 +1,5 @@
 /**
- * What `extractTypes` reads of the app's declared meta (bit 22 a): the type `meta<AppMeta>()` declares, written
+ * What `extractTypes` reads of the app's declared meta (bit 22 a): the type `metaType<AppMeta>()` declares, written
  * out for the generated ctx, `null` when the app declares none, and nothing at all for an app from an older honey
  * that carries no `$meta`. Split from extract.test.ts at its 500-line cap, as tap-delivery is from tap.
  */
@@ -21,7 +21,7 @@ describe("the base: the meta type the app declares (bit 22 a)", () => {
 				lines(
 					'import { honey } from "@lovrozagar/honey"',
 					'type AppMeta = { tenant?: "organization" | "project"; worker: "extract" }',
-					'export const app = honey<{}>().meta<AppMeta>().meta({ worker: "extract" })',
+					'export const app = honey<{}>().metaType<AppMeta>().meta({ worker: "extract" })',
 					'app.get("/tables").handler((c) => c.res.text("ok", "ok"))',
 				),
 			)
@@ -40,19 +40,19 @@ describe("the base: the meta type the app declares (bit 22 a)", () => {
 	)
 
 	it(
-		"reads the one-call meta form's declared type, and names what an export that is no app lacks",
+		"reads a type-only metaType declaration, and names what an export that is no app lacks",
 		() => {
-			const oneCall = project.write(
-				"meta/one-call.ts",
+			const typeOnly = project.write(
+				"meta/type-only.ts",
 				lines(
 					'import { honey } from "@lovrozagar/honey"',
 					'type AppMeta = { tenant?: "organization" | "project"; worker: "extract" }',
-					'export const app = honey<{}>().meta<AppMeta>({ worker: "extract" })',
-					'app.get("/tables").handler((c) => c.res.text("ok", "ok"))',
+					"export const app = honey<{}>().metaType<AppMeta>()",
+					'app.get("/tables").meta({ worker: "extract" }).handler((c) => c.res.text("ok", "ok"))',
 				),
 			)
 			const notAnApp = project.write("meta/not-an-app.ts", lines("export const app = { get: 1 }"))
-			expect(extract(oneCall).types.meta).toBe('{ tenant?: "organization" | "project"; worker: "extract" }')
+			expect(extract(typeOnly).types.meta).toBe('{ tenant?: "organization" | "project"; worker: "extract" }')
 			expect(() => extract(notAnApp)).toThrow('Export "app" is not a honey app: it carries no $ctx, $env, $taps')
 		},
 		SLOW,

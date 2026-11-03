@@ -528,19 +528,13 @@ import { honey } from "@lovrozagar/honey/plugin"
 export const plugin = honey({ app: "src/app.ts" })
 ```
 
-## A route need not repeat a meta default, and two calls say which keys were set
+## `meta<T>()` is `metaType<T>()`, and a route need not repeat a meta default
 
-A route under a handle that set a meta default had to pass that key again. It does not now — but which keys a
-handle can prove it set depends on how you wrote the call:
-
-- `meta<AppMeta>({ worker: "shop" })`, 0.7.3's one call, constrains route meta and sets defaults together. It
-  records **every** declared key as set, so a route may omit any of them. One call cannot know which keys it set:
-  TypeScript has no partial type-argument inference, so with the type given explicitly it fills the values'
-  parameter from its default instead of inferring it from the argument.
-- `meta<AppMeta>().meta({ worker: "shop" })` — declare, then default — is the precise form, and the one to reach
-  for: the values are inferred there, so a key nothing set **stays required** on every route.
-
-Both refuse a key nothing declares and a declared key's wrong value.
+The meta type and the meta values are two calls now. `metaType<AppMeta>()` declares the type (what route `.meta()`
+accepts and what `ctx.meta` holds) and returns the same handle; `meta({ … })` takes values only, keeps their literal
+types without `as const`, and makes each key it sets optional on every route under that handle. A key nothing set
+**stays required**. 0.7.3's one call, `meta<AppMeta>({ … })`, is gone: it recorded every declared key as set, since
+one call cannot know which ones it set.
 
 ```ts v0
 const app = honey().meta<AppMeta>({ worker: "shop" })
@@ -552,10 +546,8 @@ import { honey } from "@lovrozagar/honey"
 
 type AppMeta = { tenant?: "organization" | "project"; worker: "shop" }
 
-/* declare, then default: `tenant` is still required on a route nothing set it for */
-const app = honey()
-	.meta<AppMeta>()
-	.meta({ worker: "shop" as const })
+/* declare, then default: a route under this handle need not pass `worker` again */
+const app = honey().metaType<AppMeta>().meta({ worker: "shop" })
 app
 	.get("/items")
 	.meta({ summary: "List items" })
@@ -593,7 +585,7 @@ both to the template before you look one up.
 ## The generated `RouteCtx` is the route's ctx; its meta is what the app declares
 
 `types.gen.d.ts` types each route's ctx, and a service outside the app module takes it:
-`RouteCtx<"/items", "get">`. Its `meta` is the meta type the app declares with `meta<AppMeta>()` plus the OpenAPI
+`RouteCtx<"/items", "get">`. Its `meta` is the meta type the app declares with `metaType<AppMeta>()` plus the OpenAPI
 keys a route may add — not the route's configured values, which are narrower than what the handler holds (a
 route's `operationId` is `string` there, not `"items.list"`). Read a route's values from the sibling
 `RouteMeta<"/items", "get">`, which still types them as literals.

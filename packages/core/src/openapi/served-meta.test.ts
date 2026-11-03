@@ -10,7 +10,7 @@ type AppMeta = { cacheControl?: string; tenant?: "org" | "project" }
 /* An app whose middleware sets cache-control from the route's own meta, as Anyrow's gateway does: a served
    route's meta has to reach it, or the header it writes is the default. */
 function gateway() {
-	const app = honey<{}>().logger(SILENT).meta<AppMeta>()
+	const app = honey<{}>().logger(SILENT).metaType<AppMeta>()
 	return app.use(async (ctx, next) => {
 		const res = await next()
 		res.headers.set("x-meta-cache", String((ctx.meta as AppMeta).cacheControl ?? "none"))

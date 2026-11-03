@@ -63,7 +63,7 @@ JSON at runtime. `path` (default `/openapi`) is the stem `.json`, `.yaml` and `.
 `yamlPath` replace that path outright. `docs` maps each path to its page, as in `serveOpenApi`. Routes are internal and
 marked served, so the document never lists its own endpoints, and `meta` cannot lift that. `meta` goes on every route
 the call mounts, the docs pages included, and takes what a route's own `.meta()` takes on that handle: honey's keys
-(`security`, `summary`) and the ones the app declared with `meta<T>()`, so middleware that reads route meta (a
+(`security`, `summary`) and the ones the app declared with `metaType<T>()`, so middleware that reads route meta (a
 `cacheControl` an app's own middleware turns into the header, a `security` an auth layer checks) sees it on the
 document routes too. `serveOpenApi` and `serveManifest` take the same `meta`.
 

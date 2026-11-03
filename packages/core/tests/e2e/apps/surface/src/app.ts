@@ -44,7 +44,7 @@ export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
 		.errorFactory(errors)
 		.defaultErrors("unauthorized", "validation_error")
 		.defaultBoundary("validation_error")
-		.meta<Meta>()
+		.metaType<Meta>()
 		.use(withLogger)
 		.use(withAuth)
 

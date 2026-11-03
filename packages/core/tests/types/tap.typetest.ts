@@ -126,10 +126,10 @@ describe("route meta: tap keys with their payloads", () => {
 	// v0: c81529e274
 	// v0: 9a356bf11d
 	// v0: d7ec11758e
-	it("beside a .meta<T>() declaration, before or after it: both reach the handler's meta", () => {
+	it("beside a .metaType<T>() declaration, before or after it: both reach the handler's meta", () => {
 		type RouteMeta = { operationId: string; security: string }
 		honey<{}>()
-			.meta<RouteMeta>()
+			.metaType<RouteMeta>()
 			.taps<AppTaps>()
 			.get("/a")
 			.meta({ operationId: "a", security: "jwt", webhook: { event: "test" } })
@@ -141,7 +141,7 @@ describe("route meta: tap keys with their payloads", () => {
 			})
 		honey<{}>()
 			.taps<AppTaps>()
-			.meta<RouteMeta>()
+			.metaType<RouteMeta>()
 			.get("/b")
 			.meta({ audit: { action: "create", actor_id: "sys" }, operationId: "b", security: "jwt" })
 			.handler((c) => {

@@ -40,7 +40,7 @@ describe("routeTree(): serving a loaded tree", () => {
 	// v0: 97099ec2ee
 	// v0: b27299f29a
 	it("binds each registered route to its leaf, the registration being the whole record, .on() included", async () => {
-		const app = honey<{}>().meta<{ fresh?: boolean }>().routeTree(STATIC())
+		const app = honey<{}>().metaType<{ fresh?: boolean }>().routeTree(STATIC())
 		app
 			.get("/orgs")
 			.meta({ fresh: true })

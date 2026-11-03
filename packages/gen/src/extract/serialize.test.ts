@@ -393,7 +393,7 @@ describe("unresolved types: a name the program cannot resolve", () => {
 			)
 			const meta = project.write(
 				"unresolved/meta.ts",
-				lines('import { honey } from "@lovrozagar/honey"', "export const app = honey<{}>().meta<Gone>()"),
+				lines('import { honey } from "@lovrozagar/honey"', "export const app = honey<{}>().metaType<Gone>()"),
 			)
 			expect(() => extract(env)).toThrow("type Missing.Env does not resolve")
 			expect(() => extract(middleware)).toThrow("type Nope does not resolve")

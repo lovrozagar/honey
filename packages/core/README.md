@@ -902,7 +902,7 @@ not show. The JSON route is `${path}.json` (`path` is `/openapi` by default), th
 appear only with a `yaml` source, and `jsonPath` or `yamlPath` replaces the stem outright. Every route is internal,
 so the document never documents its own endpoints, and `meta` rides along under that marking on every route the call
 mounts, the docs pages included. It takes what a route's own `.meta()` takes on that handle: honey's keys (a
-`security` scheme, a `summary`) and the ones the app declared with `meta<T>()`, so an app whose middleware turns
+`security` scheme, a `summary`) and the ones the app declared with `metaType<T>()`, so an app whose middleware turns
 `meta.cacheControl` into the header passes it here. `serveOpenApi` and `serveManifest` take the same `meta`.
 
 No copy script is needed to put the bytes where a Worker can read them: point the build plugin's output at the

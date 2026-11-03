@@ -77,7 +77,7 @@ describe("generateOpenApi: synchronous, and the metaSpec it is built with", () =
 
 	// v0: 57c863da1c
 	it("builds the document of the profile it is asked for", () => {
-		const app = honey<{}>().meta<{ tenant?: string }>()
+		const app = honey<{}>().metaType<{ tenant?: string }>()
 		app.metaSpec({ meta: { tenant: "x-tenant" }, profiles: { public: { exclude: ["x-tenant"] } } })
 		app
 			.get("/a")
@@ -93,7 +93,7 @@ describe("generateOpenApi: synchronous, and the metaSpec it is built with", () =
 describe("generateOpenApi: one diagnostics channel", () => {
 	// v0: b1941b54e2
 	it("throws every policy error at once, one aggregate", () => {
-		const app = honey<{}>().meta<{ rateLimit?: string; worker?: string }>()
+		const app = honey<{}>().metaType<{ rateLimit?: string; worker?: string }>()
 		app.metaSpec({ meta: {} } as never)
 		app
 			.get("/a")
@@ -104,7 +104,7 @@ describe("generateOpenApi: one diagnostics channel", () => {
 
 	// v0: 3e900e5370
 	it("hands each warning to the logger, never the console, and still generates", () => {
-		const app = honey<{}>().meta<{ rateLimit?: string }>()
+		const app = honey<{}>().metaType<{ rateLimit?: string }>()
 		app.metaSpec({ meta: { permissions: "x-permissions" }, strict: "warn" } as never)
 		app
 			.get("/a")
@@ -152,7 +152,7 @@ describe("generateOpenApi: which routes it documents", () => {
 	// v0: fab8f185bc
 	// v0: 357170d642
 	it("documents every route without filterRoutes, drops the ones it rejects, and always hands it an object for meta", () => {
-		const app = honey<{}>().meta<{ auth?: false | string }>()
+		const app = honey<{}>().metaType<{ auth?: false | string }>()
 		app
 			.get("/public")
 			.meta({ auth: false })
@@ -182,7 +182,7 @@ describe("generateOpenApi: which routes it documents", () => {
 	it("reads each route's resolved meta, middleware's included, the same standalone and mounted behind a gateway", () => {
 		const shard = createMiddleware(async (_c, next) => next({}), { meta: { tenant: "project_id" } })
 		const worker = () => {
-			const w = honey<{}>().meta<{ tenant?: string }>()
+			const w = honey<{}>().metaType<{ tenant?: string }>()
 			w.metaSpec({ meta: { tenant: { key: "x-tenant", map: (value) => ({ column: value }) } } })
 			w.use(shard)
 				.get("/orgs/:orgId/users")

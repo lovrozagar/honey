@@ -75,7 +75,7 @@ describe("what a tap sees", () => {
 	// v0: 36f5ca835f
 	it("the request's params, headers, meta, env, path, pattern, and what middleware added", async () => {
 		let seen: Record<string, unknown> = {}
-		const app = honey<{ REGION: string }>().meta<{ audit?: boolean }>()
+		const app = honey<{ REGION: string }>().metaType<{ audit?: boolean }>()
 		app.tap("audit", (ctx) => {
 			seen = {
 				added: (ctx as unknown as { user: string }).user,
@@ -258,7 +258,7 @@ describe("taps beside errorI18n", () => {
 		const errors = defineErrors({ gone: "not_found" })
 		const app = honey<{}>()
 			.errorFactory(errors)
-			.meta<{ audit?: { action: string } }>()
+			.metaType<{ audit?: { action: string } }>()
 			.errorI18n(errorI18n({ errors: { en: { gone: "missing {id}" } }, resolveLocale: () => "en" }))
 			.tap("audit", (_ctx, payload) => void received.push(payload))
 		app
@@ -286,7 +286,7 @@ describe("over a real listen", () => {
 		const seen: unknown[] = []
 		const app = honey<{}>()
 			.errorFactory(defineErrors({ nope: "bad_request" }))
-			.meta<{ audit?: { action: string } }>()
+			.metaType<{ audit?: { action: string } }>()
 			.tap("audit", (_ctx, payload) => void seen.push(payload))
 		app
 			.get("/ok")

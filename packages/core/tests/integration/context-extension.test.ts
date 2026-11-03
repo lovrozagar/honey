@@ -25,7 +25,7 @@ describe("ctx.meta", () => {
 	// v0: 9dfc3446fd
 	it("is the route's meta, frozen, also on a route with an error factory, middleware and declared errors", async () => {
 		const app = honey<{}>()
-			.meta<AppMeta>()
+			.metaType<AppMeta>()
 			.errorFactory(defineErrors({ not_allowed: "forbidden" }))
 			.use(createMiddleware((_ctx, next) => next({ userId: "u-1" })))
 		app
@@ -45,7 +45,7 @@ describe("ctx.meta", () => {
 	// v0: c90a72efd3
 	// v0: 5ab1605dec
 	it("an internal route, marked on itself or on its chain, still answers and sees internal: true", async () => {
-		const app = honey<{}>().meta<AppMeta>()
+		const app = honey<{}>().metaType<AppMeta>()
 		app
 			.get("/api/users")
 			.meta({ auth: "public" })

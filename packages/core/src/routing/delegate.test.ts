@@ -101,7 +101,7 @@ describe("delegation: middleware, scopes, taps and the catch-all itself", () => 
 	// v0: 3b4eaa9ff1
 	// v0: 2424b76a7f
 	it("finds the catch-all by registration, not by a literal /*, and calls a catch-all with nothing to delegate stale", async () => {
-		const live = honey<{}>().meta<{ worker?: string }>()
+		const live = honey<{}>().metaType<{ worker?: string }>()
 		live
 			.get("/svc/x")
 			.meta({ worker: "svc" })
@@ -218,17 +218,17 @@ describe("delegation: types", () => {
 	// v0: b55bcc034b
 	// v0: 8909d51c36
 	it("types the catch-all's ctx.meta from the app's meta, proxy destination included", () => {
-		const app = honey<{}>().meta<AppMeta>().routeTree(TREE())
+		const app = honey<{}>().metaType<AppMeta>().routeTree(TREE())
 		app.all("*").handler((c) => {
 			expectTypeOf(c.meta.worker).toEqualTypeOf<string>()
 			return c.res.text("ok", c.meta.auth)
 		})
 		honey<{}>()
-			.meta<AppMeta>()
+			.metaType<AppMeta>()
 			.all("*")
 			.handler(proxy({ destination: (c) => new Response(c.meta.worker) }))
 		honey<{}>()
-			.meta<{ auth: string }>()
+			.metaType<{ auth: string }>()
 			.get("/t")
 			.meta({ auth: "jwt" })
 			.handler((c) => {

@@ -204,7 +204,7 @@ describe("ws(app, path).meta(): only the meta a WebSocket route reads (bit 19 g,
 	})
 
 	it("holds a WebSocket route to the app's meta type, as an HTTP route", () => {
-		const app = honey().meta<{ team: string }>()
+		const app = honey().metaType<{ team: string }>()
 		ws(app, "/e").meta({ team: "core" })
 		// @ts-expect-error the app's meta key keeps its type
 		ws(app, "/f").meta({ team: 1 })

@@ -113,7 +113,7 @@ describe("method resolution: on() with several methods", () => {
 	it("on() registers one route per listed method, with its chain and meta; any other method is 405", async () => {
 		const app = honey<{}>()
 		app
-			.meta<{ tag?: string }>()
+			.metaType<{ tag?: string }>()
 			.use(createMiddleware((_ctx, next) => next({ injected: "yes" })))
 			.on(["PUT", "PATCH"], "/items/:id")
 			.meta({ tag: "items" })

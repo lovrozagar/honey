@@ -173,7 +173,7 @@ describe("ctx.meta", () => {
 	// v0: 22d95f2a17
 	// v0: 7c336dbf9e
 	it("is narrowed to each route's own values, and readonly", () => {
-		const base = honey<{}>().meta<AppMeta>()
+		const base = honey<{}>().metaType<AppMeta>()
 		base
 			.get("/public")
 			.meta({ auth: "public" })
@@ -194,7 +194,7 @@ describe("ctx.meta", () => {
 	// v0: 29490a6c91
 	it("is narrowed beside an error factory and the route's declared errors", () => {
 		honey<{}>()
-			.meta<AppMeta>()
+			.metaType<AppMeta>()
 			.errorFactory(defineErrors({ email_taken: "conflict" }))
 			.get("/orgs")
 			.meta({ auth: "required" })
@@ -209,7 +209,7 @@ describe("ctx.meta", () => {
 	// v0: 1460dc840b
 	it("is the app's meta type on a route that sets none, a catch-all included", () => {
 		honey<{}>()
-			.meta<AppMeta>()
+			.metaType<AppMeta>()
 			.all("*")
 			.handler((ctx) => {
 				expectTypeOf(ctx.meta.auth).toEqualTypeOf<AppMeta["auth"]>()

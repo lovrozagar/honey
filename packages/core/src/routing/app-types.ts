@@ -10,7 +10,7 @@ import type { InferOutput, StandardSchemaLike } from "../validation/standard-sch
 
 /**
  * The request context a handler or middleware sees, without the framework's internal slot. `TMeta` types `ctx.meta`:
- * a middleware typed `HoneyCtx<Env, RouteMeta>` mounts on an app that declared `meta<RouteMeta>()`.
+ * a middleware typed `HoneyCtx<Env, RouteMeta>` mounts on an app that declared `metaType<RouteMeta>()`.
  */
 export type HoneyCtx<TEnv = Record<string, unknown>, TMeta = Record<string, unknown>> = Omit<
 	HoneyContext<TEnv>,
@@ -22,7 +22,7 @@ export type HoneyCtx<TEnv = Record<string, unknown>, TMeta = Record<string, unkn
 
 /**
  * Route meta: the built-in keys every route accepts, and the app's own `T`. Name it wherever you declare route meta,
- * as in `app.meta<HoneyMeta<RouteMeta>>()`.
+ * as in `app.metaType<HoneyMeta<RouteMeta>>()`.
  */
 export type HoneyMeta<T = {}> = {
 	/** Marks the operation deprecated in the generated OpenAPI document. */
@@ -61,13 +61,6 @@ export type HoneyMeta<T = {}> = {
 	/** Tag or tags that group the operation in the generated OpenAPI document. */
 	tags?: string | string[]
 } & T
-
-/**
- * The handle's meta after the one-call `meta<T>(values)`: every declared key counts as set, since one call
- * cannot know which it set (TypeScript has no partial type-argument inference). The two-call form records the
- * values it was given, so a key nothing set stays required there.
- */
-export type AllChainMeta<TMeta> = WithChainMeta<TMeta, HoneyMeta & Partial<TMeta>>
 
 /** A middleware scoped by path at the type level: what it adds to routes under `path`. */
 export type ScopedMwEntry = {
@@ -337,7 +330,7 @@ type RouteLookup<T, TPath extends string, TMethod extends string> =
 			: never
 		: never
 
-/** The route meta an app declared with `meta<T>()`, chain values left out; `never` when it declared none. */
+/** The route meta an app declared with `metaType<T>()`, chain values left out; `never` when it declared none. */
 export type InferMeta<T> = T extends { readonly $meta: infer M } ? DeclaredMeta<M> : never
 
 /** The handler context type of one route. */

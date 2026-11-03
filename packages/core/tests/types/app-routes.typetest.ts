@@ -197,7 +197,7 @@ describe("route meta on the map", () => {
 	// v0: 8f635df394
 	it("InferRouteMeta is the app meta type with the route's own values, however many routes came before, or a route map's meta", () => {
 		const app = honey<{}>()
-			.meta<AppMeta>()
+			.metaType<AppMeta>()
 			.get("/r1")
 			.handler((ctx) => ctx.res.text("ok", "1"))
 			.get("/r2")
@@ -225,7 +225,7 @@ describe("route meta on the map", () => {
 	// v0: 2d308b01b9
 	it("an internal route, marked on itself or on its chain, is left out of the map", () => {
 		const base = honey<{}>()
-			.meta<AppMeta>()
+			.metaType<AppMeta>()
 			.use(createMiddleware((_ctx, next) => next({ added: true })))
 			.get("/public")
 			.handler((ctx) => ctx.res.json("ok", {}))
