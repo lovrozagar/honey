@@ -17,9 +17,7 @@ type Meta = {
 
 const errors = defineErrors({
 	conflict: "conflict",
-	forbidden: "forbidden",
 	gone: "gone",
-	not_found: "not_found",
 	rate_limited: "too_many_requests",
 	unauthorized: "unauthorized",
 	unprocessable: "unprocessable_entity",

@@ -998,3 +998,23 @@ type RouteMeta = { worker?: "extract" | "saas" }
 type Summary = HoneyMeta["summary"]
 const withWorker = createMiddleware((ctx: HoneyCtx<{}, RouteMeta>, next) => next({ worker: ctx.meta.worker ?? "saas" }))
 ```
+
+## `defineErrors` carries honey's own keys
+
+Every factory now holds honey's framework keys (`not_found`, `validation_failed`, `malformed_body`, `too_many_requests`
+and the rest) at the status honey answers them with, so a route declares and documents them without the app listing
+them. Drop the entries that repeat them; an entry you keep replaces honey's.
+
+```ts v0
+const errors = defineErrors({
+	not_found: "not_found",
+	org_limit_reached: "forbidden",
+	validation_failed: "bad_request",
+})
+```
+
+```ts
+import { defineErrors } from "@lovrozagar/honey"
+
+const errors = defineErrors({ org_limit_reached: "forbidden" })
+```

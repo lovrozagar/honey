@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+import { defineErrors } from "../errors/errors.ts"
 import { createMiddleware } from "./middleware.ts"
 import { honey } from "../routing/app.ts"
 import { timeout } from "./timeout.ts"
@@ -32,6 +33,11 @@ describe("timeout(): a slow chain answers 504", () => {
 		["a handler that never resolves", () => new Promise<Response>(() => {})],
 	])("%s: 504 request_timeout", async (_name, handler) => {
 		expect(await send(app(10, handler))).toEqual([504, "request_timeout"])
+	})
+
+	it("answers the status every defineErrors factory documents request_timeout with", async () => {
+		const documented = defineErrors({}).request_timeout().status
+		expect(await send(app(10, () => new Promise<Response>(() => {})))).toEqual([documented, "request_timeout"])
 	})
 
 	// v0: 940f3b0637

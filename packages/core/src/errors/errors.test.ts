@@ -1,7 +1,7 @@
 import { describe, expect, expectTypeOf, it } from "vitest"
 import * as z from "zod"
 import type { FieldError } from "./error.ts"
-import { HoneyError } from "./error.ts"
+import { FRAMEWORK_ERRORS, HoneyError } from "./error.ts"
 import { defineErrors, ERROR_META } from "./errors.ts"
 
 /** A minimal Standard Schema that accepts anything and types its output as `T`. */
@@ -246,7 +246,12 @@ describe("defineErrors with custom schemas: what a schema error leaves out, and 
 	// v0: 5ab50ccc16
 	// v0: 0bf85a7506
 	it("ERROR_META is not enumerable", () => {
-		expect(Object.keys(errors)).toEqual(["email_taken", "item_not_found", "unauthorized"])
+		expect(Object.keys(errors)).toEqual([
+			...Object.keys(FRAMEWORK_ERRORS),
+			"email_taken",
+			"item_not_found",
+			"unauthorized",
+		])
 		expect(Object.getOwnPropertyDescriptor(errors, ERROR_META)).toMatchObject({ enumerable: false, writable: false })
 	})
 })
@@ -282,5 +287,31 @@ describe("defineErrors with zod schemas", () => {
 			429,
 			{ retry_after: 60 },
 		])
+	})
+})
+
+describe("defineErrors: honey's framework keys come with every factory", () => {
+	it("a factory that declares none still builds each key honey answers, at honey's status", () => {
+		const errors = defineErrors({ org_limit_reached: "forbidden" })
+		expect(
+			[errors.not_found(), errors.validation_failed(), errors.malformed_body()].map((e) => [e.errorKey, e.status]),
+		).toEqual([
+			["not_found", 404],
+			["validation_failed", 400],
+			["malformed_body", 400],
+		])
+		expect([errors[ERROR_META].not_found, errors[ERROR_META].org_limit_reached]).toEqual([
+			{ schema: null, statusKey: "not_found" },
+			{ schema: null, statusKey: "forbidden" },
+		])
+		expectTypeOf(errors.method_not_allowed).toEqualTypeOf<
+			(opts?: Parameters<typeof errors.org_limit_reached>[0]) => HoneyError
+		>()
+	})
+
+	it("an app's own entry for a framework key wins, schema and status", () => {
+		const errors = defineErrors({ not_found: { schema: schemaOf<{ id: string }>(), status: "gone" } })
+		expect([errors.not_found({ id: "1" }).status, errors[ERROR_META].not_found.statusKey]).toEqual([410, "gone"])
+		expectTypeOf(errors.not_found).parameter(0).toEqualTypeOf<{ id: string }>()
 	})
 })

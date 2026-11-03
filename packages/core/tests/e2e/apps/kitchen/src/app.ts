@@ -22,7 +22,6 @@ const errors = defineErrors({
 	api_error: "internal_server_error",
 	email_taken: "conflict",
 	invalid_input: "bad_request",
-	not_found: "not_found",
 	org_limit_reached: "forbidden",
 	org_slug_taken: "conflict",
 	unauthorized: "unauthorized",

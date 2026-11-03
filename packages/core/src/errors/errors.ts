@@ -5,7 +5,7 @@
  */
 import type { StatusKey } from "../response/status.ts"
 import type { InferOutput, StandardSchemaLike } from "../validation/standard-schema.ts"
-import { type FieldError, HoneyError } from "./error.ts"
+import { type FieldError, FRAMEWORK_ERRORS, type FrameworkErrors, HoneyError } from "./error.ts"
 
 /** Options a factory for a status-only error accepts. */
 type ErrorFactoryOpts = {
@@ -99,14 +99,21 @@ function schemaFactory(errorKey: string, status: StatusKey) {
 		new HoneyError({ cause: opts?.cause, data, errorKey, headers: opts?.headers, status })
 }
 
+/** The keys honey answers on its own behalf, under the app's own: an app's entry for one of them wins. */
+export type WithFrameworkErrors<TMap> = Omit<FrameworkErrors, keyof TMap> & TMap
+
 /**
  * Declares an app's errors. `map` gives each error key a status key, or a `{ schema, status }` pair for an error that
- * carries a typed payload. Each key becomes a factory returning a `HoneyError` with that key and status.
+ * carries a typed payload. Each key becomes a factory returning a `HoneyError` with that key and status. honey's own
+ * keys (`not_found`, `validation_failed`, `malformed_body`…) come with every factory at the status honey answers them
+ * with, so a route declares and documents them without the app re-declaring them; an entry in `map` replaces one.
  */
-export function defineErrors<const TMap extends Record<string, ErrorDef>>(map: TMap): ErrorFactories<TMap> {
+export function defineErrors<const TMap extends Record<string, ErrorDef>>(
+	map: TMap,
+): ErrorFactories<WithFrameworkErrors<TMap>> {
 	const result: Record<string, unknown> = Object.create(null)
 	const meta: Record<string, ErrorMetaEntry> = Object.create(null)
-	for (const [key, def] of Object.entries(map)) {
+	for (const [key, def] of Object.entries({ ...FRAMEWORK_ERRORS, ...map } as Record<string, ErrorDef>)) {
 		if (typeof def === "string") {
 			meta[key] = { schema: null, statusKey: def }
 			result[key] = standardFactory(key, def)
@@ -116,5 +123,5 @@ export function defineErrors<const TMap extends Record<string, ErrorDef>>(map: T
 		}
 	}
 	Object.defineProperty(result, ERROR_META, { configurable: false, enumerable: false, value: meta, writable: false })
-	return result as ErrorFactories<TMap>
+	return result as ErrorFactories<WithFrameworkErrors<TMap>>
 }

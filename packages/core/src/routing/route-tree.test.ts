@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import * as z from "zod"
 import { defineErrors } from "../errors/errors.ts"
-import { createMiddleware } from "../middleware/middleware.ts"
+import { createMiddleware, type MiddlewareFn } from "../middleware/middleware.ts"
 import { collectRoutes } from "../openapi/collect.ts"
 import { honey } from "./app.ts"
 import { gatewayTree } from "./gateway-tree.ts"
@@ -220,7 +220,7 @@ describe("toRouteTree(): what a snapshot holds", () => {
 })
 
 describe("toRouteTree(): what a snapshot knows of errors", () => {
-	it("records each declared key's status key, from the factory the route named, a middleware's own or its app's, and keeps it as data in a gateway's tree", () => {
+	it("records each declared key's status key, from the factory the route named, a middleware's own or its app's, none for a key no factory knows, and keeps it as data in a gateway's tree", () => {
 		const named = defineErrors({ teapot: { schema: z.object({ brew: z.string() }), status: "bad_request" } })
 		const app = honey<{}>().errorFactory(defineErrors({ column_name_taken: "conflict" }))
 		const audited = createMiddleware(async (_c, next) => next(), {
@@ -231,13 +231,20 @@ describe("toRouteTree(): what a snapshot knows of errors", () => {
 			.use(audited)
 			.errors("column_name_taken")
 			.handler((c) => c.res.text("ok", "c"))
-		/* timeout() declares its key with no factory: the key is recorded, its status is not */
+		/* timeout() declares its key with no factory of its own; the route's factory carries honey's request_timeout */
 		app
 			.get("/tea")
 			.use(timeout({ duration: 1000 }))
 			.errors(named, "teapot")
 			.handler((c) => c.res.text("ok", "t"))
 		app.get("/open").handler((c) => c.res.text("ok", "o"))
+		/* a middleware's own key that no factory knows: recorded, its status not */
+		const shed: MiddlewareFn<{}, {}, "load_shed"> = (_c, next) => next()
+		shed.errors = ["load_shed"]
+		app
+			.get("/shed")
+			.use(shed)
+			.handler((c) => c.res.text("ok", "s"))
 		const snap = app.toRouteTree()
 		const gateway = honey<{}>()
 		gateway.all("/*").handler((c) => c.res.text("ok", "proxy"))
@@ -247,12 +254,14 @@ describe("toRouteTree(): what a snapshot knows of errors", () => {
 			snap.routes["GET /tea"]?.es,
 			snap.routes["GET /open"]?.es,
 			snap.routes["GET /tea"]?.ek,
+			[snap.routes["GET /shed"]?.ek, snap.routes["GET /shed"]?.es],
 			served.routes["POST /columns"],
 		]).toEqual([
 			{ audit_failed: "bad_gateway", column_name_taken: "conflict" },
-			{ teapot: "bad_request" },
+			{ request_timeout: "gateway_timeout", teapot: "bad_request" },
 			undefined,
 			["request_timeout", "teapot"],
+			[["load_shed"], undefined],
 			expect.objectContaining({
 				ek: ["audit_failed", "column_name_taken"],
 				es: { audit_failed: "bad_gateway", column_name_taken: "conflict" },

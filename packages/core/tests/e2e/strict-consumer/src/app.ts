@@ -13,7 +13,7 @@ import { createLogger } from "@lovrozagar/honey/logger"
 import { requestId } from "@lovrozagar/honey/request-id"
 import * as z from "zod"
 
-const errors = defineErrors({ not_found: "not_found", unauthorized: "unauthorized" })
+const errors = defineErrors({ unauthorized: "unauthorized" })
 
 const withUser = createMiddleware(async (_ctx, next) => next({ user: { id: "u-1" } }), {
 	meta: { tenant: "org_id" },

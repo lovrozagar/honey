@@ -19,15 +19,48 @@ const EMPTY_FIELDS: Readonly<Record<string, FieldError[]>> = /* @__PURE__ */ Obj
 	/* @__PURE__ */ Object.create(null),
 )
 
+/** honey's own error keys, each with the status honey answers it with: what every `defineErrors` factory starts from. */
+export type FrameworkErrors = {
+	/** an upstream answered badly: 502 */
+	readonly bad_gateway: "bad_gateway"
+	/** a request path honey rejects: 400 */
+	readonly bad_request: "bad_request"
+	/** a body over the size limit: 413 */
+	readonly content_too_large: "content_too_large"
+	/** a request `csrf()` or `ipRestrict()` refused: 403 */
+	readonly forbidden: "forbidden"
+	/** an upstream did not answer in time: 504 */
+	readonly gateway_timeout: "gateway_timeout"
+	/** an unknown throw: 500 */
+	readonly internal_server_error: "internal_server_error"
+	/** a request body the declared parser cannot read (bad JSON, broken multipart): 400 */
+	readonly malformed_body: "bad_request"
+	/** a path served under other methods: 405 */
+	readonly method_not_allowed: "method_not_allowed"
+	/** no route matched: 404 */
+	readonly not_found: "not_found"
+	/** an answer whose content type the route's output does not declare: 500 */
+	readonly output_content_type_mismatch: "internal_server_error"
+	/** an answer its output schema rejects: 500 */
+	readonly output_validation_failed: "internal_server_error"
+	/** a handler over its `timeout()`: 504, the gateway status, since the client sent its request in time */
+	readonly request_timeout: "gateway_timeout"
+	/** a client over its rate limit: 429 */
+	readonly too_many_requests: "too_many_requests"
+	/** a body in a content type the route does not take: 415 */
+	readonly unsupported_media_type: "unsupported_media_type"
+	/** input its schema rejects: 400 */
+	readonly validation_failed: "bad_request"
+}
+
 /** The error keys the framework throws on its own behalf. */
-export const EK = /* @__PURE__ */ Object.freeze({
+export const EK: { readonly [K in keyof FrameworkErrors]: K } = /* @__PURE__ */ Object.freeze({
 	bad_gateway: "bad_gateway",
 	bad_request: "bad_request",
 	content_too_large: "content_too_large",
 	forbidden: "forbidden",
 	gateway_timeout: "gateway_timeout",
 	internal_server_error: "internal_server_error",
-	/** a request body the declared parser cannot read (bad JSON, broken multipart): 400 */
 	malformed_body: "malformed_body",
 	method_not_allowed: "method_not_allowed",
 	not_found: "not_found",
@@ -37,7 +70,26 @@ export const EK = /* @__PURE__ */ Object.freeze({
 	too_many_requests: "too_many_requests",
 	unsupported_media_type: "unsupported_media_type",
 	validation_failed: "validation_failed",
-} as const)
+})
+
+/** The status honey answers each of its own keys with. */
+export const FRAMEWORK_ERRORS: FrameworkErrors = /* @__PURE__ */ Object.freeze({
+	bad_gateway: "bad_gateway",
+	bad_request: "bad_request",
+	content_too_large: "content_too_large",
+	forbidden: "forbidden",
+	gateway_timeout: "gateway_timeout",
+	internal_server_error: "internal_server_error",
+	malformed_body: "bad_request",
+	method_not_allowed: "method_not_allowed",
+	not_found: "not_found",
+	output_content_type_mismatch: "internal_server_error",
+	output_validation_failed: "internal_server_error",
+	request_timeout: "gateway_timeout",
+	too_many_requests: "too_many_requests",
+	unsupported_media_type: "unsupported_media_type",
+	validation_failed: "bad_request",
+})
 
 /**
  * A key the framework owns (validation, negotiation, routing, the shipped middleware): it always

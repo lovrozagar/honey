@@ -4,7 +4,7 @@
  * default and boundary keys), ctx.errors, and the app's onError, onNotFound and onMethodNotAllowed.
  */
 import { describe, expect, it } from "vitest"
-import { HoneyError } from "../../src/errors/error.ts"
+import { FRAMEWORK_ERRORS, HoneyError } from "../../src/errors/error.ts"
 import { defineErrors } from "../../src/errors/errors.ts"
 import { createMiddleware } from "../../src/middleware/middleware.ts"
 import { honey } from "../../src/routing/app.ts"
@@ -452,7 +452,7 @@ describe("ctx.errors: open routes and named factories", () => {
 		app.get("/throw").handler(() => {
 			throw errors.rate_limited()
 		})
-		const all = ["auth_failed", "not_found", "rate_limited", "wrapped"]
+		const all = [...Object.keys(FRAMEWORK_ERRORS), "auth_failed", "rate_limited", "wrapped"].sort()
 		expect(await send(app, "/open")).toEqual({ body: { frozen: true, keys: all }, headers: JSON_TYPE, status: 200 })
 		expect(await send(app, "/throw")).toEqual(failure("rate_limited", 429, "too_many_requests"))
 	})

@@ -499,3 +499,19 @@ describe("errors a route does not get documented", () => {
 		]).toEqual([{ "200": { description: "Success" } }, "conflict"])
 	})
 })
+
+describe("framework keys: declared on a route without the app re-declaring them", () => {
+	it("documents a declared framework key under honey's status, in the route's enum", () => {
+		const app = honey<{}>().errorFactory(defineErrors({ org_limit_reached: "forbidden" }))
+		app
+			.post("/orgs")
+			.errors("validation_failed", "org_limit_reached")
+			.input({ json: z.object({ name: z.string() }) })
+			.handler((c) => c.res.text("ok", "x"))
+		const doc = generateOpenApi(app, { info: INFO })
+		expect([
+			Object.keys(responses(doc, "/orgs", "post")),
+			keysOf(errorSchema(doc, "/orgs", "400", { method: "post" })),
+		]).toEqual([["400", "403"], ["validation_failed"]])
+	})
+})

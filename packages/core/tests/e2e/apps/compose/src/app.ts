@@ -9,9 +9,7 @@ type Env = { JWT_SECRET: string; REDIS_URL: string }
 
 const errors = defineErrors({
 	expired_token: "unauthorized",
-	forbidden: "forbidden",
 	invalid_token: "unauthorized",
-	not_found: "not_found",
 	rate_limited: "too_many_requests",
 })
 
