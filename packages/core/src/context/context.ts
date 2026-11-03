@@ -36,6 +36,13 @@ export type RequestState<TEnv> = {
 	ip?: string | null
 	/** set when the route's handler answered, on a route with taps only: they fire on nothing else */
 	answered?: true
+	/** the id `requestId()` gave the request and the header it travels in, for `proxy()` to send upstream */
+	requestId?: {
+		/** The header `requestId()` reads and answers the id in. */
+		readonly header: string
+		/** The request's id, as on `ctx.requestId`. */
+		readonly id: string
+	}
 	/** this request's spans, when the app has telemetry */
 	trace?: RequestTrace
 }

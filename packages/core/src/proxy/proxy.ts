@@ -5,13 +5,14 @@
  * it. The answer is the passthrough brand, since the upstream decides its status and type.
  *
  * Both ways, hop-by-hop headers are dropped and the forwarding headers describe the client as the
- * platform reported it (headers.ts); the URL is the normalized path, the deadlines and failure
- * mapping are upstream.ts's. Every method but GET and HEAD forwards its body. The call follows
- * `ctx.signal`: a disconnect, `timeout()` or shutdown cancels it and its body. Redirects go back to
- * the client, never followed. On the Node bridge the answer is a HoneyResponse, so the header
- * middleware in front of the route stay on the plain map.
+ * platform reported it (headers.ts). Behind `requestId()` the request's id goes on under that
+ * middleware's header, replacing the client's. The URL is the normalized path, the deadlines and
+ * failure mapping are upstream.ts's. Every method but GET and HEAD forwards its body. The call
+ * follows `ctx.signal`: a disconnect, `timeout()` or shutdown cancels it and its body. Redirects go
+ * back to the client, never followed. On the Node bridge the answer is a HoneyResponse, so the
+ * header middleware in front of the route stay on the plain map.
  */
-import { type HoneyContext, TRACE } from "../context/context.ts"
+import { type HoneyContext, REQUEST, TRACE } from "../context/context.ts"
 import { createHoneyResponse, isNodeOutbound } from "../response/builder.ts"
 import { headersToRecord, HoneyOutHeaders } from "../response/out-headers.ts"
 import type { TypedResponse } from "../response/response.ts"
@@ -127,7 +128,9 @@ export function proxy<TCtx>(config: ProxyConfig<TCtx>): (ctx: TCtx) => Promise<T
 		const pathQuery = path + searchOfUrl(req.url)
 		const url = config.rewriteUrl ? config.rewriteUrl(pathQuery, ctx) : pathQuery
 		const headers = upstreamHeaders(req, { client: forwarded ? ip : undefined, websocket })
-		/* requestHeaders below still has the last word */
+		/* requestHeaders below still has the last word on these */
+		const requestId = (ctx as unknown as HoneyContext)[REQUEST].requestId
+		if (requestId !== undefined) headers.set(requestId.header, requestId.id)
 		const send = traced(ctx, req.method, headers)
 		const body = await forwardBody(req)
 		/* no body, or bytes whose length fetch() computes itself */

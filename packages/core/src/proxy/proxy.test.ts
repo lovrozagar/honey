@@ -1,5 +1,6 @@
 import { describe, expect, expectTypeOf, it } from "vitest"
 import { createMiddleware } from "../middleware/middleware.ts"
+import { requestId } from "../middleware/request-id.ts"
 import { isHoneyResponse, NODE_OUTBOUND } from "../response/builder.ts"
 import type { TypedResponse } from "../response/response.ts"
 import { honey } from "../routing/app.ts"
@@ -93,6 +94,56 @@ describe("proxy: requestHeaders", () => {
 			}),
 		)
 		expect(await (await app.fetch(req("/api/x"), {})).json()).toEqual(["2", "gateway"])
+	})
+})
+
+/** A proxy whose upstream answers the value of header `name` it was sent. */
+function echoId(name: string) {
+	return proxy({ destination: (_ctx, _url, init) => new Response(new Headers(init.headers).get(name)) })
+}
+
+describe("proxy: the request id", () => {
+	it("forwards ctx.requestId under the requestId middleware's header, replacing what the client sent", async () => {
+		const app = honey<{}>()
+		app
+			.use(requestId({ generate: () => "id-1" }))
+			.all("/api/*rest")
+			.handler(echoId("x-request-id"))
+		const res = await app.fetch(req("/api/x", { headers: { "x-request-id": "spoofed" } }), {})
+		expect(await res.text()).toBe("id-1")
+	})
+
+	it("uses the header the middleware was given", async () => {
+		const app = honey<{}>()
+		app
+			.use(requestId({ generate: () => "id-2", header: "cf-ray" }))
+			.all("/api/*rest")
+			.handler(echoId("cf-ray"))
+		expect(await (await app.fetch(req("/api/x"), {})).text()).toBe("id-2")
+	})
+
+	it("forwards a trusted inbound id unchanged, so the upstream logs the same id", async () => {
+		const app = honey<{}>()
+		app
+			.use(requestId({ trustInbound: true }))
+			.all("/api/*rest")
+			.handler(echoId("x-request-id"))
+		const res = await app.fetch(req("/api/x", { headers: { "x-request-id": "edge-7" } }), {})
+		expect(await res.text()).toBe("edge-7")
+	})
+
+	it("requestHeaders still has the last word", async () => {
+		const app = honey<{}>()
+		app
+			.use(requestId())
+			.all("/api/*rest")
+			.handler(
+				proxy({
+					destination: (_ctx, _url, init) => new Response(String(new Headers(init.headers).has("x-request-id"))),
+					requestHeaders: (_ctx, headers) => headers.delete("x-request-id"),
+				}),
+			)
+		expect(await (await app.fetch(req("/api/x"), {})).text()).toBe("false")
 	})
 })
 
