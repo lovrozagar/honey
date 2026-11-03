@@ -117,6 +117,19 @@ const THING = {
 	required: ["tags", "attrs"],
 	type: "object",
 }
+/* anyrow's request: a nullable one-member anyOf with comb's x- keys beside the inner anyOf and on its member */
+const LIST = { items: STRING, minItems: 1, type: "array" }
+const EXTRACTION = {
+	properties: {
+		columns: { oneOf: [LIST] },
+		merge_columns_json: {
+			anyOf: [{ anyOf: [{ ...LIST, "x-comb-text": "t" }], "x-comb-text": "t" }, { type: "null" }],
+		},
+		tags: { anyOf: [{ anyOf: [LIST] }] },
+	},
+	required: ["columns", "tags"],
+	type: "object",
+}
 const DOG = { properties: { kind: { const: "dog" }, name: STRING }, required: ["kind", "name"], type: "object" }
 const CAT = { properties: { kind: { enum: ["cat"], type: "string" } }, required: ["kind"], type: "object" }
 const ANIMAL = { discriminator: { propertyName: "kind" }, oneOf: [ref("Dog"), ref("Cat")] }
@@ -193,6 +206,18 @@ describe("goTopLevel: nullable and pointers", () => {
 				'Plain *string `json:"plain,omitempty"`',
 				'Tags []string `json:"tags"`',
 				'XKey Nullable[int64] `json:"x-key,omitzero"`',
+			),
+		},
+		{
+			components: { Extraction: EXTRACTION },
+			methods: [MARSHAL("Extraction")],
+			name: "Extraction",
+			title: "a one-variant anyOf or oneOf types the field as its variant, nullable when wrapped with a null",
+			type: struct(
+				"Extraction",
+				'Columns []string `json:"columns"`',
+				'MergeColumnsJson Nullable[[]string] `json:"merge_columns_json,omitzero"`',
+				'Tags []string `json:"tags"`',
 			),
 		},
 	])("$title", (row) => {

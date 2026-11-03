@@ -26,9 +26,9 @@ function nullableOf(schema: Json): IRSchema {
 		const rest = (schema.type as unknown[]).filter((type) => type !== "null")
 		inner = schemaToIR({ ...schema, type: rest.length === 1 ? rest[0] : rest })
 	} else if (schema.anyOf !== undefined || schema.oneOf !== undefined) {
-		const rest = ((schema.anyOf ?? schema.oneOf) as Json[]).filter((variant) => variant.type !== "null")
-		if (rest.length === 0) inner = { kind: "unknown" }
-		else inner = rest.length === 1 ? schemaToIR(rest[0]) : { kind: "union", variants: rest.map(schemaToIR) }
+		const key = schema.anyOf === undefined ? "oneOf" : "anyOf"
+		const rest = (schema[key] as Json[]).filter((variant) => variant.type !== "null")
+		inner = rest.length === 0 ? { kind: "unknown" } : variantsOf(schema, key, rest)
 	} else {
 		const { nullable: _flag, ...rest } = schema
 		inner = schemaToIR(rest)
@@ -36,10 +36,24 @@ function nullableOf(schema: Json): IRSchema {
 	return inner.kind === "nullable" ? inner : { inner, kind: "nullable" }
 }
 
+/**
+ * `variants`, the ones `schema` lists under `key`, as one schema. A sole variant is the value itself: it is read
+ * with the keys `schema` states beside the list, the variant's own winning, as a narrowed type list or a stripped
+ * nullable flag keeps them; annotations such as a description are left where they are read, on the field or the
+ * parameter that holds `schema`. More variants are their union.
+ */
+function variantsOf(schema: Json, key: "anyOf" | "oneOf", variants: Json[]): IRSchema {
+	if (variants.length !== 1) return { kind: "union", variants: variants.map(schemaToIR) }
+	const { [key]: _list, ...beside } = schema
+	return schemaToIR({ ...beside, ...variants[0] })
+}
+
+/** A union, or with no discriminator, its sole variant (`variantsOf`). */
 function unionOf(schema: Json): IRSchema {
-	const variants = ((schema.oneOf ?? schema.anyOf) as Json[]).map(schemaToIR)
+	const key = schema.oneOf === undefined ? "anyOf" : "oneOf"
 	const raw = schema.discriminator as { mapping?: Record<string, string>; propertyName: string } | undefined
-	if (raw === undefined) return { kind: "union", variants }
+	if (raw === undefined) return variantsOf(schema, key, schema[key] as Json[])
+	const variants = (schema[key] as Json[]).map(schemaToIR)
 	const discriminator: IRDiscriminator = { propertyName: raw.propertyName }
 	const mapping = raw.mapping && Object.entries(raw.mapping).map(([value, ref]) => [value, lastSegment(ref)])
 	if (mapping) discriminator.mapping = Object.fromEntries(mapping)

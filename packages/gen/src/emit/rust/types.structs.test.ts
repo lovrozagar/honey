@@ -129,6 +129,19 @@ const STRING = { type: "string" }
 const MAP = "std::collections::HashMap"
 const BASE = { properties: { id: STRING }, required: ["id"], type: "object" }
 const COMMENT = { properties: { parent: ref("Comment") }, type: "object" }
+/* anyrow's request: a nullable one-member anyOf with comb's x- keys beside the inner anyOf and on its member */
+const LIST = { items: STRING, minItems: 1, type: "array" }
+const EXTRACTION = {
+	properties: {
+		columns: { oneOf: [LIST] },
+		merge_columns_json: {
+			anyOf: [{ anyOf: [{ ...LIST, "x-comb-text": "t" }], "x-comb-text": "t" }, { type: "null" }],
+		},
+		tags: { anyOf: [{ anyOf: [LIST] }] },
+	},
+	required: ["columns", "tags"],
+	type: "object",
+}
 const DOG = { properties: { kind: STRING, name: STRING }, required: ["kind", "name"], type: "object" }
 const CAT = { properties: { kind: STRING, lives: { type: "integer" } }, required: ["kind"], type: "object" }
 const ANIMAL = {
@@ -263,6 +276,17 @@ describe("rustTopLevel: struct fields", () => {
 				field("plain: Option<String>", SKIP),
 				field("tags: Vec<String>"),
 				field("x_key: Option<Option<i64>>", rename("x-key"), ...TRI),
+			),
+		},
+		{
+			components: { Extraction: EXTRACTION },
+			name: "Extraction",
+			title: "a one-variant anyOf or oneOf types the field as its variant, nullable when wrapped with a null",
+			type: struct(
+				"Extraction",
+				field("columns: Vec<String>"),
+				field("merge_columns_json: Option<Option<Vec<String>>>", ...TRI),
+				field("tags: Vec<String>"),
 			),
 		},
 	])("$title", (row) => {

@@ -348,6 +348,60 @@ describe("schemaToIR: unions and references", () => {
 	})
 })
 
+describe("schemaToIR: an anyOf or oneOf of one variant, without a discriminator, is that variant", () => {
+	const ARRAY = { items: { type: "string" }, minItems: 1, type: "array" }
+	const LIST: IRSchema = { items: STRING, kind: "array", minItems: 1 }
+	const RULE = "no U+0000 or unpaired surrogate"
+
+	it("reads a request property published as a nullable one-member anyOf as a nullable list of strings", () => {
+		/* the wrapper's x- keys beside the inner anyOf, and on its member too, as comb publishes them */
+		const property = {
+			anyOf: [{ anyOf: [{ ...ARRAY, "x-comb-text": RULE }], "x-comb-text": RULE }, { type: "null" }],
+		}
+		expect(schemaToIR(property)).toEqual(nullable(LIST))
+	})
+
+	it("reads a one-variant oneOf, an anyOf nested in another, and a one-variant ref as the variant", () => {
+		expect([
+			schemaToIR({ oneOf: [ARRAY] }),
+			schemaToIR({ anyOf: [{ anyOf: [{ oneOf: [ARRAY] }] }] }),
+			schemaToIR({ anyOf: [{ $ref: "#/components/schemas/Tag" }] }),
+			schemaToIR({ oneOf: [{ anyOf: [{ type: "string" }, { type: "null" }] }] }),
+		]).toEqual([LIST, LIST, ref("Tag"), nullable(STRING)])
+	})
+
+	it("reads the wrapper's own keys with the variant's, the variant's winning, as a narrowed type list keeps them", () => {
+		expect([
+			schemaToIR({ anyOf: [{ type: "string" }], maxLength: 3 }),
+			schemaToIR({ anyOf: [{ maxLength: 2, type: "string" }], maxLength: 3 }),
+			schemaToIR({ anyOf: [{ type: "string" }], enum: ["a", "b"] }),
+			schemaToIR({ anyOf: [{ required: ["id"] }], properties: { id: { type: "string" } }, type: "object" }),
+			schemaToIR({ anyOf: [{ type: "string" }, { type: "null" }], maxLength: 3 }),
+			schemaToIR({ anyOf: [ARRAY], nullable: true }),
+			schemaToIR({ anyOf: [{ nullable: true, type: "string" }] }),
+		]).toEqual([
+			{ kind: "scalar", maxLength: 3, type: "string" },
+			{ kind: "scalar", maxLength: 2, type: "string" },
+			{ enum: ["a", "b"], kind: "scalar", type: "string" },
+			{ fields: [field("id", true)], kind: "object" },
+			nullable({ kind: "scalar", maxLength: 3, type: "string" }),
+			nullable(LIST),
+			nullable(STRING),
+		])
+	})
+
+	it("keeps a field's description from the wrapper, and a one-variant union with a discriminator a union", () => {
+		const wrapped = { anyOf: [{ description: "inner", type: "string" }], description: "outer", title: "T" }
+		expect([
+			schemaToIR({ properties: { name: wrapped }, type: "object" }),
+			schemaToIR({ discriminator: { propertyName: "kind" }, anyOf: [{ $ref: "#/components/schemas/Cat" }] }),
+		]).toEqual([
+			{ fields: [{ ...field("name", false), description: "outer" }], kind: "object" },
+			{ discriminator: { propertyName: "kind" }, kind: "union", variants: [ref("Cat")] },
+		])
+	})
+})
+
 describe("reading the IR back", () => {
 	it("follows refs to their schema, an unknown or endless one to unknown", () => {
 		const resolve = irResolver({ A: ref("B"), B: STRING, Loop: ref("Loop") })
