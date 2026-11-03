@@ -1,262 +1,215 @@
 /**
- * The install scripts (bit 17 phase g), run against a local server holding a fake release:
- * - install.sh installs the archive for this platform only after its sha256 matches checksums.txt, refuses a
- *   tampered archive, a missing checksum line, an unknown OS or architecture, a base that is neither https:// nor
- *   http:// on loopback (before any fetch), a version that is no tag, and a machine without curl, wget or a digest
- *   tool; each refusal one line on stderr, nonzero, nothing installed;
- * - curl runs with --proto and --tlsv1.2, wget with --https-only on an https base;
- * - the default base is the repository's GitHub Releases, a tag's or the latest;
- * - a truncated download runs nothing;
- * - sh -n and shellcheck pass.
- * install.ps1's legs are install-ps1.test.ts's.
- * The signature check (bit 19 i) is install.verify.test.ts's.
+ * The install scripts (bit 17 phase g, release program D8): installgen writes them from the layout release.ts
+ * publishes, so this holds the layout, not installgen's own contract:
+ * - with a repository, both scripts read the tag from the release's version.txt, fetch `<bin>_<os>_<arch>` and
+ *   checksums.txt from its GitHub Releases, verify checksums.txt's bundle as signed by the repository's release
+ *   workflow on that tag, and read the `<PREFIX>_` variables; the script URL is the release's unless
+ *   `installUrl` names another;
+ * - without a repository there are no scripts;
+ * - install.sh passes sh -n and shellcheck, install.ps1 parses under PowerShell;
+ * - end to end: install.sh, pointed at a loopback copy of a goreleaser snapshot release built from the generated
+ *   config, installs this host's binary after its sha256 check, and refuses a tampered checksums.txt.
  */
-import { spawnSync } from "node:child_process"
-import { chmodSync, readFileSync, writeFileSync } from "node:fs"
-import { join } from "node:path"
+import { spawn, spawnSync } from "node:child_process"
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
+import { createServer, type Server } from "node:http"
+import { delimiter, join } from "node:path"
+import { generateInstallers } from "@lovrozagar/installgen"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
-import {
-	BASE_TOOLS,
-	inTurn,
-	LINUX,
-	outcome,
-	pathWith,
-	release,
-	runSh,
-	type Served,
-	scratch,
-	scripts,
-	serve,
-	sha256,
-	tarGz,
-	which,
-	ZEROS,
-} from "./__fixtures__/install.ts"
-import { toolBin, withTools } from "./__fixtures__/tools.ts"
+import { goCacheDir, goEnv, withGo } from "../go/__fixtures__/go-env.ts"
+import { shop } from "./__fixtures__/shop.ts"
+import { syntaxCheck, toolBin, withTools } from "./__fixtures__/tools.ts"
+import { installerConfig } from "./install.ts"
+import { type GoCliOptions, generateGoCli } from "./module.ts"
 import { SPAWN_TIMEOUT } from "../../gen/__fixtures__/spawn-timeout.ts"
 
 const TOOLS = withTools()
+const GO = withGo()
 
-/** A PATH whose uname answers `s` to -s and `m` to -m, curl beside it. */
-const unamePath = (s: string, m: string) =>
-	pathWith([...BASE_TOOLS, "curl"], { uname: `case "$1" in -s) echo ${s} ;; -m) echo ${m} ;; esac` })
+const files = (options: GoCliOptions = { repo: "acme/shop" }) =>
+	generateGoCli(shop(), { modulePath: "github.com/acme/shop", ...options }).files
 
-/** A PATH whose curl records its arguments to `log` and fails, so no run leaves this machine. */
-const recordingCurl = (log: string) => pathWith([...BASE_TOOLS, "uname"], { curl: `echo "$@" >> ${log}\nexit 22` })
+const scratch = (name: string) => mkdtempSync(join(goCacheDir("tmp"), `install-${name}-`))
 
-let server: Served
-beforeAll(async () => {
-	server = await serve()
-})
-afterAll(() => server.close())
-
-describe("install.sh installs only what its checksum vouches for (phase g)", () => {
-	it("installs this platform's archive once its sha256 matches checksums.txt", { timeout: SPAWN_TIMEOUT }, async () => {
-		server.set(release({ [LINUX]: tarGz() }))
-		const { bin, ran } = await runSh(scripts().sh, { SHOP_INSTALL_BASE: server.url })
-		const runs = spawnSync(join(bin, "shop"), { encoding: "utf8" }).stdout
-		expect([ran.status, ran.stdout, ran.stderr, server.asked, runs]).toEqual([
-			0,
-			`installed ${bin}/shop\n`,
-			"",
-			[LINUX, "checksums.txt"],
-			"fake shop\n",
-		])
+describe("the install scripts' layout (phase g)", () => {
+	it("fetch the repository's release files and check its release workflow's signature on the tag", () => {
+		const generated = files()
+		for (const script of [generated["install.sh"], generated["install.ps1"]]) {
+			expect(script).toContain("https://github.com/acme/shop/releases")
+			expect(script).toContain("latest/download/version.txt")
+			expect(script).toContain("shop_")
+			expect(script).toContain("checksums.txt")
+			expect(script).toContain("https://github.com/acme/shop/.github/workflows/release.yml@refs/tags/")
+			expect(script).toContain("https://token.actions.githubusercontent.com")
+			expect(script).toContain("SHOP_INSTALL_VERIFY")
+			expect(script).toContain("https://github.com/acme/shop/releases/latest/download/install.")
+		}
 	})
 
-	it(
-		"refuses a tampered archive and one checksums.txt does not list, one line each, nothing installed",
-		{ timeout: SPAWN_TIMEOUT },
-		async () => {
-			const archive = tarGz()
-			server.set(release({ [LINUX]: archive }, { tampered: LINUX }))
-			const tampered = await runSh(scripts().sh, { SHOP_INSTALL_BASE: server.url })
-			server.set(release({ [LINUX]: archive }, { unlisted: LINUX }))
-			const unlisted = await runSh(scripts().sh, { SHOP_INSTALL_BASE: server.url })
-			expect([tampered, unlisted].map(outcome)).toEqual([
-				[1, false, `shop install: ${LINUX}: its sha256 is ${sha256(archive)}, checksums.txt says ${ZEROS}\n`],
-				[1, false, `shop install: checksums.txt lists no ${LINUX}\n`],
-			])
-		},
-	)
-})
+	it("name the prefix the options give, and the script URL installUrl names", () => {
+		const generated = files({ envPrefix: "SHOP_CLI", installUrl: "https://shop.example.com/cli/", repo: "acme/shop" })
+		expect([
+			generated["install.sh"]?.includes("SHOP_CLI_INSTALL_DIR"),
+			generated["install.sh"]?.includes("https://shop.example.com/cli/install.sh"),
+			generated["install.ps1"]?.includes("https://shop.example.com/cli/install.ps1"),
+			generated["install.sh"]?.includes("releases/latest/download/install.sh"),
+		]).toEqual([true, true, true, false])
+	})
 
-describe("install.sh's platform (phase g)", () => {
-	it(
-		"picks the archive by uname and the arch override, and refuses another OS or architecture",
-		{ timeout: SPAWN_TIMEOUT },
-		async () => {
-			server.set(release({ "shop_darwin_arm64.tar.gz": tarGz(), "shop_linux_arm64.tar.gz": tarGz() }))
-			const base = { SHOP_INSTALL_BASE: server.url }
-			const runs = await inTurn([
-				() => runSh(scripts().sh, base, unamePath("Darwin", "arm64")),
-				() => runSh(scripts().sh, { ...base, SHOP_INSTALL_ARCH: "arm64" }, unamePath("Linux", "x86_64")),
-				() => runSh(scripts().sh, base, unamePath("Linux", "sparc64")),
-				() => runSh(scripts().sh, { ...base, SHOP_INSTALL_ARCH: "mips" }, unamePath("Linux", "x86_64")),
-				() => runSh(scripts().sh, base, unamePath("FreeBSD", "amd64")),
-			])
-			expect(runs.map(outcome)).toEqual([
-				[0, true, ""],
-				[0, true, ""],
-				[1, false, "shop install: sparc64: no build for this architecture (set SHOP_INSTALL_ARCH to amd64 or arm64)\n"],
-				[1, false, "shop install: SHOP_INSTALL_ARCH mips: want amd64 or arm64\n"],
-				[1, false, "shop install: FreeBSD: this script installs on Linux and macOS; on Windows, run install.ps1\n"],
-			])
-		},
-	)
-})
+	it("are not written without a repository, which they would download from", () => {
+		const generated = files({})
+		expect([generated["install.sh"], generated["install.ps1"]]).toEqual([undefined, undefined])
+	})
 
-describe("install.sh's base (phase g)", () => {
-	it(
-		"refuses a base that is neither https:// nor http:// on loopback, before any fetch",
+	it.skipIf(!TOOLS)(
+		"parse under sh -n, pass shellcheck, and parse under PowerShell",
 		{ timeout: SPAWN_TIMEOUT },
-		async () => {
-			server.set(release({ [LINUX]: tarGz() }))
-			const runs = await inTurn(
-				["http://example.com", "http://127.evil.com:80", "ftp://127.0.0.1/x"].map(
-					(base) => () => runSh(scripts().sh, { SHOP_INSTALL_BASE: base }),
-				),
-			)
-			expect([runs.map(({ ran }) => [ran.status, ran.stderr]), server.asked]).toEqual([
-				[
-					[1, "shop install: http://example.com: want https://, or http:// on loopback\n"],
-					[1, "shop install: http://127.evil.com:80: want https://\n"],
-					[1, "shop install: ftp://127.0.0.1/x: want https://\n"],
-				],
-				[],
-			])
-		},
-	)
-
-	it(
-		"downloads from the repository's latest release or a tag's, by https alone",
-		{ timeout: SPAWN_TIMEOUT },
-		async () => {
-			const log = join(scratch("args"), "args")
-			const path = recordingCurl(log)
-			const runs = await inTurn([
-				() => runSh(scripts().sh, {}, path),
-				() => runSh(scripts().sh, { SHOP_VERSION: "v1.2.3" }, path),
-				() => runSh(scripts().sh, { SHOP_VERSION: "../x" }, path),
-				() => runSh(scripts(null).sh, {}, path),
-			])
-			expect([runs.map(({ ran }) => ran.stderr), readFileSync(log, "utf8").replaceAll(/-o \S+/g, "-o <file>")]).toEqual(
-				[
-					[
-						"shop install: could not download https://github.com/acme/shop/releases/latest/download/shop_linux_amd64.tar.gz\n",
-						"shop install: could not download https://github.com/acme/shop/releases/download/v1.2.3/shop_linux_amd64.tar.gz\n",
-						"shop install: SHOP_VERSION ../x: not a release tag\n",
-						"shop install: set SHOP_INSTALL_BASE: no repository to download from\n",
-					],
-					[
-						"--proto =https --tlsv1.2 -fsSL -o <file> https://github.com/acme/shop/releases/latest/download/shop_linux_amd64.tar.gz",
-						"--proto =https --tlsv1.2 -fsSL -o <file> https://github.com/acme/shop/releases/download/v1.2.3/shop_linux_amd64.tar.gz",
-						"",
-					].join("\n"),
-				],
-			)
-		},
-	)
-})
-
-describe("install.sh's downloader and digest (phase g)", () => {
-	it(
-		"falls back to wget, --https-only on an https base, and refuses with neither or with no digest tool",
-		{ timeout: SPAWN_TIMEOUT },
-		async () => {
-			server.set(release({ [LINUX]: tarGz() }))
-			const log = join(scratch("wget"), "args")
-			/* the wget shim records its arguments, then fetches its last one to the file -O names, by curl */
-			const shim = `echo "$@" >> ${log}\nfor a; do url=$a; done\nwhile [ "$1" != -O ]; do shift; done\nexec ${which("curl")} -fs -o "$2" "$url"`
-			const withWget = pathWith([...BASE_TOOLS, "uname"], { wget: shim })
-			const runs = await inTurn([
-				() => runSh(scripts().sh, { SHOP_INSTALL_BASE: server.url }, withWget),
-				() => runSh(scripts().sh, { SHOP_INSTALL_BASE: "https://127.0.0.1:1" }, withWget),
-				() => runSh(scripts().sh, { SHOP_INSTALL_BASE: server.url }, pathWith([...BASE_TOOLS, "uname"])),
-				() =>
-					runSh(
-						scripts().sh,
-						{ SHOP_INSTALL_BASE: server.url },
-						pathWith([...BASE_TOOLS.filter((tool) => tool !== "sha256sum"), "uname", "curl"]),
-					),
-			])
-			expect({
-				args: readFileSync(log, "utf8").replaceAll(/-O \S+/g, "-O <file>"),
-				runs: runs.map(outcome),
-			}).toEqual({
-				args: [
-					`-q -O <file> ${server.url}/${LINUX}`,
-					`-q -O <file> ${server.url}/checksums.txt`,
-					`--https-only -q -O <file> https://127.0.0.1:1/${LINUX}`,
-					"",
-				].join("\n"),
-				runs: [
-					[0, true, ""],
-					[1, false, `shop install: could not download https://127.0.0.1:1/${LINUX}\n`],
-					[1, false, "shop install: neither curl nor wget is installed\n"],
-					[1, false, "shop install: neither sha256sum nor shasum is installed to verify the download\n"],
-				],
-			})
-		},
-	)
-})
-
-describe("install.sh as a download (phase g)", () => {
-	it(
-		"runs nothing when the download stops short, before the last line or inside a function",
-		{ timeout: SPAWN_TIMEOUT },
-		async () => {
-			server.set(release({ [LINUX]: tarGz() }))
-			const text = scripts().sh
-			const cuts = [
-				text.slice(0, text.lastIndexOf('main "$@"')),
-				text.slice(0, text.indexOf('\tfetch "$base/$archive"')),
-			]
-			const runs = await inTurn(cuts.map((cut) => () => runSh(cut, { SHOP_INSTALL_BASE: server.url })))
-			expect([runs.map(({ installed }) => installed), runs[0]?.ran.status, server.asked]).toEqual([
-				[false, false],
+		() => {
+			const dir = scratch("check")
+			const generated = files()
+			writeFileSync(join(dir, "install.sh"), generated["install.sh"] ?? "")
+			writeFileSync(join(dir, "install.ps1"), generated["install.ps1"] ?? "")
+			const parsed = spawnSync("sh", ["-n", join(dir, "install.sh")], { encoding: "utf8" })
+			const checked = spawnSync(toolBin("shellcheck"), ["-s", "sh", join(dir, "install.sh")], { encoding: "utf8" })
+			const ps1 = syntaxCheck("powershell", join(dir, "install.ps1"))
+			expect([parsed.status, parsed.stderr, checked.status, checked.stdout, ps1.status, ps1.errors]).toEqual([
 				0,
-				[],
+				"",
+				0,
+				"",
+				0,
+				"",
+			])
+		},
+	)
+})
+
+/* the snapshot builds a stub main: the scripts' layout is under test, the CLI's own build elsewhere */
+const STUB = { "go.mod": "module github.com/acme/shop\n\ngo 1.24\n", "main.go": "package main\n\nfunc main() {}\n" }
+const TAG = "v1.2.3"
+const ARCH = ({ arm64: "arm64", x64: "amd64" } as Record<string, string>)[process.arch]
+const LINUX = process.platform === "linux" && ARCH !== undefined
+
+/** A goreleaser snapshot release from the generated config: its files by the path a GitHub release serves them at. */
+function snapshotRelease(): Map<string, Buffer> {
+	const dir = scratch("release")
+	const generated = files()
+	for (const [name, text] of Object.entries({ ".goreleaser.yaml": generated[".goreleaser.yaml"] ?? "", ...STUB })) {
+		writeFileSync(join(dir, name), text)
+	}
+	/* the release uploads the scripts; the snapshot needs them present */
+	writeFileSync(join(dir, "install.sh"), generated["install.sh"] ?? "")
+	writeFileSync(join(dir, "install.ps1"), generated["install.ps1"] ?? "")
+	const git = (...args: string[]) =>
+		spawnSync("git", ["-c", "user.email=t@example.com", "-c", "user.name=t", ...args], { cwd: dir })
+	git("init", "-q")
+	git("add", "-A")
+	git("commit", "-qm", "init")
+	const ran = spawnSync(toolBin("goreleaser"), ["release", "--snapshot", "--clean", "--skip=sign"], {
+		cwd: dir,
+		encoding: "utf8",
+		env: goEnv(),
+	})
+	if (ran.status !== 0) throw new Error(`goreleaser snapshot failed: ${ran.stderr}`)
+	const out = join(dir, "dist")
+	const served = new Map<string, Buffer>([["/latest/download/version.txt", Buffer.from(`${TAG}\n`)]])
+	for (const name of ["checksums.txt", `shop_linux_${ARCH}.tar.gz`]) {
+		served.set(`/download/${TAG}/${name}`, readFileSync(join(out, name)))
+	}
+	return served
+}
+
+/** PATH without a cosign, so the install takes the sha256-only path wherever the test runs. */
+const withoutCosign = (path: string) =>
+	path
+		.split(delimiter)
+		.filter((dir) => dir !== "" && !existsSync(join(dir, "cosign")))
+		.join(delimiter)
+
+/** install.sh run with sh, its output and status. */
+function runSh(script: string, env: Record<string, string>): Promise<{ status: number; out: string }> {
+	return new Promise((resolve) => {
+		const child = spawn("sh", ["-c", script], {
+			env: { HOME: env.HOME ?? "", PATH: withoutCosign(process.env.PATH ?? ""), ...env },
+		})
+		let out = ""
+		child.stdout.on("data", (chunk: Buffer) => (out += chunk.toString()))
+		child.stderr.on("data", (chunk: Buffer) => (out += chunk.toString()))
+		child.on("close", (code) => resolve({ out, status: code ?? 1 }))
+	})
+}
+
+/** A fresh home to install into, its profile left alone. */
+const env = () => {
+	const home = scratch("home")
+	return { HOME: home, SHOP_INSTALL_DIR: join(home, "bin"), SHOP_NO_MODIFY_PATH: "1" }
+}
+
+/** A loopback server answering `served`'s paths, its base URL once listening. */
+async function serve(served: Map<string, Buffer>): Promise<{ server: Server; base: string }> {
+	const server = createServer((request, response) => {
+		const body = served.get(request.url ?? "")
+		response.writeHead(body === undefined ? 404 : 200)
+		response.end(body)
+	})
+	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
+	const address = server.address()
+	return { base: `http://127.0.0.1:${typeof address === "object" && address !== null ? address.port : 0}`, server }
+}
+
+describe.skipIf(!TOOLS || !GO || !LINUX)("install.sh against a snapshot release (release program D8)", () => {
+	let server: Server
+	let base = ""
+	let served = new Map<string, Buffer>()
+
+	beforeAll(async () => {
+		served = snapshotRelease()
+		;({ base, server } = await serve(served))
+	}, 300_000)
+	afterAll(() => new Promise<void>((resolve) => server.close(() => resolve())))
+
+	const script = () =>
+		generateInstallers(installerConfig({ bin: "shop", installUrl: base, prefix: "SHOP", repo: "acme/shop" }, base))
+			.sh ?? ""
+
+	it(
+		"installs this host's binary from the latest release after its sha256 check",
+		{ timeout: SPAWN_TIMEOUT },
+		async () => {
+			const target = env()
+			const ran = await runSh(script(), target)
+			expect([ran.status, ran.out.includes("Verified"), existsSync(join(target.SHOP_INSTALL_DIR, "shop"))]).toEqual([
+				0,
+				true,
+				true,
 			])
 		},
 	)
 
-	it.skipIf(!TOOLS)("parses under sh -n and passes shellcheck", { timeout: SPAWN_TIMEOUT }, () => {
-		const file = join(scratch("check"), "install.sh")
-		writeFileSync(file, scripts().sh)
-		const [parsed, checked] = [
-			spawnSync("sh", ["-n", file], { encoding: "utf8" }),
-			spawnSync(toolBin("shellcheck"), ["-s", "sh", file], { encoding: "utf8" }),
-		]
-		expect([parsed.status, parsed.stderr, checked.status, checked.stdout]).toEqual([0, "", 0, ""])
-	})
-})
-
-describe("install.sh's hardening (phase g)", () => {
-	it("leaves no temp dir behind, after an install or a refusal", { timeout: SPAWN_TIMEOUT }, async () => {
-		const archive = tarGz()
-		server.set(release({ [LINUX]: archive }))
-		const installed = await runSh(scripts().sh, { SHOP_INSTALL_BASE: server.url })
-		server.set(release({ [LINUX]: archive }, { tampered: LINUX }))
-		const refused = await runSh(scripts().sh, { SHOP_INSTALL_BASE: server.url })
-		expect([installed.ran.status, installed.left, refused.ran.status, refused.left]).toEqual([0, [], 1, []])
-	})
-
-	it(
-		"stops at a failing step under set -eu: an install dir it cannot make is no install",
-		{ timeout: SPAWN_TIMEOUT },
-		async () => {
-			server.set(release({ [LINUX]: tarGz() }))
-			const parent = scratch("readonly")
-			chmodSync(parent, 0o500)
-			const ran = await runSh(scripts().sh, { SHOP_INSTALL_BASE: server.url, SHOP_INSTALL_DIR: join(parent, "bin") })
-			chmodSync(parent, 0o700)
-			expect([ran.ran.status === 0, ran.ran.stdout]).toEqual([false, ""])
-		},
-	)
-
-	it("evaluates no string: no eval in install.sh, no Invoke-Expression in install.ps1", () => {
-		const { ps1, sh } = scripts()
-		expect([/\beval\b/.test(sh), /Invoke-Expression|\biex\b/i.test(ps1)]).toEqual([false, false])
+	it("refuses an archive whose checksums.txt entry does not match", { timeout: SPAWN_TIMEOUT }, async () => {
+		const path = `/download/${TAG}/checksums.txt`
+		const good = served.get(path) ?? Buffer.alloc(0)
+		const archive = `shop_linux_${ARCH}.tar.gz`
+		served.set(
+			path,
+			Buffer.from(
+				good
+					.toString()
+					.split("\n")
+					.map((line) => (line.endsWith(archive) ? `${"0".repeat(64)}  ${archive}` : line))
+					.join("\n"),
+			),
+		)
+		try {
+			const target = env()
+			const ran = await runSh(script(), target)
+			expect([
+				ran.status,
+				ran.out.includes("checksum mismatch"),
+				existsSync(join(target.SHOP_INSTALL_DIR, "shop")),
+			]).toEqual([1, true, false])
+		} finally {
+			served.set(path, good)
+		}
 	})
 })

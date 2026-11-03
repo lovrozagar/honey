@@ -41,6 +41,58 @@ describe("a boolean target option takes no value (bit 22)", () => {
 	})
 })
 
+describe("the cli target's release options (release program D7, D8)", () => {
+	const base = ["--spec", "s.json", "--out", "o", "--target", "cli"]
+
+	it("takes each channel's value under its generator's name, and --cli-aur as a switch", () => {
+		expect(
+			parseGenerate([
+				...base,
+				"--cli-repo",
+				"acme/shop",
+				"--cli-description",
+				"Shop",
+				"--cli-homepage",
+				"https://shop.example.com",
+				"--cli-license",
+				"MIT",
+				"--cli-maintainer",
+				"Acme <ops@example.com>",
+				"--cli-install-url",
+				"https://shop.example.com/cli",
+				"--cli-homebrew-tap",
+				"acme/homebrew-tap",
+				"--cli-scoop-bucket",
+				"acme/scoop-bucket",
+				"--cli-winget-publisher",
+				"Acme",
+				"--cli-winget-fork",
+				"acme/winget-pkgs",
+				"--cli-packages",
+				"deb,rpm",
+				"--cli-aur",
+			]).options.cli,
+		).toEqual({
+			aur: "true",
+			description: "Shop",
+			homebrewTap: "acme/homebrew-tap",
+			homepage: "https://shop.example.com",
+			installUrl: "https://shop.example.com/cli",
+			license: "MIT",
+			maintainer: "Acme <ops@example.com>",
+			packages: "deb,rpm",
+			repo: "acme/shop",
+			scoopBucket: "acme/scoop-bucket",
+			wingetFork: "acme/winget-pkgs",
+			wingetPublisher: "Acme",
+		})
+	})
+
+	it("refuses a value after --cli-aur, as every switch does", () => {
+		expect(refused([...base, "--cli-aur", "yes"])).toBe('unexpected argument "yes"')
+	})
+})
+
 describe("generate's arguments (phase h)", () => {
 	it("refuses an unknown flag, a missing value, a stray argument, an unknown target and an option no target asked for", () => {
 		const base = ["--spec", "s.json", "--out", "o"]

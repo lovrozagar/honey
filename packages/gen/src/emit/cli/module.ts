@@ -15,20 +15,19 @@ import { compareCodeUnits } from "../shared/lang.ts"
 import { generateGoSdk, goCallPlans, WEBSOCKET, WEBSOCKET_SUM } from "../go/sdk.ts"
 import { commandTree } from "./commands.ts"
 import { discoveryEntries } from "./discovery.ts"
-import { installSh } from "./install.ts"
-import { installPs1 } from "./install-ps1.ts"
+import { installers } from "./install.ts"
 import { cmdFiles } from "./layout.ts"
-import { goreleaserFile, releaseWorkflow } from "./release.ts"
+import { goreleaserFile, type ReleaseOptions, releaseWorkflow, REPO, resolvedRelease } from "./release.ts"
 import { skillFile, skillPath } from "./skills.ts"
 
-export type GoCliOptions = {
+export type GoCliOptions = ReleaseOptions & {
 	/** the binary and root command name: lowercase words joined by `-`, at most 64 characters; the title's, else `api` */
 	readonly binaryName?: string
 	/** the module path go.mod declares, a domain first; `example.com/<binaryName>` by default */
 	readonly modulePath?: string
 	/** the environment variables' prefix: uppercase words joined by `_`; the binary name's by default */
 	readonly envPrefix?: string
-	/** the GitHub repository the release is published to, `owner/name`; none by default (install scripts then need a base) */
+	/** the GitHub repository the release is published to, `owner/name`; none by default (then no install scripts) */
 	readonly repo?: string
 	/**
 	 * the base URL the binary calls by default, absolute; the document's first server by default. A document
@@ -90,9 +89,6 @@ const BINARY_NAME = /^(?=.{1,64}$)[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
 const MODULE_PATH =
 	/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+(?:\/[A-Za-z0-9_~-](?:[A-Za-z0-9._~-]*[A-Za-z0-9_~-])?)*$/
 const ENV_PREFIX = /^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*$/
-/* a GitHub repository: its owner 1 to 39 letters, digits and single inner hyphens; its name 1 to 100 of letters,
- * digits, `.`, `_` and `-`, not `.` or `..` and not ending in `.git` */
-const REPO = /^[A-Za-z0-9](?:-?[A-Za-z0-9]){0,38}\/(?!\.\.?$)(?![\s\S]*\.git$)[A-Za-z0-9._-]{1,100}$/
 /* a base URL a CLI can call: a scheme and a host, never a path alone */
 const ABSOLUTE_URL = /^https?:\/\/[^\s/]+/
 
@@ -123,7 +119,7 @@ function baseUrlOf(baseUrl: string | undefined, servers: readonly string[]): str
 function resolved(
 	options: GoCliOptions,
 	title: string | undefined,
-): Required<Omit<GoCliOptions, "repo" | "baseUrl">> & Pick<GoCliOptions, "repo" | "baseUrl"> {
+): Required<Pick<GoCliOptions, "binaryName" | "envPrefix" | "modulePath">> & Pick<GoCliOptions, "repo" | "baseUrl"> {
 	const binaryName = options.binaryName ?? binaryNameOf(title)
 	if (!BINARY_NAME.test(binaryName)) refuse("binaryName", binaryName)
 	const modulePath = options.modulePath ?? `example.com/${binaryName}`
@@ -199,7 +195,16 @@ export function generateGoCli(document: Record<string, unknown>, options: GoCliO
 	const ir = toIR(document as OpenApiDocument, { deriveOperationIds: true })
 	const { baseUrl, binaryName, envPrefix, modulePath, repo } = resolved(options, ir.info.title)
 	const server = baseUrlOf(baseUrl, ir.servers)
-	const install = { bin: binaryName, prefix: envPrefix, repo }
+	const release = resolvedRelease(options, repo)
+	const scripts =
+		release === undefined
+			? {}
+			: installers({
+					bin: binaryName,
+					installUrl: release.installUrl,
+					prefix: envPrefix,
+					repo: `${release.owner}/${release.name}`,
+				})
 	const sdk = embeddedSdk(document, modulePath)
 	const model = sdkModel(ir)
 	const nodes = commandTree(model.ops, goCallPlans(document))
@@ -209,10 +214,9 @@ export function generateGoCli(document: Record<string, unknown>, options: GoCliO
 			...moduleFiles(modulePath, sdk.websocket),
 			"main.go": mainFile(modulePath, binaryName),
 			[skillPath(binaryName)]: skillFile(binaryName, app.short, envPrefix, model.ops),
-			".goreleaser.yaml": goreleaserFile(binaryName, modulePath, repo),
-			".github/workflows/release.yml": releaseWorkflow(binaryName),
-			"install.sh": installSh(install),
-			"install.ps1": installPs1(install),
+			".goreleaser.yaml": goreleaserFile(binaryName, modulePath, release),
+			".github/workflows/release.yml": releaseWorkflow(binaryName, release),
+			...scripts,
 			...cmdFiles(app, ir, nodes, discoveryEntries(nodes, model)),
 			...runtimeFiles(sdk.websocket),
 			...sdk.files,

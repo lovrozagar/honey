@@ -115,7 +115,8 @@ export function generateFlags(source: string): { flags: string[]; targets: strin
 	const table = /const TARGETS = \{(.*?)\n\} as const/s.exec(source)?.[1] ?? ""
 	const kebab = (key: string) => key.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)
 	const targets: string[] = []
-	const flags = [...table.matchAll(/^\t(\w+): \[(.*)\],$/gm)].flatMap(([, target, options]) => {
+	/* a target's options on one line, or wrapped one per line once the formatter breaks a long list */
+	const flags = [...table.matchAll(/^\t(\w+): \[([^\]]*)\],$/gm)].flatMap(([, target, options]) => {
 		targets.push(target as string)
 		return [...(options as string).matchAll(/"(\w+)"/g)].map(([, key]) => `--${target}-${kebab(key as string)}`)
 	})

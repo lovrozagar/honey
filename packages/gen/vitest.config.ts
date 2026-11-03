@@ -16,7 +16,8 @@ export const HARNESS = [
  */
 export const GO = [
 	"src/emit/go/**/*.test.ts",
-	"src/emit/cli/**/*.test.ts",
+	/* channels.test.ts parses the release options and renders YAML, Node alone: it runs in unit */
+	"src/emit/cli/**/!(channels).test.ts",
 	"src/cli.test.ts",
 	"scripts/sdk-budget.cli.test.ts",
 	"src/emit/shared/escape.test.ts",

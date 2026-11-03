@@ -8,6 +8,8 @@ honey ships as two packages now: [`@lovrozagar/honey`](https://www.npmjs.com/pac
 
 ### Breaking
 
+- **The generated CLI's install scripts come from installgen.** They verify `checksums.txt` against the release workflow on that exact tag, read the latest tag from the release's `version.txt`, and install to `~/.local/bin`. A CLI generated without `--cli-repo` has no install scripts, and `<PREFIX>_INSTALL_BASE` and `<PREFIX>_INSTALL_ARCH` are gone; `<PREFIX>_VERSION`, `<PREFIX>_INSTALL_DIR` and `<PREFIX>_INSTALL_VERIFY=require` stay, and `<PREFIX>_NO_MODIFY_PATH=1` is new.
+
 Every deliberate change has its before and after in [the migration guide](https://github.com/lovrozagar/honey/blob/main/docs/migration.md), one section each. The headlines:
 
 - **Code generation moved to `@lovrozagar/honey-clients`.** `@lovrozagar/honey/codegen` is gone, and its generators are the `honey-clients generate` command and its module API. `--app` takes a module that exports the app, since v1 never serves on import. Only the document-level `mergeSpecs` and `scopeSpec` are removed outright; `mergeTree` over route trees stays.
@@ -21,6 +23,8 @@ Every deliberate change has its before and after in [the migration guide](https:
 - **Logging.** `LoggerInstance` is `Logger`, and the `logger()` middleware is the `requestLog` setting. The default logger writes through the console on Workers and to stdout on Node and Bun, and under `NODE_ENV=test` it logs errors rather than nothing. The generated `RouteCtx`'s meta is the meta type the app declares, so a service typed with it accepts the handler's ctx.
 
 ### Added
+
+- **The generated CLI publishes to package managers.** `--target cli` takes `--cli-homebrew-tap`, `--cli-scoop-bucket`, `--cli-winget-fork` with `--cli-winget-publisher`, `--cli-aur` and `--cli-packages deb,rpm,apk`, with the metadata they show (`--cli-description`, `--cli-homepage`, `--cli-license`, `--cli-maintainer`); its goreleaser config adds a Homebrew cask, a Scoop manifest, a winget pull request, an AUR `-bin` package and Linux packages, and its release workflow passes each channel's secret by name. Each release also uploads `version.txt` and, unless `--cli-install-url` serves them elsewhere, both install scripts.
 
 - **Tokens with no JWT library.** `@lovrozagar/honey/jwt` signs and verifies compact JWS tokens on WebCrypto, so Node, Bun and Workers run the same code: `signJwt`, `verifyJwt`, `remoteJwks` for an issuer's keys, `decodeJwtPayload`, `importPkcs8` and `isJwsAlgorithm`. `exp` is required unless you opt out, and `jwks` requires `audience` and `issuer`.
 - **Queues on every runtime.** `queueContract` and `defineConsumer` from `@lovrozagar/honey/queue` type a queue once. `workersQueue` consumes it from a binding, reporting a named dead-letter queue without holding `max_retries`, and `serveQueue` consumes a leased `QueueStore` on Node and Bun. A body past its contract retries into the dead-letter path with its body, never acked away.

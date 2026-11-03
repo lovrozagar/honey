@@ -10,7 +10,24 @@
  * `--ts-tanstack-query` is the one switch that takes no value: it turns the TanStack Query adapter on.
  */
 const TARGETS = {
-	cli: ["baseUrl", "binaryName", "envPrefix", "modulePath", "repo"],
+	cli: [
+		"aur",
+		"baseUrl",
+		"binaryName",
+		"description",
+		"envPrefix",
+		"homebrewTap",
+		"homepage",
+		"installUrl",
+		"license",
+		"maintainer",
+		"modulePath",
+		"packages",
+		"repo",
+		"scoopBucket",
+		"wingetFork",
+		"wingetPublisher",
+	],
 	csharp: ["clientName", "packageId", "rootNamespace", "version"],
 	go: ["modulePath"],
 	java: ["artifactId", "clientName", "groupId", "packageName", "version"],
@@ -26,7 +43,7 @@ const TARGETS = {
  * `packages/core/tests/docs/readmes.test.ts` reads to hold every flag to its README row; this table only
  * says how one is parsed. Bare is `true` and an inline `true`/`false` is read, exactly as `--watch` is.
  */
-const BOOLEAN_OPTIONS = { ts: ["tanstackQuery"] } as const satisfies Partial<
+const BOOLEAN_OPTIONS = { cli: ["aur"], ts: ["tanstackQuery"] } as const satisfies Partial<
 	Record<keyof typeof TARGETS, readonly string[]>
 >
 

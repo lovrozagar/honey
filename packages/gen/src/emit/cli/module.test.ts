@@ -142,7 +142,7 @@ describe("generateGoCli: the zero-op module's files", () => {
 
 	// v0: 3deb626c3f
 	// v0: 3d57efd1be
-	it("ships the CLI runtime under internal/cli and the API's Go SDK under internal/sdk, its module files the CLI's", () => {
+	it("ships the CLI runtime under internal/cli and the API's Go SDK under internal/sdk, its module files the CLI's, and no install scripts without a repository", () => {
 		const sdk = Object.keys(generateGoSdk(ZERO).files).filter((name) => name !== "go.mod" && name !== "go.sum")
 		expect(Object.keys(zero()).sort()).toEqual(
 			[
@@ -153,8 +153,6 @@ describe("generateGoCli: the zero-op module's files", () => {
 				"cmd/root.go",
 				"go.mod",
 				"go.sum",
-				"install.ps1",
-				"install.sh",
 				...CLI_RUNTIME.filter((name) => name !== "socket.go").map((name) => `internal/cli/${name}`),
 				"main.go",
 				"skills/anyrow/SKILL.md",

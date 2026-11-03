@@ -41,6 +41,7 @@
 		"type:check": "tsc --noEmit -p tsconfig.json"
 	},
 	"dependencies": {
+		"@lovrozagar/installgen": "0.3.0",
 		"jiti": "2.7.0"
 	},
 	"devDependencies": {
