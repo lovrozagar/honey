@@ -50,6 +50,36 @@ describe("HoneyMeta", () => {
 	})
 })
 
+describe("meta.extensions: the x- keys the app's meta type declares", () => {
+	type RouteMeta = { extensions?: { "x-after"?: string; "x-before"?: string } }
+
+	it("refuses a key the declared extensions lack, on a route and on the chain, wrapped in HoneyMeta or not", () => {
+		expectTypeOf<HoneyMeta<RouteMeta>["extensions"]>().toEqualTypeOf<RouteMeta["extensions"]>()
+		for (const app of [honey<{}>().metaType<RouteMeta>(), honey<{}>().metaType<HoneyMeta<RouteMeta>>()]) {
+			app
+				.get("/a")
+				.meta({ extensions: { "x-before": "table.delete" } })
+				.handler((ctx) => ctx.res.text("ok", "a"))
+			app
+				.get("/b")
+				// @ts-expect-error "x-befor" is not in RouteMeta["extensions"]
+				.meta({ extensions: { "x-befor": "table.delete" } })
+				.handler((ctx) => ctx.res.text("ok", "b"))
+			// @ts-expect-error "x-befor" is not in RouteMeta["extensions"]
+			app.meta({ extensions: { "x-befor": "table.delete" } })
+		}
+	})
+
+	it("keeps every x- key open while the app declares none", () => {
+		expectTypeOf<HoneyMeta["extensions"]>().toEqualTypeOf<Record<`x-${string}`, unknown> | undefined>()
+		honey<{}>()
+			.metaType<{ worker?: string }>()
+			.get("/c")
+			.meta({ extensions: { "x-anything": 1 } })
+			.handler((ctx) => ctx.res.text("ok", "c"))
+	})
+})
+
 const withDb: MiddlewareFn<{}, DbCtx> = (_ctx, next) => next({ db: { query: () => [] } })
 const withAuth: MiddlewareFn<DbCtx & { req: Request }, AuthCtx> = (_ctx, next) =>
 	next({ orgId: "org-1", userId: "u-1" })

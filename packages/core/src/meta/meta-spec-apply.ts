@@ -84,12 +84,23 @@ function writeExtensions(extensions: unknown, args: ApplyMetaSpecArgs, write: (k
 	if (extensions === null || typeof extensions !== "object" || Array.isArray(extensions)) return
 	for (const [key, value] of Object.entries(extensions)) {
 		if (value === undefined) continue
-		if (key.startsWith("x-")) write(key, value)
-		else {
+		if (key.startsWith("x-")) {
+			undeclared(key, args)
+			write(key, value)
+		} else {
 			const message = `${args.method} ${args.path} — meta.extensions may only set "x-" extensions, got "${key}"`
 			args.diagnostics.add("UNKNOWN_FIELD", "error", message)
 		}
 	}
+}
+
+/** Under a strict policy, an `x-` key neither its `extensions` list nor an entry declares is reported once. */
+function undeclared(key: string, { diagnostics, method, path, spec }: ApplyMetaSpecArgs) {
+	if (spec.strict === "off" || spec.extensions.has(key) || diagnostics.reportedExtensions.has(key)) return
+	diagnostics.reportedExtensions.add(key)
+	const hint = "list it in the metaSpec's `extensions`, or fix its spelling"
+	const message = `meta.extensions key "${key}" (first seen on ${method} ${path}) is not declared — ${hint}`
+	diagnostics.add("UNDECLARED_EXTENSION", spec.strict, message)
 }
 
 /** Under a declared policy, every meta key needs an entry: a key without one is reported once. */

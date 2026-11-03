@@ -87,6 +87,8 @@ export type CompiledEntry = SchemaRead & {
 
 export type CompiledMetaSpec = {
 	readonly entries: readonly CompiledEntry[]
+	/** the `x-` keys `meta.extensions` may set: the policy's list, and every `x-` key an entry writes */
+	readonly extensions: ReadonlySet<string>
 	/** meta keys with an entry or hidden by design: what totality checks against */
 	readonly known: ReadonlySet<string>
 	/** whether any entry reads schemas, so a document builds the lookup only when needed */
@@ -239,8 +241,10 @@ export function compileMetaSpec(config: MetaSpecConfig | null, diagnostics: Meta
 	for (const { key, resolution, section } of config?.conflicts ?? []) {
 		diagnostics.add("SUBAPP_ENTRY_CONFLICT", "warn", `${section}."${key}": ${CONFLICT[resolution]}`)
 	}
+	const written = entries.flatMap((entry) => entry.keys).filter((key) => key.startsWith("x-"))
 	return {
 		entries,
+		extensions: new Set([...(config?.extensions ?? []), ...written]),
 		known,
 		needsSchemas: schema.length > 0,
 		profiles: config?.profiles ?? {},

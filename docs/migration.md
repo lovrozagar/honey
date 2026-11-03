@@ -1010,3 +1010,28 @@ import { defineErrors } from "@lovrozagar/honey"
 
 const errors = defineErrors({ org_limit_reached: "forbidden" })
 ```
+
+## `meta.extensions` keys are checked
+
+A meta type that declares `extensions` now replaces honey's open `Record<\`x-${string}\`, unknown>`, so a misspelled
+key fails to compile on a route or a chain `.meta()`. At generate time a strict metaSpec (the default once you declare
+one) reports an `x-`key that neither its new`extensions`list nor one of its entries names. List the keys your routes
+set, or set`strict: "warn"` while you migrate.
+
+```ts v0
+app.metaSpec({ meta: { worker: "x-worker" } })
+app.get("/tables/:id").meta({ extensions: { "x-befor": "table.delete" } })
+```
+
+```ts
+import { honey } from "@lovrozagar/honey"
+
+type RouteMeta = { extensions?: { "x-before"?: string }; worker?: string }
+
+const app = honey().metaType<RouteMeta>()
+app.metaSpec({ extensions: ["x-before"], meta: { worker: "x-worker" } })
+app
+	.delete("/tables/:id")
+	.meta({ extensions: { "x-before": "table.delete" } })
+	.handler((ctx) => ctx.res.text("ok", "deleted"))
+```

@@ -26,6 +26,7 @@ export type MetaSpecDiagnosticCode =
 	| "SUBAPP_ENTRY_CONFLICT"
 	| "UNKNOWN_FIELD"
 	| "UNKNOWN_PROFILE"
+	| "UNDECLARED_EXTENSION"
 	| "UNKNOWN_SECURITY_SCHEME"
 	| "UNSUPPORTED_VERSION"
 	| "UNUSED_TAG"
@@ -45,6 +46,8 @@ export class MetaSpecDiagnostics {
 	readonly list: MetaSpecDiagnostic[] = []
 	/** meta keys already reported as unmapped: once, not once per route */
 	readonly reportedMissing = new Set<string>()
+	/** `meta.extensions` keys already reported as undeclared: once, not once per route */
+	readonly reportedExtensions = new Set<string>()
 	readonly #seen = new Set<string>()
 
 	add(code: MetaSpecDiagnosticCode, level: "error" | "warn", message: string): void {

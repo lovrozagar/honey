@@ -109,6 +109,11 @@ export type MetaSpecMergeConflict = {
 
 /** The parts of a policy, with the type of its meta entries left to the caller. */
 type Sections<TMeta> = {
+	/**
+	 * the `x-` keys a route's `meta.extensions` may set besides those an entry writes; under a strict policy any other
+	 * is reported, as an error or a warning as `strict` says
+	 */
+	readonly extensions?: readonly `x-${string}`[]
 	/** one entry for each route meta key */
 	readonly meta?: TMeta
 	/** per-document filters, by profile name */
@@ -175,6 +180,7 @@ export function mergeMetaSpec(own: MetaSpecConfig | null, sub: MetaSpecConfig | 
 	conflicts.push(...overlaps("schema", own.schema, sub.schema), ...overlaps("profiles", own.profiles, sub.profiles))
 	return {
 		conflicts,
+		extensions: [...new Set([...(own.extensions ?? []), ...(sub.extensions ?? [])])],
 		meta,
 		profiles: { ...sub.profiles, ...own.profiles },
 		schema: { ...sub.schema, ...own.schema },

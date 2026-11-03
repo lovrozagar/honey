@@ -168,8 +168,9 @@ export class Honey<
 	 * values reach the routes' types with their literal types (`internal: true`, `worker: "extract"`).
 	 */
 	meta<
-		const TValues extends HoneyMeta &
-			([DeclaredMeta<TMeta>] extends [never] ? Record<string, unknown> : Partial<DeclaredMeta<TMeta>>),
+		const TValues extends HoneyMeta<
+			[DeclaredMeta<TMeta>] extends [never] ? Record<string, unknown> : Partial<DeclaredMeta<TMeta>>
+		>,
 	>(
 		values: TValues,
 	): Honey<

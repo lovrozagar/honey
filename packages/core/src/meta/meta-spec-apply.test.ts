@@ -174,6 +174,41 @@ describe("meta.extensions: the escape hatch", () => {
 	})
 })
 
+describe("meta.extensions under a policy: only the x- keys it declares", () => {
+	const meta = { extensions: { "x-a": 1, "x-befor": "table.delete", "x-before": "table.delete" } }
+
+	it("reports a key neither its extensions list nor an entry declares: an error by default, a warning under warn", () => {
+		const declared = { extensions: ["x-before"], meta: { a: "x-a" } } satisfies MetaSpecConfig
+		expect([
+			apply(declared, meta),
+			apply({ ...declared, strict: "warn" }, meta).codes,
+			apply({ ...declared, strict: "off" }, meta).codes,
+			apply(null, meta).codes,
+		]).toEqual([
+			{
+				codes: ["error UNDECLARED_EXTENSION"],
+				operation: { "x-a": 1, "x-befor": "table.delete", "x-before": "table.delete" },
+			},
+			["warn UNDECLARED_EXTENSION"],
+			[],
+			[],
+		])
+	})
+
+	it("names the key and the first route, once across routes", () => {
+		const diagnostics = new MetaSpecDiagnostics()
+		const spec = compileMetaSpec({ extensions: ["x-before"], meta: {} }, diagnostics)
+		for (const path of ["/a", "/b"]) {
+			const run = { diagnostics, filter: () => true, kind: "http", meta, method: "get", operation: {}, path } as const
+			applyMetaSpec({ ...run, profile: "default", spec })
+		}
+		expect(diagnostics.list.map(({ message }) => message)).toEqual([
+			'meta.extensions key "x-a" (first seen on get /a) is not declared — list it in the metaSpec\'s `extensions`, or fix its spelling',
+			'meta.extensions key "x-befor" (first seen on get /a) is not declared — list it in the metaSpec\'s `extensions`, or fix its spelling',
+		])
+	})
+})
+
 describe("profiles: one app, several documents", () => {
 	const config: MetaSpecConfig = {
 		meta: { cost: "x-cost", plan: "x-plan", team: { key: "x-team", profiles: ["internal"] } },

@@ -17,10 +17,20 @@ describe("resolvedStrictness: what a policy runs with", () => {
 describe("mergeMetaSpec: a mounted sub-app's policy under its parent's", () => {
 	// v0: 7482301e43
 	// v0: eff8a5bab5
-	it("fills gaps from the sub, lets the parent win a disagreement and records it", () => {
+	it("fills gaps from the sub, lets the parent win a disagreement and records it, and joins the extension lists", () => {
 		const merged = mergeMetaSpec(
-			{ meta: { a: "x-parent" }, profiles: { p: { include: ["x-a"] } }, schema: { s: { key: "x-s" } } },
-			{ meta: { a: "x-sub", b: "x-b" }, profiles: { p: {}, q: {} }, schema: { s: { key: "x-t" } } },
+			{
+				extensions: ["x-own", "x-both"],
+				meta: { a: "x-parent" },
+				profiles: { p: { include: ["x-a"] } },
+				schema: { s: { key: "x-s" } },
+			},
+			{
+				extensions: ["x-both", "x-sub"],
+				meta: { a: "x-sub", b: "x-b" },
+				profiles: { p: {}, q: {} },
+				schema: { s: { key: "x-t" } },
+			},
 		)
 		expect(merged).toEqual({
 			conflicts: [
@@ -28,6 +38,7 @@ describe("mergeMetaSpec: a mounted sub-app's policy under its parent's", () => {
 				{ key: "s", resolution: "parent", section: "schema" },
 				{ key: "p", resolution: "parent", section: "profiles" },
 			],
+			extensions: ["x-own", "x-both", "x-sub"],
 			meta: { a: "x-parent", b: "x-b" },
 			profiles: { p: { include: ["x-a"] }, q: {} },
 			schema: { s: { key: "x-s" } },

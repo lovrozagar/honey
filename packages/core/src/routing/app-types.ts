@@ -20,16 +20,16 @@ export type HoneyCtx<TEnv = Record<string, unknown>, TMeta = Record<string, unkn
 	readonly meta: Readonly<HoneyMeta<TMeta>>
 }
 
-/**
- * Route meta: the built-in keys every route accepts, and the app's own `T`. Name it wherever you declare route meta,
- * as in `app.metaType<HoneyMeta<RouteMeta>>()`.
- */
-export type HoneyMeta<T = {}> = {
+/** The route meta keys every route accepts without declaring them. */
+type BuiltinMeta = {
 	/** Marks the operation deprecated in the generated OpenAPI document. */
 	deprecated?: boolean
 	/** Longer description of the operation, emitted as the OpenAPI `description`. */
 	description?: string
-	/** Escape hatch: emitted verbatim at the highest precedence. */
+	/**
+	 * Escape hatch: `x-` keys emitted verbatim at the highest precedence. Any `x-` key until the app's meta type
+	 * declares its own `extensions`; then only those, and a strict metaSpec reports one its `extensions` list lacks.
+	 */
 	extensions?: Record<`x-${string}`, unknown>
 	/** an internal route never appears in generated artifacts */
 	internal?: boolean
@@ -60,7 +60,14 @@ export type HoneyMeta<T = {}> = {
 	summary?: string
 	/** Tag or tags that group the operation in the generated OpenAPI document. */
 	tags?: string | string[]
-} & T
+}
+
+/**
+ * Route meta: the built-in keys every route accepts, and the app's own `T`; an `extensions` that `T` declares replaces
+ * the built-in one, so a misspelled `x-` key fails to compile. Name it wherever you declare route meta, as in
+ * `app.metaType<HoneyMeta<RouteMeta>>()`.
+ */
+export type HoneyMeta<T = {}> = Omit<BuiltinMeta, Extract<keyof T, "extensions">> & T
 
 /** A middleware scoped by path at the type level: what it adds to routes under `path`. */
 export type ScopedMwEntry = {

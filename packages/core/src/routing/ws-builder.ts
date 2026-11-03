@@ -79,9 +79,9 @@ function upgrader(callbacks: WSHandler<unknown>, policy: WSOriginPolicy | null, 
 type HttpOnlyMeta = "deprecated" | "invalidate" | "mcp" | "security"
 
 /** What a WebSocket route's `.meta()` takes: an HTTP route's meta, the HTTP-only builtins refused. */
-export type WsMeta<TMeta = never> = Omit<HoneyMeta, HttpOnlyMeta> & {
+export type WsMeta<TMeta = never> = Omit<HoneyMeta<[TMeta] extends [never] ? {} : TMeta>, HttpOnlyMeta> & {
 	readonly [K in HttpOnlyMeta]?: never
-} & ([TMeta] extends [never] ? {} : TMeta)
+}
 
 /**
  * Builds a WebSocket route: declare errors, input, meta, origins and middleware, then register it with `.handler()`.
