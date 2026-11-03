@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs"
 import { describe, expect, it } from "vitest"
 import { sanitizeOpenApiSpec } from "./sanitize-spec.ts"
 import type { SchemaSpec } from "./slots.ts"
@@ -51,15 +52,110 @@ describe("sanitizeOpenApiSpec: security a published document leaves out", () => 
 describe("sanitizeOpenApiSpec: operation extensions", () => {
 	// v0: fe9a9c69f1
 	// v0: cd67ad4f4f
-	it("drops every x- key of an operation, or only the ones named", () => {
-		const operation = { operationId: "a", "x-internal": true, "x-invalidate": ["b"] }
+	it("drops every x- key of an operation honey does not read, or only the ones named", () => {
+		const operation = { operationId: "a", "x-admin": true, "x-internal": true, "x-invalidate": ["b"] }
 		expect([
 			sanitizeOpenApiSpec(spec(operation), { stripXExtensions: true }).paths["/a"]?.get,
 			sanitizeOpenApiSpec(spec(operation), { stripXExtensions: ["x-invalidate"] }).paths["/a"]?.get,
 		]).toEqual([
-			{ operationId: "a", responses: {} },
-			{ operationId: "a", responses: {}, "x-internal": true },
+			{ operationId: "a", responses: {}, "x-invalidate": ["b"] },
+			{ operationId: "a", responses: {}, "x-admin": true, "x-internal": true },
 		])
+	})
+
+	it("keeps the keys honey and its generators read: on operations, responses, parameters and schemas", () => {
+		const operation = {
+			parameters: [{ in: "path", name: "rest", schema: { type: "string" }, "x-honey-wildcard": true }],
+			responses: { "409": { description: "taken", "x-honey-error": true } },
+			"x-honey-errors": { taken: { status: 409 } },
+			"x-honey-route": "GET /a",
+			"x-mcp": true,
+		}
+		const file = { properties: { data: { type: "string" } }, type: "object", "x-mcp-file": {} }
+		const out = sanitizeOpenApiSpec(spec(operation, { components: { schemas: { File: file } } }), {
+			stripXExtensions: true,
+		})
+		expect([out.paths["/a"]?.get, out.components?.schemas]).toEqual([operation, { File: file }])
+	})
+})
+
+describe("sanitizeOpenApiSpec: extensions inside schemas", () => {
+	it("drops the x- keys honey does not read inside every schema, and never a property or header named x-", () => {
+		const consumer = { type: "string", "x-comb-text": "t" }
+		const body = {
+			additionalProperties: false,
+			items: { ...consumer },
+			properties: { "x-name": { ...consumer }, nested: { allOf: [{ ...consumer }], type: "object" } },
+			type: "object",
+			"x-comb": { max: 1 },
+		}
+		const operation = {
+			parameters: [{ in: "query", name: "q", schema: { ...consumer }, "x-comb-minimum": 1 }],
+			requestBody: { content: { "application/json": { schema: body } } },
+			responses: {
+				"200": {
+					content: { "application/json": { schema: { ...consumer } } },
+					description: "ok",
+					headers: { "x-total": { schema: { ...consumer } } },
+					"x-comb-transform": "t",
+				},
+			},
+		}
+		const out = sanitizeOpenApiSpec(spec(operation, { components: { schemas: { T: { ...consumer } } } }), {
+			stripXExtensions: true,
+		})
+		const plain = { type: "string" }
+		expect([out.paths["/a"]?.get, out.components?.schemas]).toEqual([
+			{
+				parameters: [{ in: "query", name: "q", schema: plain }],
+				requestBody: {
+					content: {
+						"application/json": {
+							schema: {
+								additionalProperties: false,
+								items: plain,
+								properties: { nested: { allOf: [plain], type: "object" }, "x-name": plain },
+								type: "object",
+							},
+						},
+					},
+				},
+				responses: {
+					"200": {
+						content: { "application/json": { schema: plain } },
+						description: "ok",
+						headers: { "x-total": { schema: plain } },
+					},
+				},
+			},
+			{ T: plain },
+		])
+	})
+})
+
+describe("sanitizeOpenApiSpec: what honey's generators read", () => {
+	it("keeps every x- key honey's generators read off an operation, a response, a parameter or a schema", () => {
+		const read = new Set<string>()
+		for (const file of ["../../../gen/src/ir/slots.ts", "../../../gen/src/emit/mcp/files.ts"])
+			for (const [, key] of readFileSync(new URL(file, import.meta.url), "utf8").matchAll(/"(x-[a-z-]+)"/g))
+				read.add(key as string)
+		const marked = Object.fromEntries([...read].map((key) => [key, true]))
+		const out = sanitizeOpenApiSpec(
+			spec(
+				{ ...marked, parameters: [{ in: "query", name: "q", ...marked }], responses: { "200": { ...marked } } },
+				{
+					components: { schemas: { S: { ...marked } } },
+				},
+			),
+			{ stripXExtensions: true },
+		)
+		const get = out.paths["/a"]?.get as Record<string, Record<string, unknown>[] & Record<string, unknown>>
+		expect([
+			read.size > 5,
+			Object.keys(get).filter((key) => key.startsWith("x-")).length,
+			out.components?.schemas,
+		]).toEqual([true, read.size, { S: marked }])
+		expect([get.parameters?.[0], get.responses?.["200"]]).toEqual([{ in: "query", name: "q", ...marked }, marked])
 	})
 })
 
@@ -86,5 +182,6 @@ describe("sanitizeOpenApiSpec: what it leaves alone", () => {
 		expect(sanitizeOpenApiSpec(bare, { stripSecurityRequirements: ["jwt"], stripSecuritySchemes: ["jwt"] })).toEqual(
 			bare,
 		)
+		expect(sanitizeOpenApiSpec(bare, { stripXExtensions: true })).toEqual(bare)
 	})
 })
