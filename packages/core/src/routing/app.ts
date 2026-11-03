@@ -145,6 +145,10 @@ export class Honey<
 		this.#graph.epoch++
 	}
 
+	protected override onGraph(graph: HoneyGraph): this {
+		return new Honey<TEnv>(graph, this[VIEW]) as never
+	}
+
 	/**
 	 * Type only: declare the route meta type, which constrains what route `.meta()` accepts (declared tap keys stay
 	 * allowed) and types `ctx.meta`. Returns this same handle; set values with `.meta({ … })`.

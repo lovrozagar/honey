@@ -54,8 +54,9 @@ export type AppOptions = { routeTree?: RouteTree }
 
 /** The app with its five operations, and the handle under no guard an MCP mount goes on. */
 export function createRoutes(options?: AppOptions) {
-	const app = honey().stripPrefix("/api")
-	if (options?.routeTree) app.routeTree(options.routeTree)
+	const app = options?.routeTree
+		? honey().routeTree(options.routeTree).stripPrefix("/api")
+		: honey().stripPrefix("/api")
 	app
 		.use(apiKeyAccess)
 		.post("/v1/projects/:project_id/extract")

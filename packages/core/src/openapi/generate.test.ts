@@ -339,8 +339,7 @@ function treeOf(routes: readonly (readonly [string, string, RouteEntry?])[]): Ro
 
 /** A gateway's own routes beside a root /:slug and the catch-all its downstream routes delegate to. */
 function gatewayOwn(tree?: RouteTree) {
-	const app = honey<{}>()
-	if (tree !== undefined) app.routeTree(tree)
+	const app = tree === undefined ? honey<{}>() : honey<{}>().routeTree(tree)
 	app.get("/health").handler((c) => c.res.text("ok", "up"))
 	app.get("/:slug").handler((c) => c.res.text("ok", "slug"))
 	app.all("/*").handler((c) => c.res.text("ok", "proxy"))

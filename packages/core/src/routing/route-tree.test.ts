@@ -71,6 +71,84 @@ describe("routeTree(): serving a loaded tree", () => {
 	})
 })
 
+describe("routeTree(): a new app, called at any point", () => {
+	it("serves the tree with the routes, chain, scopes and settings registered before it, the original treeless", async () => {
+		const errors = defineErrors({ maintenance: "service_unavailable" })
+		const tag = createMiddleware(async (_c, next) => {
+			const res = await next()
+			res.headers.set("x-chain", "1")
+			return res
+		})
+		const scope = createMiddleware(async (_c, next) => {
+			const res = await next()
+			res.headers.set("x-scope", "1")
+			return res
+		})
+		const app = honey<{}>().errorFactory(errors)
+		app.use("/orgs", scope)
+		app
+			.use(tag)
+			.get("/orgs")
+			.errors("maintenance")
+			.handler((c) => {
+				throw c.errors.maintenance()
+			})
+		const served = app.routeTree(STATIC())
+		served.get("/health").handler((c) => c.res.text("ok", "up"))
+		const orgs = await served.fetch(new Request("http://x/orgs"), {})
+		expect([
+			served === app,
+			[
+				orgs.status,
+				orgs.headers.get("x-chain"),
+				orgs.headers.get("x-scope"),
+				((await orgs.json()) as { error_key: string }).error_key,
+			],
+			await call(served, "/health"),
+			(await call(app, "/health"))[0],
+			collectRoutes(served).http.map(({ id, meta }) => [id, meta]),
+			collectRoutes(app).http.map(({ id }) => id),
+		]).toEqual([
+			false,
+			[503, "1", "1", "maintenance"],
+			[200, "up"],
+			404,
+			[
+				["GET /orgs", {}],
+				["POST /orgs", { auth: "required" }],
+				["GET /health", {}],
+			],
+			["GET /orgs"],
+		])
+	})
+})
+
+describe("routeTree(): a new app, apart from the one it was called on", () => {
+	it("keeps the two apps apart after the call, and a second call serves the new tree", async () => {
+		const app = honey<{}>()
+		app.get("/orgs").handler((c) => c.res.text("ok", "orgs"))
+		const served = app.routeTree(STATIC())
+		served.onNotFound(() => new Response("served miss", { status: 404 }))
+		app.get("/health").handler((c) => c.res.text("ok", "app's own"))
+		const again = served.routeTree(treeOf([["GET", "/orgs"]]))
+		expect([
+			await call(app, "/nowhere"),
+			await call(served, "/nowhere"),
+			await call(app, "/health"),
+			(await call(served, "/health"))[0],
+			await call(again, "/orgs"),
+			(await call(again, "/health"))[0],
+		]).toEqual([
+			[404, expect.stringContaining("not_found")],
+			[404, "served miss"],
+			[200, "app's own"],
+			404,
+			[200, "orgs"],
+			404,
+		])
+	})
+})
+
 describe("routeTree(): one loaded tree, many apps", () => {
 	// v0: f60a27ed85
 	// v0: f02f59de07
@@ -112,12 +190,10 @@ describe("routeTree(): leaves nothing serves, and stale trees", () => {
 	})
 
 	// v0: 46bf9b7c9c
-	// v0: 438e928517
 	// v0: 2b0d4ffadd
 	// v0: a414a2c8c8
-	// v0: 5acb87fe58
 	// v0: 761c2524a7
-	it("refuses a stale tree: a route it lacks, a load after routes, a second load, an older format", () => {
+	it("refuses a stale tree: a route it lacks, an older format, a leaf with no entry", () => {
 		const stale = honey<{}>().routeTree(STATIC())
 		stale.get("/new").handler((c) => c.res.text("ok", "new"))
 		expect(() => stale.fetch(new Request("http://x/orgs"), {})).toThrow(
@@ -126,14 +202,6 @@ describe("routeTree(): leaves nothing serves, and stale trees", () => {
 		stale.get("/other").handler((c) => c.res.text("ok", "other"))
 		expect(() => stale.fetch(new Request("http://x/orgs"), {})).toThrow(
 			"GET /new, GET /other are registered but missing",
-		)
-		const late = honey<{}>()
-		late.get("/x").handler((c) => c.res.text("ok", "x"))
-		expect(() => late.routeTree(STATIC())).toThrow(
-			"routeTree() must be called before routes are registered (GET /x is)",
-		)
-		expect(() => honey<{}>().routeTree(STATIC()).routeTree(STATIC())).toThrow(
-			"routeTree() was already called on this app",
 		)
 		const old = { meta: {}, root: { ...createNode(), m: { GET: { fn: null } } }, routes: {} } as unknown as RouteTree
 		expect(() => honey<{}>().routeTree(old)).toThrow("Run `honey generate`")
@@ -203,8 +271,7 @@ describe("toRouteTree(): what a snapshot holds", () => {
 			ctx.req.headers.get("authorization") === "ok" ? next() : new Response("no", { status: 401 }),
 		)
 		const build = (tree?: RouteTree) => {
-			const app = honey<{}>()
-			if (tree !== undefined) app.routeTree(tree)
+			const app = tree === undefined ? honey<{}>() : honey<{}>().routeTree(tree)
 			app.use("/admin", deny)
 			app.get("/admin/x").handler((c) => c.res.text("ok", c.routePattern))
 			return app
@@ -278,7 +345,7 @@ describe("toRouteTree(): loading a snapshot beside registrations", () => {
 	// v0: 07e1febb41
 	// v0: 0c2f68e8cc
 	// v0: 589f759aaa
-	it("lets a registration replace a snapshot's route, serves through an earlier use() handle, and keeps an SPA fallback", async () => {
+	it("lets a registration replace a snapshot's route, serves through a use() handle, and keeps an SPA fallback", async () => {
 		const errors = defineErrors({ item_not_found: "not_found" })
 		const source = honey<{}>().errorFactory(errors)
 		source
@@ -286,9 +353,8 @@ describe("toRouteTree(): loading a snapshot beside registrations", () => {
 			.errors("item_not_found")
 			.handler((c) => c.res.text("ok", "v1"))
 		source.get("/*path").handler((c) => c.res.text("ok", `spa ${c.params.path}`))
-		const app = honey<{}>().errorFactory(errors)
+		const app = honey<{}>().errorFactory(errors).routeTree(source.toRouteTree())
 		const child = app.use(createMiddleware(async (_ctx, next) => next()))
-		app.routeTree(source.toRouteTree())
 		app
 			.get("/items/:id")
 			.errors("item_not_found")
@@ -304,8 +370,7 @@ describe("toRouteTree(): loading a snapshot beside registrations", () => {
 
 	// v0: 6b3f8bc280
 	it("a middleware's context addition reaches a route bound to a loaded leaf", async () => {
-		const app = honey<{}>()
-		app.routeTree(STATIC())
+		const app = honey<{}>().routeTree(STATIC())
 		app
 			.use(createMiddleware(async (_ctx, next) => next({ db: "connected" })))
 			.get("/orgs")
@@ -359,5 +424,44 @@ describe("mergeTree of snapshots: one app serving several", () => {
 		expect(merge("/api", "/api")).toThrow("Merge conflict: duplicate GET /api")
 		expect(merge("/u/:userId", "/u/:id")).toThrow("param name mismatch")
 		expect(merge("/f/*path", "/f/*file")).toThrow("wildcard name mismatch")
+	})
+})
+
+describe("routeTree(): whose routes and settings the new app carries", () => {
+	it("leaves behind the routes a previous tree carried live, and keeps a mounted app's settings on its routes", async () => {
+		const source = honey<{}>()
+		source.get("/orgs").handler((c) => c.res.text("ok", "source's"))
+		const loaded = honey<{}>().routeTree(source.toRouteTree())
+		const reloaded = loaded.routeTree(treeOf([["GET", "/orgs"]]))
+		const seen: unknown[] = []
+		const sub = honey<{}>()
+		sub.tap("audit", (_ctx, payload) => void seen.push(["sub's audit", payload]))
+		sub.get("/sub").handler((c) => (c.tap("audit", 1), c.res.text("ok", "sub")))
+		const app = honey<{}>()
+		app.tap("log", (_ctx, payload) => void seen.push(["app's log", payload]))
+		app.get("/own").handler((c) => (c.tap("log", 2), c.res.text("ok", "own")))
+		app.route(sub)
+		const served = app.routeTree(
+			treeOf([
+				["GET", "/sub"],
+				["GET", "/own"],
+			]),
+		)
+		served.tap("log", (_ctx, payload) => void seen.push(["served's log", payload]))
+		const answers = [await call(loaded, "/orgs"), (await call(reloaded, "/orgs"))[0]]
+		for (const [at, path] of [
+			[served, "/sub"],
+			[app, "/own"],
+			[served, "/own"],
+		] as const)
+			await call(at, path)
+		expect([answers, seen]).toEqual([
+			[[200, "source's"], 404],
+			[
+				["sub's audit", 1],
+				["app's log", 2],
+				["served's log", 2],
+			],
+		])
 	})
 })

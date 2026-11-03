@@ -28,8 +28,7 @@ export type AppOptions = { routeTree?: RouteTree }
 
 /** Shared base + .route() groups. User /docs owns /docs, so Scalar is served at /reference. */
 export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
-	const root = honey<Env>()
-	if (options?.routeTree) root.routeTree(options.routeTree)
+	const root = options?.routeTree ? honey<Env>().routeTree(options.routeTree) : honey<Env>()
 	const base = root.errorFactory(errors).defaultErrors("invalid_token", "expired_token").use(withCache).use(withSession)
 	if (wsAdapter) base.wsAdapter(wsAdapter)
 

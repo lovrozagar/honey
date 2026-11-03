@@ -36,8 +36,7 @@ const withAuth = createMiddleware(async (_ctx, next) =>
 export type AppOptions = { routeTree?: RouteTree }
 
 export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
-	const app = honey<Env>()
-	if (options?.routeTree) app.routeTree(options.routeTree)
+	const app = options?.routeTree ? honey<Env>().routeTree(options.routeTree) : honey<Env>()
 	if (wsAdapter) app.wsAdapter(wsAdapter)
 
 	const routed = app

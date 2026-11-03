@@ -1198,3 +1198,30 @@ app.all("/api/*rest").handler(
 	}),
 )
 ```
+
+## `routeTree()` returns a new app, callable at any point
+
+`app.routeTree(tree)` no longer loads the tree into `app`. It returns a new app with `app`'s settings, middleware,
+scopes and routes on the tree, and `app` stays treeless. It can be called after routes register, so a gateway needs no
+factory that loads the tree before its first route: generation reads the app as built, and the runtime serves the one
+`routeTree()` returns. Keep the return value; a bare `app.routeTree(tree)` statement now serves nothing.
+
+```ts v0
+export function createApp(tree?: RouteTree) {
+	const app = honey()
+	if (tree !== undefined) app.routeTree(tree) // before the first route, or it throws
+	app.all("/*").handler(proxy({ destination }))
+	return app
+}
+```
+
+```ts
+import { honey } from "@lovrozagar/honey"
+import { proxy } from "@lovrozagar/honey/proxy"
+import type { RouteTree } from "@lovrozagar/honey/tree"
+
+declare const routeTree: RouteTree
+export const app = honey()
+app.all("/*").handler(proxy({ destination: (_ctx, url, init) => fetch(`https://upstream.test${url}`, init) }))
+export const served = app.routeTree(routeTree)
+```

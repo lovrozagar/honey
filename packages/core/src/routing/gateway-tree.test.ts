@@ -23,8 +23,7 @@ async function call(app: Fetcher, path: string, init?: RequestInit): Promise<[nu
 
 /** anyrow's gateway shape: its own routes and a root /:slug beside the catch-all its downstream routes delegate to. */
 function own(tree?: RouteTree) {
-	const app = honey<{}>()
-	if (tree !== undefined) app.routeTree(tree)
+	const app = tree === undefined ? honey<{}>() : honey<{}>().routeTree(tree)
 	app.get("/health").handler((c) => c.res.text("ok", "up"))
 	app.get("/:slug").handler((c) => c.res.text("ok", `slug ${c.params.slug}`))
 	app

@@ -33,8 +33,7 @@ function users() {
 
 /** GET /users serving its document and docs, loaded from `tree` when given one. */
 function usersServing(tree?: RouteTree) {
-	const app = honey<{}>()
-	if (tree !== undefined) app.routeTree(tree)
+	const app = tree === undefined ? honey<{}>() : honey<{}>().routeTree(tree)
 	app.get("/users").handler((c) => c.res.json("ok", []))
 	return serveOpenApi(app, { docs: { "/docs": scalar }, title: "T", version: "1" })
 }

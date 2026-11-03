@@ -1,7 +1,7 @@
 /**
- * Route trees in and out. `app.routeTree(tree)` serves a generated tree, another app's snapshot or
- * a `mergeTree()` of them: the tree gives the topology, and each leaf runs the route this app
- * registers for it, else the snapshot's live record, else the app's catch-all (routing/delegate.ts).
+ * Route trees in and out. `app.routeTree(tree)` is a new app serving a generated tree, another app's snapshot or
+ * a `mergeTree()` of them: the tree gives the topology, and each leaf runs the route the app registered for it, before
+ * the call or after, else the snapshot's live record, else the app's catch-all (routing/delegate.ts).
  * `app.toRouteTree()` is the snapshot: a copy of the topology and, per route, its resolved data
  * and a live record carrying the scopes that cover it here.
  */
@@ -9,9 +9,17 @@ import { ERROR_META, type ErrorMetaEntry } from "../errors/errors.ts"
 import { compareCodeUnits } from "../schema/canonicalize.ts"
 import { finalTable } from "./dispatch.ts"
 import { type Plan, scopesFor } from "./finalize.ts"
-import { expandOptional } from "./pattern.ts"
-import { chainErrorFactories, GRAPH, type HoneyGraph, isServed, type RouteHandler } from "./register.ts"
-import type { ErrorFactories } from "./settings.ts"
+import { expandOptional, splitRouteId } from "./pattern.ts"
+import {
+	addRoute,
+	chainErrorFactories,
+	createGraph,
+	GRAPH,
+	type HoneyGraph,
+	isServed,
+	type RouteHandler,
+} from "./register.ts"
+import type { AppSettings, ErrorFactories } from "./settings.ts"
 import { SettingsChain } from "./settings-chain.ts"
 import {
 	assertTreeFormat,
@@ -25,23 +33,37 @@ import {
 } from "./tree.ts"
 import { declaredBody } from "../validation/content-type.ts"
 
-/** Serve `tree` on `g`: frozen in place, its live records copied, the rest bound as routes register. */
-export function loadRouteTree(g: HoneyGraph, tree: RouteTree): void {
+/** `s` as a new app's own: a setter on one app leaves the other's alone. */
+function copySettings(s: AppSettings<unknown>): AppSettings<unknown> {
+	return {
+		...s,
+		defaultErrorKeys: new Set(s.defaultErrorKeys),
+		metaSpec: { absorbed: [...s.metaSpec.absorbed], declared: s.metaSpec.declared },
+		taps: s.taps === null ? null : new Map(s.taps),
+	}
+}
+
+/**
+ * A new graph serving `tree`, frozen in place with its live records copied: `g`'s settings copied, its scopes, and
+ * every route `g` registered replayed onto the tree, as later registrations bind. A tree `g` loaded is left behind.
+ */
+export function routeTreeGraph(g: HoneyGraph, tree: RouteTree): HoneyGraph {
 	assertTreeFormat(tree)
-	if (g.loaded !== null) throw new Error("routeTree() was already called on this app")
-	const registered = [...g.records.keys(), ...g.catchAll.keys()][0]
-	if (registered !== undefined)
-		throw new Error(`routeTree() must be called before routes are registered (${registered} is)`)
 	forEachLeaf(tree.root, (method, path, id) => {
 		if (!Object.hasOwn(tree.routes, id))
 			throw new Error(`routeTree(): leaf ${method} ${path} has no route entry (${id})`)
 	})
-	g.root = freezeTree(tree.root)
-	g.loaded = Object.assign(dict<RouteEntry>(), tree.routes)
+	const next: HoneyGraph = { ...createGraph(), scoped: [...g.scoped], settings: copySettings(g.settings) }
+	next.root = freezeTree(tree.root)
+	next.loaded = Object.assign(dict<RouteEntry>(), tree.routes)
 	for (const [id, entry] of Object.entries(tree.routes)) {
-		if (entry.h !== undefined) g.records.set(id, { ...(entry.h as RouteHandler), lt: true })
+		if (entry.h !== undefined) next.records.set(id, { ...(entry.h as RouteHandler), lt: true })
 	}
-	g.epoch++
+	for (const r of [...g.records.values(), ...g.catchAll.values(), ...g.unexpected.values()]) {
+		if (r.lt === true) continue
+		addRoute(next, splitRouteId(r.id).method, r.sg, r.own === g.settings ? { ...r, own: next.settings } : r)
+	}
+	return next
 }
 
 /** Each key's status key from the first factory whose ERROR_META knows it; `null` when none does. */
@@ -95,13 +117,16 @@ export function snapshotRouteTree(g: HoneyGraph): RouteTree {
 export abstract class RouteTreeChain<TEnv> extends SettingsChain<TEnv> {
 	abstract get [GRAPH](): HoneyGraph
 
+	/** This handle's view on `graph`: the app `routeTree()` returns. */
+	protected abstract onGraph(graph: HoneyGraph): this
+
 	/**
-	 * Serve `tree` (a generated `routes.gen.ts`, a `toRouteTree()` snapshot, or a `mergeTree()` of
-	 * them). Call it before registering routes; a route registered afterwards binds to its leaf.
+	 * A new app serving `tree` (a generated `routes.gen.ts`, a `toRouteTree()` snapshot, or a `mergeTree()` of them):
+	 * this app's settings, routes and scopes, and this handle's chain, on the tree. Call it at any point; a route
+	 * registered on the new app binds to its leaf, and this app stays as it was.
 	 */
 	routeTree(tree: RouteTree): this {
-		loadRouteTree(this[GRAPH], tree)
-		return this
+		return this.onGraph(routeTreeGraph(this[GRAPH], tree))
 	}
 
 	/** A copy of the routes this app serves, for another app to serve with `routeTree()`. */

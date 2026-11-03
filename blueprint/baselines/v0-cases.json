@@ -46637,6 +46637,8 @@
 		}
 	},
 	"retired": {
+		"438e928517": "plan 39 5.6: routeTree() returns a new app and can be called at any point, the routes registered before it replayed onto the tree, so a late call no longer throws (route-tree.test 'a new app, called at any point')",
+		"5acb87fe58": "plan 39 5.6: routeTree() returns a new app and can be called at any point, the routes registered before it replayed onto the tree, so a late call no longer throws (route-tree.test 'a new app, called at any point')",
 		"124924980a": "plan 39 5.5: streamed() (was readableStream()) wraps a json or form body only, which it leaves unread for the handler; search, headers and cookies are read before the handler, so they always run their schema and a wrapper there is a type error (input.typetest)",
 		"57dfdbb604": "plan 39 5.5: streamed() (was readableStream()) wraps a json or form body only, which it leaves unread for the handler; search, headers and cookies are read before the handler, so they always run their schema and a wrapper there is a type error (input.typetest)",
 		"2e068c2591": "plan 39 5.5: streamed() (was readableStream()) wraps a json or form body only, which it leaves unread for the handler; search, headers and cookies are read before the handler, so they always run their schema and a wrapper there is a type error (input.typetest)",

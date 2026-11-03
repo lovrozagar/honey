@@ -436,9 +436,8 @@ describe("errors: where a key's status comes from", () => {
 				.errorFactory(errorsOf({ captcha_failed: "bad_request" }))
 				.defaultBoundary("internal_server_error")
 				.defaultErrors("captcha_failed")
-			if (tree !== undefined) app.routeTree(tree)
 			app.all("/*").handler((c) => c.res.json("ok", {}))
-			return app
+			return tree === undefined ? app : app.routeTree(tree)
 		}
 		const app = gateway(gatewayTree(gateway(), source))
 		overlaySchemas(app, source)

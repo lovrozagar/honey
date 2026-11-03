@@ -27,6 +27,35 @@ app.all("/billing/*").handler(
 )
 ```
 
+## A gateway on its generated tree
+
+A gateway serves the tree `honey generate` writes from `codegen.mergeTree`: its services' trees merged, plus the
+gateway's own routes. Three files keep the app generation reads apart from the one the runtime serves:
+
+- `gateway.app.ts` builds the gateway: its settings, middleware and own routes, with no tree.
+- `route-tree.ts`, the `codegen.mergeTree` entry, exports the merged tree as `tree` and re-exports that app as `app`
+  (`export { app } from "./gateway.app.ts"`), which generation reads the gateway's own routes from.
+- `index.ts` serves `app.routeTree(routeTree)`: a new app with the same settings, middleware and routes, on the
+  generated tree. The app it is called on stays treeless, so generation can import both files into one module graph.
+  `routeTree()` can be called at any point, and a route registered on the new app binds to its leaf.
+
+```ts
+import { honey } from "@lovrozagar/honey"
+import { proxy } from "@lovrozagar/honey/proxy"
+import type { RouteTree } from "@lovrozagar/honey/tree"
+
+/* gateway.app.ts */
+export const app = honey()
+app.get("/robots.txt").handler((ctx) => ctx.res.text("ok", "User-agent: *"))
+app
+	.all("/*")
+	.handler(proxy({ destination: (_ctx, url, init) => fetch(`https://orders.internal.example.com${url}`, init) }))
+
+/* index.ts: `import { routeTree } from "./_gen/routes.gen.ts"` */
+declare const routeTree: RouteTree
+export const served = app.routeTree(routeTree)
+```
+
 ## Reference
 
 | Value                                          | Default                  | What it does                                                                                                                                                                                                                                                                                                     | Watch for                                                                                                                                                                                                                                                                                      |

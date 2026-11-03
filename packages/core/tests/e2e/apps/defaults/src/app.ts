@@ -10,8 +10,7 @@ export type AppOptions = { routeTree?: RouteTree }
 
 /** No basePath, no CORS, no i18n, default trailingSlash ("ignore"). */
 export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
-	const app = honey()
-	if (options?.routeTree) app.routeTree(options.routeTree)
+	const app = options?.routeTree ? honey().routeTree(options.routeTree) : honey()
 	if (wsAdapter) app.wsAdapter(wsAdapter)
 
 	const routed = app

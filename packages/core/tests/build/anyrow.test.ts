@@ -50,20 +50,16 @@ const FILES = {
 	/* anyrow.gateway.app.ts: its own routes and errors, and the catch-all its services' routes delegate to */
 	"src/gateway.ts": [
 		'import { defineErrors, honey } from "@lovrozagar/honey"',
-		"export function createGateway(tree?: unknown) {",
-		'\tconst app = honey().errorFactory(defineErrors({ maintenance: "service_unavailable" }))',
-		"\tif (tree !== undefined) app.routeTree(tree as never)",
-		'\tapp.metaSpec({ meta: { kind: "x-kind", worker: false } } as never)',
-		'\tapp.get("/health").errors("maintenance").handler((c) => c.res.text("ok", "up"))',
-		'\tapp.get("/robots.txt").handler((c) => c.res.text("ok", "User-agent: *"))',
-		'\tapp.all("/*").handler((c) => c.res.text("ok", "forwarded"))',
-		"\treturn app",
-		"}",
+		'export const app = honey().errorFactory(defineErrors({ maintenance: "service_unavailable" }))',
+		'app.metaSpec({ meta: { kind: "x-kind", worker: false } } as never)',
+		'app.get("/health").errors("maintenance").handler((c) => c.res.text("ok", "up"))',
+		'app.get("/robots.txt").handler((c) => c.res.text("ok", "User-agent: *"))',
+		'app.all("/*").handler((c) => c.res.text("ok", "forwarded"))',
 		"",
 	].join("\n"),
 	/* anyrow.gateway.app.ts:22,87: the served gateway loads its own generated tree */
 	"src/gateway.app.ts":
-		'import { routeTree } from "./_gen/routes.gen.ts"\nimport { createGateway } from "./gateway.ts"\nexport const app = createGateway(routeTree)\n',
+		'import { routeTree } from "./_gen/routes.gen.ts"\nimport { app as gateway } from "./gateway.ts"\nexport const app = gateway.routeTree(routeTree)\n',
 	"src/growth.ts": service("growth", [
 		["/growth/contracts", "jwt", "contract"],
 		["/growth/actors", "iaActor", "internal"],
@@ -84,10 +80,10 @@ const FILES = {
 	"src/seed.ts": [
 		'import { mergeTree } from "@lovrozagar/honey"',
 		'import { extract } from "./extract.ts"',
-		'import { createGateway } from "./gateway.ts"',
+		'import { app as gateway } from "./gateway.ts"',
 		'import { growth } from "./growth.ts"',
 		`export const tree = ${MERGE(["extract", "growth"])}`,
-		"export const app = createGateway()",
+		"export const app = gateway",
 		"",
 	].join("\n"),
 	"vite.config.ts": `import { honey } from "@lovrozagar/honey/plugin"

@@ -63,8 +63,8 @@ export type AppOptions = { routeTree?: RouteTree }
 export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
 	const log = createLogger({ level: "debug" })
 
-	const root = honey<Env>().basePath("/api").trailingSlash("strip")
-	if (options?.routeTree) root.routeTree(options.routeTree)
+	const app = honey<Env>().basePath("/api").trailingSlash("strip")
+	const root = options?.routeTree ? app.routeTree(options.routeTree) : app
 	if (wsAdapter) root.wsAdapter(wsAdapter)
 
 	const h = root

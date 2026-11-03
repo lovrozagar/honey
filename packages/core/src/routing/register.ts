@@ -122,7 +122,7 @@ export type HoneyGraph = {
 	/** The app's settings, shared by every handle. */
 	readonly settings: AppSettings<unknown>
 	/** routes a loaded app registered that its tree lacks: the tree is stale, said at finalize */
-	readonly unexpected: RouteId[]
+	readonly unexpected: Map<RouteId, RouteHandler>
 }
 
 /** What one handle contributes to the routes registered or mounted through it. */
@@ -161,7 +161,7 @@ export function createGraph(): HoneyGraph {
 		scoped: [],
 		served: new Set(),
 		settings: createSettings(),
-		unexpected: [],
+		unexpected: new Map(),
 	}
 }
 
@@ -208,7 +208,7 @@ export function addRoute(g: HoneyGraph, method: string, segments: readonly Segme
 	else if (!Object.hasOwn(g.loaded, id)) {
 		/* a loaded app binds the routes its tree holds; a root wildcard it lacks is the catch-all */
 		if (segments.length === 1 && segments[0]?.k === "wildcard") g.catchAll.set(id, record)
-		else g.unexpected.push(id)
+		else g.unexpected.set(id, record)
 		return id
 	}
 	g.records.set(id, record)

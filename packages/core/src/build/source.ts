@@ -36,8 +36,8 @@ async function unlessStale<T>(run: () => T | Promise<T>, config: ResolvedHoneyCo
 		const { mergeTree, tree } = config.codegen
 		const fix =
 			mergeTree === undefined
-				? "generate from an entry that builds the app without it, or set codegen.mergeTree for a gateway"
-				: `export the gateway's app, built without its tree, from ${mergeTree} as app`
+				? "generate from the module that builds the app, and serve `app.routeTree(routeTree)` from another, or set codegen.mergeTree for a gateway"
+				: `re-export the gateway's app as built, before its routeTree() call, from ${mergeTree} as app`
 		throw new Error(
 			`${config.app} loads the route tree generation writes (${tree || "its routes.gen.ts"}), and that tree is stale: ${fix}`,
 			{ cause: error },

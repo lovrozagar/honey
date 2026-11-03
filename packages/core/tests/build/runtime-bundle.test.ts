@@ -122,7 +122,8 @@ describe("the runtime bundle of an installed core (bit 19 i)", () => {
 			 * (26,157): no numeric status. Plan 39 5.4 added 272 (26,157 to 26,429) so params take a schema per param onto
 			 * ctx.params: the per-param validation with one 400 naming every refused param and an async validator
 			 * awaited, the registration check that a key is a param of the path, and the read that places the values.
-			 * Locked at 26,500.
+			 * Locked at 26,500. Plan 39 5.5 took 18 off (26,408). Plan 39 5.6 added 74 (26,408 to 26,482) so routeTree()
+			 * returns a new app: the settings copy and the replay of every registered route onto the tree's graph.
 			 */
 			const gzipped = gzipSync(js, { level: 9 }).length
 			const builtBy = run(BUN as string, ["--version"], full).out.trim()
@@ -254,7 +255,8 @@ describe("the runtime bundle of an installed core (bit 19 i)", () => {
 			 * The generated tree's body gate added its 58 bytes here too (27,480 to 27,538). Plan 38 added 166
 			 * (27,538 to 27,704) though this call takes no auth: 63 for refusing auth beside a cacheControl at
 			 * runtime, 103 for the docs map's two refusals and the guarded branch in answering and mountAll. The
-			 * guard itself is basic()'s, so none of it is here. Locked at 27,800.
+			 * guard itself is basic()'s, so none of it is here. Locked at 27,800. Plan 39 5.6 added 75 (27,743 to
+			 * 27,818): routeTree()'s settings copy and route replay, as in the minimal bundle. Locked at 27,900.
 			 */
 			const gzipped = gzipSync(bunBundle("static-doc", served), { level: 9 }).length
 			expect(
@@ -262,7 +264,7 @@ describe("the runtime bundle of an installed core (bit 19 i)", () => {
 					routeModules("static-doc", served, [...GENERATOR, ...PAGES]),
 					routeModules("static-page", withPage, [...GENERATOR, ...PAGES]),
 					routeModules("generated-doc", generated, PAGES),
-					gzipped < 27_800,
+					gzipped < 27_900,
 				],
 				`${gzipped} bytes gzipped`,
 			).toEqual([[], ["openapi/scalar"], [], true])

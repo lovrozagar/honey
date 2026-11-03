@@ -36,31 +36,27 @@ const downSource = (extra: readonly string[] = []) =>
 		"",
 	].join("\n")
 
-/** The gateway factory: built with or without its tree, its own routes and errors, and a catch-all. */
+/** The gateway's app, built without its tree: its own routes and errors, and a catch-all. */
 const GATEWAY_SOURCE = [
 	'import { defineErrors, honey } from "@lovrozagar/honey"',
-	"export function createGateway(tree?: unknown) {",
-	'\tconst app = honey().errorFactory(defineErrors({ maintenance: "service_unavailable" }))',
-	"\tif (tree !== undefined) app.routeTree(tree as never)",
-	'\tapp.get("/health").errors("maintenance").handler((c) => c.res.text("ok", "up"))',
-	'\tapp.get("/robots.txt").handler((c) => c.res.text("ok", "User-agent: *"))',
-	'\tapp.all("/*").handler((c) => c.res.text("ok", "forwarded"))',
-	"\treturn app",
-	"}",
+	'export const app = honey().errorFactory(defineErrors({ maintenance: "service_unavailable" }))',
+	'app.get("/health").errors("maintenance").handler((c) => c.res.text("ok", "up"))',
+	'app.get("/robots.txt").handler((c) => c.res.text("ok", "User-agent: *"))',
+	'app.all("/*").handler((c) => c.res.text("ok", "forwarded"))',
 	"",
 ].join("\n")
 
-/** A downstream service, its gateway factory (built with or without a tree), and the served gateway over its tree. */
+/** A downstream service, the gateway's treeless app, and the served gateway: that app's routeTree() over its tree. */
 function gatewayProject(): Project {
 	const made = project({
 		"src/down.ts": downSource(),
 		"src/gateway.ts": GATEWAY_SOURCE,
 		/* the served gateway, as anyrow.gateway.app.ts: it loads the tree generation writes */
 		"src/gateway.app.ts":
-			'import { routeTree } from "./_gen/routes.gen.ts"\nimport { createGateway } from "./gateway.ts"\nexport const app = createGateway(routeTree)\n',
+			'import { routeTree } from "./_gen/routes.gen.ts"\nimport { app as gateway } from "./gateway.ts"\nexport const app = gateway.routeTree(routeTree)\n',
 		/* the merge entry that also exports the gateway built without its tree */
 		"src/seed.ts":
-			'import { mergeTree } from "@lovrozagar/honey"\nimport { app as down } from "./down.ts"\nimport { createGateway } from "./gateway.ts"\nexport const tree = mergeTree([down.toRouteTree(), { worker: "down" }])\nexport const app = createGateway()\n',
+			'import { mergeTree } from "@lovrozagar/honey"\nimport { app as down } from "./down.ts"\nimport { app as gateway } from "./gateway.ts"\nexport const tree = mergeTree([down.toRouteTree(), { worker: "down" }])\nexport const app = gateway\n',
 		"src/route-tree.ts":
 			'import { mergeTree } from "@lovrozagar/honey"\nimport { app as down } from "./down.ts"\nexport const tree = mergeTree([down.toRouteTree(), { worker: "down" }])\n',
 	})
@@ -130,16 +126,13 @@ describe("a gateway's app (bit 19 h2)", () => {
 			const evaluations = join(made.dir, "served.log")
 			made.write(
 				"src/gateway.app.ts",
-				`import { appendFileSync } from "node:fs"\nimport { routeTree } from "./_gen/routes.gen.ts"\nimport { createGateway } from "./gateway.ts"\nappendFileSync(${JSON.stringify(evaluations)}, "x")\nexport const app = createGateway(routeTree)\n`,
+				`import { appendFileSync } from "node:fs"\nimport { routeTree } from "./_gen/routes.gen.ts"\nimport { app as gateway } from "./gateway.ts"\nappendFileSync(${JSON.stringify(evaluations)}, "x")\nexport const app = gateway.routeTree(routeTree)\n`,
 			)
 			const config = { app: "src/gateway.app.ts", codegen: { ...OUTPUTS, mergeTree: "src/seed.ts" } }
 			expect(await generate(config, made.dir)).toEqual(ALL_WRITTEN)
 			made.write(
 				"src/gateway.ts",
-				read(made.dir, "src/gateway.ts").replace(
-					"\treturn app",
-					'\tapp.get("/status").handler((c) => c.res.text("ok", "s"))\n\treturn app',
-				),
+				`${read(made.dir, "src/gateway.ts")}app.get("/status").handler((c) => c.res.text("ok", "s"))\n`,
 			)
 			expect(await generate(config, made.dir)).toEqual(ALL_WRITTEN)
 			expect(routeIds(made.dir)).toEqual([
@@ -283,13 +276,10 @@ describe("a gateway over its own tree (bit 19 h2, Anyrow's shape), continued (2)
 			const tree = read(made.dir, "src/_gen/routes.gen.ts")
 			made.write(
 				"src/gateway.ts",
-				read(made.dir, "src/gateway.ts").replace(
-					"\treturn app",
-					'\tapp.get("/status").handler((c) => c.res.text("ok", "s"))\n\treturn app',
-				),
+				`${read(made.dir, "src/gateway.ts")}app.get("/status").handler((c) => c.res.text("ok", "s"))\n`,
 			)
 			expect(await generate(SERVED, made.dir)).toBe(
-				"src/gateway.app.ts loads the route tree generation writes (src/_gen/routes.gen.ts), and that tree is stale: export the gateway's app, built without its tree, from src/route-tree.ts as app",
+				"src/gateway.app.ts loads the route tree generation writes (src/_gen/routes.gen.ts), and that tree is stale: re-export the gateway's app as built, before its routeTree() call, from src/route-tree.ts as app",
 			)
 			expect([
 				read(made.dir, "src/_gen/routes.gen.ts"),
@@ -308,7 +298,7 @@ describe("a gateway through the plugin in dev (bit 19 h2)", () => {
 			const evaluations = join(made.dir, "served.log")
 			made.write(
 				"src/gateway.app.ts",
-				`import { appendFileSync } from "node:fs"\nimport { routeTree } from "./_gen/routes.gen.ts"\nimport { createGateway } from "./gateway.ts"\nappendFileSync(${JSON.stringify(evaluations)}, "x")\nexport const app = createGateway(routeTree)\n`,
+				`import { appendFileSync } from "node:fs"\nimport { routeTree } from "./_gen/routes.gen.ts"\nimport { app as gateway } from "./gateway.ts"\nappendFileSync(${JSON.stringify(evaluations)}, "x")\nexport const app = gateway.routeTree(routeTree)\n`,
 			)
 			expect(await generate({ codegen: { mergeTree: "src/seed.ts" } }, made.dir)).toEqual(["src/_gen/routes.gen.ts"])
 			const config = {
@@ -391,9 +381,9 @@ describe("sourceOf natively: what fails and how it is named (bit 19 h2)", () => 
 			),
 			await failure(sourceOf(resolveHoneyConfig({ app: "src/app.ts" }), broken.dir)),
 		]).toEqual([
-			"src/app.ts loads the route tree generation writes (src/_gen/routes.gen.ts), and that tree is stale: generate from an entry that builds the app without it, or set codegen.mergeTree for a gateway",
-			"src/app.ts loads the route tree generation writes (its routes.gen.ts), and that tree is stale: generate from an entry that builds the app without it, or set codegen.mergeTree for a gateway",
-			"src/app.ts loads the route tree generation writes (src/_gen/routes.gen.ts), and that tree is stale: export the gateway's app, built without its tree, from src/routes.ts as app",
+			"src/app.ts loads the route tree generation writes (src/_gen/routes.gen.ts), and that tree is stale: generate from the module that builds the app, and serve `app.routeTree(routeTree)` from another, or set codegen.mergeTree for a gateway",
+			"src/app.ts loads the route tree generation writes (its routes.gen.ts), and that tree is stale: generate from the module that builds the app, and serve `app.routeTree(routeTree)` from another, or set codegen.mergeTree for a gateway",
+			"src/app.ts loads the route tree generation writes (src/_gen/routes.gen.ts), and that tree is stale: re-export the gateway's app as built, before its routeTree() call, from src/routes.ts as app",
 			"not stale",
 		])
 	})
@@ -415,10 +405,10 @@ describe("sourceOf natively: what fails and how it is named (bit 19 h2)", () => 
 const GATEWAY = (tree: string) => ({
 	"src/down.ts": downSource(),
 	"src/gateway.ts": GATEWAY_SOURCE,
-	"src/served.ts": `import { createGateway } from "./gateway.ts"\n${tree}export const app = createGateway(${tree === "" ? "" : "routeTree"})\n`,
+	"src/served.ts": `import { app as gateway } from "./gateway.ts"\n${tree}export const app = ${tree === "" ? "gateway" : "gateway.routeTree(routeTree)"}\n`,
 	"src/routes.ts": MERGE,
 	"src/seed.ts":
-		'import { mergeTree } from "@lovrozagar/honey"\nimport { app as down } from "./down.ts"\nimport { createGateway } from "./gateway.ts"\nexport const tree = mergeTree([down.toRouteTree(), {}])\nexport const app = createGateway()\n',
+		'import { mergeTree } from "@lovrozagar/honey"\nimport { app as down } from "./down.ts"\nimport { app as gateway } from "./gateway.ts"\nexport const tree = mergeTree([down.toRouteTree(), {}])\nexport const app = gateway\n',
 })
 
 describe("sourceOf natively: a gateway's app (bit 19 h2)", () => {
@@ -448,7 +438,7 @@ describe("sourceOf natively: a gateway's app (bit 19 h2)", () => {
 	it("is config.app, imported over its current tree, when the merge entry has none", async () => {
 		const made = linked({
 			...GATEWAY(""),
-			"src/served.ts": 'import { createGateway } from "./gateway.ts"\nexport const app = createGateway()\n',
+			"src/served.ts": 'import { app as gateway } from "./gateway.ts"\nexport const app = gateway\n',
 		})
 		const source = await sourceOf(
 			resolveHoneyConfig({ app: "src/served.ts", codegen: { mergeTree: "src/routes.ts" } }),
@@ -481,8 +471,8 @@ describe("sourceOf natively: the documents' app, imported on demand (bit 19 h2)"
 			"src/down.ts": downSource(),
 			"src/gateway.ts": GATEWAY_SOURCE,
 			"src/seed.ts":
-				'import { mergeTree } from "@lovrozagar/honey"\nimport { app as down } from "./down.ts"\nimport { createGateway } from "./gateway.ts"\nexport const tree = mergeTree([down.toRouteTree(), {}])\nexport const app = createGateway()\n',
-			"src/served.ts": 'import { createGateway } from "./gateway.ts"\nexport const app = createGateway()\n',
+				'import { mergeTree } from "@lovrozagar/honey"\nimport { app as down } from "./down.ts"\nimport { app as gateway } from "./gateway.ts"\nexport const tree = mergeTree([down.toRouteTree(), {}])\nexport const app = gateway\n',
+			"src/served.ts": 'import { app as gateway } from "./gateway.ts"\nexport const app = gateway\n',
 		})
 		const source = await sourceOf(
 			resolveHoneyConfig({ app: "src/served.ts", codegen: { mergeTree: "src/seed.ts" } }),

@@ -276,7 +276,7 @@ describe("a stale route tree (bit 19 h2, V072-3 under Q3)", () => {
 			for (const stale of [OLDER, outOfDate()]) {
 				const { dir } = fresh({ "src/_gen/routes.gen.ts": stale, "src/app.ts": SELF_LOADING })
 				await expect(generate({ app: "src/app.ts", codegen: ALL }, dir)).rejects.toThrow(
-					"src/app.ts loads the route tree generation writes (src/_gen/routes.gen.ts), and that tree is stale: generate from an entry that builds the app without it, or set codegen.mergeTree for a gateway",
+					"src/app.ts loads the route tree generation writes (src/_gen/routes.gen.ts), and that tree is stale: generate from the module that builds the app, and serve `app.routeTree(routeTree)` from another, or set codegen.mergeTree for a gateway",
 				)
 				expect([read(dir, "src/_gen/routes.gen.ts"), existsSync(join(dir, "src/_gen/manifest.gen.json"))]).toEqual([
 					stale,

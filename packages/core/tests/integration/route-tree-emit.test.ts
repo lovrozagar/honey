@@ -72,8 +72,7 @@ const deny = createMiddleware(async () => new Response("denied", { status: 401 }
 const maker =
 	(routes: (app: App) => void) =>
 	(tree?: RouteTree): App => {
-		const app = honey<{}>()
-		if (tree) app.routeTree(tree)
+		const app = tree ? honey<{}>().routeTree(tree) : honey<{}>()
 		routes(app)
 		return app
 	}

@@ -71,7 +71,10 @@ export function delegatedRecords(g: HoneyGraph): [RouteId, RouteHandler][] {
  * catch-all with no leaf left to serve. Regenerating it (`honey generate`) brings them back in step.
  */
 export function assertTreeCurrent(g: HoneyGraph): void {
-	const stale = g.catchAll.size > 0 && unserved(g).length === 0 ? [...g.unexpected, ...g.catchAll.keys()] : g.unexpected
+	const stale =
+		g.catchAll.size > 0 && unserved(g).length === 0
+			? [...g.unexpected.keys(), ...g.catchAll.keys()]
+			: [...g.unexpected.keys()]
 	if (stale.length === 0) return
 	const verb = stale.length === 1 ? "is" : "are"
 	throw new Error(
