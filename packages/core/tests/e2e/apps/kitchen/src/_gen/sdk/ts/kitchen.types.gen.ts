@@ -7,6 +7,7 @@ export type CreateApiV1OrganizationResponse409 = {
 	status: 409
 	status_key: string
 	success: false
+	vars?: Record<string, number | string>
 }
 export type Err400InvalidInput = {
 	error_key: "invalid_input"
@@ -15,6 +16,7 @@ export type Err400InvalidInput = {
 	status: 400
 	status_key: string
 	success: false
+	vars?: Record<string, number | string>
 }
 export type Err401Unauthorized = {
 	error_key: "unauthorized"
@@ -23,6 +25,7 @@ export type Err401Unauthorized = {
 	status: 401
 	status_key: string
 	success: false
+	vars?: Record<string, number | string>
 }
 export type Err403OrgLimitReached = {
 	error_key: "org_limit_reached"
@@ -31,6 +34,7 @@ export type Err403OrgLimitReached = {
 	status: 403
 	status_key: string
 	success: false
+	vars?: Record<string, number | string>
 }
 export type Err500ApiError = {
 	error_key: "api_error"
@@ -39,6 +43,7 @@ export type Err500ApiError = {
 	status: 500
 	status_key: string
 	success: false
+	vars?: Record<string, number | string>
 }
 export type ListApiEventsResponse200 = string
 export type ListApiResponse200 = { id: string }

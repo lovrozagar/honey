@@ -542,6 +542,12 @@ components:
           type: string
         success:
           const: false
+        vars:
+          additionalProperties:
+            type:
+              - number
+              - string
+          type: object
       required:
         - error_key
         - fields
@@ -583,6 +589,12 @@ components:
           type: string
         success:
           const: false
+        vars:
+          additionalProperties:
+            type:
+              - number
+              - string
+          type: object
       required:
         - error_key
         - fields
@@ -624,6 +636,12 @@ components:
           type: string
         success:
           const: false
+        vars:
+          additionalProperties:
+            type:
+              - number
+              - string
+          type: object
       required:
         - error_key
         - fields
@@ -665,6 +683,12 @@ components:
           type: string
         success:
           const: false
+        vars:
+          additionalProperties:
+            type:
+              - number
+              - string
+          type: object
       required:
         - error_key
         - fields
@@ -708,6 +732,12 @@ components:
           type: string
         success:
           const: false
+        vars:
+          additionalProperties:
+            type:
+              - number
+              - string
+          type: object
       required:
         - error_key
         - fields

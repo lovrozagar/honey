@@ -425,6 +425,15 @@
           },
           "success": {
             "const": false
+          },
+          "vars": {
+            "additionalProperties": {
+              "type": [
+                "number",
+                "string"
+              ]
+            },
+            "type": "object"
           }
         },
         "required": [
@@ -484,6 +493,15 @@
           },
           "success": {
             "const": false
+          },
+          "vars": {
+            "additionalProperties": {
+              "type": [
+                "number",
+                "string"
+              ]
+            },
+            "type": "object"
           }
         },
         "required": [
@@ -582,6 +600,15 @@
           },
           "success": {
             "const": false
+          },
+          "vars": {
+            "additionalProperties": {
+              "type": [
+                "number",
+                "string"
+              ]
+            },
+            "type": "object"
           }
         },
         "required": [
@@ -641,6 +668,15 @@
           },
           "success": {
             "const": false
+          },
+          "vars": {
+            "additionalProperties": {
+              "type": [
+                "number",
+                "string"
+              ]
+            },
+            "type": "object"
           }
         },
         "required": [

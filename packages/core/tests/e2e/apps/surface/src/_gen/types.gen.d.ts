@@ -40,11 +40,11 @@ type CreateStatuRequestAa6c2c = { x: string }
 
 type CreateStatuResponse202 = { jobId: string }
 
-type DeleteOutNoContentResponse404 = { error_key: "not_found"; fields: Record<string, { error_key: string; message: string; path: string }[]>; message: string; status: 404; status_key: string; success: false }
+type DeleteOutNoContentResponse404 = { error_key: "not_found"; fields: Record<string, { error_key: string; message: string; path: string }[]>; message: string; status: 404; status_key: string; success: false; vars?: Record<string, number | string> }
 
-type Err400ValidationError = { error_key: "validation_error"; fields: Record<string, { error_key: string; message: string; path: string }[]>; message: string; status: 400; status_key: string; success: false }
+type Err400ValidationError = { error_key: "validation_error"; fields: Record<string, { error_key: string; message: string; path: string }[]>; message: string; status: 400; status_key: string; success: false; vars?: Record<string, number | string> }
 
-type Err401Unauthorized = { error_key: "unauthorized"; fields: Record<string, { error_key: string; message: string; path: string }[]>; message: string; status: 401; status_key: string; success: false }
+type Err401Unauthorized = { error_key: "unauthorized"; fields: Record<string, { error_key: string; message: string; path: string }[]>; message: string; status: 401; status_key: string; success: false; vars?: Record<string, number | string> }
 
 type GetInParamsMemberResponse200 = { memberId: string; orgId: string }
 

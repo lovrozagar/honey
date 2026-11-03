@@ -14,13 +14,13 @@ type CreateAccountSettingRequest = { notifications: boolean; theme: "dark" | "li
 
 type CreateResourceRequest = { name: string; type: "doc" | "image" | "video" }
 
-type CreateResourceResponse429 = { error_key: "rate_limited"; fields: Record<string, { error_key: string; message: string; path: string }[]>; message: string; status: 429; status_key: string; success: false }
+type CreateResourceResponse429 = { error_key: "rate_limited"; fields: Record<string, { error_key: string; message: string; path: string }[]>; message: string; status: 429; status_key: string; success: false; vars?: Record<string, number | string> }
 
-type Err401ExpiredTokenInvalidToken = { error_key: "expired_token" | "invalid_token"; fields: Record<string, { error_key: string; message: string; path: string }[]>; message: string; status: 401; status_key: string; success: false }
+type Err401ExpiredTokenInvalidToken = { error_key: "expired_token" | "invalid_token"; fields: Record<string, { error_key: string; message: string; path: string }[]>; message: string; status: 401; status_key: string; success: false; vars?: Record<string, number | string> }
 
-type Err403Forbidden = { error_key: "forbidden"; fields: Record<string, { error_key: string; message: string; path: string }[]>; message: string; status: 403; status_key: string; success: false }
+type Err403Forbidden = { error_key: "forbidden"; fields: Record<string, { error_key: string; message: string; path: string }[]>; message: string; status: 403; status_key: string; success: false; vars?: Record<string, number | string> }
 
-type Err404NotFound = { error_key: "not_found"; fields: Record<string, { error_key: string; message: string; path: string }[]>; message: string; status: 404; status_key: string; success: false }
+type Err404NotFound = { error_key: "not_found"; fields: Record<string, { error_key: string; message: string; path: string }[]>; message: string; status: 404; status_key: string; success: false; vars?: Record<string, number | string> }
 
 export type Routes = {
 	"/account": {
