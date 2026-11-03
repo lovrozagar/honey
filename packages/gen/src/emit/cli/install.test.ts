@@ -5,7 +5,10 @@
  *   checksums.txt from its GitHub Releases, verify checksums.txt's bundle as signed by the repository's release
  *   workflow on that tag, and read the `<PREFIX>_` variables; the script URL is the release's unless
  *   `installUrl` names another;
- * - without a repository there are no scripts;
+ * - without a repository there are no scripts and no installgen config;
+ * - installgen.config.mts is the scripts' config as a file: loaded, it writes both emitted scripts byte for byte, and
+ *   the pinned installgen's own CLI loads it under Node with nothing installed beside it and lists every URL the
+ *   scripts fetch for a tag;
  * - install.sh passes sh -n and shellcheck, install.ps1 parses under PowerShell;
  * - end to end: install.sh, pointed at a loopback copy of a goreleaser snapshot release built from the generated
  *   config, installs this host's binary after its sha256 check, and refuses a tampered checksums.txt.
@@ -13,13 +16,15 @@
 import { spawn, spawnSync } from "node:child_process"
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
 import { createServer, type Server } from "node:http"
-import { delimiter, join } from "node:path"
-import { generateInstallers } from "@lovrozagar/installgen"
+import { createRequire } from "node:module"
+import { delimiter, dirname, join } from "node:path"
+import { pathToFileURL } from "node:url"
+import { generateInstallers, type InstallgenConfig } from "@lovrozagar/installgen"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { goCacheDir, goEnv, withGo } from "../go/__fixtures__/go-env.ts"
 import { shop } from "./__fixtures__/shop.ts"
 import { syntaxCheck, toolBin, withTools } from "./__fixtures__/tools.ts"
-import { installerConfig } from "./install.ts"
+import { INSTALLGEN_CONFIG, INSTALLGEN_VERSION, installerConfig } from "./install.ts"
 import { type GoCliOptions, generateGoCli } from "./module.ts"
 import { SPAWN_TIMEOUT } from "../../gen/__fixtures__/spawn-timeout.ts"
 
@@ -56,9 +61,13 @@ describe("the install scripts' layout (phase g)", () => {
 		]).toEqual([true, true, true, false])
 	})
 
-	it("are not written without a repository, which they would download from", () => {
+	it("are not written without a repository, which they would download from, and neither is their config", () => {
 		const generated = files({})
-		expect([generated["install.sh"], generated["install.ps1"]]).toEqual([undefined, undefined])
+		expect([generated["install.sh"], generated["install.ps1"], generated[INSTALLGEN_CONFIG]]).toEqual([
+			undefined,
+			undefined,
+			undefined,
+		])
 	})
 
 	it.skipIf(!TOOLS)(
@@ -79,6 +88,69 @@ describe("the install scripts' layout (phase g)", () => {
 				"",
 				0,
 				"",
+			])
+		},
+	)
+})
+
+/** The installed installgen's manifest: the release the scripts are written by, and its CLI. */
+const installgen = () => {
+	const manifest = createRequire(import.meta.url).resolve("@lovrozagar/installgen/package.json")
+	const { bin, version } = JSON.parse(readFileSync(manifest, "utf8")) as {
+		bin: { installgen: string }
+		version: string
+	}
+	return { bin: join(dirname(manifest), bin.installgen), version }
+}
+
+/** `generated`'s installgen.config.mts, alone in a fresh directory. */
+function configDir(generated: Readonly<Record<string, string>>): string {
+	const dir = scratch("config")
+	writeFileSync(join(dir, INSTALLGEN_CONFIG), generated[INSTALLGEN_CONFIG] ?? "")
+	return dir
+}
+
+describe("installgen.config.mts, the scripts' config as a file", () => {
+	it("writes both emitted scripts byte for byte when loaded, with a repository and with installUrl", async () => {
+		const runs: GoCliOptions[] = [
+			{ repo: "acme/shop" },
+			{ envPrefix: "SHOP_CLI", installUrl: "https://shop.example.com/cli", repo: "acme/shop" },
+		]
+		for (const options of runs) {
+			const generated = files(options)
+			const file = join(configDir(generated), INSTALLGEN_CONFIG)
+			const config = ((await import(pathToFileURL(file).href)) as { default: InstallgenConfig }).default
+			const { ps1, sh } = generateInstallers(config)
+			expect([sh, ps1]).toEqual([generated["install.sh"], generated["install.ps1"]])
+		}
+	})
+
+	it("names the installgen release that writes the scripts, which the release workflow's npx runs", () => {
+		expect(INSTALLGEN_VERSION).toBe(installgen().version)
+	})
+
+	it(
+		"loads in installgen's own CLI under Node with nothing installed beside it, listing every file the scripts fetch for a tag",
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			const dir = configDir(files())
+			const ran = spawnSync(process.execPath, [installgen().bin, "check", "--list", "--default-version", "v1.2.3"], {
+				cwd: dir,
+				encoding: "utf8",
+			})
+			const base = "https://github.com/acme/shop/releases"
+			const platform = (os: string, arch: string) => [
+				`${os}/${arch} ${base}/download/v1.2.3/shop_${os}_${arch}${os === "windows" ? ".zip" : ".tar.gz"}`,
+				`${os}/${arch} ${base}/download/v1.2.3/checksums.txt`,
+				`${os}/${arch} ${base}/download/v1.2.3/checksums.txt.sigstore.json`,
+			]
+			expect([ran.status, ran.stderr, ran.stdout.trim().split("\n")]).toEqual([
+				0,
+				"",
+				[
+					`latest ${base}/latest/download/version.txt`,
+					...["linux", "darwin", "windows"].flatMap((os) => ["amd64", "arm64"].flatMap((arch) => platform(os, arch))),
+				],
 			])
 		},
 	)

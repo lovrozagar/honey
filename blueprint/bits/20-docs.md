@@ -54,6 +54,8 @@ The commands, as the installers run them (document them for a user verifying by 
 - the checksums: `cosign verify-blob --bundle checksums.txt.sigstore.json --certificate-identity https://github.com/<owner>/<repo>/.github/workflows/release.yml@refs/tags/<tag> --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt`;
 - an archive's build provenance: `gh attestation verify <archive> --repo <owner>/<repo>`.
 
+**rc.19 docs note (the release proves its installers):** with a repository the module also holds `installgen.config.mts`, the scripts' config as a file, and after the attestation the release workflow runs `npx --yes @lovrozagar/installgen@0.3.0 check --default-version "$GITHUB_REF_NAME"` over the tag's files, then holds `latest/download/version.txt` to the tag unless the release is a prerelease. A semver prerelease tag is a GitHub prerelease (`prerelease: auto`) that never becomes latest and reaches no package manager (`skip_upload: auto`). `docs/cli-release.md` documents both.
+
 **Bit 19 i2/j docs notes:** the README's `app.realtime("/rt", …)` block is stale (v1 has `realtime(app, path)`), fixed in this bit's docs pass; the e2e apps, the README and the bench were moved to `ws(app, path)` at the cutover.
 
 **Bit 19 h2 docs note (not a break, v0 parity):** a gateway's runtime `serveOpenApi` document has no service request or response bodies, because a generated tree carries no schemas. A gateway serves its generated document asset instead, as Anyrow does.

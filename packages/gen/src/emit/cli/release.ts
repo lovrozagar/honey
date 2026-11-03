@@ -10,11 +10,15 @@
  * `.github/workflows/release.yml` runs it on a `v*` tag alone: contents read by default; the release job alone gets
  * contents write and the OIDC token cosign and the build provenance attestation over every archive sign with;
  * checkout keeps no credentials; every action is pinned by commit; each channel's secret reaches goreleaser's step
- * env by name. Every value is a validated option (the binary, the module path, the repository, the channels), never
- * spec text.
+ * env by name. With a repository, a semver prerelease tag is published as a GitHub prerelease (`prerelease: auto`),
+ * which never becomes `latest`, and once the release is attested the workflow proves the install scripts work against
+ * it: `installgen check` over the tag's files (installgen.config.mts, written beside the scripts from the same
+ * layout), then, for a tag GitHub made latest, that `latest/download/version.txt` reads the tag. Every value is a
+ * validated option (the binary, the module path, the repository, the channels), never spec text.
  */
 
 import { channelBlock, type Release, SECRETS } from "./channels.ts"
+import { INSTALLGEN_VERSION } from "./install.ts"
 
 export { REPO, type Release, type ReleaseOptions, resolvedRelease } from "./channels.ts"
 
@@ -28,6 +32,7 @@ export const RELEASE_ACTIONS = {
 	cosign: "sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2",
 	goreleaser: "goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3",
 	setupGo: "actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0",
+	setupNode: "actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0",
 }
 
 /** A value as a YAML double-quoted scalar (a JSON string is one): a name like `true` or `1e3` stays a string. */
@@ -56,6 +61,8 @@ before:
   github:
     owner: ${q(release.owner)}
     name: ${q(release.name)}
+  # a semver prerelease tag (v1.2.0-rc.1) is a GitHub prerelease, which never moves latest: the install scripts' default
+  prerelease: auto
   extra_files:
 ${extra.map((file) => `    - glob: ./${file}\n`).join("")}`
 	return `${MARKER}
@@ -96,7 +103,50 @@ changelog:
 ${github}${(release?.channels ?? []).map((channel) => channelBlock(bin, channel)).join("")}`
 }
 
-/** .github/workflows/release.yml: goreleaser on a `v*` tag, publishing the signed release, then attesting it. */
+/** The `npx` that runs the installgen the scripts were written by, on installgen.config.mts in the module's root. */
+const INSTALLGEN = `npx --yes @lovrozagar/installgen@${INSTALLGEN_VERSION}`
+
+/**
+ * The steps that prove the install scripts work against the release just published, which a release with a repository
+ * runs after its attestation. The scripts install `<PREFIX>_VERSION` when it is set and otherwise the tag
+ * `latest/download/version.txt` reads, so a release must serve both paths:
+ * - every platform's archive under this tag, and its line in checksums.txt: `installgen check --default-version
+ *   <tag>`. The tag, not latest, is what this run published; checking latest instead would pass a prerelease on the
+ *   previous release's files and never look at this one's.
+ * - latest reads this tag, unless the tag is a prerelease. goreleaser publishes a semver prerelease as a GitHub
+ *   prerelease (`prerelease: auto`), which never becomes latest; every other release is published with GitHub's
+ *   `make_latest` default, true, so it is latest the moment it exists. Whether it is a prerelease is read back from
+ *   the release goreleaser made, not re-derived from the tag, and latest's URL from `check --list`, the one the
+ *   scripts read.
+ */
+const installerChecks = `      - uses: ${RELEASE_ACTIONS.setupNode}
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - name: Check every file the install scripts fetch for this tag
+        run: ${INSTALLGEN} check --default-version "$GITHUB_REF_NAME"
+      - name: Check latest reads this tag
+        shell: bash
+        env:
+          GH_TOKEN: \${{ github.token }}
+        run: |
+          prerelease="$(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json isPrerelease --jq .isPrerelease)"
+          if [ "$prerelease" = true ]; then
+            echo "$GITHUB_REF_NAME is a prerelease: latest stays on the last release"
+            exit 0
+          fi
+          url="$(${INSTALLGEN} check --list | awk '$1 == "latest" { print $2 }')"
+          latest="$(curl -fsSL --retry 3 "$url" | tr -d '[:space:]')"
+          if [ "$latest" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::$url reads '$latest', not $GITHUB_REF_NAME"
+            exit 1
+          fi
+`
+
+/**
+ * .github/workflows/release.yml: goreleaser on a `v*` tag, publishing the signed release, then attesting it, then,
+ * with a repository, checking the install scripts' files against it.
+ */
 export function releaseWorkflow(bin: string, release: Release | undefined): string {
 	const secrets = (release?.channels ?? []).flatMap((channel) => {
 		const secret = SECRETS[channel.kind]
@@ -104,7 +154,12 @@ export function releaseWorkflow(bin: string, release: Release | undefined): stri
 	})
 	return `${MARKER}
 # Releases ${bin} on a v* tag: goreleaser builds the six binaries and publishes them beside checksums.txt, which cosign
-# signs keyless as this workflow; every archive gets a build provenance attestation.
+# signs keyless as this workflow; every archive gets a build provenance attestation.${
+		release === undefined
+			? ""
+			: `
+# installgen check then proves the install scripts' files are published, and that latest reads a non-prerelease tag.`
+	}
 name: release
 on:
   push:
@@ -139,5 +194,5 @@ jobs:
 ${secrets.join("")}      - uses: ${RELEASE_ACTIONS.attest}
         with:
           subject-checksums: dist/checksums.txt
-`
+${release === undefined ? "" : installerChecks}`
 }

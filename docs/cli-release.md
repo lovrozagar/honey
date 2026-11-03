@@ -4,8 +4,8 @@
 repository. Besides the commands, it holds a goreleaser config, a GitHub Actions release workflow, and `install.sh` and
 `install.ps1`. It ships no README: you write one for your users, and this page is what it should say.
 
-Without `--cli-repo` there is no release to install from, so the module has no install scripts and its goreleaser
-config releases to the git remote's repository.
+Without `--cli-repo` there is no release to install from, so the module has no install scripts, no
+`installgen.config.mts`, and its goreleaser config releases to the git remote's repository.
 
 ## What the module documents itself
 
@@ -45,6 +45,15 @@ Pushing a `v*` tag runs the release workflow:
 3. cosign signs `checksums.txt` keyless (`checksums.txt.sigstore.json`).
 4. It pushes each channel below that the options turned on.
 5. GitHub attests the build's provenance.
+6. installgen checks the release against the install scripts. `installgen.config.mts`, written beside the scripts from
+   the same layout, drives `npx --yes @lovrozagar/installgen@0.3.0 check --default-version "$GITHUB_REF_NAME"`, which
+   fails the run unless every platform's archive is published under the tag and listed in `checksums.txt`. Then,
+   unless the release is a prerelease, the run checks that `releases/latest/download/version.txt` reads the tag,
+   which is what the one-liners install.
+
+A tag with a semver prerelease part (`v1.2.0-rc.1`) is published as a GitHub prerelease. It never becomes the
+latest release, so the one-liners keep installing the last full release, and the Homebrew, Scoop, winget and AUR
+channels skip it. Users who want it name it: `<PREFIX>_VERSION=v1.2.0-rc.1`.
 
 ## Channels
 

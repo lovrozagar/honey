@@ -2,7 +2,8 @@
  * The release channels (release program D7): each channel's goreleaser block from its options (a Homebrew cask that
  * clears macOS's quarantine flag, Scoop, a winget pull request from a fork, AUR `-bin`, nfpm deb/rpm/apk), exactly
  * the configured channels' secrets in goreleaser's step env, each channel refused, naming the flag, without a value it
- * needs or without a repository, and each invalid option refused at generate.
+ * needs or without a repository, and each invalid option refused at generate. Every channel that pushes to a package
+ * manager skips a prerelease tag (`skip_upload: auto`); the Linux packages are release files and ship with it.
  */
 import { describe, expect, it } from "vitest"
 import { CHANNELS } from "./__fixtures__/release.ts"
@@ -31,6 +32,7 @@ const CHANNEL_BLOCKS = {
 			maintainers: ["Acme <ops@example.com>"],
 			name: "shop-bin",
 			private_key: "{{ .Env.AUR_SSH_KEY }}",
+			skip_upload: "auto",
 		},
 	],
 	homebrew_casks: [
@@ -44,6 +46,7 @@ const CHANNEL_BLOCKS = {
 			},
 			name: "shop",
 			repository: { name: "homebrew-tap", owner: "acme", token: "{{ .Env.HOMEBREW_TAP_TOKEN }}" },
+			skip_upload: "auto",
 		},
 	],
 	nfpms: [
@@ -61,6 +64,7 @@ const CHANNEL_BLOCKS = {
 			...ABOUT,
 			name: "shop",
 			repository: { name: "scoop-bucket", owner: "acme", token: "{{ .Env.SCOOP_BUCKET_TOKEN }}" },
+			skip_upload: "auto",
 		},
 	],
 	winget: [
@@ -78,6 +82,7 @@ const CHANNEL_BLOCKS = {
 				token: "{{ .Env.WINGET_TOKEN }}",
 			},
 			short_description: ABOUT.description,
+			skip_upload: "auto",
 		},
 	],
 }

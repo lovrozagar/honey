@@ -1,8 +1,11 @@
 /**
  * The channels a generated CLI's release publishes to (release program D7): the flat `--cli-*` options parsed into
  * one `Release`, each channel holding exactly the metadata its goreleaser block needs and refused, naming the flag,
- * without it or without a repository; and each channel's goreleaser block and the secret its push reads.
+ * without it or without a repository; and each channel's goreleaser block and the secret its push reads. A channel
+ * that pushes to a package manager skips a prerelease tag (`skip_upload: auto`), as the release keeps it off `latest`:
+ * a user who asked for nothing gets no release candidate.
  */
+import { checked, HTTPS_URL, PERSON, refuse, SPDX_EXPRESSION } from "../shared/metadata.ts"
 import { q } from "./release.ts"
 
 /** The Linux package formats nfpm builds. */
@@ -62,21 +65,14 @@ export const SECRETS: Readonly<Record<Channel["kind"], string | undefined>> = {
 	winget: "WINGET_TOKEN",
 }
 
-/* a description: one line of printable text, at most 256 characters (winget's ShortDescription); a homepage or an
- * install URL: https and a host; a license: an SPDX expression of ids joined by AND, OR or WITH; a maintainer:
- * `Name <email>`; a winget publisher: a name of letters, digits, spaces and `.,&'-`, at most 64 characters */
+/* a description: one line of printable text, at most 256 characters (winget's ShortDescription); a winget
+ * publisher: a name of letters, digits, spaces and `.,&'-`, at most 64 characters; a homepage, an install URL, a
+ * license and a maintainer take the grammars every target's package metadata shares (../shared/metadata.ts) */
 const DESCRIPTION = /^\P{Cc}{1,256}$/u
-const HTTPS_URL = /^https:\/\/[A-Za-z0-9.-]+(?::\d+)?(?:\/[A-Za-z0-9._~%!$&'()*+,;=:@/-]*)?$/
-const LICENSE = /^[A-Za-z0-9.+-]+(?: (?:AND|OR|WITH) [A-Za-z0-9.+-]+)*$/
-const MAINTAINER = /^[^<>\p{Cc}]+ <[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+>$/u
 const PUBLISHER = /^[A-Za-z0-9][A-Za-z0-9 .,&'-]{0,63}$/
 /* a GitHub repository: its owner 1 to 39 letters, digits and single inner hyphens; its name 1 to 100 of letters,
  * digits, `.`, `_` and `-`, not `.` or `..` and not ending in `.git` */
 export const REPO = /^[A-Za-z0-9](?:-?[A-Za-z0-9]){0,38}\/(?!\.\.?$)(?![\s\S]*\.git$)[A-Za-z0-9._-]{1,100}$/
-
-const refuse = (option: string, value: string): never => {
-	throw new Error(`Invalid ${option}: ${JSON.stringify(value)}`)
-}
 
 /** `owner/name` split, once REPO has checked it. */
 const split = (repo: string) => {
@@ -89,12 +85,6 @@ function repoOption(option: string, value: string | undefined): { owner: string;
 	if (value === undefined) return undefined
 	if (!REPO.test(value)) refuse(option, value)
 	return split(value)
-}
-
-/** A checked option, or undefined when not given. */
-function checked(option: string, value: string | undefined, grammar: RegExp): string | undefined {
-	if (value !== undefined && !grammar.test(value)) refuse(option, value)
-	return value
 }
 
 const known = (each: string): each is PackageFormat => (PACKAGE_FORMATS as readonly string[]).includes(each)
@@ -130,8 +120,8 @@ function needed(option: string, value: string | undefined, channel: string): str
 export function resolvedRelease(options: ReleaseOptions, repo: string | undefined): Release | undefined {
 	const description = checked("description", options.description, DESCRIPTION)
 	const homepage = checked("homepage", options.homepage, HTTPS_URL)
-	const license = checked("license", options.license, LICENSE)
-	const maintainer = checked("maintainer", options.maintainer, MAINTAINER)
+	const license = checked("license", options.license, SPDX_EXPRESSION)
+	const maintainer = checked("maintainer", options.maintainer, PERSON)
 	const installUrl = checked("installUrl", options.installUrl?.replace(/\/+$/, ""), HTTPS_URL)
 	const tap = repoOption("homebrewTap", options.homebrewTap)
 	const bucket = repoOption("scoopBucket", options.scoopBucket)
@@ -207,6 +197,7 @@ export function channelBlock(bin: string, channel: Channel): string {
 			return `# the Homebrew cask, pushed to the tap; the binaries are not notarized, so it clears macOS's quarantine flag
 homebrew_casks:
   - name: ${q(bin)}
+    skip_upload: auto
 ${pushTo(channel.owner, channel.name, SECRETS.homebrew as string, "    ")}${aboutLines(channel.about)}    hooks:
       post:
         install: |
@@ -218,11 +209,13 @@ ${pushTo(channel.owner, channel.name, SECRETS.homebrew as string, "    ")}${abou
 			return `# the Scoop manifest, pushed to the bucket
 scoops:
   - name: ${q(bin)}
+    skip_upload: auto
 ${pushTo(channel.owner, channel.name, SECRETS.scoop as string, "    ")}${aboutLines(channel.about)}`
 		case "winget":
 			return `# the winget manifests, pushed to the fork and proposed to microsoft/winget-pkgs
 winget:
   - name: ${q(bin)}
+    skip_upload: auto
     publisher: ${q(channel.publisher)}
     package_identifier: ${q(`${channel.publisher.replace(/[^A-Za-z0-9]/g, "")}.${bin}`)}
 ${aboutLines(channel.about, "short_description")}    repository:
@@ -241,6 +234,7 @@ ${aboutLines(channel.about, "short_description")}    repository:
 			return `# the AUR ${bin}-bin package, pushed over SSH
 aurs:
   - name: ${q(`${bin}-bin`)}
+    skip_upload: auto
 ${aboutLines(channel.about)}    maintainers: [${q(channel.about.maintainer)}]
     private_key: "{{ .Env.${SECRETS.aur as string} }}"
     git_url: ${q(`ssh://aur@aur.archlinux.org/${bin}-bin.git`)}

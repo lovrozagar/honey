@@ -15,7 +15,7 @@ import { compareCodeUnits } from "../shared/lang.ts"
 import { generateGoSdk, goCallPlans, WEBSOCKET, WEBSOCKET_SUM } from "../go/sdk.ts"
 import { commandTree } from "./commands.ts"
 import { discoveryEntries } from "./discovery.ts"
-import { installers } from "./install.ts"
+import { installFiles } from "./install.ts"
 import { cmdFiles } from "./layout.ts"
 import { goreleaserFile, type ReleaseOptions, releaseWorkflow, REPO, resolvedRelease } from "./release.ts"
 import { skillFile, skillPath } from "./skills.ts"
@@ -199,7 +199,7 @@ export function generateGoCli(document: Record<string, unknown>, options: GoCliO
 	const scripts =
 		release === undefined
 			? {}
-			: installers({
+			: installFiles({
 					bin: binaryName,
 					installUrl: release.installUrl,
 					prefix: envPrefix,
