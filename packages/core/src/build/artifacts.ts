@@ -72,8 +72,12 @@ async function typesOf(
 		converters: { effect: await effectConverter() },
 		info: { title: outputs[0]?.title ?? "API", version: outputs[0]?.version ?? "0.0.0" },
 		invalidate: outputs.length > 0 ? "off" : config.codegen.invalidate,
-		/* the first output's scheme wins a name, so a route naming any declared scheme is not reported */
-		securitySchemes: Object.assign({}, ...outputs.map((entry) => entry.securitySchemes ?? {}).reverse()),
+		/* the first output's scheme wins a name, so a route naming any declared scheme is not reported; with no output
+		   nothing declares a scheme, and a named one is no error */
+		securitySchemes:
+			outputs.length === 0
+				? undefined
+				: Object.assign({}, ...outputs.map((entry) => entry.securitySchemes ?? {}).reverse()),
 	})
 	const extracted = run.codegen.extractTypes({
 		entryPath: source.entry,

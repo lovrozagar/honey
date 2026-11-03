@@ -115,6 +115,12 @@ const WITH_HIDDEN_ADDITION = [
 ]
 
 /* a ws route after the app's chain; the import hoists */
+const WITH_SECURED = [
+	'\t.get("/secured")',
+	'\t.meta({ security: "jwt" } as never)',
+	'\t.handler((c) => c.res.text("ok", "s"))',
+]
+
 const WITH_SOCKET = ['import { ws } from "@lovrozagar/honey/ws"', 'ws(app, "/live").handler({})']
 
 describe("artifactsOf (bit 19 h2)", () => {
@@ -179,6 +185,15 @@ describe("artifactsOf (bit 19 h2)", () => {
 })
 
 describe("artifactsOf (bit 19 h2), continued (2)", () => {
+	it(
+		"builds types alone for routes naming a security scheme no OpenAPI output declares",
+		async () => {
+			const { dir } = fresh({ "src/app.ts": appSource({ extra: WITH_SECURED }) })
+			const { files } = await artifacts({ app: "src/app.ts", codegen: { tree: false, types: true } }, dir)
+			expect(files["src/_gen/types.gen.d.ts"]).toContain('"GET /secured"')
+		},
+		SLOW,
+	)
 	it("refuses types for a gateway with no app, its types having no module to be read from", async () => {
 		const made = fresh({ "src/down.ts": appSource() })
 		made.write(
