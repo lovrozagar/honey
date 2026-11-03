@@ -8,7 +8,7 @@ import type { MaybePromise, MiddlewareFn, RuntimeMiddleware } from "../middlewar
 import type {
 	AllChainMeta,
 	DeclaredMeta,
-	DefaultMeta,
+	HoneyMeta,
 	ScopedMwEntry,
 	WithChainMeta,
 	WithMiddlewareMeta,
@@ -171,7 +171,7 @@ export class Honey<
 	 */
 	meta<
 		TNewMeta extends Record<string, unknown> = never,
-		TValues extends Partial<DefaultMeta> & Partial<TNewMeta> = Partial<DefaultMeta> & Partial<TNewMeta>,
+		TValues extends HoneyMeta & Partial<TNewMeta> = HoneyMeta & Partial<TNewMeta>,
 	>(
 		values: TValues,
 	): Honey<TEnv, TCtx, TRoutes, AllChainMeta<TNewMeta>, TErrorFactory, TDefaultErrors, TBasePath, TTaps, TScopedMw>
@@ -180,7 +180,7 @@ export class Honey<
 	 * values reach the routes' types (`internal: true`).
 	 */
 	meta<
-		const TValues extends Partial<DefaultMeta> &
+		const TValues extends HoneyMeta &
 			([DeclaredMeta<TMeta>] extends [never] ? Record<string, unknown> : Partial<DeclaredMeta<TMeta>>),
 	>(
 		values: TValues,

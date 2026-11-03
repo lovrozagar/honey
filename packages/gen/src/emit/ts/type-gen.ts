@@ -38,8 +38,8 @@ export type GenerateTypesOptions = {
 const RESERVED = [
 	"HoneyContext",
 	"HoneyError",
+	"HoneyMeta",
 	"Omit",
-	"OpenApiMeta",
 	"Partial",
 	"Readonly",
 	"Record",
@@ -175,7 +175,7 @@ function ctxMeta(extracted: ExtractedTypes | null | undefined, literal: string):
 	const declared = extracted?.meta ?? null
 	/* the OpenAPI keys the declared meta does not redefine: a consumer that types `security` its own way holds
 	   that type in the handler, and intersecting honey's would conflict with it */
-	return declared === null ? literal : `Partial<Omit<OpenApiMeta, keyof ${declared}>> & ${declared}`
+	return declared === null ? literal : `Partial<Omit<HoneyMeta, keyof ${declared}>> & ${declared}`
 }
 
 /** One `Routes[pattern][method]` entry. */
@@ -253,13 +253,13 @@ export function generateTypes(options: GenerateTypesOptions): string {
 	const ctx: Ctx = { names, resolve: (schema) => irToTs(schema, names) }
 	const hasErrors = [...routes.values()].some((op) => Object.keys(op.extensions.errors ?? {}).length > 0)
 	const selectors = [...routes.keys()].sort(compareCodeUnits)
-	/* OpenApiMeta only when a declared meta is emitted: the ctx's meta is that type and the keys a route may add */
+	/* HoneyMeta only when a declared meta is emitted: the ctx's meta is that type and the keys a route may add */
 	const declaredMeta = options.extracted?.meta ?? null
 	const imports = [
 		"HoneyContext",
 		"WithOutput",
 		...(hasErrors ? ["HoneyError"] : []),
-		...(declaredMeta === null ? [] : ["OpenApiMeta"]),
+		...(declaredMeta === null ? [] : ["HoneyMeta"]),
 	]
 	const out = [`import type { ${imports.join(", ")} } from "@lovrozagar/honey"`]
 	out.push(...baseCtx(options.extracted, name))

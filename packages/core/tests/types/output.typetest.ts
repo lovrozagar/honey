@@ -10,7 +10,7 @@ import { createMiddleware } from "../../src/middleware/middleware.ts"
 import type { TypedResponse } from "../../src/response/response.ts"
 import { honey } from "../../src/routing/app.ts"
 import { defineErrors } from "../../src/errors/errors.ts"
-import type { InferRouteInput, InferRouteOutput, InferRoutes, OpenApiMeta } from "../../src/routing/app-types.ts"
+import type { HoneyMeta, InferRouteInput, InferRouteOutput, InferRoutes } from "../../src/routing/app-types.ts"
 import type { RouteSelectorOf, SelectorOf, WithOutput } from "../../src/routing/codegen-types.ts"
 import type { AllowedResMethods, ApplyOutput, OutputSchemas } from "../../src/routing/output-types.ts"
 
@@ -378,7 +378,7 @@ describe("the codegen surface (O6): WithOutput, HoneyCodegen and route selectors
 		expectTypeOf<SelectorOf<{ routeSelector: "GET /a" | "POST /b" }>>().toEqualTypeOf<"GET /a" | "POST /b">()
 		expectTypeOf<SelectorOf<{}>>().toEqualTypeOf<string>()
 		expectTypeOf<RouteSelectorOf>().toEqualTypeOf<string>()
-		expectTypeOf<NonNullable<OpenApiMeta["invalidate"]>>().toEqualTypeOf<readonly string[]>()
+		expectTypeOf<NonNullable<HoneyMeta["invalidate"]>>().toEqualTypeOf<readonly string[]>()
 		honey<{}>()
 			.get("/a")
 			.meta({ invalidate: ["GET /a", "GET /anything"] })

@@ -2,7 +2,8 @@
 
 Middleware runs in registration order around the handler, may short-circuit, and may extend `ctx` for
 everything below it. A `MiddlewareFn<Requires, Adds>` (or `createMiddleware`) types what it reads and what it
-adds. Call `await next()` to run the rest of the chain: it
+adds. A middleware that reads route meta types its ctx `HoneyCtx<Env, RouteMeta>`, so `ctx.meta` carries the built-in
+keys and the app's own. Call `await next()` to run the rest of the chain: it
 returns the downstream response, synchronously when everything below ran synchronously.
 
 The edge set is plain middleware, each from its own subpath, so an app bundles only what it imports: `cors`,

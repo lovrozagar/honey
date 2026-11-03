@@ -7,6 +7,7 @@ import { describe, expectTypeOf, it } from "vitest"
 import { createMiddleware } from "../../src/middleware/middleware.ts"
 import { honey } from "../../src/routing/app.ts"
 import type {
+	HoneyMeta,
 	InferBasePath,
 	InferRouteCtx,
 	InferRouteMeta,
@@ -14,7 +15,6 @@ import type {
 	InferRoutePaths,
 	InferRoutes,
 	MergeRoute,
-	OpenApiMeta,
 	RouteRecord,
 } from "../../src/routing/app-types.ts"
 
@@ -321,6 +321,6 @@ describe("the mcp meta", () => {
 			.handler((ctx) => ctx.res.json("ok", {}))
 		// @ts-expect-error mcp is a boolean, never a string
 		app.get("/bad").meta({ mcp: "yes" })
-		expectTypeOf<OpenApiMeta["mcp"]>().toEqualTypeOf<boolean | undefined>()
+		expectTypeOf<HoneyMeta["mcp"]>().toEqualTypeOf<boolean | undefined>()
 	})
 })

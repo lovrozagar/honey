@@ -14,7 +14,7 @@ import { createWsSession } from "../ws/session.ts"
 import { compileInput, type InferInputMap, type NonBodyInput, type InputStep } from "../input/input.ts"
 import { joinPatterns, parsePattern } from "./pattern.ts"
 import { addRoute, type HandleView, type HoneyGraph, type PendingRoute, settle } from "./register.ts"
-import type { DefaultMeta } from "./app-types.ts"
+import type { HoneyMeta } from "./app-types.ts"
 import type { ErrorFactories } from "./settings.ts"
 import type { ParamsFromPath } from "./types.ts"
 
@@ -79,7 +79,7 @@ function upgrader(callbacks: WSHandler<unknown>, policy: WSOriginPolicy | null, 
 type HttpOnlyMeta = "deprecated" | "invalidate" | "mcp" | "security"
 
 /** What a WebSocket route's `.meta()` takes: an HTTP route's meta, the HTTP-only builtins refused. */
-export type WsMeta<TMeta = never> = Omit<Partial<DefaultMeta>, HttpOnlyMeta> & {
+export type WsMeta<TMeta = never> = Omit<HoneyMeta, HttpOnlyMeta> & {
 	readonly [K in HttpOnlyMeta]?: never
 } & ([TMeta] extends [never] ? {} : TMeta)
 

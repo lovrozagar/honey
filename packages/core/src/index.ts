@@ -35,7 +35,6 @@ export type { StatusKey } from "./response/status.ts"
 export { Honey, honey } from "./routing/app.ts"
 export type {
 	ComputeErrorsByStatus,
-	DefaultMeta,
 	HoneyCtx,
 	HoneyMeta,
 	InferBasePath,
@@ -52,7 +51,6 @@ export type {
 	InferRouteOutput,
 	InferRoutePaths,
 	InferRoutes,
-	OpenApiMeta,
 	RouteRecord,
 } from "./routing/app-types.ts"
 export type { HoneyCodegen, RouteSelectorOf, WithOutput } from "./routing/codegen-types.ts"

@@ -9,7 +9,8 @@ import * as z from "zod"
 import { defineErrors } from "../../src/errors/errors.ts"
 import { createMiddleware, type MiddlewareFn } from "../../src/middleware/middleware.ts"
 import { honey } from "../../src/routing/app.ts"
-import type { InferBasePath, InferCtx, InferEnv } from "../../src/routing/app-types.ts"
+import type { MetaSpecContext, HoneyMetaSpec } from "../../src/meta/meta-spec-merge.ts"
+import type { HoneyCtx, HoneyMeta, InferBasePath, InferCtx, InferEnv } from "../../src/routing/app-types.ts"
 
 type Query = (sql: string) => unknown[]
 type DbCtx = { db: { query: Query } }
@@ -226,6 +227,45 @@ describe("createMiddleware's errors and meta", () => {
 			// @ts-expect-error captcha is required and nothing supplies it
 			.meta({ worker: "a" })
 			.handler((c) => c.res.text("ok", "x"))
+	})
+})
+
+describe("HoneyCtx<TEnv, TMeta>: a middleware typed by the meta its routes declare", () => {
+	type RouteMeta = { captcha?: boolean; worker?: "extract" | "saas" }
+	type Env = { KEY: string }
+	const withWorker = createMiddleware((ctx: HoneyCtx<Env, RouteMeta>, next) => {
+		expectTypeOf(ctx.meta.worker).toEqualTypeOf<"extract" | "saas" | undefined>()
+		expectTypeOf(ctx.meta.deprecated).toEqualTypeOf<boolean | undefined>()
+		expectTypeOf(ctx.env.KEY).toEqualTypeOf<string>()
+		return next()
+	})
+
+	it("reads its meta typed, and its routes read the same meta typed", () => {
+		honey<Env>()
+			.meta<RouteMeta>()
+			.use(withWorker)
+			.get("/x")
+			.handler((c) => {
+				expectTypeOf(c.meta.worker).toEqualTypeOf<"extract" | "saas" | undefined>()
+				return c.res.text("ok", "x")
+			})
+	})
+
+	it("metaSpec callbacks read the app's meta, typed", () => {
+		const spec: HoneyMetaSpec<RouteMeta> = {
+			meta: {
+				captcha: "x-captcha",
+				worker: {
+					key: "x-worker",
+					map: (value, ctx: MetaSpecContext<RouteMeta>) => {
+						expectTypeOf(ctx.meta.captcha).toEqualTypeOf<boolean | undefined>()
+						return value
+					},
+				},
+			},
+		}
+		honey<Env>().meta<RouteMeta>().metaSpec(spec)
+		expectTypeOf<MetaSpecContext["meta"]>().toEqualTypeOf<Readonly<HoneyMeta<Record<string, unknown>>>>()
 	})
 })
 

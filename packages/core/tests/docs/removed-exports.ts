@@ -59,6 +59,7 @@ const SHAPE = "an internal shape of the route builder's types, never written in 
  */
 export const REMOVED_NAMES: Readonly<Record<string, Verdict>> = {
 	ClientInfo: { kind: "guide" },
+	DefaultMeta: { kind: "guide" },
 	GenerateOptions: { kind: "internal", why: PLUGIN },
 	HoneyGoCliConfig: { kind: "internal", why: PLUGIN },
 	HoneySdkPortsConfig: { kind: "internal", why: PLUGIN },
@@ -73,6 +74,7 @@ export const REMOVED_NAMES: Readonly<Record<string, Verdict>> = {
 	MatchResult: { kind: "internal", why: TREE },
 	MetaSpecTarget: { kind: "internal", why: SHAPE },
 	NodeUpgradeData: { kind: "internal", why: ADAPTER },
+	OpenApiMeta: { kind: "guide" },
 	OutputSchemaDef: { kind: "internal", why: SHAPE },
 	OutputValidator: { kind: "internal", why: TREE },
 	Overwrite: { kind: "internal", why: SHAPE },

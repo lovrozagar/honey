@@ -980,3 +980,21 @@ const withAuth = createMiddleware((_ctx: { req: Request }, next) => next({ user:
 	errors: [errors, "unauthorized"],
 })
 ```
+
+## `DefaultMeta` and `OpenApiMeta` are `HoneyMeta`
+
+One type names route meta: `HoneyMeta` is the built-in keys, and `HoneyMeta<RouteMeta>` adds your own. A middleware
+types the meta it reads with `HoneyCtx<Env, RouteMeta>`, and a metaSpec `map` or `expand` gets `MetaSpecContext<RouteMeta>`.
+
+```ts v0
+import type { DefaultMeta, OpenApiMeta } from "@lovrozagar/honey"
+type Summary = OpenApiMeta["summary"]
+```
+
+```ts
+import { createMiddleware, type HoneyCtx, type HoneyMeta } from "@lovrozagar/honey"
+
+type RouteMeta = { worker?: "extract" | "saas" }
+type Summary = HoneyMeta["summary"]
+const withWorker = createMiddleware((ctx: HoneyCtx<{}, RouteMeta>, next) => next({ worker: ctx.meta.worker ?? "saas" }))
+```

@@ -14,7 +14,7 @@ import type {
 	ApplyScoped,
 	ChainSupplied,
 	ComputeErrorsByStatus,
-	DefaultMeta,
+	HoneyMeta,
 	HandlerCtx,
 	InitAccMeta,
 	MergeRoute,
@@ -300,7 +300,7 @@ export class RouteBuilder<B extends BuilderTypes> {
 	}
 
 	/** Set the route's meta, merged over the chain's. A repeated `invalidate` entry is removed. */
-	meta<TRouteMeta extends Partial<DefaultMeta> & ([B["meta"]] extends [never] ? {} : ChainSupplied<B["meta"]>)>(
+	meta<TRouteMeta extends HoneyMeta & ([B["meta"]] extends [never] ? {} : ChainSupplied<B["meta"]>)>(
 		meta: TRouteMeta,
 	): BuilderChain<
 		Next<

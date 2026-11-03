@@ -8,11 +8,23 @@ import type { TapMethod } from "./tap.ts"
 import type { StatusKey } from "../response/status.ts"
 import type { InferOutput, StandardSchemaLike } from "../validation/standard-schema.ts"
 
-/** The request context a handler or middleware sees, without the framework's internal slot. */
-export type HoneyCtx<TEnv = Record<string, unknown>> = Omit<HoneyContext<TEnv>, typeof REQUEST>
+/**
+ * The request context a handler or middleware sees, without the framework's internal slot. `TMeta` types `ctx.meta`:
+ * a middleware typed `HoneyCtx<Env, RouteMeta>` mounts on an app that declared `meta<RouteMeta>()`.
+ */
+export type HoneyCtx<TEnv = Record<string, unknown>, TMeta = Record<string, unknown>> = Omit<
+	HoneyContext<TEnv>,
+	typeof REQUEST | "meta"
+> & {
+	/** The matched route's meta: the built-in keys and the app's own. */
+	readonly meta: Readonly<HoneyMeta<TMeta>>
+}
 
-/** Built-in route meta keys. */
-export type OpenApiMeta = {
+/**
+ * Route meta: the built-in keys every route accepts, and the app's own `T`. Name it wherever you declare route meta,
+ * as in `app.meta<HoneyMeta<RouteMeta>>()`.
+ */
+export type HoneyMeta<T = {}> = {
 	/** Marks the operation deprecated in the generated OpenAPI document. */
 	deprecated?: boolean
 	/** Longer description of the operation, emitted as the OpenAPI `description`. */
@@ -48,23 +60,14 @@ export type OpenApiMeta = {
 	summary?: string
 	/** Tag or tags that group the operation in the generated OpenAPI document. */
 	tags?: string | string[]
-}
-
-/** The meta keys every route accepts without declaring them: the built-in OpenAPI keys. */
-export type DefaultMeta = OpenApiMeta
+} & T
 
 /**
  * The handle's meta after the one-call `meta<T>(values)`: every declared key counts as set, since one call
  * cannot know which it set (TypeScript has no partial type-argument inference). The two-call form records the
  * values it was given, so a key nothing set stays required there.
  */
-export type AllChainMeta<TMeta> = WithChainMeta<TMeta, Partial<DefaultMeta> & Partial<TMeta>>
-
-/**
- * The route meta a consumer declares: the OpenAPI keys and its own. Name it wherever you declare route meta, as in
- * `app.meta<HoneyMeta<RouteMeta>>()`.
- */
-export type HoneyMeta<T = {}> = OpenApiMeta & T
+export type AllChainMeta<TMeta> = WithChainMeta<TMeta, HoneyMeta & Partial<TMeta>>
 
 /** A middleware scoped by path at the type level: what it adds to routes under `path`. */
 export type ScopedMwEntry = {

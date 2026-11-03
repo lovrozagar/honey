@@ -10,7 +10,7 @@ import type { HoneyContext } from "../../src/context/context.ts"
 import { defineErrors } from "../../src/errors/errors.ts"
 import { createMiddleware, type MiddlewareFn } from "../../src/middleware/middleware.ts"
 import { honey } from "../../src/routing/app.ts"
-import type { HoneyMeta, OpenApiMeta } from "../../src/routing/app-types.ts"
+import type { HoneyMeta } from "../../src/routing/app-types.ts"
 import type {
 	InferBasePath,
 	InferCtx,
@@ -36,9 +36,9 @@ type AppMeta = { auth?: "public" | "required"; tags?: string }
 
 describe("HoneyMeta", () => {
 	/* 0.7.3's public alias for "the OpenAPI keys and mine" (bit 22 a): a consumer declares its route meta with it */
-	it("is the OpenAPI meta keys intersected with the consumer's own", () => {
+	it("is the built-in meta keys intersected with the consumer's own", () => {
 		expectTypeOf<HoneyMeta<{ worker: "extract" }>>().toExtend<{ summary?: string; worker: "extract" }>()
-		expectTypeOf<HoneyMeta>().toEqualTypeOf<OpenApiMeta>()
+		expectTypeOf<HoneyMeta["summary"]>().toEqualTypeOf<string | undefined>()
 		const app = honey<{}>().meta<HoneyMeta<{ worker: "extract" }>>().meta({ worker: "extract" })
 		app
 			.get("/tables")
@@ -317,7 +317,7 @@ describe("ctx.meta beside chain meta", () => {
 	// v0: 1e6272505d
 	// v0: 28628ff81e
 	// v0: 81869ea9bd
-	it("ctx.meta beside chain meta: a route's values narrow it, DefaultMeta's keys beside TMeta's; a bare route gets the app type", () => {
+	it("ctx.meta beside chain meta: a route's values narrow it, HoneyMeta's keys beside TMeta's; a bare route gets the app type", () => {
 		const base = honey<TestEnv>().meta<AppMeta>().meta({ auth: "required" }).context({ region: "eu" }).use(trace)
 		base
 			.post("/orgs/:orgId")
@@ -337,7 +337,7 @@ describe("ctx.meta beside chain meta", () => {
 			expectTypeOf(ctx.meta.tags).toEqualTypeOf<AppMeta["tags"]>()
 			return ctx.res.text("ok", "ok")
 		})
-		// @ts-expect-error a key neither TMeta nor DefaultMeta has
+		// @ts-expect-error a key neither TMeta nor HoneyMeta has
 		base.get("/x").meta({ unknown: true })
 	})
 })

@@ -143,7 +143,7 @@ function builtins(): CompiledEntry[] {
 
 function compileEntry(
 	key: string,
-	entry: MetaSpecEntry<never> | MetaSpecSchemaEntry<never>,
+	entry: MetaSpecEntry<never, never> | MetaSpecSchemaEntry<never>,
 	rank: 1 | 2,
 	diagnostics: MetaSpecDiagnostics,
 ): CompiledEntry | null {
@@ -222,7 +222,8 @@ const CONFLICT = {
 export function compileMetaSpec(config: MetaSpecConfig | null, diagnostics: MetaSpecDiagnostics): CompiledMetaSpec {
 	const overrides = config?.meta ?? {}
 	const known = new Set(HIDDEN)
-	const compile = (key: string, entry: MetaSpecEntry<never>, rank: 1 | 2) => compileEntry(key, entry, rank, diagnostics)
+	const compile = (key: string, entry: MetaSpecEntry<never, never>, rank: 1 | 2) =>
+		compileEntry(key, entry, rank, diagnostics)
 	const meta = [
 		...builtins().map((entry) =>
 			Object.hasOwn(overrides, entry.sourceKey) ? compile(entry.sourceKey, overrides[entry.sourceKey], 2) : entry,
