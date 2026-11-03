@@ -34,6 +34,7 @@ describe("the request-log field catalog", () => {
 		expect([...REQUEST_LOG_FIELDS]).toEqual([
 			"bytes",
 			"durationMs",
+			"errorKey",
 			"kind",
 			"method",
 			"path",

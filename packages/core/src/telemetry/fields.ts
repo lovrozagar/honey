@@ -9,6 +9,8 @@ export type RequestLogEntry = {
 	readonly bytes?: number
 	/** Milliseconds from the request's arrival until its response body ended or was cancelled, rounded to the microsecond. */
 	readonly durationMs: number
+	/** The key of the error that answered, when one did. */
+	readonly errorKey?: string
 	/** what the body is: json, text, binary, stream, sse, generate or empty */
 	readonly kind: string
 	/** The HTTP method. */
@@ -29,6 +31,7 @@ export type RequestLogEntry = {
 export const REQUEST_LOG_FIELDS: readonly string[] = /* @__PURE__ */ Object.freeze([
 	"bytes",
 	"durationMs",
+	"errorKey",
 	"kind",
 	"method",
 	"path",

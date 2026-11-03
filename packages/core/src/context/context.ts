@@ -45,6 +45,10 @@ export type RequestState<TEnv> = {
 	}
 	/** this request's spans, when the app has telemetry */
 	trace?: RequestTrace
+	/** the key of the error that answered, for the request log */
+	errorKey?: string
+	/** a 5xx answer's digest: in its body, on its operator line and in its telemetry */
+	digest?: string
 }
 
 /** What a context reads from its route, computed once at finalize. */
@@ -139,6 +143,7 @@ export function replaceRequest(ctx: object, req: Request): void {
 /** Record the error behind the response on `ctx.error`, read-only for user code. */
 export function setCtxError(ctx: HoneyContext<never> | HoneyContext, error: HoneyError): void {
 	;(ctx as { error: HoneyError | undefined }).error = error
+	ctx[REQUEST].errorKey = error.errorKey
 }
 
 /**

@@ -88,6 +88,7 @@ export function requestLine(s: AppSettings<unknown>, seen: Seen, response: Respo
 	}
 	const requestId = state?.requestId?.id ?? header(response, "x-request-id")
 	if (requestId !== undefined) entry.requestId = requestId
+	if (state?.errorKey !== undefined) entry.errorKey = state.errorKey
 	return (ended, bytes) => {
 		entry.durationMs = Math.round((performance.now() - started) * 1000) / 1000
 		entry.status = ended ? response.status : "aborted"

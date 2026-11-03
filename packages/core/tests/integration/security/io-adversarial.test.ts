@@ -204,7 +204,8 @@ describe("v1 adversarial: an answer's contract", () => {
 		const answers = await Promise.all(
 			["/wrong-type", "/wrong-body"].map(async (path) => {
 				const res = await app.fetch(send(path), {})
-				return [res.status, await res.text()] as const
+				/* the digest is 16 random hex digits, which may spell 42 by chance */
+				return [res.status, (await res.text()).replace(/"digest":"[0-9a-f]{16}"/, "")] as const
 			}),
 		)
 		expect(answers.map(([status, text]) => [status, /SECRET|hunter2|expected|42/.test(text)])).toEqual([

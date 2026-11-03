@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
 import { HoneyError } from "../errors/error.ts"
 import { defineErrors } from "../errors/errors.ts"
-import { DIGEST } from "../errors/projector.ts"
 import { createMiddleware } from "../middleware/middleware.ts"
 import { honey } from "../routing/app.ts"
 import { createLogger } from "../telemetry/logger.ts"
@@ -99,15 +98,24 @@ describe("translateError(): what stays as it was", () => {
 		const translated = translateError(error, translations, "en")
 		expect([translated.message, typeof translated.stack]).toEqual(["A is gone", "string"])
 	})
+})
 
-	it("a 5xx's digest travels with the copy, so the client still gets it", () => {
-		const error = new HoneyError({ errorKey: "item_gone", status: "internal_server_error", vars: { name: "x" } })
-		Object.defineProperty(error, DIGEST, { value: "0123456789abcdef" })
-		expect((translateError(error, translations, "en") as unknown as Record<symbol, unknown>)[DIGEST]).toBe(
-			"0123456789abcdef",
+describe("translateError(): through the app", () => {
+	it("a translated 5xx still carries the digest its operator line has", async () => {
+		const a = app(
+			() => new HoneyError({ errorKey: "item_gone", status: "internal_server_error", vars: { name: "x" } }),
+			() => "en",
 		)
+		const answer = (await (await a.fetch(new Request("http://app.test/x"), { TENANT: "t" })).json()) as {
+			digest?: string
+			message: string
+		}
+		const [line] = a.lines.filter((entry) => entry.msg === "server error")
+		expect([answer.message, answer.digest]).toEqual(["x is gone", line?.digest])
 	})
+})
 
+describe("translateError(): prototype names", () => {
 	it("a locale, key or field named like a prototype member misses", () => {
 		const error = new HoneyError({
 			errorKey: "constructor",

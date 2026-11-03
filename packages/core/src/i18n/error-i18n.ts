@@ -7,7 +7,6 @@
  * error is never changed, so one instance can answer many requests in many locales.
  */
 import { type FieldError, HoneyError } from "../errors/error.ts"
-import { DIGEST } from "../errors/projector.ts"
 import { dict } from "../routing/tree.ts"
 import type { ErrorI18n, ResolveLocaleCtx } from "../routing/settings.ts"
 import type { MaybePromise } from "../middleware/middleware.ts"
@@ -56,7 +55,7 @@ function translatedFields(
 	return out
 }
 
-/** A copy of `error` with `message` and `fields`: same key, status, data, headers, vars, cause, stack and digest. */
+/** A copy of `error` with `message` and `fields`: same key, status, data, headers, vars, cause and stack. */
 function copyOf(
 	error: HoneyError,
 	message: string | undefined,
@@ -73,9 +72,6 @@ function copyOf(
 	})
 	copy.message = message ?? error.message
 	if (error.stack !== undefined) copy.stack = error.stack
-	/* a 5xx's digest names the operator's line: the client's copy carries it too */
-	const digest = (error as unknown as Record<symbol, unknown>)[DIGEST]
-	if (digest !== undefined) Object.defineProperty(copy, DIGEST, { value: digest })
 	return copy
 }
 

@@ -95,7 +95,7 @@ describe("requestLog: one line per request, from the field catalog", () => {
 	// v0: 28c838ff81
 	// v0: 238cf0a144
 	// v0: dfd70438f2
-	it("a buffered body: method, path without its query, status, route id, kind, bytes, runtime, a duration", async () => {
+	it("a buffered body: method, path without its query, status, error key, route id, kind, bytes, runtime, a duration", async () => {
 		const { app: a, lines } = app()
 		await (await a.fetch(get("/json/7?token=secret"), {})).text()
 		await (await a.fetch(get("/text"), {})).text()
@@ -107,7 +107,15 @@ describe("requestLog: one line per request, from the field catalog", () => {
 			{ ...common, bytes: 10, kind: "json", path: "/json/7", routeId: "GET /json/:id", status: 200 },
 			{ ...common, bytes: 6, kind: "text", path: "/text", routeId: "GET /text", status: 200 },
 			{ ...common, kind: "empty", path: "/empty", routeId: "GET /empty", status: 204 },
-			{ ...common, bytes: expect.any(Number), kind: "json", path: "/fail", routeId: "GET /fail", status: 500 },
+			{
+				...common,
+				bytes: expect.any(Number),
+				errorKey: "internal_server_error",
+				kind: "json",
+				path: "/fail",
+				routeId: "GET /fail",
+				status: 500,
+			},
 			{ ...common, bytes: expect.any(Number), kind: "json", path: "/nowhere", routeId: "", status: 404 },
 		])
 	})
@@ -127,7 +135,9 @@ describe("requestLog: one line per request, from the field catalog", () => {
 		await (await a.fetch(get("/with-id"), {})).text()
 		expect(entries(lines)[0]).toMatchObject({ requestId: "r-1" })
 	})
+})
 
+describe("requestLog: the path and the request id", () => {
 	it("logs the path under stripPrefix, the route it matched, and the id requestId() gave under its own header", async () => {
 		const { lines, logger } = recording()
 		const a = honey<{}>()

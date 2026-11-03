@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { createMiddleware } from "../middleware/middleware.ts"
+import { requestId } from "../middleware/request-id.ts"
 import { NODE_OUTBOUND } from "../response/builder.ts"
 import { honey } from "../routing/app.ts"
 import type { OnErrorFn } from "../routing/settings.ts"
@@ -113,9 +114,9 @@ describe("onError: what it returns shapes the response", () => {
 			[500, "internal_server_error", null, true],
 		],
 		[
-			"a HoneyError with an unknown status key is the internal 500, one onError chose: no digest",
+			"a HoneyError with an unknown status key is the internal 500, one onError chose: with a digest",
 			() => new HoneyError({ errorKey: "typed", status: "nope" as never }),
-			[500, "internal_server_error", null, false],
+			[500, "internal_server_error", null, true],
 		],
 	])("%s", async (_name, onError, [status, errorKey, retryAfter, digested]) => {
 		const { app } = throwing(new Error("db constraint"))
@@ -272,20 +273,109 @@ describe("the digest: an unknown error's 500 and its operator line", () => {
 		expect(new Set(digests).size).toBe(2)
 	})
 
-	it.each([
-		["a named 4xx", new HoneyError({ errorKey: "slug_taken", status: "conflict" })],
-		["a named 5xx", new HoneyError({ errorKey: "upstream_down", status: "bad_gateway" })],
-	])("%s carries no digest and writes no operator line", async (_name, thrown) => {
-		const { app, lines } = throwing(thrown)
+	it("a named 4xx carries no digest and writes no operator line", async () => {
+		const { app, lines } = throwing(new HoneyError({ errorKey: "slug_taken", status: "conflict" }))
 		const body = (await (await app.fetch(get("/boom/1"), {})).json()) as Record<string, unknown>
 		expect([body.digest, lines]).toEqual([undefined, []])
 	})
 
-	it("an error onError handled writes no operator line", async () => {
+	it("an error onError mapped to a 4xx writes no operator line", async () => {
 		const { app, lines } = throwing(new Error("db constraint"))
 		app.onError(() => new HoneyError({ errorKey: "slug_taken", status: "conflict" }))
 		await app.fetch(get("/boom/1"), {})
 		expect(lines).toEqual([])
+	})
+})
+
+/** An app under stripPrefix("/api") with requestId(), whose GET /v1/boom/:id throws `thrown`. */
+function serverErrors(thrown: () => unknown) {
+	const { lines, logger } = recording()
+	const app = honey<{}>().logger(logger).requestLog(true).stripPrefix("/api").use(requestId())
+	app.get("/v1/boom/:id").handler(() => {
+		throw thrown()
+	})
+	return { app, lines }
+}
+
+const errorLines = (lines: Record<string, unknown>[]) => lines.filter((line) => line.level === 50)
+
+describe("every 5xx: a digest and one operator line", () => {
+	it("a 5xx the app throws on purpose: its digest, and one line with its cause, key, request id, route and path", async () => {
+		const upstream = new Error("connect ECONNREFUSED")
+		const { app, lines } = serverErrors(
+			() => new HoneyError({ cause: upstream, errorKey: "upstream_down", status: "bad_gateway" }),
+		)
+		const res = await app.fetch(get("/api/v1/boom/7?token=secret"), {})
+		const body = (await res.json()) as Record<string, unknown>
+		expect([res.status, body.error_key, body.digest]).toEqual([
+			502,
+			"upstream_down",
+			expect.stringMatching(/^[0-9a-f]{16}$/),
+		])
+		expect(errorLines(lines)).toEqual([
+			expect.objectContaining({
+				digest: body.digest,
+				err: expect.objectContaining({ cause: expect.objectContaining({ message: "connect ECONNREFUSED" }) }),
+				errorKey: "upstream_down",
+				method: "GET",
+				msg: "server error",
+				path: "/v1/boom/7",
+				requestId: res.headers.get("x-request-id"),
+				routeId: "GET /v1/boom/:id",
+			}),
+		])
+	})
+
+	it("one error instance thrown by two requests at once: each answer's digest is its own line's", async () => {
+		const shared = new HoneyError({ errorKey: "upstream_down", status: "bad_gateway" })
+		const { app, lines } = serverErrors(() => shared)
+		const bodies = await Promise.all(
+			[1, 2].map(
+				async () => ((await (await app.fetch(get("/api/v1/boom/1"), {})).json()) as { digest: string }).digest,
+			),
+		)
+		expect([
+			new Set(bodies).size,
+			errorLines(lines)
+				.map((line) => line.digest)
+				.toSorted(),
+		]).toEqual([2, bodies.toSorted()])
+	})
+
+	it("an unknown error onError maps to a 5xx: its digest, and one line naming what was thrown", async () => {
+		const { app, lines } = serverErrors(() => new Error("pool exhausted"))
+		app.onError(() => new HoneyError({ errorKey: "db_unavailable", status: "service_unavailable" }))
+		const body = (await (await app.fetch(get("/api/v1/boom/1"), {})).json()) as Record<string, unknown>
+		expect(errorLines(lines)).toEqual([
+			expect.objectContaining({
+				digest: body.digest,
+				err: expect.objectContaining({ message: "pool exhausted" }),
+				errorKey: "db_unavailable",
+				msg: "server error",
+			}),
+		])
+	})
+})
+
+describe("every 5xx: the line's name, and the request line's error key", () => {
+	it("an unknown error keeps its one unhandled-error line, now with the key it answered as", async () => {
+		const { app, lines } = serverErrors(() => new Error("db down"))
+		const body = (await (await app.fetch(get("/api/v1/boom/1"), {})).json()) as Record<string, unknown>
+		expect(errorLines(lines)).toEqual([
+			expect.objectContaining({ digest: body.digest, errorKey: "internal_server_error", msg: "unhandled error" }),
+		])
+	})
+
+	it("the request line names the error that answered, and a plain answer names none", async () => {
+		const { app, lines } = serverErrors(() => new HoneyError({ errorKey: "slug_taken", status: "conflict" }))
+		app.get("/v1/fine").handler((c) => c.res.text("ok", "fine"))
+		await (await app.fetch(get("/api/v1/boom/1"), {})).text()
+		await (await app.fetch(get("/api/v1/fine"), {})).text()
+		const requests = lines.filter((line) => line.msg === "request")
+		expect(requests.map((line) => [line.status, line.errorKey])).toEqual([
+			[409, "slug_taken"],
+			[200, undefined],
+		])
 	})
 })
 

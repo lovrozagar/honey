@@ -4,8 +4,8 @@
  * HoneyError to replace the error, a Response to answer, or nothing to fall through to the native
  * projection. The boundary never rejects.
  *
- * An unknown error the app did not handle gets a digest: the client's 500 carries only it, the
- * operator's log line carries it with the error's name, message and stack (H17).
+ * Every 5xx error answer gets a digest and one operator line: the client's body carries the digest,
+ * the line carries it with what was thrown (name, message, stack, cause chain) and the request (H17).
  */
 import { type HoneyContext, REQUEST, setCtxError } from "../context/context.ts"
 import type { MaybePromise } from "../middleware/middleware.ts"
@@ -19,7 +19,6 @@ import { HoneyError, hasUnknownStatus } from "./error.ts"
 import {
 	asHoneyError,
 	createErrorResponse,
-	DIGEST,
 	type ErrorAnswer,
 	type FormatterReport,
 	projectThrown,
@@ -56,6 +55,7 @@ export function errorCtx(s: AppSettings<unknown>, state: FetchState): ErrorCtx<u
 function answerFor(s: AppSettings<unknown>, ctx: object): ErrorAnswer {
 	const state = stateOf(ctx)
 	return {
+		digest: state.digest,
 		format: s.errorFormat,
 		instance: (ctx as { requestId?: string }).requestId ?? null,
 		nodeOut: isNodeOutbound(state.req),
@@ -125,16 +125,20 @@ function newDigest(): string {
 }
 
 /**
- * Answer an error nothing handled. An unknown throw that became a 5xx gets a digest, and the
- * operator's line; a HoneyError the app threw itself answers as it is.
+ * A 5xx answer's digest, kept on the request (a thrown instance may be shared), and its one
+ * operator line: what was thrown, the key it answers as, and the request.
  */
-function unhandled(s: AppSettings<unknown>, { ctx, error, thrown }: Throw): MaybePromise<Response> {
-	if (error !== thrown && error.status >= 500) {
-		const digest = newDigest()
-		Object.defineProperty(error, DIGEST, { value: digest })
-		s.logger.error({ ...bindings(ctx), digest, err: HoneyError.serialize(thrown) }, "unhandled error")
-	}
-	return answer(s, ctx, error)
+function serverError(s: AppSettings<unknown>, t: Throw, error: HoneyError, msg: string): void {
+	if (error.status < 500) return
+	const digest = newDigest()
+	stateOf(t.ctx).digest = digest
+	s.logger.error({ ...bindings(t.ctx), digest, err: HoneyError.serialize(t.thrown), errorKey: error.errorKey }, msg)
+}
+
+/** Answer an error nothing handled: a HoneyError the app threw as it is, anything else as the boundary projects it. */
+function unhandled(s: AppSettings<unknown>, t: Throw): MaybePromise<Response> {
+	serverError(s, t, t.error, t.error === t.thrown ? "server error" : "unhandled error")
+	return answer(s, t.ctx, t.error)
 }
 
 /** A failing onError: logged once, then the native projection answers. */
@@ -145,8 +149,11 @@ function onErrorFailed(s: AppSettings<unknown>, t: Throw, failure: unknown): May
 
 /** Apply what `onError` returned: a HoneyError replaces the error, a Response answers, nothing falls through. */
 function settleOnError(s: AppSettings<unknown>, t: Throw, result: unknown): MaybePromise<Response> {
-	if (result instanceof HoneyError)
-		return answer(s, t.ctx, hasUnknownStatus(result) ? projectThrown(result, stateOf(t.ctx).plan.policy) : result)
+	if (result instanceof HoneyError) {
+		const error = hasUnknownStatus(result) ? projectThrown(result, stateOf(t.ctx).plan.policy) : result
+		serverError(s, t, error, "server error")
+		return answer(s, t.ctx, error)
+	}
 	/* jsonFromError answers a HoneyResponse on the Node path: a Response all the same */
 	if (result instanceof Response || isHoneyResponse(result)) {
 		setCtxError(t.ctx as HoneyContext, t.error)
@@ -181,7 +188,7 @@ function reportThrow(s: AppSettings<unknown>, telemetry: Telemetry, ctx: object,
 	const state = stateOf(ctx)
 	/* the boundary has answered: ctx.error holds what it answered as */
 	const honeyError = c.error as HoneyError
-	const digest = (honeyError as { [DIGEST]?: string })[DIGEST]
+	const digest = state.digest
 	/* telemetry on: every request it serves has a trace */
 	const trace = state.trace as RequestTrace
 	trace.error(honeyError, thrown, digest)

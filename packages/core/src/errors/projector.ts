@@ -21,9 +21,6 @@ export type ErrorFactoryRecord = {
 	readonly [ERROR_META]?: Readonly<Record<string, ErrorMetaEntry>>
 }
 
-/** The digest an unknown error's 500 carries: the same value is on the operator's log line. */
-export const DIGEST: unique symbol = /* @__PURE__ */ Symbol("honey.digest")
-
 /** What a route allows to reach the client. */
 export type ErrorPolicy = {
 	/** The error an undeclared or unknown throw becomes; `null`: a 500. */
@@ -68,9 +65,11 @@ export type FormatterReport = (failure: unknown) => void
 
 /**
  * How an error answer is built: who hears a crashed formatter, whether honey's Node adapter sends
- * it, its format, and the request id a Problem Details document names as its instance.
+ * it, its format, its digest, and the request id a Problem Details document names as its instance.
  */
 export type ErrorAnswer = {
+	/** A 5xx answer's digest: the same value is on the operator's log line. */
+	readonly digest?: string | undefined
 	/** Body format: honey's envelope by default, or `problem+json`. */
 	readonly format?: ErrorFormat
 	/** The request id a Problem Details document names as its `instance`. */
@@ -127,8 +126,7 @@ function errorBody(
 		}
 	}
 	const defaultShape = defaultShapeOf(error, answer)
-	const digest = (error as { [DIGEST]?: string })[DIGEST]
-	if (digest !== undefined) defaultShape.digest = digest
+	if (answer.digest !== undefined) defaultShape.digest = answer.digest
 	try {
 		return defaultFormatter(error, defaultShape)
 	} catch (failure) {
