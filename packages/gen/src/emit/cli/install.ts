@@ -30,7 +30,11 @@ export const INSTALLGEN_VERSION = "0.3.0"
 /** The name `installgen` finds its config by, in the module's root, where the release workflow runs it. */
 export const INSTALLGEN_CONFIG = "installgen.config.mts"
 
-/** The layout both configs spell: every plain value, and the fixed pieces of each path around its tokens. */
+/**
+ * The layout both configs spell: every plain value, and the fixed pieces of each path around its tokens. The pieces
+ * hold only the binary name and the repository, each refused at generate unless it matches its grammar (lowercase
+ * words joined by `-`; GitHub's owner/name), so the config file writes them into its template literals as they are.
+ */
 function layout(app: InstallApp, base: string) {
 	return {
 		asset: [`download/`, `/${app.bin}_`, `_`] as const,
@@ -60,9 +64,6 @@ export function installerConfig(app: InstallApp, base = `https://github.com/${ap
 	}
 }
 
-/** `text` inside a template literal: its backslashes, backticks and `${` escaped. */
-const raw = (text: string) => text.replace(/[\\`]|\$(?=\{)/g, (ch) => `\\${ch}`)
-
 /**
  * `installgen.config.mts` for `app`: `installerConfig`'s config as a module installgen loads with no local install
  * (its one import is type-only, which Node 22.18+ strips), so `npx @lovrozagar/installgen@<version> check` runs in the
@@ -78,10 +79,10 @@ import type { InstallgenConfig } from "@lovrozagar/installgen"
 
 export default {
 	assetPath: ({ arch, os, tag }) =>
-		\`${raw(asset[0])}\${tag}${raw(asset[1])}\${os}${raw(asset[2])}\${arch}\${os === "windows" ? ".zip" : ".tar.gz"}\`,
-${value("baseUrl")}	checksumsPath: ({ tag }) => \`${raw(checksums[0])}\${tag}${raw(checksums[1])}\`,
+		\`${asset[0]}\${tag}${asset[1]}\${os}${asset[2]}\${arch}\${os === "windows" ? ".zip" : ".tar.gz"}\`,
+${value("baseUrl")}	checksumsPath: ({ tag }) => \`${checksums[0]}\${tag}${checksums[1]}\`,
 ${value("envPrefix")}${value("installDir")}${value("latestPath")}${value("message")}${value("name")}${value("scriptUrls")}	signature: {
-		identity: ({ tag }) => \`${raw(identity[0])}\${tag}\`,
+		identity: ({ tag }) => \`${identity[0]}\${tag}\`,
 		issuer: ${JSON.stringify(ISSUER)},
 	},
 } satisfies InstallgenConfig
