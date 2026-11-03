@@ -27,9 +27,9 @@ const v1 = (await import(
 const { createMiddleware } = (await import(
 	resolve(REPO, "packages/core/src/middleware/middleware.ts")
 )) as typeof import("../../../src/middleware/middleware.ts")
-const { serve: serveNode } = (await import(
-	resolve(REPO, "packages/core/src/adapters/node/serve.ts")
-)) as typeof import("../../../src/adapters/node/serve.ts")
+const { createNodeServer: serveNode } = (await import(
+	resolve(REPO, "packages/core/src/adapters/node/server.ts")
+)) as typeof import("../../../src/adapters/node/server.ts")
 const { rangeResponse } = (await import(
 	resolve(REPO, "packages/core/src/response/range.ts")
 )) as typeof import("../../../src/response/range.ts")

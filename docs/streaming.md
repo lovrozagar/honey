@@ -23,7 +23,7 @@ ends on its own or the client goes away. This block runs as part of the docs' te
 
 ```ts run
 import { honey } from "@lovrozagar/honey"
-import { serve } from "@lovrozagar/honey/serve"
+import { serve } from "@lovrozagar/honey/node"
 
 let ended = (_: string) => {}
 const cleanedUp = new Promise<string>((resolve) => (ended = resolve))

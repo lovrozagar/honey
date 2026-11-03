@@ -4,10 +4,11 @@
  * one readiness line (the endpoint, the issuer, the registered client and its redirect), and once its standard input
  * closes, one line with the log of every request answered, then stops.
  */
+import { serve } from "../../../src/adapters/bun/serve.ts"
 import { CLIENT_ID, REDIRECT_URI, startOAuthWorld } from "./fixture.ts"
 
 export async function main(): Promise<void> {
-	const world = await startOAuthWorld()
+	const world = await startOAuthWorld(serve)
 	const { endpoint, issuer } = world
 	process.stdout.write(`${JSON.stringify({ clientId: CLIENT_ID, endpoint, issuer, redirectUri: REDIRECT_URI })}\n`)
 	process.stdin.once("end", () => {

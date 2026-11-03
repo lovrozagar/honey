@@ -13,7 +13,7 @@
  */
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http"
 import { connect, type AddressInfo } from "node:net"
-import { serve } from "../../packages/core/src/adapters/node/serve.ts"
+import { createNodeServer } from "../../packages/core/src/adapters/node/server.ts"
 import { cors } from "../../packages/core/src/middleware/cors.ts"
 import { requestId } from "../../packages/core/src/middleware/request-id.ts"
 import { secureHeaders } from "../../packages/core/src/middleware/secure-headers.ts"
@@ -154,7 +154,7 @@ async function listening(server: Server): Promise<{ port: number; server: Server
 const bound = await Promise.all(
 	SCENARIOS.map(async (scenario) => {
 		const raw = createServer(scenario.raw).listen(0, "127.0.0.1")
-		const v1 = serve(scenario.app, { env: {}, hostname: "127.0.0.1", port: 0 })
+		const v1 = createNodeServer(scenario.app, { env: {}, hostname: "127.0.0.1", port: 0 })
 		/* subscribed at once: a server bound while another is awaited would already have said so */
 		const [rawBound, v1Bound] = await Promise.all([listening(raw), listening(v1)])
 		return { raw: rawBound, scenario, v1: v1Bound }

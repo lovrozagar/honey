@@ -8,7 +8,7 @@
  */
 import type { AddressInfo } from "node:net"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { type HoneyServer, serve } from "../../../src/adapters/node/serve.ts"
+import { type HoneyServer, createNodeServer } from "../../../src/adapters/node/server.ts"
 import { requestId } from "../../../src/middleware/request-id.ts"
 import { proxy } from "../../../src/proxy/proxy.ts"
 import { realtime } from "../../../src/realtime/realtime.ts"
@@ -130,7 +130,7 @@ describe("the app logger reaches the request's producers, background tasks and t
 		app.get("/page").handler((ctx) => ctx.res.text("ok", "x"))
 		/* a builder left without .handler() makes the app refuse to serve: the bridge answers 500 */
 		app.get("/unfinished")
-		const server = serve(app, { env: {}, hostname: "127.0.0.1", port: 0 })
+		const server = createNodeServer(app, { env: {}, hostname: "127.0.0.1", port: 0 })
 		servers.push(server)
 		await new Promise((resolve) => server.once("listening", resolve))
 		const res = await fetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}/page`)

@@ -11,6 +11,7 @@ import { writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { clientsDir, withClients } from "../../../gen/src/emit/mcp/__fixtures__/clients.ts"
+import { serve } from "../../src/adapters/node/serve.ts"
 import { CLIENT_ID, type OAuthWorld, REDIRECT_URI, startOAuthWorld } from "./mcp-oauth/fixture.ts"
 
 /** Each client: its imports, its options beside its name, and how it hands the callback to finishAuth. */
@@ -127,7 +128,7 @@ const authSteps = (log: readonly string[]) =>
 describe.skipIf(!withClients())("the mounted resource server under the official TS clients' OAuth (bit 21 f)", () => {
 	let world: OAuthWorld
 	beforeAll(async () => {
-		world = await startOAuthWorld()
+		world = await startOAuthWorld(serve)
 	})
 	afterAll(() => world.stop())
 

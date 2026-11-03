@@ -6,7 +6,7 @@
  */
 import { type AddressInfo, connect } from "node:net"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { serve } from "../../src/adapters/node/serve.ts"
+import { createNodeServer } from "../../src/adapters/node/server.ts"
 import { rangeResponse } from "../../src/response/range.ts"
 import type { SSEStream } from "../../src/response/sse.ts"
 import { honey } from "../../src/routing/app.ts"
@@ -184,7 +184,7 @@ describe("a stream ends when its client drops the socket", () => {
 	// v0: 6e66defcb5
 	it("stream(), generate() and sse() each run their finally after a real socket drops mid-stream", async () => {
 		const { app, finished } = endlessApp()
-		const server = serve(app, { env: {}, hostname: "127.0.0.1", port: 0 })
+		const server = createNodeServer(app, { env: {}, hostname: "127.0.0.1", port: 0 })
 		await new Promise((resolve) => server.once("listening", resolve))
 		const { port } = server.address() as AddressInfo
 		try {
@@ -218,7 +218,7 @@ describe("a never-yielding SSE producer facing a client that stopped reading", (
 				}
 			}),
 		)
-		const server = serve(app, { env: {}, hostname: "127.0.0.1", port: 0 })
+		const server = createNodeServer(app, { env: {}, hostname: "127.0.0.1", port: 0 })
 		await new Promise((resolve) => server.once("listening", resolve))
 		const { port } = server.address() as AddressInfo
 		try {

@@ -39,6 +39,11 @@
 			"types": "./dist/build/index.d.ts",
 			"default": "./dist/build/index.js"
 		},
+		"./bun": {
+			"honey-source": "./src/adapters/bun/serve.ts",
+			"types": "./dist/adapters/bun/serve.d.ts",
+			"default": "./dist/adapters/bun/serve.js"
+		},
 		"./cache-control": {
 			"honey-source": "./src/response/cache-control.ts",
 			"types": "./dist/response/cache-control.d.ts",
@@ -213,11 +218,6 @@
 			"honey-source": "./src/middleware/secure-headers.ts",
 			"types": "./dist/middleware/secure-headers.d.ts",
 			"default": "./dist/middleware/secure-headers.js"
-		},
-		"./serve": {
-			"honey-source": "./src/adapters/serve.ts",
-			"types": "./dist/adapters/serve.d.ts",
-			"default": "./dist/adapters/serve.js"
 		},
 		"./server-timing": {
 			"honey-source": "./src/middleware/server-timing.ts",

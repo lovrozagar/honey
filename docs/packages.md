@@ -8,9 +8,9 @@ generator.
 
 | Export                              | What it holds                                                                                                                                       |
 | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@lovrozagar/honey`                 | `honey`, `HoneyError`, `defineErrors`, `createMiddleware`, `mergeTree`, `detectRuntime`, and the type helpers below                                 |
-| `@lovrozagar/honey/serve`           | `serve(app, options)`: Node or Bun, whichever runs it                                                                                               |
-| `@lovrozagar/honey/node`            | `serve` for `node:http` directly                                                                                                                    |
+| `@lovrozagar/honey`                 | `honey`, `HoneyError`, `defineErrors`, `createMiddleware`, `mergeTree`, and the type helpers below                                                  |
+| `@lovrozagar/honey/node`            | `serve(app, options)` on Node's `node:http`                                                                                                         |
+| `@lovrozagar/honey/bun`             | `serve(app, options)` on `Bun.serve`                                                                                                                |
 | `@lovrozagar/honey/ws`              | `ws(app, path)`, a WebSocket route                                                                                                                  |
 | `@lovrozagar/honey/ws/bun`          | `bunWebSocket`                                                                                                                                      |
 | `@lovrozagar/honey/ws/node`         | `nodeWebSocket` (with the optional `ws` peer)                                                                                                       |
@@ -63,7 +63,7 @@ generator.
 | `@lovrozagar/honey/cookie-sign`     | `sign`, `verify`, `createCookieSigner`                                                                                                              |
 | `@lovrozagar/honey/crypto`          | `timingSafeEqual`                                                                                                                                   |
 | `@lovrozagar/honey/request-to-curl` | `requestToCurl`                                                                                                                                     |
-| `@lovrozagar/honey/testing`         | `testClient`, an app called in process or over `serve`                                                                                              |
+| `@lovrozagar/honey/testing`         | `testClient`, an app called in process or over a runtime's `serve`                                                                                  |
 | `@lovrozagar/honey/tree`            | the route tree's types and helpers                                                                                                                  |
 | `@lovrozagar/honey/plugin`          | `honey()`, the Vite plugin that generates the app's artifacts                                                                                       |
 | `@lovrozagar/honey/build`           | `createBuildPlugin`, a production bundle for a deploy target                                                                                        |

@@ -705,13 +705,15 @@ app.errorI18n(
 The rest of what 0.7.3 exported and 1.0 does not. Everything else it exported was its own internals — an
 adapter's socket wrapper, the plugin's resolved config, the tree's matcher — and no app wrote them.
 
-| v0                                                                                 | v1                                                                            |
-| ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `startHoneyServer`, `enableServe`, `HoneyServeOptions` (`@lovrozagar/honey/serve`) | `serve(app, options)`, its options inline, `ServeHandle` for what it answers  |
-| `enableOpenApi`, `spec` (`@lovrozagar/honey/openapi`)                              | `serveOpenApi(app, options)`                                                  |
-| `createProxyHandler` (`@lovrozagar/honey/proxy`)                                   | `proxy({ destination })`, a handler you pass to `.handler()`                  |
-| `RealtimeRouteOpts` (`@lovrozagar/honey/realtime`)                                 | `RealtimeLimits` and `ConnContext`                                            |
-| `ClientInfo`, `clientInfo`, `TrustProxy` (`@lovrozagar/honey/trust`)               | nothing: `ctx.ip` is the platform's peer, and a proxy header is yours to read |
+| v0                                                                                 | v1                                                                                                                                    |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `startHoneyServer`, `enableServe`, `HoneyServeOptions` (`@lovrozagar/honey/serve`) | `serve(app, options)` from `@lovrozagar/honey/node` or `@lovrozagar/honey/bun`, its options inline, `ServeHandle` for what it answers |
+| `HoneyServer` (`@lovrozagar/honey/node`), its `shutdown(timeout)`                  | `ServeHandle`: Node's own `http.Server` on `server`, and `close(timeout)`                                                             |
+| `detectRuntime` (`@lovrozagar/honey`)                                              | nothing: a server imports its runtime's `serve`, and a Worker exports the app                                                         |
+| `enableOpenApi`, `spec` (`@lovrozagar/honey/openapi`)                              | `serveOpenApi(app, options)`                                                                                                          |
+| `createProxyHandler` (`@lovrozagar/honey/proxy`)                                   | `proxy({ destination })`, a handler you pass to `.handler()`                                                                          |
+| `RealtimeRouteOpts` (`@lovrozagar/honey/realtime`)                                 | `RealtimeLimits` and `ConnContext`                                                                                                    |
+| `ClientInfo`, `clientInfo`, `TrustProxy` (`@lovrozagar/honey/trust`)               | nothing: `ctx.ip` is the platform's peer, and a proxy header is yours to read                                                         |
 
 ```ts v0
 import { startHoneyServer } from "@lovrozagar/honey/serve"
@@ -720,7 +722,7 @@ await startHoneyServer(app, { port: 3000 })
 
 ```ts
 import { honey } from "@lovrozagar/honey"
-import { serve } from "@lovrozagar/honey/serve"
+import { serve } from "@lovrozagar/honey/node"
 
 const app = honey()
 const server = await serve(app, { port: 3000 })
@@ -882,7 +884,7 @@ The runtime is named for the product. Nothing else changed.
 | `@lovrozagar/honey/ws/cloudflare`             | `@lovrozagar/honey/ws/workers`             |
 | `cfWebSocket()`                               | `workersWebSocket()`                       |
 | `createBuildPlugin({ target: "cloudflare" })` | `createBuildPlugin({ target: "workers" })` |
-| `detectRuntime()` answering `"cloudflare"`    | `detectRuntime()` answering `"workers"`    |
+| `detectRuntime()` answering `"cloudflare"`    | removed: import the runtime's `serve`      |
 | `honey init --cf`, `honey init --cloudflare`  | `honey init --workers`                     |
 | `runtime: "cloudflare"` in the request log    | `runtime: "workers"`                       |
 
@@ -904,10 +906,11 @@ const app = honey()
 ws(app, "/echo").handler({ onMessage: (_ctx, socket, data) => socket.send(data) })
 ```
 
-## `testClient` moved, and `transport: "node"` is `transport: "serve"`
+## `testClient` moved, and `transport: "node"` is `transport: serve`
 
-`testClient` comes from `@lovrozagar/honey/testing`. `transport: "serve"` serves the app with `serve(app)` on a free
-port through the runtime's own adapter (Node's on Node, Bun's on Bun), so it is no longer Node-only.
+`testClient` comes from `@lovrozagar/honey/testing`. `transport` takes the runtime's `serve` itself, from
+`@lovrozagar/honey/node` or `@lovrozagar/honey/bun`: the app is served with it on a free port through that runtime's
+own adapter, so it is no longer Node-only.
 
 ```ts v0
 const client = testClient(app, { transport: "node" })
@@ -915,16 +918,18 @@ const client = testClient(app, { transport: "node" })
 
 ```ts
 import { honey } from "@lovrozagar/honey"
+import { serve } from "@lovrozagar/honey/node"
 import { testClient } from "@lovrozagar/honey/testing"
 
 const app = honey()
-const client = testClient(app, { env: {}, transport: "serve" })
+const client = testClient(app, { env: {}, transport: serve })
 await client.close()
 ```
 
 ## `app.serve(...)` is removed
 
-Import `serve` from `@lovrozagar/honey/serve` and pass the app. On Cloudflare Workers, export the app itself.
+Import `serve` from your runtime's entry, `@lovrozagar/honey/node` or `@lovrozagar/honey/bun`, and pass the app. On
+Cloudflare Workers, export the app itself.
 
 ```ts v0
 app.serve({ port: 3000 })
@@ -932,7 +937,7 @@ app.serve({ port: 3000 })
 
 ```ts
 import { honey } from "@lovrozagar/honey"
-import { serve } from "@lovrozagar/honey/serve"
+import { serve } from "@lovrozagar/honey/node"
 
 const app = honey()
 const server = await serve(app, { hostname: "0.0.0.0", port: 3000 })

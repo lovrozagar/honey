@@ -10,7 +10,7 @@
  */
 import { createHash } from "node:crypto"
 import * as z from "zod"
-import { serve, type ServeHandle } from "../../../src/adapters/serve.ts"
+import { serve } from "../../../src/adapters/bun/serve.ts"
 import { defineErrors } from "../../../src/errors/errors.ts"
 import { errorI18n } from "../../../src/i18n/error-i18n.ts"
 import type { NextFn } from "../../../src/middleware/middleware.ts"
@@ -443,8 +443,8 @@ async function main(): Promise<void> {
 	const app = createConformanceApp(() => origins)
 	const handler = process.env.HONEY_CONFORMANCE_MCP
 	if (handler !== undefined) mcp(app, "/mcp", ((await import(handler)) as { mcpHandler: McpHandler }).mcpHandler)
-	const listeners: ServeHandle[] = await Promise.all([0, 1].map(() => serve(app, { hostname: "127.0.0.1", port: 0 })))
-	const [primary, alt] = listeners as [ServeHandle, ServeHandle]
+	const listeners = await Promise.all([0, 1].map(() => serve(app, { hostname: "127.0.0.1", port: 0 })))
+	const [primary, alt] = listeners as [(typeof listeners)[number], (typeof listeners)[number]]
 	const drop = await listenDropFront(app)
 	origins = { alt: alt.url, drop: drop.url, url: primary.url }
 	process.stdout.write(`${JSON.stringify({ url: primary.url, alt: alt.url, drop: drop.url })}\n`)

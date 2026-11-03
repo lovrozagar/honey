@@ -7,7 +7,7 @@ import { createServer, type Server } from "node:http"
 import { type AddressInfo, connect } from "node:net"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { WebSocket as WsClient } from "ws"
-import { type HoneyServer, type NodeServeOptions, serve } from "../../src/adapters/node/serve.ts"
+import { type HoneyServer, type NodeServeOptions, createNodeServer } from "../../src/adapters/node/server.ts"
 import { createMiddleware } from "../../src/middleware/middleware.ts"
 import { honey } from "../../src/routing/app.ts"
 import { bunWebSocket } from "../../src/ws/bun.ts"
@@ -28,7 +28,7 @@ afterEach(async () => {
 
 /** Serve `app` on a free loopback port. */
 async function listen(app: FetchApp, options: Partial<NodeServeOptions<unknown>> = {}) {
-	const server = serve(app, { env: {}, hostname: "127.0.0.1", port: 0, ...options })
+	const server = createNodeServer(app, { env: {}, hostname: "127.0.0.1", port: 0, ...options })
 	servers.push(server)
 	await new Promise((resolve) => server.once("listening", resolve))
 	const { port } = server.address() as AddressInfo
@@ -191,7 +191,7 @@ describe("WebSockets on Node: the adapter serve(app) uses", () => {
 		own.wsAdapter(given)
 		await listen(own as unknown as FetchApp)
 		expect([adapterOf(bare).runtime, adapterOf(own) === given]).toEqual(["node", true])
-		expect(() => serve(wsApp().wsAdapter(bunWebSocket()) as unknown as FetchApp, { env: {} })).toThrow(
+		expect(() => createNodeServer(wsApp().wsAdapter(bunWebSocket()) as unknown as FetchApp, { env: {} })).toThrow(
 			"serve() on Node needs a nodeWebSocket() adapter, but app.wsAdapter() was given another",
 		)
 	})

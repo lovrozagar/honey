@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest"
+import { serve } from "../adapters/node/serve.ts"
 import { honey } from "../routing/app.ts"
 import { type TestClient, testClient } from "./testing.ts"
 
@@ -241,13 +242,13 @@ describe("testClient: a workflow across requests", () => {
 	})
 })
 
-describe("testClient: transport serve", () => {
+describe("testClient: a serve transport", () => {
 	// v0: 08c44f3b06
-	it("sends real HTTP through serve(app), the socket's peer and the cookie jar included, until close()", async () => {
-		const c = testClient(cookieApp(), { cookies: true, env: {}, transport: "serve" })
+	it("sends real HTTP through the runtime's serve(app), the socket's peer and the cookie jar included, until close()", async () => {
+		const c = testClient(cookieApp(), { cookies: true, env: {}, transport: serve })
 		const peerApp = honey()
 		peerApp.get("/peer").handler((ctx) => ctx.res.json("ok", { ip: ctx.ip }))
-		const served = testClient(peerApp, { env: {}, ip: "203.0.113.7", transport: "serve" })
+		const served = testClient(peerApp, { env: {}, ip: "203.0.113.7", transport: serve })
 		const ip = await (await served.get("/peer")).json()
 		const cookie = await jarAfter(c, ["sid=abc"])
 		await Promise.all([c.close(), served.close(), c.close()])

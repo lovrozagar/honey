@@ -6,7 +6,7 @@ Every public export of both packages, tagged **KEEP** (re-homed and split, behav
 
 | export | disposition | note |
 | --- | --- | --- |
-| `.` (`honey()`, `Honey`, `HoneyContext`, `HoneyCtx`, `defineErrors`, `HoneyError`, `createMiddleware`, `HoneyRes`/`createErrorResponse`, `mergeTree`, `detectRuntime`, `toFetchRequest`, the `Infer*`/meta types) | KEEP | the `Honey` class (~2,600 lines in v0) is split into route-model / finalize / dispatch / registration files under the limits; the public type stays |
+| `.` (`honey()`, `Honey`, `HoneyContext`, `HoneyCtx`, `defineErrors`, `HoneyError`, `createMiddleware`, `HoneyRes`/`createErrorResponse`, `mergeTree`, `toFetchRequest`, the `Infer*`/meta types) | KEEP | the `Honey` class (~2,600 lines in v0) is split into route-model / finalize / dispatch / registration files under the limits; the public type stays |
 | `./accepts` | KEEP | |
 | `./body-limit` | KEEP | |
 | `./build` | MODIFY [H15] | Deno build target removed |
@@ -32,7 +32,8 @@ Every public export of both packages, tagged **KEEP** (re-homed and split, behav
 | `./cron`, `./cron/serve`, `./cron/workers` | NEW | |
 | `./queue`, `./queue/serve`, `./queue/workers` | NEW | |
 | `./logger` | KEEP | the only `console` owner |
-| `./node` | KEEP | Node adapter |
+| `./node` | KEEP, MODIFY (plan 39 6.4) | Node adapter: async `serve(app, options)` → `ServeHandle<http.Server>` |
+| `./bun` | ADD (plan 39 6.4) | Bun adapter: async `serve(app, options)` → `ServeHandle` with Bun's `Server` |
 | `./openapi`, `./openapi/scalar`, `./openapi/swagger` | MODIFY [B1,B2,B3] | configurable `servers` + variables, `tags`/`externalDocs`, `webhooks` |
 | `./openapi/spec` | DELETE (bit 19 i) | v0's `spec()` handler is `serveOpenApi` on `./openapi` |
 | `./plugin` | KEEP | |
@@ -40,7 +41,7 @@ Every public export of both packages, tagged **KEEP** (re-homed and split, behav
 | `./proxy` | MODIFY [H15] | Deno branch removed |
 | `./realtime` | MODIFY [H8] | SSE declared-schema typing + uniform reconnect; reference resume server ships |
 | `./secure-headers` | KEEP | |
-| `./serve` | MODIFY [H15] | Deno runtime removed; node/bun/cf detection kept |
+| `./serve` | DELETE (plan 39 6.4) | Deno runtime removed [H15], then the detecting entry itself: a server imports `./node` or `./bun`; `detectRuntime` leaves the root and stays internal for the request log |
 | `./static` | MODIFY [A3] | Range / 206 / `Accept-Ranges` |
 | `./telemetry/otel` | KEEP | |
 | `./testing` | KEEP (bit 20 a) | `testClient`, with the types `TestClient`, `TestClientOptions` and `TestRequestOptions` (src/testing/testing.ts); v0's `transport: "node"` is `transport: "serve"` |

@@ -1,6 +1,6 @@
 import type { AddressInfo } from "node:net"
 import { describe, expect, it, vi } from "vitest"
-import { serve } from "../adapters/node/serve.ts"
+import { createNodeServer } from "../adapters/node/server.ts"
 import { createMiddleware } from "../middleware/middleware.ts"
 import { requestId } from "../middleware/request-id.ts"
 import { honey } from "../routing/app.ts"
@@ -301,7 +301,7 @@ describe("curlLogger(): a later reader still gets the whole body", () => {
 	// v0: 51c3ae9846
 	it("on the Node bridge: the handler reads the body the logger also logged", async () => {
 		const a = app({ body: true })
-		const server = serve(a, { env: {}, hostname: "127.0.0.1", port: 0 })
+		const server = createNodeServer(a, { env: {}, hostname: "127.0.0.1", port: 0 })
 		await new Promise((resolve) => server.once("listening", resolve))
 		const { port } = server.address() as AddressInfo
 		try {

@@ -326,7 +326,7 @@ describe("ws, core's optional peer, in a real install (bit 19 i)", () => {
 	const SERVER = [
 		'import { execFileSync } from "node:child_process"',
 		'import { honey } from "@lovrozagar/honey"',
-		'import { serve } from "@lovrozagar/honey/serve"',
+		'import { serve } from "@lovrozagar/honey/node"',
 		'import { ws } from "@lovrozagar/honey/ws"',
 		"const app = honey()",
 		'ws(app, "/live").handler({ onMessage: (_ctx, ws, data) => ws.send(data) })',

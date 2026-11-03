@@ -1,5 +1,6 @@
 /**
- * The Bun adapter: `Bun.serve` with the app's fetch, the server passed in the env so `ctx.ip` and
+ * `serve(app, options)` from `@lovrozagar/honey/bun`: `Bun.serve` with the app's fetch, the server
+ * passed in the env so `ctx.ip` and
  * the WebSocket upgrade read it. Bun takes the `websocket` handlers at creation, so a honey app's
  * ws adapter is fixed here: its own `bunWebSocket()`, or one set before `serve()`.
  *
@@ -15,13 +16,47 @@ import type { HoneyGraph } from "../../routing/register.ts"
 import type { AppSettings } from "../../routing/settings.ts"
 import { createLogger, type Logger } from "../../telemetry/logger.ts"
 import { bunWebSocket, type BunWebSocketHandlers, type BunWSAdapter } from "../../ws/bun.ts"
+import {
+	DEFAULT_CLOSE_TIMEOUT,
+	DEFAULT_HOSTNAME,
+	DEFAULT_MAX_REQUEST_BODY,
+	DEFAULT_PORT,
+	type FetchApp,
+	type ServeHandle,
+	urlOf,
+} from "../serve-handle.ts"
 
-type FetchApp<TEnv> = { fetch(request: Request, env: TEnv): Response | Promise<Response> }
+export type { ServeHandle } from "../serve-handle.ts"
 
-type BunServer = {
+/**
+ * The server `Bun.serve()` returned, as far as honey vouches for it: these members of Bun's own `Server`, which a
+ * `bun-types` program sees in full. Honey cannot name that type itself: its declarations must type-check for an app
+ * without `bun-types`. Upgrades go through `ws(app, path)`, so `upgrade` is not offered here.
+ */
+export type BunServer = {
+	/** Requests being handled right now. */
+	readonly pendingRequests: number
+	/** WebSockets open right now. */
+	readonly pendingWebSockets: number
+	/** The peer of `request`, as Bun reports it; `null` when it reports none. */
+	requestIP(request: Request): {
+		/** The peer's IP address. */
+		address: string
+		/** Which IP version `address` is. */
+		family: "IPv4" | "IPv6"
+		/** The peer's port. */
+		port: number
+	} | null
+	/** Stop at once, without the drain `close()` gives; `true` also cuts the open connections. */
+	stop(closeActiveConnections?: boolean): Promise<void>
+	/** The URL Bun reports the server at. */
+	readonly url: URL
+}
+
+/** What honey itself calls on that server: Bun has `closeIdleConnections`, and a TCP bind always has a port. */
+type Listening = BunServer & {
 	closeIdleConnections(): void
 	readonly port: number
-	stop(closeActiveConnections: boolean): Promise<void>
 }
 
 type BunGlobal = {
@@ -32,22 +67,21 @@ type BunGlobal = {
 		maxRequestBodySize: number
 		port: number
 		websocket?: BunWebSocketHandlers
-	}): BunServer
+	}): Listening
 }
 
+/** Options for `serve` from `@lovrozagar/honey/bun`: where to listen, and what Bun's server is given. */
 export type BunServeOptions<TEnv> = {
-	env: TEnv
-	hostname: string
-	maxRequestBodySize: number
+	/** Handed to the app as `ctx.env`, in a copy that also carries the server. Default `{}`. */
+	env?: TEnv
+	/** Default `0.0.0.0`: every IPv4 interface. */
+	hostname?: string
+	/** The largest request body Bun accepts, in bytes; over it the answer is 413. Default 128 MiB. */
+	maxRequestBodySize?: number
 	/** Errors the app could not answer; Bun then answers 500. Unset, they go to the app's logger, or a default one for a plain fetch handler. */
 	onError?: (error: unknown) => void
-	port: number
-}
-
-export type BunListener = {
-	/** Let in-flight requests finish for up to `timeout` ms, then cut every connection. */
-	close(timeout: number): Promise<void>
-	readonly port: number
+	/** Default 3000; `0` picks a free port. */
+	port?: number
 }
 
 /** Settle when `work` does or after `ms`, whichever is first; the timer never outlives it. */
@@ -94,8 +128,17 @@ function unlessUpgraded(response: Response): Response | undefined {
 	return response.status === 101 ? undefined : response
 }
 
-export function serve<TEnv>(app: FetchApp<TEnv>, options: BunServeOptions<TEnv>): BunListener {
+/**
+ * Starts the app with `Bun.serve` and resolves once it listens. Rejects when the server cannot bind,
+ * such as a port already in use, and when the app's WebSocket adapter is not `bunWebSocket()`.
+ * `close()` lets in-flight requests finish, then cuts what is left at the timeout.
+ */
+export async function serve<TEnv>(
+	app: FetchApp<TEnv>,
+	options: BunServeOptions<TEnv> = {},
+): Promise<ServeHandle<BunServer>> {
 	const settings = settingsOf(app)
+	const hostname = options.hostname ?? DEFAULT_HOSTNAME
 	/* no onError: the app's logger, never Bun's own error page (a stack in development, outside the sink) */
 	const onError = options.onError ?? reportTo(settings?.logger ?? createLogger())
 	const adapter = settings === null ? null : bunAdapterOf(settings)
@@ -109,16 +152,16 @@ export function serve<TEnv>(app: FetchApp<TEnv>, options: BunServeOptions<TEnv>)
 		fetch: (request, bun) => {
 			/* an adapter set after Bun.serve took the first one's handlers can never upgrade: say so */
 			if (settings !== null && settings.wsAdapter !== adapter && isWebSocketUpgrade(request)) throw new Error(SWAPPED)
-			const answer = app.fetch(request, (env ??= { ...options.env, server: bun }))
+			const answer = app.fetch(request, (env ??= { ...(options.env ?? ({} as TEnv)), server: bun }))
 			return answer instanceof Promise ? answer.then(unlessUpgraded) : unlessUpgraded(answer)
 		},
-		hostname: options.hostname,
-		maxRequestBodySize: options.maxRequestBodySize,
-		port: options.port,
+		hostname,
+		maxRequestBodySize: options.maxRequestBodySize ?? DEFAULT_MAX_REQUEST_BODY,
+		port: options.port ?? DEFAULT_PORT,
 		...(adapter === null ? {} : { websocket: adapter.websocket }),
 	})
 	return {
-		async close(timeout) {
+		async close(timeout = DEFAULT_CLOSE_TIMEOUT) {
 			/* graceful first; idle keep-alive connections would otherwise keep serving, so close them
 			 * now and again once the in-flight requests have finished and left theirs idle */
 			const graceful = server.stop(false)
@@ -127,5 +170,7 @@ export function serve<TEnv>(app: FetchApp<TEnv>, options: BunServeOptions<TEnv>)
 			server.closeIdleConnections()
 		},
 		port: server.port,
+		server,
+		url: urlOf(hostname, server.port),
 	}
 }

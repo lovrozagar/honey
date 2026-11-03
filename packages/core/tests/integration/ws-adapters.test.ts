@@ -11,7 +11,7 @@ import { createInterface } from "node:readline"
 import { fileURLToPath } from "node:url"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { WebSocket as WsClient } from "ws"
-import { type HoneyServer, serve } from "../../src/adapters/node/serve.ts"
+import { type HoneyServer, createNodeServer } from "../../src/adapters/node/server.ts"
 import { honey } from "../../src/routing/app.ts"
 import { workersWebSocket } from "../../src/ws/workers.ts"
 import type { WSAdapter } from "../../src/ws/contract.ts"
@@ -27,7 +27,7 @@ afterEach(async () => {
 
 /** Serve `app` on a free loopback port. */
 async function listen(app: { fetch(request: Request, env: unknown): Response | Promise<Response> }) {
-	const server = serve(app, { env: {}, hostname: "127.0.0.1", port: 0 })
+	const server = createNodeServer(app, { env: {}, hostname: "127.0.0.1", port: 0 })
 	servers.push(server)
 	await new Promise((resolve) => server.once("listening", resolve))
 	return { port: (server.address() as AddressInfo).port }
@@ -221,7 +221,7 @@ const closesAbruptly = (version: string) => {
 }
 
 const BUN_APP = `
-const { serve } = await import(${JSON.stringify(`${SRC}adapters/serve.ts`)})
+const { serve } = await import(${JSON.stringify(`${SRC}adapters/bun/serve.ts`)})
 const { honey } = await import(${JSON.stringify(`${SRC}routing/app.ts`)})
 const { bunWebSocket } = await import(${JSON.stringify(`${SRC}ws/bun.ts`)})
 const { ws } = await import(${JSON.stringify(`${SRC}ws/route.ts`)})
@@ -272,10 +272,9 @@ const { honey } = await import(${JSON.stringify(`${SRC}routing/app.ts`)})
 const { nodeWebSocket } = await import(${JSON.stringify(`${SRC}ws/node.ts`)})
 const { ws } = await import(${JSON.stringify(`${SRC}ws/route.ts`)})
 const scenarioApp = ${scenarioApp.toString()}
-const server = serve(scenarioApp(honey, ws, nodeWebSocket({ maxPayload: 1024 })), { env: {}, hostname: "127.0.0.1", port: 0 })
-await new Promise((resolve) => server.once("listening", resolve))
+const handle = await serve(scenarioApp(honey, ws, nodeWebSocket({ maxPayload: 1024 })), { hostname: "127.0.0.1", port: 0 })
 const kept = createServer({ shouldUpgradeCallback: () => true }).shouldUpgradeCallback !== undefined
-console.log(server.address().port, kept)
+console.log(handle.port, kept)
 process.stdin.once("data", () => process.exit(0))
 `
 

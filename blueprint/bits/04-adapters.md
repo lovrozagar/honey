@@ -15,9 +15,9 @@ The three runtime adapters and a **plain `serve(app, options)`**. Each adapter m
 - Hop-by-hop headers (and any header `Connection` names) are dropped on BOTH a native `Response` and a `HoneyResponse` header map — core never strips them, so a handler-set `transfer-encoding` beside Node's `content-length` would otherwise put two framings on the wire (one key scan, no allocation). No `101`/`Upgrade` keep here; that path is bit 06.
 
 ## Files (from files.tsv — `adapters` + `runtime`)
-- `src/adapters/node/serve.ts` (+test), `src/adapters/node/request.ts` (+test) — the `node:http` ↔ Fetch bridge (node:* allowed here only): route on the request target not the Host header, absolute-form target by path, malformed Host → 400, body streamed both ways, client-close abort, `PEER_ADDRESS` from `socket.remoteAddress`; responses keep multiple Set-Cookie + HEAD, chunked streaming, keep-alive, graceful drain.
-- `src/adapters/bun/serve.ts` (+test) — `Bun.serve({ fetch: app.fetch })`, the server as env (`requestIP` → `ctx.ip`).
-- `src/adapters/serve.ts` (+test) — the plain `serve(app, options)` (the `./serve` export); holds the shared option defaults (incl. the 128 MiB `maxRequestBodySize`). `src/adapters/fetch-request.ts` (+test) — `toFetchRequest`.
+- `src/adapters/node/server.ts` (+test; `createNodeServer`, behind `./node`'s `serve` in `node/serve.ts` since plan 39 6.4), `src/adapters/node/request.ts` (+test) — the `node:http` ↔ Fetch bridge (node:* allowed here only): route on the request target not the Host header, absolute-form target by path, malformed Host → 400, body streamed both ways, client-close abort, `PEER_ADDRESS` from `socket.remoteAddress`; responses keep multiple Set-Cookie + HEAD, chunked streaming, keep-alive, graceful drain.
+- `src/adapters/bun/serve.ts` (+test) — `Bun.serve({ fetch: app.fetch })`, the server as env (`requestIP` → `ctx.ip`). Since plan 39 6.4 it is the `./bun` export, an async `serve` answering a `ServeHandle` with Bun's own `Server`.
+- `src/adapters/serve-handle.ts` (+test) — was `src/adapters/serve.ts`, the detecting `./serve` export, deleted in plan 39 6.4; now what `./node` and `./bun` share: `ServeHandle<TServer>` and the shared option defaults (incl. the 128 MiB `maxRequestBodySize`). `src/adapters/fetch-request.ts` (+test) — `toFetchRequest`.
 - `src/runtime/detect-runtime.ts` (+test) — node/bun/cf, no Deno. (Workers has no adapter file; `optional-peer` is bit 06.)
 
 ## Tests (named, written first)

@@ -5,14 +5,13 @@
  * server: `mcp(app, "/mcp", handler, { oauth })`. Its routes check the token themselves, its audience the endpoint:
  * listing needs `orders:read`, creating `orders:write` (a 403 step-up challenge otherwise). Every request either
  * server answers is logged in order, so a leg reads the whole discovery, token and step-up sequence off it. Both
- * serve through `serve()`, the adapter of the runtime this process is, as the conformance app does: gen's leg runs
- * the world on Bun, whose node:http lacks parts the Node adapter reads (Bun 1.3.11 has no `headersDistinct`).
+ * serve through the `serve` the caller hands in, its runtime's own: core's test passes Node's, and gen's leg runs
+ * the world on Bun (serve.ts), whose node:http lacks parts the Node adapter reads (Bun 1.3.11 has no `headersDistinct`).
  */
 import { createHash, randomBytes } from "node:crypto"
 import { join } from "node:path"
 import { written } from "../../../../gen/src/emit/mcp/__fixtures__/written.ts"
 import { generateMcpHandler } from "../../../../gen/src/emit/mcp/mounted.ts"
-import { serve, type ServeHandle } from "../../../src/adapters/serve.ts"
 import { type McpHandler, mcp } from "../../../src/mcp/mount.ts"
 import { oauth } from "../../../src/mcp/oauth.ts"
 import { generateOpenApi } from "../../../src/openapi/generate.ts"
@@ -53,8 +52,21 @@ const SCHEMES = {
 	},
 }
 
+/** A running server, as either runtime's `serve` answers it. */
+type Listener = { close(timeout?: number): Promise<void>; readonly url: string }
+
+/** `serve` from `@lovrozagar/honey/node` or `@lovrozagar/honey/bun`: the runtime the world runs on. */
+export type Serve = (
+	app: { fetch(request: Request, env: {}): Promise<Response> },
+	options: { hostname: string; port: number },
+) => Promise<Listener>
+
 /** A server answering `fetch` on a loopback port the OS picks: its origin. */
-async function listening(servers: ServeHandle[], fetch: (request: Request) => Promise<Response>): Promise<string> {
+async function listening(
+	serve: Serve,
+	servers: Listener[],
+	fetch: (request: Request) => Promise<Response>,
+): Promise<string> {
 	const server = await serve({ fetch }, { hostname: "127.0.0.1", port: 0 })
 	servers.push(server)
 	return server.url
@@ -171,14 +183,15 @@ async function handlerOf(app: ReturnType<typeof honey>): Promise<McpHandler> {
 }
 
 /** The stub authorization server and the orders app, listening. */
-export async function startOAuthWorld(): Promise<OAuthWorld> {
-	const servers: ServeHandle[] = []
+export async function startOAuthWorld(serve: Serve): Promise<OAuthWorld> {
+	const servers: Listener[] = []
 	const log: string[] = []
 	const tokens = new Map<string, Token>()
 	let issuer = ""
 	let origin = ""
 	const endpoint = () => `${origin}/mcp`
 	issuer = await listening(
+		serve,
 		servers,
 		logged(
 			log,
@@ -194,6 +207,7 @@ export async function startOAuthWorld(): Promise<OAuthWorld> {
 		oauth: oauth({ authorizationServers: [issuer], resourceName: "Orders", scopesSupported: ["orders:read"] }),
 	})
 	origin = await listening(
+		serve,
 		servers,
 		logged(log, "app", (request) => Promise.resolve(app.fetch(request, {}))),
 	)

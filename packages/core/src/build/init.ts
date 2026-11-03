@@ -27,7 +27,7 @@ export const app = serveOpenApi(
 )
 `
 
-const SERVER_TS = `import { serve } from "@lovrozagar/honey/serve"
+const SERVER_TS = `import { serve } from "@lovrozagar/honey/bun"
 import { app } from "./app.ts"
 
 await serve(app, { port: Number(process.env.PORT ?? 3000) })

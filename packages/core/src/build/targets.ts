@@ -52,10 +52,10 @@ function importApp(app: BuildApp): string {
 	return `import { ${app.export} as app } from "./${app.entry}"`
 }
 
-/** A server on every interface, as `serve(app)` starts one: the process's env, PORT before the configured port. */
-function serverEntry(app: BuildApp, port: number): string {
+/** A server on every interface, as `serve(app)` from the runtime's entry starts one: the process's env, PORT before the configured port. */
+function serverEntry(runtime: "bun" | "node", app: BuildApp, port: number): string {
 	return [
-		'import { serve } from "@lovrozagar/honey/serve"',
+		`import { serve } from "@lovrozagar/honey/${runtime}"`,
 		importApp(app),
 		"",
 		`await serve(app, { env: process.env, hostname: "0.0.0.0", port: Number(process.env.PORT ?? ${port}) })`,
@@ -189,9 +189,9 @@ async function passedOn(context: EntryContext, app: BuildApp): Promise<string[]>
 }
 
 const TARGETS: Readonly<Record<BuildTarget, Target & { readonly named: boolean }>> = {
-	bun: { entry: serverEntry, named: false, noExternal: false, ssrTarget: "node" },
+	bun: { entry: (app, port) => serverEntry("bun", app, port), named: false, noExternal: false, ssrTarget: "node" },
 	workers: { entry: workerEntry, named: true, noExternal: true, ssrTarget: "webworker" },
-	node: { entry: serverEntry, named: false, noExternal: false, ssrTarget: "node" },
+	node: { entry: (app, port) => serverEntry("node", app, port), named: false, noExternal: false, ssrTarget: "node" },
 }
 
 /** The Vite plugin that builds `app` for `config.target`: `vite build` with it emits `<outDir>/index.js`. */

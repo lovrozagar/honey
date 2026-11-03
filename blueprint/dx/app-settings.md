@@ -14,4 +14,4 @@
 | log↔trace correlation | — | on when telemetry active | `requestId` → span attr `honey.request_id`; logger child binds `trace_id`+`span_id`; ids stay distinct (not collapsed) | with telemetry off, `requestId`+logger behave as today; trace id is never used as the client-facing id | `telemetry/correlation.test.ts` |
 | `.fetch(request, env, ctx)` | yes (entry) | — | the Fetch handler an adapter calls | finalize compiles once; registering after first `fetch` re-finalizes | `routing/dispatch.test.ts` |
 
-Deno is not a target (H15). Runtime is node / bun / cf, resolved by `detectRuntime` and the adapters.
+Deno is not a target (H15). Runtime is node / bun / cf, named by the server's import (`./node`, `./bun`) or, on Workers, the exported app (plan 39 6.4).

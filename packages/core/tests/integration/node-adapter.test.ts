@@ -6,7 +6,7 @@
 import type { AddressInfo } from "node:net"
 import { connect } from "node:net"
 import { afterEach, describe, expect, it } from "vitest"
-import { type HoneyServer, serve } from "../../src/adapters/node/serve.ts"
+import { type HoneyServer, createNodeServer } from "../../src/adapters/node/server.ts"
 import { defineErrors } from "../../src/errors/errors.ts"
 import { createMiddleware } from "../../src/middleware/middleware.ts"
 import { honey } from "../../src/routing/app.ts"
@@ -20,7 +20,7 @@ afterEach(async () => {
 })
 
 async function listen(app: App) {
-	const server = serve(app, { env: {}, hostname: "127.0.0.1", port: 0 })
+	const server = createNodeServer(app, { env: {}, hostname: "127.0.0.1", port: 0 })
 	servers.push(server)
 	await new Promise((resolve) => server.once("listening", resolve))
 	const { port } = server.address() as AddressInfo
@@ -274,7 +274,7 @@ describe("the connection and the client", () => {
 	it("ctx.ip is the socket peer, an IPv4-mapped address unwrapped", async () => {
 		const app = honey<{}>()
 		app.get("/").handler((ctx) => ctx.res.json("ok", { ip: ctx.ip }))
-		const server = serve(app, { env: {}, hostname: "::", port: 0 })
+		const server = createNodeServer(app, { env: {}, hostname: "::", port: 0 })
 		servers.push(server)
 		await new Promise((resolve) => server.once("listening", resolve))
 		const { port } = server.address() as AddressInfo

@@ -7,7 +7,7 @@ import type { AddressInfo } from "node:net"
 import { connect } from "node:net"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { WebSocket as WsClient } from "ws"
-import { type HoneyServer, serve } from "../../src/adapters/node/serve.ts"
+import { type HoneyServer, createNodeServer } from "../../src/adapters/node/server.ts"
 import { cors } from "../../src/middleware/cors.ts"
 import { createMiddleware } from "../../src/middleware/middleware.ts"
 import { realtime } from "../../src/realtime/realtime.ts"
@@ -37,7 +37,7 @@ const HANDSHAKE = "Sec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZ
 /** `app` with GET /alive, served on a free loopback port. */
 async function listen(app: Honey<{}>) {
 	app.get("/alive").handler((ctx) => ctx.res.text("ok", "alive"))
-	const server = serve(app, { env: {}, hostname: "127.0.0.1", port: 0 })
+	const server = createNodeServer(app, { env: {}, hostname: "127.0.0.1", port: 0 })
 	servers.push(server)
 	await new Promise((resolve) => server.once("listening", resolve))
 	const { port } = server.address() as AddressInfo

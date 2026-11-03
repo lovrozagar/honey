@@ -1,4 +1,4 @@
-/** The runtimes honey serves on. Cloudflare Workers is detected so `serve()` can say to export the app instead. */
+/** The runtimes honey runs on, as the request log names them. Internal: a server process imports its runtime's `serve`. */
 export type ServeRuntime = "bun" | "node" | "workers"
 
 /** The slice of the global object `detectRuntime` inspects. */
@@ -26,5 +26,5 @@ export function detectRuntime(g: RuntimeGlobals = globalThis): ServeRuntime {
 	const agent = g.navigator?.userAgent ?? ""
 	if (agent.startsWith("Cloudflare-Workers") || agent.startsWith("workerd")) return "workers"
 	if (g.process?.versions?.node !== undefined) return "node"
-	throw new Error("serve() could not detect the runtime: expected Bun, Node, or Cloudflare Workers")
+	throw new Error("could not detect the runtime: expected Bun, Node, or Cloudflare Workers")
 }

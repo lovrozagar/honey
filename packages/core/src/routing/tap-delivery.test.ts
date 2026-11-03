@@ -1,6 +1,6 @@
 import type { AddressInfo } from "node:net"
 import { describe, expect, it, vi } from "vitest"
-import { serve } from "../adapters/node/serve.ts"
+import { createNodeServer } from "../adapters/node/server.ts"
 import { defineErrors } from "../errors/errors.ts"
 import { createMiddleware } from "../middleware/middleware.ts"
 import { createLogger } from "../telemetry/logger.ts"
@@ -302,7 +302,7 @@ describe("over a real listen", () => {
 				ctx.tap("audit", { action: "should-not-fire" })
 				throw ctx.errors.nope()
 			})
-		const server = serve(app, { env: {}, hostname: "127.0.0.1", port: 0 })
+		const server = createNodeServer(app, { env: {}, hostname: "127.0.0.1", port: 0 })
 		await new Promise((resolve) => server.once("listening", resolve))
 		const { port } = server.address() as AddressInfo
 		try {

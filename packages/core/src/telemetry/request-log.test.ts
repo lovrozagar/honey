@@ -1,7 +1,7 @@
 import type { AddressInfo } from "node:net"
 import { connect } from "node:net"
 import { afterEach, describe, expect, it } from "vitest"
-import { type HoneyServer, serve } from "../adapters/node/serve.ts"
+import { type HoneyServer, createNodeServer } from "../adapters/node/server.ts"
 import { createMiddleware } from "../middleware/middleware.ts"
 import { requestId } from "../middleware/request-id.ts"
 import { createHoneyResponse, isHoneyResponse } from "../response/builder.ts"
@@ -64,7 +64,7 @@ afterEach(async () => {
 
 /** The raw bytes a real node:http server writes for `path`, without the Date header. */
 async function onTheWire(served: Honey<{}>, request: string): Promise<string> {
-	const server = serve(served, { env: {}, hostname: "127.0.0.1", port: 0 })
+	const server = createNodeServer(served, { env: {}, hostname: "127.0.0.1", port: 0 })
 	servers.push(server)
 	await new Promise((resolve) => server.once("listening", resolve))
 	const { port } = server.address() as AddressInfo

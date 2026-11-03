@@ -13,7 +13,8 @@ import * as z from "zod"
 import { httpSession, withClients } from "../../../gen/src/emit/mcp/__fixtures__/clients.ts"
 import { written } from "../../../gen/src/emit/mcp/__fixtures__/written.ts"
 import { generateMcpHandler } from "../../../gen/src/emit/mcp/mounted.ts"
-import { serve, type ServeHandle } from "../../src/adapters/serve.ts"
+import type { Server } from "node:http"
+import { serve, type ServeHandle } from "../../src/adapters/node/serve.ts"
 import { type McpHandler, mcp } from "../../src/mcp/mount.ts"
 import { memoryUploadStore, uploads } from "../../src/mcp/uploads.ts"
 import { urlFiles } from "../../src/mcp/url-files.ts"
@@ -45,7 +46,7 @@ function app() {
 		})
 }
 
-const servers: ServeHandle[] = []
+const servers: ServeHandle<Server>[] = []
 let endpoint = ""
 const hosted: string[] = []
 

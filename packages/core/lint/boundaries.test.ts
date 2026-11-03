@@ -47,15 +47,14 @@ describe("honey/boundaries: imports", () => {
 		])
 	})
 
-	it("lets serve(), the one runtime dispatcher, load an adapter on demand, never statically", () => {
+	it("lets no portable file load an adapter, not even through import(): a server imports its runtime's entry", () => {
 		const fixture = {
-			"packages/core/src/adapters/serve.ts":
-				'const n = () => import("./node/serve.ts")\nconst b = () => import("./bun/serve.ts")\nimport { x } from "./node/serve.ts"\n',
-			"packages/core/src/adapters/fetch-request.ts": 'export const n = () => import("./node/serve.ts")\n',
+			"packages/core/src/adapters/serve.ts": 'const n = () => import("./node/serve.ts")\n',
+			"packages/core/src/adapters/serve-handle.ts": 'const b = () => import("./bun/serve.ts")\n',
 		}
 		expect(reportsOf(rule, fixture)).toEqual([
 			{ file: "packages/core/src/adapters/serve.ts", message: ADAPTER },
-			{ file: "packages/core/src/adapters/fetch-request.ts", message: ADAPTER },
+			{ file: "packages/core/src/adapters/serve-handle.ts", message: ADAPTER },
 		])
 	})
 

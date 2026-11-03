@@ -6,8 +6,8 @@ method. Each takes `json`, `form`, `headers` and `search`, and `ip` sets the pee
 
 - **Cookies:** `cookies: true` keeps each answer's `Set-Cookie` and sends the cookies on later requests, honoring
   `Max-Age` and `Expires`.
-- **Real HTTP:** `transport: "serve"` serves the app on a free local port through the runtime's adapter, for what
-  only a real socket shows; `close()` stops it.
+- **Real HTTP:** `transport: serve`, with `serve` from `@lovrozagar/honey/node` or `@lovrozagar/honey/bun`, serves the
+  app on a free local port through that runtime's adapter, for what only a real socket shows; `close()` stops it.
 
 ```ts run
 import { honey } from "@lovrozagar/honey"

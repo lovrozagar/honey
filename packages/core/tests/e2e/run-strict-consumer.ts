@@ -300,7 +300,7 @@ async function nodeConsumer(dir: string): Promise<boolean> {
 		join(dir, "src", "server-app.ts"),
 		[
 			'import { honey } from "@lovrozagar/honey"',
-			'import { serve } from "@lovrozagar/honey/serve"',
+			'import { serve } from "@lovrozagar/honey/node"',
 			'export const app = honey().get("/health").handler((ctx) => ctx.res.text("ok", "ok"))',
 			"export default app",
 			`await serve(app, { port: ${port} })`,

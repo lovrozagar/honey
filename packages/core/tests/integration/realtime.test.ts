@@ -6,7 +6,7 @@
 import type { AddressInfo } from "node:net"
 import { afterEach, describe, expect, it } from "vitest"
 import { WebSocket as WsClient } from "ws"
-import { type HoneyServer, serve } from "../../src/adapters/node/serve.ts"
+import { type HoneyServer, createNodeServer } from "../../src/adapters/node/server.ts"
 import { createBus } from "../../src/realtime/bus.ts"
 import { realtime } from "../../src/realtime/realtime.ts"
 import type { ConnContext } from "../../src/realtime/route.ts"
@@ -25,7 +25,7 @@ afterEach(async () => {
 async function reference(count: number) {
 	const ref = createReferenceServer()
 	for (let n = 1; n <= count; n++) ref.append({ n })
-	const server = serve(ref.app, { env: {}, hostname: "127.0.0.1", port: 0 })
+	const server = createNodeServer(ref.app, { env: {}, hostname: "127.0.0.1", port: 0 })
 	servers.push(server)
 	await new Promise((resolve) => server.once("listening", resolve))
 	const { port } = server.address() as AddressInfo
@@ -74,7 +74,7 @@ async function sseEvents(url: string, count: number, headers: Record<string, str
 
 /** `app` served on a free loopback port; the ws:// base. */
 async function listen(app: Honey<{}>) {
-	const server = serve(app, { env: {}, hostname: "127.0.0.1", port: 0 })
+	const server = createNodeServer(app, { env: {}, hostname: "127.0.0.1", port: 0 })
 	servers.push(server)
 	await new Promise((resolve) => server.once("listening", resolve))
 	return `ws://127.0.0.1:${(server.address() as AddressInfo).port}`

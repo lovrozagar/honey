@@ -25,10 +25,6 @@ const GLOBALS = new Map([
 
 const ADAPTER_BUCKETS = new Set(["node", "bun", "workers"])
 
-/* serve(app) detects the runtime and loads that runtime's adapter on demand: the one portable
- * file that may reach an adapter, and only through import(), so no runtime's code loads elsewhere */
-const DISPATCHER = "adapters/serve.ts"
-
 const MESSAGES = {
 	adapter: "only the same runtime's adapter may import an adapter",
 	codegen: "core reaches honey-clients from build/ only",
@@ -73,12 +69,12 @@ function isNodeBuiltin(spec) {
 	return spec.startsWith("node:") || NODE_BUILTINS.has(spec.split("/")[0])
 }
 
-function relativeProblem(where, spec, dynamic) {
+/* no portable file reaches an adapter, statically or through import(): a server imports its runtime's entry */
+function relativeProblem(where, spec) {
 	const target = resolveRel(where.rel, spec)
 	if (target === null) return "escape"
 	const to = bucketOf(where.pkg, target)
-	if (!ADAPTER_BUCKETS.has(to) || to === where.bucket) return null
-	return dynamic && where.pkg === "core" && where.rel === DISPATCHER ? null : "adapter"
+	return !ADAPTER_BUCKETS.has(to) || to === where.bucket ? null : "adapter"
 }
 
 function packageProblem(where, spec, dynamic) {
@@ -95,7 +91,7 @@ function packageProblem(where, spec, dynamic) {
 }
 
 function problemOf(where, spec, dynamic) {
-	if (spec.startsWith(".")) return relativeProblem(where, spec, dynamic)
+	if (spec.startsWith(".")) return relativeProblem(where, spec)
 	if (isNodeBuiltin(spec))
 		return where.bucket === "node" || where.bucket === "build" || where.pkg === "gen" ? null : "node"
 	return packageProblem(where, spec, dynamic)

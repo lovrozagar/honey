@@ -1,7 +1,7 @@
 import type { AddressInfo } from "node:net"
 import { describe, expect, expectTypeOf, it } from "vitest"
 import * as z from "zod"
-import { serve } from "../adapters/node/serve.ts"
+import { createNodeServer } from "../adapters/node/server.ts"
 import { defineErrors } from "../errors/errors.ts"
 import { createMiddleware } from "../middleware/middleware.ts"
 import { GRAPH, Honey, honey } from "./app.ts"
@@ -189,7 +189,7 @@ describe("chain meta on the wire", () => {
 			.get("/route")
 			.meta({ security: "none" })
 			.handler((ctx) => ctx.res.json("ok", ctx.meta))
-		const server = serve(app, { env: {}, hostname: "127.0.0.1", port: 0 })
+		const server = createNodeServer(app, { env: {}, hostname: "127.0.0.1", port: 0 })
 		await new Promise((resolve) => server.once("listening", resolve))
 		const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
 		try {

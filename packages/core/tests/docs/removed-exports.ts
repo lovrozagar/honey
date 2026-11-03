@@ -38,6 +38,7 @@ export const REMOVED_SUBPATHS: readonly RemovedSubpath[] = [
 	{ covers: "@lovrozagar/honey-clients", subpath: "./codegen-go-cli" },
 	{ covers: "@lovrozagar/honey-clients", subpath: "./codegen/extract" },
 	{ covers: "serveOpenApi", subpath: "./openapi/spec" },
+	{ covers: "@lovrozagar/honey/node", subpath: "./serve" },
 	{ covers: "trustProxy", subpath: "./trust" },
 	{ covers: "workersWebSocket", subpath: "./ws/cloudflare" },
 	{
@@ -55,7 +56,7 @@ const SHAPE = "an internal shape of the route builder's types, never written in 
 
 /**
  * Each name a kept subpath exported at 0.7.3 and no longer does. `guide` means migration.md names it: those are
- * the enablers and types a 0.7.3 app wrote (`logger()` in a `.use()`, `enableServe()`, `trustProxy`'s types).
+ * the enablers and types a 0.7.3 app wrote (`logger()` in a `.use()`, `detectRuntime()`, `trustProxy`'s types).
  */
 export const REMOVED_NAMES: Readonly<Record<string, Verdict>> = {
 	ClientInfo: { kind: "guide" },
@@ -64,6 +65,7 @@ export const REMOVED_NAMES: Readonly<Record<string, Verdict>> = {
 	HoneyGoCliConfig: { kind: "internal", why: PLUGIN },
 	HoneySdkPortsConfig: { kind: "internal", why: PLUGIN },
 	HoneyServeOptions: { kind: "guide" },
+	HoneyServer: { kind: "guide" },
 	HttpMethod: { kind: "internal", why: TREE },
 	InputSchemasDef: { kind: "internal", why: SHAPE },
 	InvalidateCheckConfig: { kind: "internal", why: PLUGIN },
@@ -88,6 +90,10 @@ export const REMOVED_NAMES: Readonly<Record<string, Verdict>> = {
 	ResolvedSdkPorts: { kind: "internal", why: PLUGIN },
 	RouteHandler: { kind: "internal", why: TREE },
 	RouteId: { kind: "internal", why: TREE },
+	ServeRuntime: {
+		kind: "internal",
+		why: "the runtime name the request log records; a server imports its runtime's serve, so an app never names one",
+	},
 	SuccessStatusKey: { kind: "internal", why: SHAPE },
 	TranslationRegistry: { kind: "internal", why: "the i18n registry core fills; an app passes errorI18n() instead" },
 	TrustProxy: { kind: "guide" },
@@ -95,11 +101,11 @@ export const REMOVED_NAMES: Readonly<Record<string, Verdict>> = {
 	WSPreUpgrade: { kind: "internal", why: ADAPTER },
 	WSRouteHandler: { kind: "internal", why: TREE },
 	clientInfo: { kind: "guide" },
+	detectRuntime: { kind: "guide" },
 	createProxyHandler: { kind: "guide" },
 	defineMiddleware: { kind: "guide" },
 	enableI18n: { kind: "guide" },
 	enableOpenApi: { kind: "guide" },
-	enableServe: { kind: "guide" },
 	generateAndWrite: { kind: "internal", why: PLUGIN },
 	generateFromApp: { kind: "internal", why: PLUGIN },
 	generateRouteTree: { kind: "internal", why: PLUGIN },
@@ -115,7 +121,6 @@ export const REMOVED_NAMES: Readonly<Record<string, Verdict>> = {
 	resolveHoneyConfig: { kind: "internal", why: PLUGIN },
 	resolveTranslation: { kind: "internal", why: "the i18n lookup core calls; an app passes errorI18n() instead" },
 	spec: { kind: "guide" },
-	startHoneyServer: { kind: "guide" },
 }
 
 /** The names a module's source exports, however it writes them: a list, a re-export, or a declaration. */

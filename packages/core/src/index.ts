@@ -3,7 +3,6 @@
  * types an app is read through. Everything optional is its own subpath; nothing here registers itself (H23).
  */
 export { toFetchRequest } from "./adapters/fetch-request.ts"
-export type { ServeHandle } from "./adapters/serve.ts"
 export { HoneyContext } from "./context/context.ts"
 export type { CookieOptions } from "./context/cookie.ts"
 export { HoneyError } from "./errors/error.ts"
@@ -57,7 +56,6 @@ export type { HoneyCodegen, RouteSelectorOf, WithOutput } from "./routing/codege
 export type { TapContext, TapHandler } from "./routing/tap.ts"
 export { mergeTree } from "./routing/tree-merge.ts"
 export type { MergePath, PrefixRoutes } from "./routing/types.ts"
-export { detectRuntime, type ServeRuntime } from "./runtime/detect-runtime.ts"
 export type { InferOutput, StandardSchemaLike } from "./validation/standard-schema.ts"
 export type { WSAdapter, WSContext, WSHandler } from "./ws/contract.ts"
 export type { WSOriginPolicy } from "./ws/origin.ts"

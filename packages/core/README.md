@@ -90,8 +90,8 @@ Serving is the same for any app, and the reference UI comes from the document th
 ```ts
 import { honey } from "@lovrozagar/honey"
 import { serveOpenApi } from "@lovrozagar/honey/openapi"
+import { serve } from "@lovrozagar/honey/node"
 import { scalar } from "@lovrozagar/honey/openapi/scalar"
-import { serve } from "@lovrozagar/honey/serve"
 
 const app = honey()
 app.get("/health").handler((ctx) => ctx.res.text("ok", "ok"))
@@ -332,7 +332,7 @@ Streaming bodies clean up when the client leaves — the generator's `finally` r
 
 ```ts run
 import { honey } from "@lovrozagar/honey"
-import { serve } from "@lovrozagar/honey/serve"
+import { serve } from "@lovrozagar/honey/node"
 
 let ended = (_: string) => {}
 const cleanedUp = new Promise<string>((resolve) => (ended = resolve))
@@ -694,16 +694,16 @@ One app runs on each of them; only how it is served differs.
 
 | Runtime            | How it runs                                                                                                                      |
 | ------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
-| Node               | `serve(app)` from `@lovrozagar/honey/serve`                                                                                      |
-| Bun                | `serve(app)`, or `Bun.serve({ fetch: app.fetch })`                                                                               |
+| Node               | `serve(app)` from `@lovrozagar/honey/node`                                                                                       |
+| Bun                | `serve(app)` from `@lovrozagar/honey/bun`, or `Bun.serve({ fetch: app.fetch })`                                                  |
 | Cloudflare Workers | `export default app` — the Worker's `fetch` handler, with named exports beside it; `scheduled` and `queue` move onto the default |
 
 ```ts
-import { detectRuntime, honey, toFetchRequest } from "@lovrozagar/honey"
-import { serve } from "@lovrozagar/honey/serve"
+import { honey, toFetchRequest } from "@lovrozagar/honey"
+import { serve } from "@lovrozagar/honey/node"
 
 const app = honey()
-app.get("/health").handler((ctx) => ctx.res.text("ok", detectRuntime()))
+app.get("/health").handler((ctx) => ctx.res.text("ok", "ok"))
 
 /* a request from an adapter that handed you its own Request subclass */
 declare const incoming: Request
@@ -714,18 +714,20 @@ console.log(server.url)
 await server.close()
 ```
 
-`@lovrozagar/honey/serve` is the one to reach for: it resolves the runtime itself and returns a `ServeHandle` with
-the bound `url` and a `close()` that drains. `@lovrozagar/honey/node` is `node:http` directly, for an existing
-server or a framework that hands you one:
+A server process knows its runtime, so each runtime has its own entry and nothing is detected. Each takes only its
+own runtime's options (`headersTimeout`, `keepAliveTimeout` and the rest are Node's) and resolves, once the server
+listens, to a `ServeHandle`: the bound `port` and `url`, a `close()` that drains, and the runtime's own server on
+`server`, typed as that runtime types it (Node's `http.Server`, Bun's `Server`):
 
 ```ts
 import { honey } from "@lovrozagar/honey"
-import { serve } from "@lovrozagar/honey/node"
+import { serve } from "@lovrozagar/honey/bun"
 
 const app = honey()
 app.get("/health").handler((ctx) => ctx.res.text("ok", "ok"))
 
-const server = await serve(app, { env: {}, port: 0 })
+const server = await serve(app, { port: 0 })
+console.log(server.url)
 await server.close()
 ```
 
@@ -1247,9 +1249,9 @@ generator.
 
 | Export                              | What it holds                                                                                                            |
 | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `@lovrozagar/honey`                 | `honey`, `HoneyError`, `defineErrors`, `createMiddleware`, `mergeTree`, `detectRuntime`, and the type helpers below      |
-| `@lovrozagar/honey/serve`           | `serve(app, options)`: Node or Bun, whichever runs it                                                                    |
-| `@lovrozagar/honey/node`            | `serve` for `node:http` directly                                                                                         |
+| `@lovrozagar/honey`                 | `honey`, `HoneyError`, `defineErrors`, `createMiddleware`, `mergeTree`, and the type helpers below                       |
+| `@lovrozagar/honey/node`            | `serve(app, options)` on Node's `node:http`                                                                              |
+| `@lovrozagar/honey/bun`             | `serve(app, options)` on `Bun.serve`                                                                                     |
 | `@lovrozagar/honey/ws`              | `ws(app, path)`, a WebSocket route                                                                                       |
 | `@lovrozagar/honey/ws/bun`          | `bunWebSocket`                                                                                                           |
 | `@lovrozagar/honey/ws/node`         | `nodeWebSocket` (with the optional `ws` peer)                                                                            |
@@ -1301,14 +1303,14 @@ generator.
 | `@lovrozagar/honey/cookie-sign`     | `sign`, `verify`, `createCookieSigner`                                                                                   |
 | `@lovrozagar/honey/crypto`          | `timingSafeEqual`                                                                                                        |
 | `@lovrozagar/honey/request-to-curl` | `requestToCurl`                                                                                                          |
-| `@lovrozagar/honey/testing`         | `testClient`, an app called in process or over `serve`                                                                   |
+| `@lovrozagar/honey/testing`         | `testClient`, an app called in process or over a runtime's `serve`                                                       |
 | `@lovrozagar/honey/tree`            | the route tree's types and helpers                                                                                       |
 | `@lovrozagar/honey/plugin`          | `honey()`, the Vite plugin that generates the app's artifacts                                                            |
 | `@lovrozagar/honey/build`           | `createBuildPlugin`, a production bundle for a deploy target                                                             |
 
 The root export's values: `honey()` and the `Honey` class behind it, `HoneyContext` and `HoneyRes` (the handler's
 `ctx` and its `ctx.res`), `HoneyError`, `defineErrors` and `ERROR_META`, `createErrorResponse`, `createMiddleware`,
-`mergeTree`, `detectRuntime` and `toFetchRequest`.
+`mergeTree` and `toFetchRequest`.
 
 ## Type helpers
 

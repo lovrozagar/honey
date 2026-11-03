@@ -1,12 +1,12 @@
 /**
  * Fixture for proxy-upstream.test.ts: a honey app that proxies `/up/*` to a real HTTP upstream
- * (upstream.mjs, its own Node process) with the runtime's own `fetch()`, served by `serve()` on
- * whatever runtime runs this file (Node, Bun). Prints `PORT <app> <upstream>` once both listen.
+ * (upstream.mjs, its own Node process) with the runtime's own `fetch()`, served by that runtime's
+ * `serve()`: the launcher names it as the first argument (`node`, `bun`). Prints `PORT <app> <upstream>`
+ * once both listen.
  * `GET /state` on the app reports what the upstream observed.
  */
 import { spawn } from "node:child_process"
 import { fileURLToPath } from "node:url"
-import { serve } from "../../../src/adapters/serve.ts"
 import { proxy } from "../../../src/proxy/proxy.ts"
 import { honey } from "../../../src/routing/app.ts"
 
@@ -50,5 +50,8 @@ app.all("/up/*rest").handler(
 	}),
 )
 
+const { serve } = (await import(
+	process.argv[2] === "bun" ? "../../../src/adapters/bun/serve.ts" : "../../../src/adapters/node/serve.ts"
+)) as typeof import("../../../src/adapters/node/serve.ts")
 const handle = await serve(app, { hostname: "127.0.0.1", port: 0 })
 console.log(`PORT ${handle.port} ${base}`)

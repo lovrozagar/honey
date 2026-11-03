@@ -1,7 +1,7 @@
 import type { AddressInfo } from "node:net"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import * as z from "zod"
-import { serve } from "../adapters/node/serve.ts"
+import { createNodeServer } from "../adapters/node/server.ts"
 import { HoneyError } from "../errors/error.ts"
 import { rangeResponse } from "../response/range.ts"
 import { HoneyRes } from "../response/response.ts"
@@ -484,7 +484,7 @@ describe("output validation over real HTTP", () => {
 			.get("/bad")
 			.output(out)
 			.handler((ctx) => ctx.res.raw(foreign("application/json")))
-		const server = serve(app, { env: {}, hostname: "127.0.0.1", port: 0 })
+		const server = createNodeServer(app, { env: {}, hostname: "127.0.0.1", port: 0 })
 		await new Promise((resolve) => server.once("listening", resolve))
 		const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
 		try {

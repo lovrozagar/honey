@@ -1,11 +1,11 @@
 /**
  * `testClient(app, options)`: requests against an app from a test, each answered as the raw Web `Response`
- * (`@lovrozagar/honey/testing`). By default it calls `app.fetch` in process; `transport: "serve"` serves the app
- * through `serve(app)` on a free local port and sends real HTTP, so the runtime's adapter (its request view, its
- * response writer, the socket's peer) is in the path. An opt-in cookie jar carries `Set-Cookie` into the next
- * request. A plain function: nothing registers itself (H23).
+ * (`@lovrozagar/honey/testing`). By default it calls `app.fetch` in process; `transport: serve` serves the app
+ * through that runtime's `serve` (`@lovrozagar/honey/node`, `@lovrozagar/honey/bun`) on a free local port and sends
+ * real HTTP, so the runtime's adapter (its request view, its response writer, the socket's peer) is in the path. An
+ * opt-in cookie jar carries `Set-Cookie` into the next request. A plain function: nothing registers itself (H23), and
+ * no adapter is imported here: the test names its runtime.
  */
-import { serve } from "../adapters/serve.ts"
 import { PEER_ADDRESS } from "../context/peer.ts"
 
 /** Anything with a `fetch` handler, such as a honey app. */
@@ -13,6 +13,24 @@ type FetchApp<TEnv> = {
 	/** Answers `request`, with `env` as the app's environment. */
 	fetch(request: Request, env: TEnv): Response | Promise<Response>
 }
+
+/** `serve` from `@lovrozagar/honey/node` or `@lovrozagar/honey/bun`, as a test client's transport. */
+type ServeTransport<TEnv> = (
+	app: FetchApp<TEnv>,
+	options: {
+		/** The client's `env`, handed to the app as `ctx.env`. */
+		env: TEnv
+		/** Always the loopback, `127.0.0.1`. */
+		hostname: string
+		/** Always `0`: a free port. */
+		port: number
+	},
+) => Promise<{
+	/** Stops the server; `TestClient.close()` calls it. */
+	close(): Promise<void>
+	/** Where the client sends each request. */
+	readonly url: string
+}>
 
 /** Per-request options for a `TestClient` call. */
 export type TestRequestOptions = {
@@ -37,10 +55,11 @@ export type TestClientOptions<TEnv> = {
 	/** The default peer address for every request; a request's own `ip` wins. In process only. */
 	ip?: string
 	/**
-	 * `"fetch"` (default) calls `app.fetch` in process. `"serve"` serves the app with `serve(app)` on a free local
-	 * port, started on first use, and sends real HTTP through the runtime's adapter; `close()` stops it.
+	 * `"fetch"` (default) calls `app.fetch` in process. `serve` from `@lovrozagar/honey/node` or
+	 * `@lovrozagar/honey/bun` serves the app with it on a free local port, started on first use, and sends real HTTP
+	 * through that runtime's adapter; `close()` stops it.
 	 */
-	transport?: "fetch" | "serve"
+	transport?: "fetch" | ServeTransport<TEnv>
 }
 
 /**
@@ -64,7 +83,7 @@ export type TestClient = {
 	put(path: string, options?: TestRequestOptions): Promise<Response>
 	/** Any method, a custom one included. */
 	request(method: string, path: string, options?: TestRequestOptions): Promise<Response>
-	/** Stop the server `transport: "serve"` started; nothing otherwise. */
+	/** Stop the server a `serve` transport started; nothing otherwise. */
 	close(): Promise<void>
 }
 
@@ -109,11 +128,12 @@ function parseSetCookie(line: string, now: number): { expired: boolean; name: st
 /** A test client for `app`; see `TestClientOptions` for the cookie jar, peer address and transport. */
 export function testClient<TEnv>(app: FetchApp<TEnv>, options: TestClientOptions<TEnv>): TestClient {
 	const jar = new Map<string, string>()
-	let server: ReturnType<typeof serve> | null = null
+	const { transport = "fetch" } = options
+	let server: ReturnType<ServeTransport<TEnv>> | null = null
 
 	const send = async (request: (origin: string) => Request, ip: string | undefined): Promise<Response> => {
-		if (options.transport === "serve") {
-			server ??= serve(app, { env: options.env, hostname: "127.0.0.1", port: 0 })
+		if (transport !== "fetch") {
+			server ??= transport(app, { env: options.env, hostname: "127.0.0.1", port: 0 })
 			return fetch(request((await server).url), { redirect: "manual" })
 		}
 		const req = request(IN_PROCESS_ORIGIN)

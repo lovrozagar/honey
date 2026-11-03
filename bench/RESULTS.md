@@ -14,13 +14,13 @@ Two environments, two matrices each:
 
 Listen path differs by env:
 
-| Framework | Bun                    | Node                                                                  |
-| --------- | ---------------------- | --------------------------------------------------------------------- |
-| Honey     | `Bun.serve({ fetch })` | `app.serve({ runtime: "node" })` + `import "@lovrozagar/honey/serve"` |
-| Hono      | `Bun.serve({ fetch })` | `@hono/node-server`                                                   |
-| Elysia    | `app.listen()` (Bun)   | `@elysia/node` adapter                                                |
-| Express   | `app.listen()`         | same                                                                  |
-| Nest      | `bun run` TS           | `tsx` TS (cannot bun-bundle)                                          |
+| Framework | Bun                    | Node                                       |
+| --------- | ---------------------- | ------------------------------------------ |
+| Honey     | `Bun.serve({ fetch })` | `serve(app)` from `@lovrozagar/honey/node` |
+| Hono      | `Bun.serve({ fetch })` | `@hono/node-server`                        |
+| Elysia    | `app.listen()` (Bun)   | `@elysia/node` adapter                     |
+| Express   | `app.listen()`         | same                                       |
+| Nest      | `bun run` TS           | `tsx` TS (cannot bun-bundle)               |
 
 Bun ports `3100–3104`. Node ports `3300–3304`. Nest size is n/a.
 
@@ -69,7 +69,7 @@ Zero 4xx/5xx on every recorded scenario below.
 | Express   | 582 KB | 229 KB    |
 | Nest      | n/a    | n/a       |
 
-Honey’s Node bundle includes `honey/serve` + the Node HTTP/WS adapter. That is why it is 32 KB gzip here vs 15 KB on Bun fetch-only.
+Honey’s Node bundle includes the Node HTTP/WS adapter. That is why it is 32 KB gzip here vs 15 KB on Bun fetch-only. It was measured through the former `honey/serve`, which also bundled the Bun adapter; `honey/node` carries only Node's.
 
 | Scenario          | Honey | Hono | Elysia   | Express | Nest |
 | ----------------- | ----- | ---- | -------- | ------- | ---- |

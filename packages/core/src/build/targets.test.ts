@@ -164,9 +164,9 @@ describe("the build entry per target (bit 19 h2)", () => {
 	// v0: 12d6f6b97b
 	it.each(["node", "bun"] as const)("%s: serves as serve(app) does, the process's env, on 0.0.0.0", (target) => {
 		const entry = entryOf(plugin(target))
-		/* v1's serve() reads the runtime itself, so the entry names none */
+		/* the target's own entry: nothing is detected at run time */
 		expect([
-			entry.includes('import { serve } from "@lovrozagar/honey/serve"'),
+			entry.includes(`import { serve } from "@lovrozagar/honey/${target}"`),
 			entry.includes('await serve(app, { env: process.env, hostname: "0.0.0.0"'),
 			entry.includes("runtime"),
 		]).toEqual([true, true, false])

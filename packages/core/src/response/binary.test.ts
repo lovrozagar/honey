@@ -1,6 +1,6 @@
 import type { AddressInfo } from "node:net"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { type HoneyServer, serve } from "../adapters/node/serve.ts"
+import { type HoneyServer, createNodeServer } from "../adapters/node/server.ts"
 import { honey } from "../routing/app.ts"
 import { isHoneyResponse, rawBodyOf } from "./builder.ts"
 import { HoneyRes } from "./response.ts"
@@ -13,7 +13,7 @@ afterEach(async () => {
 
 /** Serve `app` on a free loopback port; the base URL to reach it. */
 async function listen(app: { fetch(request: Request, env: {}): Response | Promise<Response> }): Promise<string> {
-	const server = serve(app, { env: {}, hostname: "127.0.0.1", port: 0 })
+	const server = createNodeServer(app, { env: {}, hostname: "127.0.0.1", port: 0 })
 	servers.push(server)
 	await new Promise((resolve) => server.once("listening", resolve))
 	return `http://127.0.0.1:${(server.address() as AddressInfo).port}`
