@@ -8,7 +8,7 @@
 import type { BinaryBody } from "../response/binary.ts"
 import type { HoneyRes, ResponseOptions, TypedResponse } from "../response/response.ts"
 import type { StatusKey } from "../response/status.ts"
-import type { InferInput, InferOutput, StandardSchemaLike } from "../validation/standard-schema.ts"
+import type { InferInput, StandardSchemaLike } from "../validation/standard-schema.ts"
 
 /** A media type's declared bodies by status key: a schema, or `true` for a body with none. */
 export type StatusSchemas = { readonly [K in StatusKey]?: StandardSchemaLike | true }
@@ -69,8 +69,8 @@ export type AllowedResMethods<TOutput> =
 /** The helpers every route keeps, whatever it declares. */
 type UniversalRes = Pick<HoneyRes, "noContent" | "raw" | "redirect" | "stream">
 
-/** A declared body's type: its schema's output; `unknown` for a body declared without one. */
-type BodyOf<S> = S extends StandardSchemaLike ? InferOutput<S> : unknown
+/** A declared body's type: its schema's input, what output validation accepts; `unknown` without a schema. */
+type BodyOf<S> = S extends StandardSchemaLike ? InferInput<S> : unknown
 
 /** The header schema status `K` declares, or `never`. */
 type HeadersOf<TOutput, K> = TOutput extends { readonly headers?: infer H }

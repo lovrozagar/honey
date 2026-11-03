@@ -16,6 +16,20 @@ import type { AllowedResMethods, ApplyOutput, OutputSchemas } from "../../src/ro
 
 const withDb = createMiddleware((_ctx, next) => next({ db: "test-db" }))
 
+describe("ctx.res under .output(): a body's type", () => {
+	it("is its schema's input: what output validation accepts, not what it would parse to", () => {
+		honey<{}>()
+			.get("/sizes")
+			.output({ "application/json": { ok: z.object({ size: z.string().transform((text) => text.length) }) } })
+			.handler((ctx) => {
+				// @ts-expect-error the schema's output (a number) is not what it accepts
+				ctx.res.json("ok", { size: 3 })
+				expectTypeOf(ctx.res.json).parameter(1).toEqualTypeOf<{ size: string }>()
+				return ctx.res.json("ok", { size: "abc" })
+			})
+	})
+})
+
 describe("ctx.res under .output(): a declared helper is narrowed", () => {
 	// v0: 4490cead2b
 	// v0: 5e521e3a58
