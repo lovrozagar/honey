@@ -2,7 +2,9 @@
  * Every export 0.7.3 shipped and 1.0 does not is judged once, and each one judged `guide` is named in
  * docs/migration.md (bit 22 a). This is the leg the `LoggerInstance` → `Logger` rename and the `logger()`
  * middleware's removal needed: both were silent breaks a consumer met at its own typecheck, with nothing in the
- * guide, and 37 import sites in one app. A removal nobody judged reds here.
+ * guide, and 37 import sites in one app. A removal nobody judged reds here. Today's surface is held to a snapshot
+ * (plan 39 6.1), blueprint/baselines/exports.json, so a name that leaks out of a subpath or leaves it is a decision
+ * written there, never a side effect of exporting a helper for a test.
  */
 import { readFileSync } from "node:fs"
 import { join, resolve } from "node:path"
@@ -30,7 +32,12 @@ const baseline = JSON.parse(readFileSync(join(REPO, "blueprint/baselines/v073-ex
 	string,
 	string[]
 >
-const live = surfaceOf(liveSources())
+const sources = liveSources()
+const live = surfaceOf(sources)
+const snapshot = JSON.parse(readFileSync(join(REPO, "blueprint/baselines/exports.json"), "utf8")) as Record<
+	string,
+	string[]
+>
 const gone = removed(baseline, live)
 const guide = readFileSync(join(REPO, GUIDE), "utf8")
 /** whether `text` names the identifier `name`, whole-token (a phrase is looked for as written) */
@@ -123,5 +130,17 @@ describe("the guide carries every break a 0.7.3 app can meet (bit 22 a)", () => 
 			.filter(([, verdict]) => verdict.kind === "internal" && verdict.why.trim().length < 20)
 			.map(([name]) => name)
 		expect(bare).toEqual([])
+	})
+})
+
+describe("today's surface is the snapshot (plan 39 6.1)", () => {
+	it("exports from each subpath exactly the names blueprint/baselines/exports.json lists", () => {
+		const now = Object.fromEntries(Object.entries(live).map(([subpath, exported]) => [subpath, [...exported].sort()]))
+		expect(now).toEqual(snapshot)
+	})
+
+	it("re-exports no module whole, so every name a subpath exports is one its source lists", () => {
+		const starred = Object.entries(sources).filter(([, text]) => /^export \*/m.test(text))
+		expect(starred.map(([subpath]) => subpath)).toEqual([])
 	})
 })

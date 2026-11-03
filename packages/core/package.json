@@ -100,9 +100,9 @@
 			"default": "./dist/i18n/index.js"
 		},
 		"./input": {
-			"honey-source": "./src/input/input.ts",
-			"types": "./dist/input/input.d.ts",
-			"default": "./dist/input/input.js"
+			"honey-source": "./src/input/input-subpath.ts",
+			"types": "./dist/input/input-subpath.d.ts",
+			"default": "./dist/input/input-subpath.js"
 		},
 		"./jwt": {
 			"honey-source": "./src/security/jwt.ts",
@@ -115,9 +115,9 @@
 			"default": "./dist/middleware/ip-restrict.js"
 		},
 		"./logger": {
-			"honey-source": "./src/telemetry/logger.ts",
-			"types": "./dist/telemetry/logger.d.ts",
-			"default": "./dist/telemetry/logger.js"
+			"honey-source": "./src/telemetry/logger-subpath.ts",
+			"types": "./dist/telemetry/logger-subpath.d.ts",
+			"default": "./dist/telemetry/logger-subpath.js"
 		},
 		"./mcp": {
 			"honey-source": "./src/mcp/mount.ts",
@@ -170,9 +170,9 @@
 			"default": "./dist/openapi/swagger.js"
 		},
 		"./plugin": {
-			"honey-source": "./src/build/plugin.ts",
-			"types": "./dist/build/plugin.d.ts",
-			"default": "./dist/build/plugin.js"
+			"honey-source": "./src/build/plugin-subpath.ts",
+			"types": "./dist/build/plugin-subpath.d.ts",
+			"default": "./dist/build/plugin-subpath.js"
 		},
 		"./powered-by": {
 			"honey-source": "./src/middleware/powered-by.ts",
@@ -245,9 +245,9 @@
 			"default": "./dist/middleware/timeout.js"
 		},
 		"./tree": {
-			"honey-source": "./src/routing/tree.ts",
-			"types": "./dist/routing/tree.d.ts",
-			"default": "./dist/routing/tree.js"
+			"honey-source": "./src/routing/tree-subpath.ts",
+			"types": "./dist/routing/tree-subpath.d.ts",
+			"default": "./dist/routing/tree-subpath.js"
 		},
 		"./ws": {
 			"honey-source": "./src/ws/route.ts",

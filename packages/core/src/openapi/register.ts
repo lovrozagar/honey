@@ -3,7 +3,6 @@
  * served, and the docs pages. A plain subpath: nothing registers itself, and an app that never
  * imports it carries none of it.
  */
-export { SERVED } from "../routing/register.ts"
 export type { OpenApiDocument, OpenApiInfo } from "./document.ts"
 export {
 	type GenerateOpenApiOptions,
@@ -21,7 +20,7 @@ export {
 	type ManifestRoute,
 	type RouteManifest,
 } from "./manifest.ts"
-export { type DocsConfig, inlineJson } from "./docs-page.ts"
+export type { DocsConfig } from "./docs-page.ts"
 export { scalar } from "./scalar.ts"
 export type { DocsPage } from "./served.ts"
 export { type ServeManifestOptions, type ServeOpenApiOptions, serveManifest, serveOpenApi } from "./serve.ts"
