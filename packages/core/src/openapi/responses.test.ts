@@ -100,11 +100,11 @@ describe("redirects and declared headers", () => {
 		app
 			.get("/oauth/callback")
 			.output({ redirect: { found: true } })
-			.handler((c) => c.res.redirect("https://example.com"))
+			.handler((c) => c.res.redirect("found", "https://example.com"))
 		app
 			.get("/moved")
 			.output({ redirect: { moved_permanently: true } })
-			.handler((c) => c.res.redirect("/new", { status: 301 }))
+			.handler((c) => c.res.redirect("moved_permanently", "/new"))
 		app
 			.get("/mixed")
 			.output({ "application/json": { ok: z.object({ id: z.string() }) }, redirect: { found: true } })

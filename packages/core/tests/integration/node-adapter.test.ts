@@ -149,7 +149,7 @@ describe("answers on the wire: bodies, redirects and cookies", () => {
 	it("text, a redirect with cookies, and json with cookies, headers and a custom status", async () => {
 		const app = honey<{}>()
 		app.get("/text").handler((ctx) => ctx.res.text("ok", "plain"))
-		app.get("/go").handler((ctx) => ctx.res.redirect("/there", { cookies: { s: { value: "1" } } }))
+		app.get("/go").handler((ctx) => ctx.res.redirect("found", "/there", { cookies: { s: { value: "1" } } }))
 		app
 			.get("/json")
 			.handler((ctx) =>

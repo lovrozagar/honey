@@ -392,7 +392,7 @@ function helpersApp() {
 		.get("/teapot")
 		.handler((ctx) => ctx.res.raw(new Response("raw body", { headers: { "x-custom": "yes" }, status: 418 })))
 	app.delete("/item").handler((ctx) => ctx.res.noContent())
-	app.get("/old").handler((ctx) => ctx.res.redirect("/new?foo=bar&baz=qux", { status: 307 }))
+	app.get("/old").handler((ctx) => ctx.res.redirect("temporary_redirect", "/new?foo=bar&baz=qux"))
 	app.get("/big-json").handler((ctx) => ctx.res.json("ok", BIG_OBJECT))
 	app.get("/big-text").handler((ctx) => ctx.res.text("ok", BIG_TEXT))
 	return app

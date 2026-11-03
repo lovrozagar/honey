@@ -2,15 +2,16 @@
  * The `.output()` type algebra: what a route declares it answers (a media type's bodies by status
  * key, its redirects, the headers of each status), and ctx.res narrowed to it. A declared helper
  * takes only the declared status keys, each body typed by its status's schema and its options
- * carrying the status's declared headers; an undeclared one is gone, and so is raw; noContent,
- * redirect and stream stay; sse only for an event stream; binary for octet-stream or an open type.
+ * carrying the status's declared headers; an undeclared one is gone, and so is raw; noContent and
+ * stream stay; redirect takes only the declared redirect keys; sse only for an event stream; binary
+ * for octet-stream or an open type.
  * The handler's return is narrowed the same way: a declared media type at one of its status keys, or the body
  * itself when the route declares one 2xx status under one media type. Status keys alone (`{ ok: schema }`) are the
  * shorthand for `{ "application/json": { ok: schema } }`.
  */
 import type { BinaryBody } from "../response/binary.ts"
 import type { HoneyRes, ResponseOptions, StreamBody, TypedResponse } from "../response/response.ts"
-import type { StatusKey } from "../response/status.ts"
+import type { RedirectKey, StatusKey } from "../response/status.ts"
 import type { InferInput, StandardSchemaLike } from "../validation/standard-schema.ts"
 
 /** A media type's declared bodies by status key: a schema, or `true` for a body with none. */
@@ -31,13 +32,13 @@ export type OutputSchemas = {
 	readonly [mediaType: `${string}/${string}`]: StatusSchemas
 } & {
 	/** The schema of the headers each status carries, by status key; that status's helper then requires them. */ readonly headers?: HeaderSchemas
-	/** Redirect statuses the route may answer with, recorded for the generators; `ctx.res.redirect` stays unnarrowed. */ readonly redirect?: RedirectStatuses
+	/** Redirect statuses the route may answer with: `ctx.res.redirect` takes only these, and the generators record them. */ readonly redirect?: RedirectStatuses
 }
 
 /** `.output()`'s shorthand: JSON bodies by status key, beside the headers and redirects of the explicit form. */
 export type JsonShorthand = StatusSchemas & {
 	/** The schema of the headers each status carries, by status key; that status's helper then requires them. */ readonly headers?: HeaderSchemas
-	/** Redirect statuses the route may answer with, recorded for the generators. */ readonly redirect?: RedirectStatuses
+	/** Redirect statuses the route may answer with: `ctx.res.redirect` takes only these, and the generators record them. */ readonly redirect?: RedirectStatuses
 }
 
 /** The media types a declaration names. */
@@ -102,7 +103,12 @@ export type AllowedResMethods<TOutput> =
 	| ([BinaryTypes<TOutput>] extends [never] ? never : "binary")
 
 /** The helpers a route that declares an output keeps; `raw` is gone, since a raw Response declares nothing. */
-type UniversalRes = Pick<HoneyRes, "noContent" | "redirect" | "stream">
+type UniversalRes = Pick<HoneyRes, "noContent" | "stream">
+
+/** The redirect keys the output's `redirect` entry declares, or `never`. */
+type RedirectsOf<TOutput> = TOutput extends { readonly redirect?: infer R }
+	? Extract<keyof NonNullable<R>, RedirectKey>
+	: never
 
 /**
  * What a handler may return: any typed answer without `.output()`; with one, a declared media type at one of its
@@ -112,7 +118,7 @@ export type DeclaredAnswer<TOutput> = [TOutput] extends [never]
 	? TypedResponse
 	:
 			| { [CT in MediaTypes<TOutput>]: TypedResponse<CT, Extract<keyof TOutput[CT], StatusKey>> }[MediaTypes<TOutput>]
-			| TypedResponse<"none">
+			| TypedResponse<"none", "no_content" | RedirectsOf<TOutput>>
 			| SoleBody<TOutput>
 
 /** A declared body's type: its schema's input, what output validation accepts; `unknown` without a schema. */
@@ -225,6 +231,17 @@ type OutputRes<TOutput> = UniversalRes &
 	Narrowed<TOutput, "application/xml", true> &
 	Narrowed<TOutput, "text/csv", true> &
 	("text/event-stream" extends keyof TOutput ? Pick<HoneyRes, "sse"> : {}) &
+	([RedirectsOf<TOutput>] extends [never]
+		? {}
+		: {
+				/** A redirect to `url`, at one of the redirect keys the output declares. */ redirect: <
+					SK extends RedirectsOf<TOutput>,
+				>(
+					statusKey: SK,
+					url: string,
+					opts?: ResponseOptions,
+				) => TypedResponse<"none", SK>
+			}) &
 	([BinaryTypes<TOutput>] extends [never]
 		? {}
 		: {

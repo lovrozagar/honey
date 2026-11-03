@@ -123,6 +123,15 @@ export const statusKeyToCode: Readonly<Record<StatusKey, number>> = /* @__PURE__
 	variant_also_negotiates: 506,
 })
 
+/** The status keys `redirect()` answers with: every 3xx but 304, which carries no `Location`. */
+export type RedirectKey =
+	| "found"
+	| "moved_permanently"
+	| "multiple_choices"
+	| "permanent_redirect"
+	| "see_other"
+	| "temporary_redirect"
+
 function invert(map: Readonly<Record<StatusKey, number>>): Readonly<Record<number, StatusKey>> {
 	const out: Record<number, StatusKey> = Object.create(null)
 	for (const key of Object.keys(map) as StatusKey[]) out[map[key]] = key

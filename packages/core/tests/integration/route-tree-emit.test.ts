@@ -284,7 +284,7 @@ describe("route-tree emit: no schema data in the module", () => {
 		app
 			.get("/r")
 			.output({ redirect: { found: true, moved_permanently: true } })
-			.handler((c) => c.res.redirect("/somewhere"))
+			.handler((c) => c.res.redirect("found", "/somewhere"))
 		app
 			.get("/items")
 			.input({ search: listQuery })

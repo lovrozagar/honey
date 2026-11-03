@@ -141,16 +141,19 @@ describe("status", () => {
 		["conflict", 409],
 		["gone", 410],
 		["internal_server_error", 500],
-	] as const)("the status key %s answers %i on every helper; opts.status overrides it", (key, code) => {
+	] as const)("the status key %s answers %i on every helper", (key, code) => {
 		expect([res.json(key, {}).status, res.text(key, "x").status, res.html(key, "x").status]).toEqual([code, code, code])
-		expect(res.text(key, "x", { status: 299 }).status).toBe(299)
 	})
 
 	// v0: b3c80a24ec
 	it("a body on a null-body status throws, on the native and the Node path", () => {
 		for (const helper of [new HoneyRes(), new HoneyRes(true)])
-			for (const status of [101, 103, 204, 205, 304])
-				expect(() => helper.json("ok", 1, { status })).toThrow(`A ${status} response cannot have a body`)
+			for (const [key, status] of [
+				["no_content", 204],
+				["reset_content", 205],
+				["not_modified", 304],
+			] as const)
+				expect(() => helper.json(key, 1)).toThrow(`A ${status} response cannot have a body`)
 	})
 })
 
@@ -204,10 +207,12 @@ describe("noContent and redirect", () => {
 	// v0: 6698aaeaa5
 	// v0: 40feefa5e3
 	// v0: c80f1d7ea9
-	it("redirect answers 302 to the location with no body, or the status the options give", () => {
-		const found = res.redirect("/new")
+	it("redirect answers its key's status to the location with no body", () => {
+		const found = res.redirect("found", "/new")
 		expect([found.status, found.headers.get("location"), found.body]).toEqual([302, "/new", null])
-		const moved = [301, 307, 308].map((status) => res.redirect("/new", { status }))
+		const moved = (["moved_permanently", "temporary_redirect", "permanent_redirect"] as const).map((key) =>
+			res.redirect(key, "/new"),
+		)
 		expect(moved.map((r) => [r.status, r.headers.get("location")])).toEqual([
 			[301, "/new"],
 			[307, "/new"],
@@ -315,7 +320,7 @@ describe("the Node path", () => {
 			"1",
 			"",
 		])
-		const moved = nodeRes.redirect("/next", { status: 301 })
+		const moved = nodeRes.redirect("moved_permanently", "/next")
 		expect([moved.status, moved.headers.get("location")]).toEqual([301, "/next"])
 		nodeRes.json("ok", 1, { headers: { "x-a": "1" } })
 		expect(nodeRes.json("ok", 1).headers.get("x-a")).toBeNull()
@@ -367,14 +372,13 @@ describe("stream(): a body written through a WritableStream", () => {
 
 	// v0: 578c554fa4
 	// v0: eadb867a34
-	it("takes a status, headers (content-type included) and cookies", async () => {
+	it("answers 200 and takes headers (content-type included) and cookies", async () => {
 		const response = res.stream(async () => {}, {
 			cookies: { s: { value: "1" } },
 			headers: { "content-type": "text/plain", "x-a": "1" },
-			status: 201,
 		})
 		const seen = [response.status, response.headers.get("content-type"), response.headers.get("x-a")]
-		expect([...seen, response.headers.getSetCookie()]).toEqual([201, "text/plain", "1", ["s=1"]])
+		expect([...seen, response.headers.getSetCookie()]).toEqual([200, "text/plain", "1", ["s=1"]])
 	})
 })
 
@@ -444,15 +448,15 @@ describe("generate(): a body pulled from a generator", () => {
 	// v0: f97c4880f6
 	// v0: 23a6d10f34
 	// v0: 6941ca3642
-	it("yields every value, under octet-stream unless a content type is given, with a status", async () => {
+	it("yields every value, under octet-stream unless a content type is given, at 200", async () => {
 		const plain = res.generate((function* () {})())
-		const typed = res.generate(ndjson(), { contentType: "application/x-ndjson", status: 202 })
+		const typed = res.generate(ndjson(), { contentType: "application/x-ndjson" })
 		expect([
 			[plain.status, plain.headers.get("content-type"), await plain.text()],
 			[typed.status, typed.headers.get("content-type"), await typed.text()],
 		]).toEqual([
 			[200, "application/octet-stream", ""],
-			[202, "application/x-ndjson", '{"n":1}\n{"n":2}\n'],
+			[200, "application/x-ndjson", '{"n":1}\n{"n":2}\n'],
 		])
 	})
 
@@ -466,12 +470,12 @@ describe("generate(): a body pulled from a generator", () => {
 describe("sse(): the event stream response", () => {
 	// v0: 6d6d110a3d
 	// v0: 9d3394f383
-	it("answers text/event-stream, no-cache, with a status, headers and cookies, never Connection", async () => {
+	it("answers text/event-stream, no-cache, 200, with headers and cookies, never Connection", async () => {
 		const response = res.sse(
 			async (stream) => {
 				await stream.send({ data: "hi", event: "msg" })
 			},
-			{ cookies: { s: { value: "1" } }, headers: { "x-a": "1" }, status: 200 },
+			{ cookies: { s: { value: "1" } }, headers: { "x-a": "1" } },
 		)
 		const headers = Object.fromEntries(response.headers)
 		expect([response.status, headers, await response.text()]).toEqual([

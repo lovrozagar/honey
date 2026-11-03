@@ -81,7 +81,7 @@ function declaring() {
 	app
 		.get("/moved")
 		.output(out)
-		.handler((ctx) => ctx.res.redirect("/elsewhere"))
+		.handler((ctx) => ctx.res.redirect("found", "/elsewhere"))
 	app
 		.delete("/tagged")
 		.output(out)

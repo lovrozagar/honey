@@ -431,14 +431,14 @@ describe("HoneyContext — response helpers", () => {
 	})
 
 	// v0: f73edeefbf
-	it("redirect(/x) → 302", () => {
-		const res = makeCtx().res.redirect("/x")
+	it("redirect(found, /x) → 302", () => {
+		const res = makeCtx().res.redirect("found", "/x")
 		expect([res.status, res.headers.get("location")]).toEqual([302, "/x"])
 	})
 
 	// v0: 511cc3ba03
-	it("redirect with status 307", () => {
-		expect(makeCtx().res.redirect("/x", { status: 307 }).status).toBe(307)
+	it("redirect at temporary_redirect → 307", () => {
+		expect(makeCtx().res.redirect("temporary_redirect", "/x").status).toBe(307)
 	})
 })
 

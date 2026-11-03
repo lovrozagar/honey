@@ -88,7 +88,7 @@ describe("ctx.res under .output(): what stays and what goes", () => {
 	// v0: 0da51d81f1
 	// v0: 864b2b279f
 	// v0: 51f229a974
-	it("an undeclared helper is gone, raw too; noContent, redirect and stream stay", () => {
+	it("an undeclared helper is gone, raw and an undeclared redirect too; noContent and stream stay", () => {
 		honey<{}>()
 			.get("/report")
 			.output({ "application/json": { ok: z.object({ data: z.array(z.string()) }) }, "text/html": { ok: z.string() } })
@@ -102,10 +102,27 @@ describe("ctx.res under .output(): what stays and what goes", () => {
 				expectTypeOf(ctx.res).not.toHaveProperty("generate")
 				expectTypeOf(ctx.res.noContent).toBeFunction()
 				expectTypeOf(ctx.res).not.toHaveProperty("raw")
-				expectTypeOf(ctx.res.redirect).toBeFunction()
+				expectTypeOf(ctx.res).not.toHaveProperty("redirect")
 				expectTypeOf(ctx.res.stream).toBeFunction()
 				return ctx.res.json("ok", { data: ["a"] })
 			})
+	})
+
+	it("redirect takes only the status keys the output's redirect entry declares", () => {
+		honey<{}>()
+			.get("/old")
+			.output({ ok: z.string(), redirect: { moved_permanently: true } })
+			.handler((ctx) => {
+				expectTypeOf(ctx.res.redirect).parameter(0).toEqualTypeOf<"moved_permanently">()
+				// @ts-expect-error found is no declared redirect
+				ctx.res.redirect("found", "/new")
+				return ctx.res.redirect("moved_permanently", "/new")
+			})
+		honey<{}>()
+			.get("/gone")
+			.output({ redirect: { see_other: true } })
+			// @ts-expect-error a redirect at a status the output does not declare
+			.handler((ctx) => (ctx.res as unknown as HoneyRes).redirect("found", "/x"))
 	})
 
 	// v0: 5e40ffd882
@@ -143,7 +160,7 @@ describe("the handler's return under .output(): only what the route declares", (
 			.handler((c) => (c.res as unknown as HoneyRes).json("created", { id: "1" }))
 		app.get("/d").handler((c) => c.res.raw(new Response("x")))
 		expectTypeOf<DeclaredAnswer<typeof out>>().toEqualTypeOf<
-			TypedResponse<"application/json", "ok"> | TypedResponse<"none"> | { id: string }
+			TypedResponse<"application/json", "ok"> | TypedResponse<"none", "no_content"> | { id: string }
 		>()
 	})
 
@@ -196,7 +213,7 @@ describe("the handler's return under .output(): the body itself", () => {
 
 	it("one 2xx status under one media type: the handler may return the body itself", () => {
 		expectTypeOf<DeclaredAnswer<{ readonly "text/csv": { readonly ok: true } }>>().toEqualTypeOf<
-			TypedResponse<"text/csv", "ok"> | TypedResponse<"none"> | string | ReadableStream<Uint8Array>
+			TypedResponse<"text/csv", "ok"> | TypedResponse<"none", "no_content"> | string | ReadableStream<Uint8Array>
 		>()
 		const app = honey<{}>()
 		app
@@ -229,7 +246,7 @@ describe("the handler's return under .output(): no body where honey cannot pick 
 	it("refuses the body for two statuses, two media types, declared headers or an event stream", () => {
 		expectTypeOf<
 			DeclaredAnswer<{ readonly "application/json": { readonly created: typeof tables; readonly ok: typeof tables } }>
-		>().toEqualTypeOf<TypedResponse<"application/json", "created" | "ok"> | TypedResponse<"none">>()
+		>().toEqualTypeOf<TypedResponse<"application/json", "created" | "ok"> | TypedResponse<"none", "no_content">>()
 		const app = honey<{}>()
 		app
 			.get("/a")
@@ -406,11 +423,13 @@ describe("OutputSchemas: what .output() takes", () => {
 
 	it("refuses a key that names no status, under a media type, headers or redirect", () => {
 		const route = honey<{}>().get("/t")
-		expectTypeOf(route.output).toBeCallableWith({
-			"application/json": { ok: z.string() },
-			headers: { ok: z.object({}) },
-			redirect: { found: true },
-		})
+		expectTypeOf(
+			route.output({
+				"application/json": { ok: z.string() },
+				headers: { ok: z.object({}) },
+				redirect: { found: true },
+			}),
+		).toHaveProperty("handler")
 		// @ts-expect-error a status key that names no status
 		route.output({ "application/json": { okay: z.string() } })
 		// @ts-expect-error a header status that names no status

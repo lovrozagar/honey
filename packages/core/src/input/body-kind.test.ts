@@ -30,7 +30,7 @@ describe("bodyKind: read from how the answer was built, never from its body", ()
 				bodyKind(res.json("ok", {})),
 				bodyKind(res.binary("ok", new Uint8Array(1))),
 				bodyKind(res.noContent()),
-				bodyKind(res.redirect("/x")),
+				bodyKind(res.redirect("found", "/x")),
 				bodyKind(res.sse(async () => {}, { headers: { "content-length": "5" } })),
 				bodyKind(res.generate(counter().generator)),
 				bodyKind(res.stream(async () => {})),

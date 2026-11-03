@@ -293,7 +293,7 @@ const app = honey()
 
 app.get("/page").handler((ctx) => ctx.res.html("ok", "<h1>hi</h1>"))
 app.get("/feed").handler((ctx) => ctx.res.xml("ok", "<feed />"))
-app.get("/old").handler((ctx) => ctx.res.redirect("/new"))
+app.get("/old").handler((ctx) => ctx.res.redirect("found", "/new"))
 app.get("/nothing").handler((ctx) => ctx.res.noContent())
 app.get("/bytes").handler((ctx) =>
 	ctx.res.stream(async (writable) => {

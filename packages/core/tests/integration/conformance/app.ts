@@ -321,7 +321,7 @@ function hopRoutes(app: ConformanceApp, origins: () => Origins | null): void {
 		.get("/redirect/cross-origin")
 		.meta({ operationId: "redirect.crossOrigin", mcp: true })
 		.output({ redirect: { temporary_redirect: true } })
-		.handler((ctx) => ctx.res.redirect(`${origins()?.alt ?? ""}/v1/echo`, { status: 307 }))
+		.handler((ctx) => ctx.res.redirect("temporary_redirect", `${origins()?.alt ?? ""}/v1/echo`))
 }
 
 /** The routes the TS harness cases call beside the matrix: raw statuses, boundaries, health, WS echo. */

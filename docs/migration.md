@@ -1115,3 +1115,26 @@ app
 	.output({ ok: tables })
 	.handler(async () => [{ id: "t-1" }])
 ```
+
+## A status is a key: no `status` option, and `redirect(statusKey, url)`
+
+`ResponseOptions` has no numeric `status` anymore. The status key a helper takes is the one the document names, so a
+number beside it could only contradict the contract. `redirect` takes its 3xx key first. Under `.output()` it takes
+only the keys the `redirect` entry declares, and a route that declares an output but no `redirect` has no
+`ctx.res.redirect`. `stream`, `generate` and `sse` answer 200.
+
+```ts v0
+app.get("/created").handler((ctx) => ctx.res.json("ok", { id: "1" }, { status: 201 }))
+app.get("/old").handler((ctx) => ctx.res.redirect("/new", { status: 301 }))
+```
+
+```ts
+import { honey } from "@lovrozagar/honey"
+
+const app = honey()
+app.get("/created").handler((ctx) => ctx.res.json("created", { id: "1" }))
+app
+	.get("/old")
+	.output({ redirect: { moved_permanently: true } })
+	.handler((ctx) => ctx.res.redirect("moved_permanently", "/new"))
+```

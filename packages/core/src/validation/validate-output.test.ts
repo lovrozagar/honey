@@ -217,7 +217,7 @@ describe("output validation through the app: the content type", () => {
 		app
 			.get("/redirect")
 			.output({ ...out, redirect: { found: true } })
-			.handler((ctx) => ctx.res.redirect("/x"))
+			.handler((ctx) => ctx.res.redirect("found", "/x"))
 		expect([
 			await answer(app.fetch(get("/text"), {})),
 			(await answer(app.fetch(get("/json5"), {})))[1].error_key,

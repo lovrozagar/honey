@@ -18,7 +18,7 @@ import {
 import { BINARY_HEADERS, type BinaryBody, binaryBytes, binaryHeaders, type BinaryOptions } from "./binary.ts"
 import type { HeaderMap } from "./out-headers.ts"
 import { SSE_HEADERS, type SSEOptions, type SSEStream, sseBody } from "./sse.ts"
-import { type StatusKey, statusKeyToCode } from "./status.ts"
+import { type RedirectKey, type StatusKey, statusKeyToCode } from "./status.ts"
 
 /** Options the `ctx.res` helpers accept; only `raw()` takes none. */
 export type ResponseOptions = {
@@ -26,11 +26,6 @@ export type ResponseOptions = {
 	cookies?: Record<string, CookieOptions>
 	/** Headers set on the answer; each replaces the helper's own header of that name. */
 	headers?: Record<string, string>
-	/**
-	 * The status to send instead of the helper's own; `noContent()` ignores it. A helper with a body throws a
-	 * `TypeError` for a status that cannot carry one, such as 204 or 304.
-	 */
-	status?: number
 }
 
 /** What `ctx.res` reads from its request, only when a stream needs it: the context itself is one. */
@@ -100,9 +95,9 @@ function applyPlain(headers: HeaderMap, opts: ResponseOptions | undefined): Head
 	return headers
 }
 
-/** Statuses whose responses never carry a body (Fetch "null body status"). */
+/** The statuses of the vocabulary whose responses never carry a body (Fetch "null body status"). */
 function isNullBodyStatus(status: number): boolean {
-	return status === 101 || status === 103 || status === 204 || status === 205 || status === 304
+	return status === 204 || status === 205 || status === 304
 }
 
 // per-process-constant: text-codec
@@ -152,8 +147,9 @@ function writableOver(write: (bytes: Uint8Array) => Promise<void>, end: { close(
 }
 
 /**
- * The `ctx.res` helpers. `json()`, `text()` and the other body helpers take a status key and a body; `noContent()`,
- * `redirect()`, `stream()`, `generate()` and `sse()` pick their own status; `raw()` passes a native Response through.
+ * The `ctx.res` helpers. `json()`, `text()` and the other body helpers take a status key and a body, `redirect()` a
+ * redirect key and a URL; `noContent()`, `stream()`, `generate()` and `sse()` pick their own status; `raw()` passes a
+ * native Response through. A status is always a key, never a number, so the answer is the one the document names.
  */
 export class HoneyRes {
 	protected readonly nodeOut: boolean
@@ -180,7 +176,7 @@ export class HoneyRes {
 		body: ReadableStream<Uint8Array>,
 		base: Readonly<Record<string, string>>,
 		opts?: ResponseOptions,
-		status = opts?.status ?? 200,
+		status = 200,
 	) {
 		const headers = hasOptions(opts) ? applyNative(new Headers(base), opts) : base
 		return withProducedBody(new Response(body, { headers, status }))
@@ -188,12 +184,11 @@ export class HoneyRes {
 
 	/** A response with a body and no extra headers. */
 	#known<CT extends string, SK extends string>(
-		code: number,
+		status: number,
 		headers: Readonly<Record<string, string>>,
 		raw: RawBody | StreamBody,
 		opts?: ResponseOptions,
 	): TypedResponse<CT, SK> {
-		const status = opts?.status ?? code
 		/* `new Response(body, { status: 204 })` throws on the native path; fail the same way everywhere */
 		if (isNullBodyStatus(status)) {
 			throw new TypeError(`A ${status} response cannot have a body; use ctx.res.noContent() or another status`)
@@ -255,7 +250,7 @@ export class HoneyRes {
 		return this.#known(statusKeyToCode[statusKey], JSON_HEADERS, body ?? "", opts)
 	}
 
-	/** A 204 answer with no body. `opts.status` is ignored; headers and cookies apply. */
+	/** A 204 answer with no body; headers and cookies apply. */
 	noContent(opts?: ResponseOptions): TypedResponse<"none", "no_content"> {
 		return typed(this.#empty(204, {}, opts))
 	}
@@ -312,9 +307,9 @@ export class HoneyRes {
 		return typed(this.#streamed(body, BINARY_HEADERS, opts))
 	}
 
-	/** A redirect to `url`, status 302 unless `opts.status` says otherwise. */
-	redirect(url: string, opts?: ResponseOptions): TypedResponse<"none", "found"> {
-		return typed(this.#empty(opts?.status ?? 302, { location: url }, opts))
+	/** A redirect to `url` at `statusKey`'s status (`found` is 302); under `.output()`, only a declared redirect. */
+	redirect<SK extends RedirectKey>(statusKey: SK, url: string, opts?: ResponseOptions): TypedResponse<"none", SK> {
+		return typed(this.#empty(statusKeyToCode[statusKey], { location: url }, opts))
 	}
 
 	/** A `text/plain; charset=utf-8` answer. */

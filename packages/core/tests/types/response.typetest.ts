@@ -1,11 +1,11 @@
 /**
  * ctx.res as typed: each helper returns a TypedResponse branded with its content type and status
- * key (noContent and redirect at any status included, raw() with an open brand), brands that keep
+ * key (noContent at no_content, redirect at its redirect key, raw() with an open brand; no numeric status option), brands that keep
  * one content type or status key from passing for another, every TypedResponse a Response, and a
  * handler that returns a plain Response refused. Checked by typecheck.
  */
 import { describe, expectTypeOf, it } from "vitest"
-import { HoneyRes, type TypedResponse } from "../../src/response/response.ts"
+import { HoneyRes, type ResponseOptions, type TypedResponse } from "../../src/response/response.ts"
 import { honey } from "../../src/routing/app.ts"
 
 const res = new HoneyRes()
@@ -32,14 +32,24 @@ describe("each helper's brand", () => {
 		expectTypeOf(res.csv("ok", "a,b,c")).toEqualTypeOf<TypedResponse<"text/csv", "ok">>()
 	})
 
+	it("takes its status as a key only: no numeric status option overrides it", () => {
+		expectTypeOf<ResponseOptions>().not.toHaveProperty("status")
+		// @ts-expect-error the status is the key; a number would break what the document says
+		res.json("ok", { id: "1" }, { status: 201 })
+	})
+
 	// v0: 82c82625a9
 	// v0: 82741fbadd
 	// v0: b6dd1c326b
 	// v0: 9d24243c2e
-	it("noContent is none and no_content, redirect none and found at any status, raw() open", () => {
+	it("noContent is none and no_content, redirect none at its status key, raw() open", () => {
 		expectTypeOf(res.noContent()).toEqualTypeOf<TypedResponse<"none", "no_content">>()
-		expectTypeOf(res.redirect("/login")).toEqualTypeOf<TypedResponse<"none", "found">>()
-		expectTypeOf(res.redirect("/login", { status: 301 })).toEqualTypeOf<TypedResponse<"none", "found">>()
+		expectTypeOf(res.redirect("found", "/login")).toEqualTypeOf<TypedResponse<"none", "found">>()
+		expectTypeOf(res.redirect("moved_permanently", "/login")).toEqualTypeOf<
+			TypedResponse<"none", "moved_permanently">
+		>()
+		// @ts-expect-error ok is no redirect status
+		res.redirect("ok", "/login")
 		expectTypeOf(res.raw(new Response("test"))).toEqualTypeOf<TypedResponse<string, string>>()
 	})
 })
