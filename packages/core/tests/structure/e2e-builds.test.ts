@@ -22,7 +22,7 @@ const PROFILES = { fast: 1.9, slow: 3.9 } as const
 /* the build's own spread here, slowest over median (1.16, its cold first build): record runs carry that noise */
 const SPREADS = [1, 1.02, 1.16] as const
 
-const KEY = "bun 1.3"
+const KEY = "bun 1.4"
 const CELL = "surface×workers"
 
 /** One record-mode job on a runner `factor` times this machine, its app build `spread` over its median. */
@@ -84,7 +84,7 @@ describe("the e2e build gate's ratio", () => {
 		expect(Object.values(PROFILES).map((factor) => judge(slower, LOCAL.reference, factor))).toEqual([
 			{ failures: [regressed], hung: false, ratio: 24.85, status: "REGRESSED" },
 			{
-				failures: ["built in 9303ms, over the 8000ms hang guard on bun", regressed],
+				failures: ["built in 9303ms, over the 7000ms hang guard on bun", regressed],
 				hung: true,
 				ratio: 24.85,
 				status: "REGRESSED",
@@ -156,22 +156,22 @@ describe("the e2e build gate's ceiling rule", () => {
 describe("the e2e build gate's hang guard", () => {
 	it("reds a build over its runtime's guard in judge and record mode alike, and holds Bun to its own", () => {
 		expect([
-			at("bun", 8_001, "judge"),
-			at("bun", 8_001, "record"),
-			at("node", 8_001, "judge"),
-			at("bun", 8_000, "judge"),
+			at("bun", 7_001, "judge"),
+			at("bun", 7_001, "record"),
+			at("node", 7_001, "judge"),
+			at("bun", 7_000, "judge"),
 		]).toEqual([
-			["built in 8001ms, over the 8000ms hang guard on bun"],
-			["built in 8001ms, over the 8000ms hang guard on bun"],
+			["built in 7001ms, over the 7000ms hang guard on bun"],
+			["built in 7001ms, over the 7000ms hang guard on bun"],
 			[],
 			[],
 		])
 	})
 
 	it("is each runtime's worst local median x the slow class's 3.9 x its spread, above CI's slowest cell", () => {
-		/* Bun 1.44 s x 3.9 x 1.33 = 7.5 s; Node 2.47 s x 3.9 x 1.28 = 12.3 s; CI's slowest: Bun 5.5 s, Node 8.2 s */
-		const derived = { bun: Math.ceil(1.44 * 3.9 * 1.33) * 1_000, node: Math.ceil(2.47 * 3.9 * 1.28) * 1_000 }
-		expect([gate.HANG_GUARD_MS, gate.HANG_GUARD_MS.bun > 5_500, gate.HANG_GUARD_MS.node > 8_200]).toEqual([
+		/* Bun 1.32 s x 3.9 x 1.23 = 6.3 s; Node 2.47 s x 3.9 x 1.28 = 12.3 s; CI's slowest: Bun 4.1 s, Node 8.2 s */
+		const derived = { bun: Math.ceil(1.32 * 3.9 * 1.23) * 1_000, node: Math.ceil(2.47 * 3.9 * 1.28) * 1_000 }
+		expect([gate.HANG_GUARD_MS, gate.HANG_GUARD_MS.bun > 4_123, gate.HANG_GUARD_MS.node > 8_200]).toEqual([
 			derived,
 			true,
 			true,
@@ -192,7 +192,7 @@ describe("the e2e build gate's record lines", () => {
 		const log = [
 			`e2e (cf-workers prod)\tRun bun run test:e2e:cf:prod\t2026-10-28T19:30:45.9Z ${gate.ratioLine(KEY, CELL, 15.04, [5_512.4, 5_498, 5_620], 366.6)}`,
 			gate.referenceLine(KEY, CELL, [366.6, 360, 371, 368]),
-			"RATIO build bun@1.3 defaults×workers 17.84 ms=2480 ref=139" /* a k=1 record run's line, before builds= */,
+			"RATIO build bun@1.4 defaults×workers 17.84 ms=2480 ref=139" /* a k=1 record run's line, before builds= */,
 			"RATIO hotpath body 1.2",
 		].join("\n")
 		expect([
@@ -207,8 +207,8 @@ describe("the e2e build gate's record lines", () => {
 				{ cell: "defaults×workers", key: KEY, ms: 2_480, ratio: 17.84, referenceMs: 139 },
 			],
 			[
-				"RATIO build bun@1.3 surface×workers 15.04 ms=5512 ref=367 builds=5512,5498,5620",
-				"REFERENCE build bun@1.3 surface×workers 367 367,360,371,368",
+				"RATIO build bun@1.4 surface×workers 15.04 ms=5512 ref=367 builds=5512,5498,5620",
+				"REFERENCE build bun@1.4 surface×workers 367 367,360,371,368",
 			],
 		])
 	})
@@ -231,7 +231,7 @@ describe("the e2e build gate's record lines", () => {
 })
 
 describe("the e2e build gate's ceilings", () => {
-	const keys = ["bun 1.3", "node 22"] /* the build job's runtimes: BUN_VERSION's minor, setup-node's "22" */
+	const keys = ["bun 1.4", "node 22"] /* the build job's runtimes: BUN_VERSION's minor, setup-node's "22" */
 	const cells = BUILD_SPECS.map((spec) => spec.id)
 
 	it("names every cell a baseline lacks, so a pending one cannot pass for recorded", () => {

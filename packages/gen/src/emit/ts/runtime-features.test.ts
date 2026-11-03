@@ -207,17 +207,17 @@ describe("a receiver of the SDK's webhook events", () => {
 
 	/* minified, the receiver's bytes are the verifier's: 2,406 at plan 37, with room for one small fix */
 	it(
-		"bundles alone, no client in it, where the same import through the index carries the client",
+		"bundles alone, no client in it, where a receiver that also exports the index's client carries it",
 		{ timeout: SPAWN_TIMEOUT },
 		(ctx) => {
 			const bun = withPinnedBun()
 			if (bun === undefined) return ctx.skip()
 			const dir = mkdtempSync(join(scratch, "receiver-"))
 			const files = { ...sdkFiles(doc(HEALTH, EVENTS_HOOKS)).files, "receiver.ts": RECEIVER }
-			const indexed = RECEIVER.replace('"./api.webhook.gen"', '"./api.index.gen"').replace(
+			const indexed = `${RECEIVER.replace('"./api.webhook.gen"', '"./api.index.gen"').replace(
 				"type WebhookEvent, verifyWebhook, WebhookVerificationError",
 				"type WebhookEvent, isClientError as verifyWebhook, ClientError as WebhookVerificationError",
-			)
+			)}\nexport { Api } from "./api.index.gen"\n`
 			for (const [name, text] of Object.entries({ ...files, "indexed.ts": indexed }))
 				writeFileSync(join(dir, name), text)
 			const bundle = (entry: string) => {

@@ -18,7 +18,7 @@ permissions:
   contents: read
 
 env:
-  BUN_VERSION: "1.3.11"
+  BUN_VERSION: "1.4.4"
 
 jobs:
   # each manifest checked against the tag, then packed by its prepack: no write, no token

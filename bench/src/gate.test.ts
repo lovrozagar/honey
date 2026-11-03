@@ -17,12 +17,12 @@ import {
 	unsteady,
 } from "./gate.ts"
 
-/* finalize 100x10 on CI's bun 1.3, from blueprint/baselines/bench.json: its CI median and its ceiling */
-const own = ceilingsOf("finalize", "bun 1.3")?.["100x10"]
-/* seeded ratios, one pass of them: samples tightly around 3.2 (past the CI median, under the ceiling) and 4.4 (over it) */
+/* finalize 100x10 on CI's bun 1.4, from blueprint/baselines/bench.json: its CI median and its ceiling */
+const own = ceilingsOf("finalize", "bun 1.4")?.["100x10"]
+/* seeded ratios, one pass of them: samples tightly around 2 (past the CI median, under the ceiling) and 2.8 (over it) */
 const around = (ratio: number) => [[-0.01, 0, 0.01, 0, -0.01, 0, 0.01, 0, 0].map((d) => ratio + d)]
-const under = rowOf("100x10", around(3.2), own).status
-const over = rowOf("100x10", around(4.4), own).status
+const under = rowOf("100x10", around(2), own).status
+const over = rowOf("100x10", around(2.8), own).status
 /* a report row with only what exitCode reads: its status and its pass spread */
 const row = (status: string, spread = 0) => ({ ratio: 1, scenario: "s", spread, status })
 
@@ -54,19 +54,19 @@ describe("the gate's two modes", () => {
 })
 
 describe("the judge reads its ceilings from bench.json (bit 20 e3)", () => {
-	it("holds finalize 100x10's CI median and ceiling for bun 1.3", () => {
-		expect([own?.baseline, own?.ceiling]).toEqual([2.53, 4.226])
+	it("holds finalize 100x10's CI median and ceiling for bun 1.4", () => {
+		expect([own?.baseline, own?.ceiling]).toEqual([1.725, 2.484])
 	})
 
 	it("passes a ratio past the CI median but under the ceiling, and fails one above the ceiling", () => {
-		expect([under, over, rowOf("100x10", around(3.2), undefined).status]).toEqual(["ok", "REGRESSED", "unbaselined"])
+		expect([under, over, rowOf("100x10", around(2), undefined).status]).toEqual(["ok", "REGRESSED", "unbaselined"])
 	})
 
 	it("prints a reportOnly scenario over its ceiling without failing the run, while a blocking one still fails it", () => {
 		/* adapter post-1kib, bimodal on CI (bench.json's reason), against finalize 100x10 over its ceiling */
 		const postOwn = ceilingsOf("adapter", "node 26.12")?.["post-1kib"]
-		const post = rowOf("post-1kib", around(9.2), postOwn).status
-		expect([postOwn?.reportOnly, postOwn?.ceiling, post]).toEqual([true, 8.352, "report-only: over"])
+		const post = rowOf("post-1kib", around(13.5), postOwn).status
+		expect([postOwn?.reportOnly, postOwn?.ceiling, post]).toEqual([true, 12.905, "report-only: over"])
 		expect([exitCode("judge", true, [row("ok"), row(post)]), exitCode("judge", true, [row(post), row(over)])]).toEqual([
 			0, 1,
 		])

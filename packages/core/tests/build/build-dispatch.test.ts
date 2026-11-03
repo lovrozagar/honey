@@ -36,6 +36,6 @@ describe("ci.yml's build mode", () => {
 
 	it("pins the Bun its build ceilings are kept under: a BUN_VERSION bump to a new minor needs a re-record", () => {
 		const pinned = (ci as unknown as { env: { BUN_VERSION: string } }).env.BUN_VERSION
-		expect(runtimeKey("bun", pinned)).toBe("bun 1.3")
+		expect(runtimeKey("bun", pinned)).toBe("bun 1.4")
 	})
 })

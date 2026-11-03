@@ -22,14 +22,16 @@ import { ceilingRule, MIN_RECORD_RUNS } from "./ceiling-rule.ts"
  * One build's hang guard, in ms, per runtime that runs `vite build`. Bit 19 j2's method (worst local median x CI's
  * factor over this machine x the runtime's spread) with the factor of CI's SLOW runner class, 3.9 (surface x
  * workers: 1.42 s here, 5.5 s in CI run 40754723329), not j2's 1.91 (one fast-class run):
- * - bun 1.3.11: worst median 1.44 s (surface x cloudflare) x 3.9 x 1.33 = 7.5 s -> 8 s.
+ * - bun 1.4.4: worst median 1.32 s (surface x workers; 18 cells, 3 builds each, record mode) x 3.9 x 1.23 (the largest
+ *   cold first build over its cell's median, surface x bun's 1491/1214 ms) = 6.3 s -> 7 s. CI's slowest Bun build in the
+ *   six bun 1.4 record runs was 4.1 s (surface x bun, run 41578975301). Under 1.3.11 it was 1.44 s x 3.9 x 1.33 -> 8 s.
  * - Node: worst median 2.47 s (surface x bun on Node 22; 2.18 s on 26.12.1; 3 builds of every cell under the heavy
  *   lock) x 3.9 x 1.28 (surface x cloudflare's cold first build over its median, 2771/2168 ms on Node 26.12.1) =
  *   12.3 s -> 13 s. CI's 515 Node cells since j2 built in 1.9-8.2 s.
  * It judges a build once it exits: one that never exits is ci.yml's job timeout's. A build over it is hung or
  * runaway, not merely slow: slowness is the ratio's to judge.
  */
-export const HANG_GUARD_MS: Record<RuntimeId, number> = { bun: 8_000, node: 13_000 }
+export const HANG_GUARD_MS: Record<RuntimeId, number> = { bun: 7_000, node: 13_000 }
 
 /**
  * App builds per cell, judged on their median: one build is one sample against a median of references, so one

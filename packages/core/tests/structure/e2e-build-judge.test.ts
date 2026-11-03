@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest"
 import * as gate from "../e2e/build-gate.ts"
 import { BUILD_SPECS } from "../e2e/builds.ts"
 
-const KEY = "bun 1.3"
+const KEY = "bun 1.4"
 /*
  * CI run 40877110861's build (bun) job, the one false red of k=1: the cloudflare reference 139 ms; defaults×workers
  * built once in 2,949 ms (ratio 21.21) where compose×workers took 2,472 and gateway×workers 2,501, siblings that
@@ -47,8 +47,8 @@ describe("the e2e build gate's median of three builds", () => {
 	})
 
 	it("holds every build to the hang guard: one runaway build of three reds, whatever the median", () => {
-		expect(onRedJob([8_001, RED_JOB.normal, RED_JOB.normal]).failures).toEqual([
-			"built in 8001ms, over the 8000ms hang guard on bun",
+		expect(onRedJob([7_001, RED_JOB.normal, RED_JOB.normal]).failures).toEqual([
+			"built in 7001ms, over the 7000ms hang guard on bun",
 		])
 	})
 
@@ -61,10 +61,10 @@ describe("the e2e build gate's report-only interim", () => {
 	it("refuses a baseline whose ceilings are emptied for a re-record, as it refuses no baseline", () => {
 		const reportOnly = { builds: {}, note: "report-only from <sha> for the k=3 re-record", runs: [] }
 		const cells = BUILD_SPECS.map((spec) => spec.id)
-		expect(gate.missingCeilings(reportOnly, ["bun 1.3", "node 22"], cells)).toEqual(
-			gate.missingCeilings(undefined, ["bun 1.3", "node 22"], cells),
+		expect(gate.missingCeilings(reportOnly, ["bun 1.4", "node 22"], cells)).toEqual(
+			gate.missingCeilings(undefined, ["bun 1.4", "node 22"], cells),
 		)
-		expect(gate.missingCeilings(reportOnly, ["bun 1.3"], cells)).toHaveLength(cells.length)
+		expect(gate.missingCeilings(reportOnly, ["bun 1.4"], cells)).toHaveLength(cells.length)
 	})
 
 	it("judges no cell against an emptied baseline: each reads unbaselined, never failing", () => {
@@ -103,10 +103,10 @@ describe("the e2e build gate's ratio judges on GitHub Actions only", () => {
 	})
 
 	it("holds the hang guard in both", () => {
-		const runaway = [8_001, RED_JOB.normal, RED_JOB.normal]
+		const runaway = [7_001, RED_JOB.normal, RED_JOB.normal]
 		expect([inEnv(OFF_ACTIONS, runaway).failures, inEnv(ON_ACTIONS, runaway).failures]).toEqual([
-			["built in 8001ms, over the 8000ms hang guard on bun"],
-			["built in 8001ms, over the 8000ms hang guard on bun"],
+			["built in 7001ms, over the 7000ms hang guard on bun"],
+			["built in 7001ms, over the 7000ms hang guard on bun"],
 		])
 	})
 

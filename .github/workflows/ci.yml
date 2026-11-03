@@ -27,7 +27,7 @@ permissions:
   contents: read
 
 env:
-  BUN_VERSION: "1.3.11"
+  BUN_VERSION: "1.4.4"
 
 jobs:
   # The Node every other job calls current: the newest RELEASE in nodejs.org's index, resolved once here and fed to

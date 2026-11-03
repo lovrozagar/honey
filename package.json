@@ -119,7 +119,7 @@
 		"yup": "catalog:",
 		"zod": "catalog:"
 	},
-	"packageManager": "bun@1.3.11",
+	"packageManager": "bun@1.4.4",
 	"standards": {
 		"repo": "honey",
 		"gates": [
