@@ -11,6 +11,7 @@ import {
 	type IROperationExtensions,
 	type IRParam,
 	type IRResponse,
+	type IRSchema,
 	type IRWebhookEvent,
 } from "./model.ts"
 import { schemaToIR } from "./schema.ts"
@@ -64,12 +65,14 @@ function deref(value: unknown, components: Components, depth = 0): Json | undefi
 	)
 }
 
-/** A schema `$ref` resolved to its component, for shape checks only. */
-function shallow(schema: Json | undefined, components: Components, depth = 0): Json | undefined {
-	if (typeof schema?.$ref !== "string" || depth > 16) return schema
-	const name = schema.$ref.split("/").pop() as string
+/** `schema` followed through refs, read from `components`, and nullables, for shape checks only. */
+function shallow(schema: IRSchema, components: Components, depth = 0): IRSchema {
+	if (depth > 16) return { kind: "unknown" }
+	if (schema.kind === "nullable") return shallow(schema.inner, components, depth + 1)
+	if (schema.kind !== "ref") return schema
 	const schemas = components.schemas ?? {}
-	return shallow(Object.hasOwn(schemas, name) ? (schemas[name] as Json) : undefined, components, depth + 1)
+	const target = Object.hasOwn(schemas, schema.name) ? (schemas[schema.name] as Json) : undefined
+	return shallow(schemaToIR(target), components, depth + 1)
 }
 
 const STRING = { kind: "scalar", type: "string" } as const
@@ -135,13 +138,15 @@ function ordered(content: Json): string[] {
 		.map(({ type }) => type)
 }
 
-/** A multipart form's parts: a binary property, or a list of them, is a file. */
-function partsOf(form: Json | undefined, components: Components): IRMultipartPart[] {
-	return Object.entries((form?.properties ?? {}) as Record<string, Json>).map(([name, property]) => {
-		const resolved = shallow(property, components)
-		const items = resolved?.type === "array" ? shallow(resolved.items as Json | undefined, components) : undefined
-		const file = resolved?.format === "binary" || items?.format === "binary"
-		return { name, schema: schemaToIR(property), type: file ? "file" : "text" }
+/** A multipart form's parts, read from its IR: a binary field, or a list of them, is a file. */
+function partsOf(form: IRSchema, components: Components): IRMultipartPart[] {
+	const object = shallow(form, components)
+	if (object.kind !== "object") return []
+	return object.fields.map(({ name, schema }) => {
+		const resolved = shallow(schema, components)
+		const items = resolved.kind === "array" ? shallow(resolved.items, components) : undefined
+		const file = resolved.kind === "binary" || items?.kind === "binary"
+		return { name, schema, type: file ? "file" : "text" }
 	})
 }
 
@@ -150,12 +155,12 @@ function bodyOf(type: string, media: Json | undefined, required: boolean, compon
 	const essence = essenceOf(type)
 	if (essence === "application/octet-stream")
 		return { contentType: "application/octet-stream", kind: "stream", required }
-	const parts = essence === "multipart/form-data" ? partsOf(shallow(schema, components), components) : []
+	const ir = schemaToIR(schema)
+	const parts = essence === "multipart/form-data" ? partsOf(ir, components) : []
 	if (parts.some((part) => part.type === "file")) {
-		/* a part can only be a file when the form has a schema */
-		return { contentType: "multipart/form-data", kind: "multipart", parts, required, schema: schemaToIR(schema) }
+		return { contentType: "multipart/form-data", kind: "multipart", parts, required, schema: ir }
 	}
-	return { contentType: type, kind: "raw", required, schema: schemaToIR(schema) }
+	return { contentType: type, kind: "raw", required, schema: ir }
 }
 
 /* a urlencoded form cannot carry a file, so a multipart one with a file part ranks just above it */

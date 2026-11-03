@@ -176,6 +176,52 @@ describe("request bodies: multipart with files", () => {
 	})
 })
 
+describe("request bodies: multipart behind a wrapper", () => {
+	it("finds a form, a file and a list of files behind a one-variant anyOf or oneOf, and a file behind a null", () => {
+		const files = { items: { kind: "binary" }, kind: "array" } as const
+		const nullable = { inner: { kind: "binary" }, kind: "nullable" } as const
+		const properties = {
+			file: { oneOf: [BINARY] },
+			files: { anyOf: [{ anyOf: [{ items: BINARY, type: "array" }] }] },
+			maybe: { anyOf: [BINARY, { type: "null" }] },
+			listed: { format: "binary", type: ["string", "null"] },
+		}
+		const parts = [
+			{ name: "file", schema: { kind: "binary" }, type: "file" },
+			{ name: "files", schema: files, type: "file" },
+			{ name: "maybe", schema: nullable, type: "file" },
+			{ name: "listed", schema: nullable, type: "file" },
+		]
+		const wrapped = body("multipart/form-data", { anyOf: [{ properties, type: "object" }] })
+		expect(wrapped?.kind === "multipart" ? wrapped.parts : wrapped).toEqual(parts)
+	})
+
+	it("reads a part whose ref never ends as text", () => {
+		const loop = { $ref: "#/components/schemas/Loop" }
+		const spec = {
+			components: { schemas: { Loop: loop } },
+			info: { title: "T", version: "1" },
+			openapi: "3.1.0",
+			paths: {
+				"/u": {
+					post: {
+						operationId: "u",
+						requestBody: {
+							content: { "multipart/form-data": { schema: { properties: { f: BINARY, l: loop }, type: "object" } } },
+						},
+						responses: {},
+					},
+				},
+			},
+		}
+		const op = toIR(spec).operations[0] as IROperation
+		expect(op.body?.kind === "multipart" ? op.body.parts : op.body).toEqual([
+			{ name: "f", schema: { kind: "binary" }, type: "file" },
+			{ name: "l", schema: { kind: "ref", name: "Loop" }, type: "text" },
+		])
+	})
+})
+
 describe("request bodies: order and refs", () => {
 	it("lists every body in preference order, JSON-like before the rest, and follows body and schema refs", () => {
 		const components = {
