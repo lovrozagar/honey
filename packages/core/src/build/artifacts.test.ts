@@ -36,7 +36,7 @@ const SCHEMES = {
 function app() {
 	return honey<{}>()
 		.get("/public")
-		.meta({ public: true, security: ["apiKey", "jwt"] } as never)
+		.meta({ extensions: { "x-team": "growth" }, public: true, security: ["apiKey", "jwt"] } as never)
 		.handler((c) => c.res.text("ok", "p"))
 		.get("/internal")
 		.meta({ security: "iaKey" } as never)
@@ -84,11 +84,13 @@ describe("documentOf: each output its own (bit 19 h2)", () => {
 		expect(Object.keys(all.components?.securitySchemes ?? {})).toEqual(["apiKey", "iaKey", "jwt"])
 		expect(Object.keys(contract.components?.securitySchemes ?? {})).toEqual(["jwt"])
 		expect(Object.keys(published.components?.securitySchemes ?? {})).toEqual(["apiKey", "jwt"])
-		const keys = (document: Document, path: string) => Object.keys(document.paths[path]?.get ?? {})
-		expect([
-			keys(all, "/public").some((key) => key.startsWith("x-")),
-			keys(published, "/public").some((key) => key.startsWith("x-")),
-		]).toEqual([true, false])
+		const extensions = (document: Document, path: string) =>
+			Object.keys(document.paths[path]?.get ?? {}).filter((key) => key.startsWith("x-"))
+		/* the published document drops the app's own extension and keeps the one honey's generators read */
+		expect([extensions(all, "/public"), extensions(published, "/public")]).toEqual([
+			["x-team", "x-honey-route"],
+			["x-honey-route"],
+		])
 		expect([all.paths["/public"]?.get.security, published.paths["/public"]?.get.security]).toEqual([
 			[{ apiKey: [] }, { jwt: [] }],
 			[{ apiKey: [] }],
