@@ -175,26 +175,28 @@ export abstract class SettingsChain<TEnv> {
 	}
 
 	/**
-	 * Shape the body of every error without a payload schema: `fn` returns the schema's output type, and `schema` describes
-	 * the body in the OpenAPI document.
+	 * Shape the body of every error without a payload schema: `fn` gets the error and honey's default body (its `digest`
+	 * and `vars` included) and returns the schema's output type, and `schema` describes the body in the OpenAPI document.
 	 */
 	defaultErrorFormatter<TSchema extends StandardSchemaLike>(
 		schema: TSchema,
-		fn: (error: HoneyError) => InferOutput<TSchema>,
+		fn: (error: HoneyError, base: Record<string, unknown>) => InferOutput<TSchema>,
 	): this
 	/**
 	 * Shape the body of every error without a payload schema: `fn` gets the error and honey's default body and returns the
 	 * body to send. If it throws, the failure is logged and the default body goes out.
 	 */
 	defaultErrorFormatter(fn: ErrorFormatter): this
-	defaultErrorFormatter(schemaOrFn: ErrorFormatter | StandardSchemaLike, fn?: (error: HoneyError) => unknown): this {
+	defaultErrorFormatter(
+		schemaOrFn: ErrorFormatter | StandardSchemaLike,
+		fn?: (error: HoneyError, base: Record<string, unknown>) => unknown,
+	): this {
 		if (typeof schemaOrFn === "function") {
 			this.settings.errorSchema = null
 			this.settings.errorFormatter = schemaOrFn
 		} else {
-			const mapper = fn as (error: HoneyError) => Record<string, unknown>
 			this.settings.errorSchema = schemaOrFn
-			this.settings.errorFormatter = (error) => mapper(error)
+			this.settings.errorFormatter = fn as ErrorFormatter
 		}
 		return this
 	}

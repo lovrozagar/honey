@@ -95,7 +95,7 @@ export function jsonAnswer(
 /** The default shape of a standard error: honey's envelope, or a Problem Details document. */
 function defaultShapeOf(error: HoneyError, answer: ErrorAnswer): Record<string, unknown> {
 	if (answer.format === "problem+json") return problemDetails(error, answer.instance ?? null)
-	return {
+	const shape: Record<string, unknown> = {
 		error_key: error.errorKey,
 		fields: error.fields,
 		message: error.message,
@@ -103,6 +103,9 @@ function defaultShapeOf(error: HoneyError, answer: ErrorAnswer): Record<string, 
 		status_key: error.statusKey,
 		success: false,
 	}
+	/* vars already reach the client inside a translated message: the structured copy exposes nothing new */
+	if (error.vars !== undefined) shape.vars = error.vars
+	return shape
 }
 
 function errorBody(

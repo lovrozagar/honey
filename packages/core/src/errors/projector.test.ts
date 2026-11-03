@@ -105,9 +105,8 @@ describe("createErrorResponse: deep coverage", () => {
 			status: 409,
 			status_key: "conflict",
 			success: false,
+			vars: { email: "a@b.com" },
 		})
-		/* vars are ICU input on HoneyError, not part of the public envelope */
-		expect(err.vars).toEqual({ email: "a@b.com" })
 		expect(res.headers.get("content-type")).toBe("application/json")
 	})
 

@@ -181,6 +181,7 @@ async function body(res: Response) {
 		error_key: string
 		fields: Record<string, { error_key: string; path: string }[]>
 		message: string
+		vars?: Record<string, number | string>
 	}
 }
 
@@ -205,8 +206,8 @@ describe("app.errorI18n: the answer to a thrown error is translated", () => {
 			await body(await a.fetch(new Request("http://app.test/x"), { TENANT: "t" })),
 		]
 		expect([de.message, en.message, shared.message]).toEqual(["Order 7 ist weg", "Order 7 is gone", "item_gone"])
-		/* the vars filled the message; the answer carries neither them nor fields it never had */
-		expect([de.fields, "vars" in de]).toEqual([{}, false])
+		/* the vars filled the message and ride along structured; no fields it never had */
+		expect([de.fields, de.vars]).toEqual([{}, shared.vars])
 	})
 
 	// v0: 737977869f
@@ -309,9 +310,9 @@ describe("app.errorI18n: when it cannot translate", () => {
 
 	// v0: 259e1818fa
 	// v0: 5eeb80e3fc
-	it("not set: the message stays the key, and the body never carries vars", async () => {
+	it("not set: the message stays the key, and the body still carries the vars", async () => {
 		const answer = await body(await app(gone).fetch(new Request("http://app.test/x"), { TENANT: "t" }))
-		expect([answer.message, "vars" in answer]).toEqual(["item_gone", false])
+		expect([answer.message, answer.vars]).toEqual(["item_gone", gone().vars])
 	})
 
 	it("the framework's own 404 and 405 are not translated", async () => {

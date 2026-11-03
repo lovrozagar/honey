@@ -42,7 +42,7 @@ describe("the default envelope", () => {
 	// v0: c8efda6f89
 	// v0: 5f38aaf701
 	// v0: 85d57d8458
-	it("carries key, message, status, status_key and fields; never vars or the cause", async () => {
+	it("carries key, message, status, status_key, fields and vars; never the cause", async () => {
 		const withFields = throwing(
 			() =>
 				new HoneyError({ cause: new Error("secret"), errorKey: "val_error", fields, status: "unprocessable_entity" }),
@@ -60,10 +60,10 @@ describe("the default envelope", () => {
 			status: 422,
 		})
 		const { body } = await send(throwing(rateLimited), "/t")
-		expect([body.error_key, body.message, "vars" in body, "cause" in body]).toEqual([
+		expect([body.error_key, body.message, body.vars, "cause" in body]).toEqual([
 			"rate_limited",
 			"rate_limited",
-			false,
+			{ limit: 100, retryAfter: 60 },
 			false,
 		])
 	})
@@ -116,7 +116,7 @@ describe("defaultErrorFormatter", () => {
 	// v0: b68007f377
 	// v0: d4dc8ac02d
 	// v0: 348fd83a5f
-	it("replaces the shape outright, reads vars off the error, and is never handed the cause", async () => {
+	it("replaces the shape outright, is handed the vars, and is never handed the cause", async () => {
 		const shapes: object[] = []
 		const app = throwing(rateLimited, (a) =>
 			a.defaultErrorFormatter((error, shape) => {
@@ -130,8 +130,8 @@ describe("defaultErrorFormatter", () => {
 		})
 		expect((await send(app, "/t")).body).toEqual({ code: "rate_limited", ok: false, retryAfter: 60 })
 		expect(shapes.map((shape) => ["cause" in shape, "vars" in shape])).toEqual([
-			[false, false],
-			[false, false],
+			[false, true],
+			[false, true],
 		])
 	})
 })

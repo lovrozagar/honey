@@ -90,6 +90,23 @@ describe("settings setters: handles and formatters", () => {
 		expect(JSON.parse((await get(mapped, "/std"))[1])).toEqual({ code: "gone" })
 		expect(JSON.parse((await get(mapped, "/data"))[1])).toEqual({ code: "x", d: 1 })
 	})
+
+	it("a schema formatter gets honey's default body, so a 500 keeps its digest and an error its vars", async () => {
+		const app = honey<{}>().defaultErrorFormatter(schema, (_e, base) => ({ ...base, trace: "t" }))
+		app.get("/crash").handler(() => {
+			throw new Error("db down")
+		})
+		app.get("/quota").handler(() => {
+			throw new HoneyError({ errorKey: "quota_exceeded", status: "too_many_requests", vars: { limit: 5 } })
+		})
+		const crash = JSON.parse((await get(app, "/crash"))[1]) as Record<string, unknown>
+		expect(crash).toMatchObject({
+			digest: expect.stringMatching(/^[0-9a-f]{16}$/),
+			error_key: "internal_server_error",
+			trace: "t",
+		})
+		expect(JSON.parse((await get(app, "/quota"))[1])).toMatchObject({ trace: "t", vars: { limit: 5 } })
+	})
 })
 
 /** A json logger at trace whose lines are parsed into `lines`. */

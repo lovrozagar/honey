@@ -154,7 +154,7 @@ describe("errors in honey's envelope (the default format)", () => {
 	// v0: 68f4933c56
 	// v0: 08d9f2a22b
 
-	it("documents every key of a status in one envelope: its key and status as enums, every field required, no vars", () => {
+	it("documents every key of a status in one envelope: its key and status as enums, every field but vars required", () => {
 		const errors = defineErrors({ email_taken: "conflict", forbidden: "forbidden", slug_taken: "conflict" })
 		const app = honey<{}>().errorFactory(errors)
 		app
@@ -187,6 +187,7 @@ describe("errors in honey's envelope (the default format)", () => {
 					status: { enum: [409], type: "integer" },
 					status_key: { type: "string" },
 					success: { const: false },
+					vars: { additionalProperties: { type: ["number", "string"] }, type: "object" },
 				},
 				required: ["error_key", "fields", "message", "status", "status_key", "success"],
 				type: "object",
@@ -261,7 +262,7 @@ describe("errors: a custom envelope schema", () => {
 			["email_taken"],
 			{ enum: [409], type: "integer" },
 			["code", "ok"],
-			["error_key", "fields", "message", "status", "status_key", "success"],
+			["error_key", "fields", "message", "status", "status_key", "success", "vars"],
 		])
 	})
 

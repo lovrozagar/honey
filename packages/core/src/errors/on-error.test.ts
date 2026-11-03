@@ -216,6 +216,18 @@ describe("onError: one that fails falls back, and is logged once", () => {
 	})
 })
 
+describe("the default body", () => {
+	it("carries an error's vars, and leaves them out when it has none", async () => {
+		const { app } = throwing(
+			new HoneyError({ errorKey: "quota_exceeded", status: "too_many_requests", vars: { limit: 5, plan: "free" } }),
+		)
+		const body = (await (await app.fetch(get("/boom/1"), {})).json()) as Record<string, unknown>
+		const plain = throwing(new HoneyError({ errorKey: "gone", status: "gone" }))
+		const plainBody = (await (await plain.app.fetch(get("/boom/1"), {})).json()) as Record<string, unknown>
+		expect([body.vars, "vars" in plainBody]).toEqual([{ limit: 5, plan: "free" }, false])
+	})
+})
+
 describe("the digest: an unknown error's 500 and its operator line", () => {
 	// v0: 55e46daa5e
 	// v0: 35c503a101

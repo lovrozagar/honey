@@ -112,6 +112,7 @@ export function defaultEnvelope(): JsonSchema {
 			status: { type: "integer" },
 			status_key: { ...STRING },
 			success: { const: false },
+			vars: { additionalProperties: { type: ["number", "string"] }, type: "object" },
 		},
 		required: ["error_key", "fields", "message", "status", "status_key", "success"],
 		type: "object",
