@@ -23,6 +23,7 @@ import type {
 	SkipRouteRecord,
 	WithMiddlewareMeta,
 } from "./app-types.ts"
+import { errorsOf } from "./middleware-chain.ts"
 import { joinPatterns, parsePattern } from "./pattern.ts"
 import { addRoute, type HandleView, type HoneyGraph, type PendingRoute, type RouteSource, settle } from "./register.ts"
 import type { MergePath, ParamsFromPath } from "./types.ts"
@@ -363,14 +364,17 @@ export class RouteBuilder<B extends BuilderTypes> {
 		return this.#next({ middlewares: [...this.#s.middlewares, mw as unknown as RuntimeMiddleware] })
 	}
 
-	/** Register the route, once per method, and return the app typed with it. Throws on a route already registered. */
+	/**
+	 * Register the route, once per method, and return the app typed with it. Keys `fn.errors` names, as `proxy()`'s
+	 * handler does, count as the route's own. Throws on a route already registered.
+	 */
 	handler(fn: (ctx: RouteHandlerCtx<B>) => MaybePromise<TypedResponse>): HandlerReturn<B> {
 		const s = this.#s
 		settle(s.graph, s.pending, s.view.node)
 		const source: RouteSource = {
 			cm: s.view.chain,
 			cv: s.view.contextValues,
-			dk: s.errorKeys,
+			dk: new Set([...s.errorKeys, ...(errorsOf(fn) ?? [])]),
 			ef: s.errorSource,
 			fn: fn as unknown as RouteSource["fn"],
 			in: s.input?.step ?? null,

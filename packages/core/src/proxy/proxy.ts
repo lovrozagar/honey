@@ -118,11 +118,14 @@ function traced(ctx: unknown, method: string, headers: Headers): Send {
 	return (call) => outbound.send(call)
 }
 
-/** A route handler that forwards each request to `config.destination` and streams the upstream's answer back. */
+/**
+ * A route handler that forwards each request to `config.destination` and streams the upstream's answer back. It declares
+ * the errors it answers with, `bad_gateway` (502) and `gateway_timeout` (504), on each route it handles.
+ */
 export function proxy<TCtx>(config: ProxyConfig<TCtx>): (ctx: TCtx) => Promise<TypedResponse> {
 	const decoded = config.decoded !== false
 	const forwarded = config.forwardedHeaders !== false
-	return async (ctx) => {
+	const handler = async (ctx: TCtx): Promise<TypedResponse> => {
 		const { ip, path, req, signal } = ctx as unknown as ProxyCtx
 		const websocket = req.headers.get("upgrade")?.trim().toLowerCase() === "websocket"
 		const pathQuery = path + searchOfUrl(req.url)
@@ -160,4 +163,6 @@ export function proxy<TCtx>(config: ProxyConfig<TCtx>): (ctx: TCtx) => Promise<T
 		const replaced = config.onResponse ? await config.onResponse(ctx, answer) : undefined
 		return (replaced ?? answer) as TypedResponse
 	}
+	handler.errors = ["bad_gateway", "gateway_timeout"]
+	return handler
 }

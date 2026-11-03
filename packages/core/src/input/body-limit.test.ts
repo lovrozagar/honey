@@ -2,11 +2,13 @@ import type { AddressInfo } from "node:net"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { type HoneyServer, createNodeServer } from "../adapters/node/server.ts"
 import * as z from "zod"
+import { defineErrors } from "../errors/errors.ts"
 import { createMiddleware } from "../middleware/middleware.ts"
 import { ipRestrict } from "../middleware/ip-restrict.ts"
 import { requestId } from "../middleware/request-id.ts"
 import { timeout } from "../middleware/timeout.ts"
 import { type CurlLogData, curlLogger } from "../observability/curl-logger.ts"
+import { generateOpenApi } from "../openapi/generate.ts"
 import { honey } from "../routing/app.ts"
 import { type BodyLimitOptions, bodyLimit } from "./body-limit.ts"
 
@@ -451,5 +453,21 @@ describe("bodyLimit on a real socket", () => {
 			[201, { json: { name: "Bob" } }],
 			413,
 		])
+	})
+})
+
+describe("bodyLimit: the error it declares", () => {
+	it("documents 413 content_too_large on each route behind it, with no app-wide declaration", () => {
+		const app = honey<{}>().errorFactory(defineErrors({}))
+		app
+			.post("/upload")
+			.use(bodyLimit({ maxSize: 1 }))
+			.handler((ctx) => ctx.res.text("ok", "x"))
+		app.post("/open").handler((ctx) => ctx.res.text("ok", "x"))
+		const { paths } = generateOpenApi(app, { info: { title: "T", version: "1" } })
+		expect([
+			Object.keys(paths["/upload"]?.post?.responses ?? {}),
+			Object.keys(paths["/open"]?.post?.responses ?? {}),
+		]).toEqual([["413"], ["200"]])
 	})
 })

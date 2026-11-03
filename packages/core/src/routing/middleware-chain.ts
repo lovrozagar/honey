@@ -6,9 +6,9 @@
 import type { RuntimeMiddleware } from "../middleware/middleware.ts"
 import { pathInScope, type Segment } from "./pattern.ts"
 
-/** The error keys a middleware declares (`createMiddleware(fn, { errors })`). */
-export function errorsOf(mw: RuntimeMiddleware): readonly string[] | undefined {
-	return (mw as { errors?: readonly string[] }).errors
+/** The error keys a middleware (`createMiddleware(fn, { errors })`) or a shipped handler such as `proxy()` declares. */
+export function errorsOf(fn: object): readonly string[] | undefined {
+	return (fn as { errors?: readonly string[] }).errors
 }
 
 /** The factory a middleware's error keys come from (`createMiddleware(fn, { errors })`). */

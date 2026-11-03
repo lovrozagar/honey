@@ -1,8 +1,10 @@
 import { describe, expect, expectTypeOf, it } from "vitest"
+import { defineErrors } from "../errors/errors.ts"
 import { createMiddleware } from "../middleware/middleware.ts"
 import { requestId } from "../middleware/request-id.ts"
 import { isHoneyResponse, NODE_OUTBOUND } from "../response/builder.ts"
 import type { TypedResponse } from "../response/response.ts"
+import { generateOpenApi } from "../openapi/generate.ts"
 import { honey } from "../routing/app.ts"
 import { proxy } from "./proxy.ts"
 
@@ -277,5 +279,18 @@ describe("proxy: the plain path on the Node bridge", () => {
 		app.all("/api/*rest").handler(proxy({ destination: () => new Response(null, { status: 304 }) }))
 		const res = await app.fetch(nodeReq("/api/x"), {})
 		expect([isHoneyResponse(res), res.status, res.body]).toEqual([true, 304, null])
+	})
+})
+
+describe("proxy: the errors it declares", () => {
+	it("documents 502 bad_gateway and 504 gateway_timeout on each route it handles, with no app-wide declaration", () => {
+		const app = honey<{}>().errorFactory(defineErrors({}))
+		app.get("/api/*rest").handler(proxy({ destination: () => new Response("x") }))
+		app.get("/own").handler((ctx) => ctx.res.text("ok", "x"))
+		const { paths } = generateOpenApi(app, { info: { title: "T", version: "1" } })
+		expect([
+			Object.keys(paths["/api/{rest}"]?.get?.responses ?? {}),
+			Object.keys(paths["/own"]?.get?.responses ?? {}),
+		]).toEqual([["502", "504"], ["200"]])
 	})
 })

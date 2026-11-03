@@ -94,7 +94,7 @@ function counted(body: ReadableStream<Uint8Array>, cap: number): ReadableStream<
 /**
  * Limit the request body to `options.maxSize` bytes, or to the `limits` entry for its media type. A declared
  * Content-Length over the cap answers 413 before anything is read; otherwise the read that passes the cap fails with
- * 413.
+ * 413. It declares `content_too_large` on each route behind it.
  */
 export function bodyLimit(options: BodyLimitOptions): MiddlewareFn<
 	{
@@ -119,5 +119,6 @@ export function bodyLimit(options: BodyLimitOptions): MiddlewareFn<
 		replaceRequest(ctx, withBody(req, counted(body, cap)))
 		return next()
 	}
+	mw.errors = ["content_too_large"]
 	return namedMiddleware("bodyLimit", mw)
 }
