@@ -3,6 +3,7 @@ import { connect } from "node:net"
 import { afterEach, describe, expect, it } from "vitest"
 import { type HoneyServer, serve } from "../adapters/node/serve.ts"
 import { createMiddleware } from "../middleware/middleware.ts"
+import { requestId } from "../middleware/request-id.ts"
 import { createHoneyResponse, isHoneyResponse } from "../response/builder.ts"
 import { type Honey, honey } from "../routing/app.ts"
 import { createLogger } from "./logger.ts"
@@ -125,6 +126,19 @@ describe("requestLog: one line per request, from the field catalog", () => {
 			.handler((ctx) => ctx.res.text("ok", "x"))
 		await (await a.fetch(get("/with-id"), {})).text()
 		expect(entries(lines)[0]).toMatchObject({ requestId: "r-1" })
+	})
+
+	it("logs the path under stripPrefix, the route it matched, and the id requestId() gave under its own header", async () => {
+		const { lines, logger } = recording()
+		const a = honey<{}>()
+			.logger(logger)
+			.requestLog(true)
+			.stripPrefix("/api")
+			.use(requestId({ header: "cf-ray" }))
+		a.get("/v1/items/:id").handler((ctx) => ctx.res.text("ok", ctx.requestId))
+		const res = await a.fetch(get("/api/v1/items/7?q=1"), {})
+		const id = await res.text()
+		expect(entries(lines)[0]).toMatchObject({ path: "/v1/items/7", requestId: id, routeId: "GET /v1/items/:id" })
 	})
 })
 

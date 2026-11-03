@@ -75,17 +75,18 @@ function write(s: AppSettings<unknown>, entry: RequestLogEntry): void {
  * body ended (`ended`) or was cancelled, with the bytes it carried.
  */
 export function requestLine(s: AppSettings<unknown>, seen: Seen, response: Response): BodyEnd {
-	const { request, started } = seen
+	const { request, started, state } = seen
 	const entry: Mutable<RequestLogEntry> = {
 		durationMs: 0,
 		kind: kindOf(response, rawBodyOf(response)),
 		method: request.method,
-		path: pathOf(request.url),
-		routeId: seen.state?.plan.route.id ?? "",
+		/* the path routing matched, under stripPrefix; the raw URL's before routing ran */
+		path: state?.path ?? pathOf(request.url),
+		routeId: state?.plan.route.id ?? "",
 		runtime: runtimeOf(),
 		status: response.status,
 	}
-	const requestId = header(response, "x-request-id")
+	const requestId = state?.requestId?.id ?? header(response, "x-request-id")
 	if (requestId !== undefined) entry.requestId = requestId
 	return (ended, bytes) => {
 		entry.durationMs = Math.round((performance.now() - started) * 1000) / 1000

@@ -13,9 +13,9 @@ export type RequestLogEntry = {
 	readonly kind: string
 	/** The HTTP method. */
 	readonly method: string
-	/** without its query */
+	/** The path routing matched (`ctx.path`, under `stripPrefix`), without its query. */
 	readonly path: string
-	/** The response's `x-request-id` header, when it has one. */
+	/** The id `requestId()` gave the request, else the response's `x-request-id` header, when there is one. */
 	readonly requestId?: string
 	/** the route that served it; empty for a request no route served */
 	readonly routeId: string
