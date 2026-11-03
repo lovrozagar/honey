@@ -4,6 +4,7 @@
  * values come inline or next, and a target's options keep their generator's names.
  */
 import { describe, expect, it } from "vitest"
+import { METADATA_FIELDS } from "../emit/shared/metadata.ts"
 import { parseGenerate, usage, UsageError } from "./args.ts"
 
 /** What parseGenerate makes of `argv`: "accepted", or the usage error's message. */
@@ -192,5 +193,41 @@ describe("generate's usage text", () => {
 			(target) => refused(["--spec", "s.json", "--out", "o", "--target", target]) === "accepted",
 		)
 		expect([listed.length, accepted]).toEqual([8, listed])
+	})
+})
+
+describe("generate's --metadata-<field> flags (plan 39 8.2)", () => {
+	const base = ["--spec", "s.json", "--out", "o", "--target", "csharp"]
+
+	it("reads each field under its kebab name, authors and keywords split at commas", () => {
+		const run = parseGenerate([
+			...base,
+			"--metadata-authors",
+			"Acme Inc <oss@acme.dev>, Bo",
+			"--metadata-keywords=shop,api-client",
+			"--metadata-license-file",
+			"LICENSE",
+			"--metadata-description=The Shop API",
+		])
+		expect(run.metadata).toEqual({
+			authors: ["Acme Inc <oss@acme.dev>", "Bo"],
+			description: "The Shop API",
+			keywords: ["shop", "api-client"],
+			licenseFile: "LICENSE",
+		})
+		expect(parseGenerate(base).metadata).toEqual({})
+	})
+
+	it("refuses a field it does not know and a field with no value", () => {
+		expect(refused([...base, "--metadata-licence", "MIT"])).toBe("unknown option --metadata-licence")
+		expect(refused([...base, "--metadata-description"])).toBe("--metadata-description requires a value")
+	})
+
+	it("lists every field in the usage text", () => {
+		expect(
+			METADATA_FIELDS.filter(
+				(field) => !usage().includes(`--metadata-${field.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}`),
+			),
+		).toEqual([])
 	})
 })

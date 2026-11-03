@@ -3,7 +3,18 @@
  * the value, and a `Name <email>` split at its last ` <`.
  */
 import { describe, expect, it } from "vitest"
-import { checked, HTTPS_URL, PERSON, personOf, SPDX_EXPRESSION, SPDX_ID, TEXT } from "./metadata.ts"
+import {
+	authorName,
+	checked,
+	checkedMetadata,
+	HTTPS_URL,
+	METADATA_FIELDS,
+	PERSON,
+	personOf,
+	SPDX_EXPRESSION,
+	SPDX_ID,
+	TEXT,
+} from "./metadata.ts"
 
 const GRAMMARS = { HTTPS_URL, PERSON, SPDX_EXPRESSION, SPDX_ID, TEXT }
 
@@ -46,5 +57,60 @@ describe("the package metadata grammars", () => {
 
 	it("splits a person into its name and email", () => {
 		expect(personOf("Ada O'Brien <ada@example.com>")).toEqual({ email: "ada@example.com", name: "Ada O'Brien" })
+	})
+})
+
+describe("the package metadata block (plan 39 8.2)", () => {
+	const full = {
+		authors: ["Acme Inc <oss@acme.dev>", "Bo"],
+		changelog: "https://acme.dev/changelog",
+		copyright: "© 2026 Acme Inc",
+		description: "The Shop API's client",
+		documentation: "https://docs.acme.dev",
+		homepage: "https://acme.dev",
+		icon: "assets/icon.png",
+		keywords: ["shop", "api-client"],
+		license: "MIT OR Apache-2.0",
+		licenseFile: "LICENSE",
+		readme: "README.md",
+		repository: "https://github.com/acme/shop",
+	} as const
+
+	it("names every field a block can hold, and accepts a block with each one set", () => {
+		expect([...METADATA_FIELDS].sort()).toEqual(Object.keys(full).sort())
+		expect(checkedMetadata(full)).toEqual(full)
+		expect(checkedMetadata({})).toEqual({})
+	})
+
+	it.each<[string, unknown, string]>([
+		["description", "two\nlines", 'Invalid metadata.description: "two\\nlines"'],
+		["homepage", "http://acme.dev", 'Invalid metadata.homepage: "http://acme.dev"'],
+		["repository", "github.com/acme/shop", 'Invalid metadata.repository: "github.com/acme/shop"'],
+		["documentation", "https://", 'Invalid metadata.documentation: "https://"'],
+		["changelog", "ftp://acme.dev", 'Invalid metadata.changelog: "ftp://acme.dev"'],
+		["license", "MIT or Apache-2.0", 'Invalid metadata.license: "MIT or Apache-2.0"'],
+		["copyright", "", 'Invalid metadata.copyright: ""'],
+		["authors", ["Ada <ada>"], 'Invalid metadata.authors: "Ada <ada>"'],
+		["authors", ["Doe, Jo"], 'Invalid metadata.authors: "Doe, Jo"'],
+		["authors", "Ada", 'Invalid metadata.authors: "Ada"'],
+		["authors", [], "Invalid metadata.authors: []"],
+		["keywords", ["api client"], 'Invalid metadata.keywords: "api client"'],
+		["keywords", ["a,b"], 'Invalid metadata.keywords: "a,b"'],
+		["keywords", [7], "Invalid metadata.keywords: 7"],
+		["readme", 7, "Invalid metadata.readme: 7"],
+	])("refuses %s = %j, naming metadata.<field> and the value", (field, value, message) => {
+		expect(() => checkedMetadata({ [field]: value })).toThrow(message)
+	})
+
+	it("refuses a field it does not know, and a block that is not an object", () => {
+		expect(() => checkedMetadata({ licence: "MIT" })).toThrow(
+			`Invalid metadata: unknown field "licence", want one of ${METADATA_FIELDS.join(", ")}`,
+		)
+		for (const value of [null, "MIT", ["MIT"]])
+			expect(() => checkedMetadata(value)).toThrow("Invalid metadata: want an object of fields")
+	})
+
+	it("reads an author's name with or without an email", () => {
+		expect(["Acme Inc <oss@acme.dev>", "Bo"].map(authorName)).toEqual(["Acme Inc", "Bo"])
 	})
 })

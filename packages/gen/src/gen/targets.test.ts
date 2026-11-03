@@ -97,3 +97,61 @@ describe("generated (plan 39 8.1)", () => {
 		expect(Object.keys(files.java ?? {}).filter((path) => path.includes("com/acme/shop/")).length > 0).toBe(true)
 	})
 })
+
+describe("the run's metadata block (plan 39 8.2)", () => {
+	const document = { info: { title: "Shop", version: "1" }, openapi: "3.1.0", paths: {} }
+	const metadata = {
+		authors: ["Acme Inc <oss@acme.dev>", "Bo"],
+		description: "The Shop API's client",
+		homepage: "https://acme.dev",
+		license: "MIT",
+		repository: "https://github.com/acme/shop",
+	}
+	/** The one file of `files` whose path ends with `suffix`. */
+	const fileEnding = (files: Readonly<Record<string, string>> | undefined, suffix: string) =>
+		Object.entries(files ?? {}).find(([path]) => path.endsWith(suffix))?.[1] ?? ""
+
+	it("fills each target's options of the same meaning, the target's own option winning", async () => {
+		const run: GenerateRun = {
+			metadata,
+			options: { java: { description: "The Shop API for the JVM" } },
+			targets: ["csharp", "java"],
+		}
+		const files = await generated(run, document, { env: {}, report: () => undefined })
+		const csproj = fileEnding(files.csharp, ".csproj")
+		expect(
+			["Description", "Authors", "PackageLicenseExpression", "PackageProjectUrl", "RepositoryUrl"].map(
+				(element) => new RegExp(`<${element}>(.*)</${element}>`).exec(csproj)?.[1],
+			),
+		).toEqual(["The Shop API%27s client", "Acme Inc, Bo", "MIT", "https://acme.dev", "https://github.com/acme/shop"])
+		const gradle = fileEnding(files.java, "build.gradle")
+		expect(
+			[
+				"description = 'The Shop API for the JVM'",
+				"url = 'https://acme.dev'",
+				"name = 'MIT'",
+				"name = 'Acme Inc'",
+				"email = 'oss@acme.dev'",
+				"url = 'https://github.com/acme/shop'",
+			].filter((line) => !gradle.includes(line)),
+		).toEqual([])
+	})
+
+	it("refuses a block a field of which its grammar refuses, before generating anything", async () => {
+		const run: GenerateRun = { metadata: { homepage: "http://acme.dev" }, targets: ["csharp"] }
+		await expect(generated(run, document, { env: {}, report: () => undefined })).rejects.toThrow(
+			'Invalid metadata.homepage: "http://acme.dev"',
+		)
+		// @ts-expect-error: a misspelled field is a type error on a run
+		const misspelled: GenerateRun = { metadata: { licence: "MIT" }, targets: ["csharp"] }
+		await expect(generated(misspelled, document, { env: {}, report: () => undefined })).rejects.toThrow(
+			'Invalid metadata: unknown field "licence"',
+		)
+	})
+
+	it("treats an option given as undefined as not given, so the metadata still fills it", async () => {
+		const run: GenerateRun = { metadata, options: { csharp: { license: undefined } }, targets: ["csharp"] }
+		const files = await generated(run, document, { env: {}, report: () => undefined })
+		expect(fileEnding(files.csharp, ".csproj")).toContain("<PackageLicenseExpression>MIT</PackageLicenseExpression>")
+	})
+})

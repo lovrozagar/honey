@@ -5,6 +5,8 @@
  * honey takes everywhere, so any validator that reads one checks a run before it reaches `generated`.
  */
 
+import { authorName, type Metadata } from "../emit/shared/metadata.ts"
+
 /**
  * What `generate` can produce: an SDK per language (`csharp`, `go`, `java`, `python`, `rust`, `ts`), a Go `cli`, or an
  * `mcp` server.
@@ -157,8 +159,10 @@ function schemaOf<T extends Target>(target: T): TargetOptionsSchema<T> {
 			validate(value) {
 				if (typeof value !== "object" || value === null || Array.isArray(value))
 					return { issues: [{ message: `${target} options: want an object of option names to strings` }] }
-				const issues = Object.entries(value).flatMap(([key, option]) => issueOf(target, key, option) ?? [])
-				return issues.length > 0 ? { issues } : { value: value as TargetOptions<T> }
+				/* an option given as undefined is not given: a caller's optional field, never a value */
+				const given = Object.entries(value).filter(([, option]) => option !== undefined)
+				const issues = given.flatMap(([key, option]) => issueOf(target, key, option) ?? [])
+				return issues.length > 0 ? { issues } : { value: Object.fromEntries(given) as TargetOptions<T> }
 			},
 			vendor: "honey-clients",
 			version: 1,
@@ -180,4 +184,43 @@ export function checkedOptions(target: Target, value: unknown): Options {
 	const result = targetOptionSchemas[target]["~standard"].validate(value)
 	if (result.issues !== undefined) throw new Error(result.issues.map((issue) => issue.message).join("; "))
 	return result.value as Options
+}
+
+/** Reads one option's value out of the run's metadata. */
+type FromMetadata = (metadata: Metadata) => string | undefined
+
+const description: FromMetadata = (metadata) => metadata.description
+const homepage: FromMetadata = (metadata) => metadata.homepage
+const license: FromMetadata = (metadata) => metadata.license
+const repository: FromMetadata = (metadata) => metadata.repository
+const firstAuthor: FromMetadata = (metadata) => metadata.authors?.[0]
+
+/**
+ * The options each target fills from the run's metadata block (plan 39 8.2), each read from the field of the same
+ * meaning: NuGet's authors are names, a POM's developer and the Linux packages' maintainer the first author whole,
+ * crates.io's keywords the CLI's comma-separated list. A target's own option wins over its metadata.
+ */
+const FROM_METADATA: {
+	readonly [T in Target]?: { readonly [K in (typeof TARGET_OPTIONS)[T][number]]?: FromMetadata }
+} = {
+	cli: { description, homepage, license, maintainer: firstAuthor },
+	csharp: {
+		authors: (metadata) => metadata.authors?.map(authorName).join(", "),
+		description,
+		homepage,
+		license,
+		repository,
+	},
+	java: { description, developer: firstAuthor, homepage, license, repository },
+	rust: { description, homepage, keywords: (metadata) => metadata.keywords?.join(","), license, repository },
+}
+
+/** `target`'s options: those `metadata` fills, under the ones the run gives the target itself, checked. */
+export function optionsFor(target: Target, metadata: Metadata, options: unknown): Options {
+	const filled = Object.entries(FROM_METADATA[target] ?? {}).flatMap(([key, read]) => {
+		const value = (read as FromMetadata)(metadata)
+		return value === undefined ? [] : [[key, value] as const]
+	})
+	const given = checkedOptions(target, options)
+	return { ...Object.fromEntries(filled), ...given }
 }

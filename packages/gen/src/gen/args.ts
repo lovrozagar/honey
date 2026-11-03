@@ -5,6 +5,7 @@
  * untouched (each generator validates its own). Strict: an unknown flag, a missing value, a stray argument, an unknown
  * target or an option for a target not asked for is a usage error.
  */
+import { isListField, type Metadata, METADATA_FIELDS } from "../emit/shared/metadata.ts"
 import { isBooleanOption, type Target, TARGET_OPTIONS, type TargetOptions, TARGETS } from "./targets.ts"
 
 /** What one `generate` run asks for: a spec file or an app module (one, never both). */
@@ -14,12 +15,14 @@ export type Generate = {
 	readonly out: string
 	readonly targets: readonly Target[]
 	readonly options: { readonly [T in Target]: TargetOptions<T> }
+	readonly metadata: Metadata
 	readonly watch: boolean
 }
 
 /** A run as its flags are read: each target's options by name, filled in place. */
 type Parsing = { -readonly [K in keyof Generate]: Generate[K] } & {
 	options: Record<Target, Record<string, string>>
+	metadata: Record<string, string | string[]>
 	targets: Target[]
 }
 
@@ -36,6 +39,10 @@ export function usage(): string {
   --out <dir>       each target's files go under <dir>/<target>
   --watch           generate again on each change of the spec or the app module
   -h, --help        this text
+
+The package metadata every publishing target reads, given once as --metadata-<field> <value> (a target's own
+option of the same meaning wins; authors and keywords comma separated):
+  ${METADATA_FIELDS.map((field) => `--metadata-${kebab(field)}`).join(" ")}
 
 A target's options are its generator's, as --<target>-<option> <value>:
 ${Object.entries(TARGET_OPTIONS)
@@ -89,6 +96,12 @@ function takeFlag(arg: string, rest: string[], into: Parsing) {
 		if (!(TARGETS as readonly string[]).includes(target))
 			throw new UsageError(`--target ${JSON.stringify(target)}: want one of ${TARGETS.join(", ")}`)
 		if (!into.targets.includes(target as Target)) into.targets.push(target as Target)
+	} else if (flag.startsWith("metadata-")) {
+		const field = METADATA_FIELDS.find((name) => flag === `metadata-${kebab(name)}`)
+		if (field === undefined) throw new UsageError(`unknown option --${flag}`)
+		const value = valueOf(flag, inline, rest)
+		const metadata: Record<string, string | string[]> = into.metadata
+		metadata[field] = isListField(field) ? value.split(",").map((entry) => entry.trim()) : value
 	} else {
 		const option = optionFlag(flag)
 		if (option === undefined) throw new UsageError(`unknown option --${flag}`)
@@ -103,6 +116,7 @@ export function parseGenerate(argv: readonly string[]): Generate {
 	const rest = [...argv]
 	const into: Parsing = {
 		app: "",
+		metadata: {},
 		options: Object.fromEntries(TARGETS.map((target) => [target, {}])) as Parsing["options"],
 		out: "",
 		spec: "",

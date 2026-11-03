@@ -108,8 +108,9 @@ const dxAreas = (): string[] =>
 
 /**
  * The generate CLI's flags, read from gen's sources rather than listed here: the targets and their
- * `--<target>-<option>` options from targets.ts's `TARGET_OPTIONS` table, and the global flags from the ones args.ts's
- * `takeFlag` matches. An option added there and left out of gen's README reds the coverage leg below.
+ * `--<target>-<option>` options from targets.ts's `TARGET_OPTIONS` table, the `--metadata-<field>` flags from
+ * metadata.ts's `METADATA_FIELDS`, and the global flags from the ones args.ts's `takeFlag` matches. An option added
+ * there and left out of gen's README reds the coverage leg below.
  */
 export function generateFlags(source: string): { flags: string[]; targets: string[] } {
 	const table = /const TARGET_OPTIONS = \{(.*?)\n\} as const/s.exec(source)?.[1] ?? ""
@@ -121,7 +122,9 @@ export function generateFlags(source: string): { flags: string[]; targets: strin
 		return [...(options as string).matchAll(/"(\w+)"/g)].map(([, key]) => `--${target}-${kebab(key as string)}`)
 	})
 	const global = [...source.matchAll(/flag === "([a-z]+)"/g)].map(([, flag]) => `--${flag as string}`)
-	return { flags: [...new Set([...global, ...flags])], targets }
+	const fields = /const METADATA_FIELDS = \[(.*?)\] as const/s.exec(source)?.[1] ?? ""
+	const metadata = [...fields.matchAll(/"(\w+)"/g)].map(([, field]) => `--metadata-${kebab(field as string)}`)
+	return { flags: [...new Set([...global, ...flags, ...metadata])], targets }
 }
 
 describe("the npm READMEs are each their package's guide", () => {
@@ -232,7 +235,9 @@ describe("the npm READMEs cover their package's surface", () => {
 	it("gen's README names every target, every flag its parser takes, and both its subpaths", () => {
 		const readme = read("packages/gen/README.md")
 		const { flags, targets } = generateFlags(
-			`${read("packages/gen/src/gen/targets.ts")}\n${read("packages/gen/src/gen/args.ts")}`,
+			["src/gen/targets.ts", "src/gen/args.ts", "src/emit/shared/metadata.ts"]
+				.map((path) => read(`packages/gen/${path}`))
+				.join("\n"),
 		)
 		const subpaths = specifiers(read("packages/gen/package.json"), "@lovrozagar/honey-clients")
 		expect([
@@ -252,8 +257,9 @@ describe("the npm READMEs cover their package's surface", () => {
 		const args = ["export const TARGET_OPTIONS = {", '\tts: ["name", "modulePath"],', "} as const satisfies X"].join(
 			"\n",
 		)
-		expect(generateFlags(`${args}\nif (flag === "spec") x()`)).toEqual({
-			flags: ["--spec", "--ts-name", "--ts-module-path"],
+		const fields = 'export const METADATA_FIELDS = [\n\t"licenseFile",\n] as const'
+		expect(generateFlags(`${args}\nif (flag === "spec") x()\n${fields}`)).toEqual({
+			flags: ["--spec", "--ts-name", "--ts-module-path", "--metadata-license-file"],
 			targets: ["ts"],
 		})
 	})

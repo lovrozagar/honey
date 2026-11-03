@@ -24,7 +24,8 @@ import { type Generate, parseGenerate, usage, UsageError } from "./gen/args.ts"
 import { FORMATTERS, formatterFor, missingFormatter } from "./gen/formatters.ts"
 import { runCli } from "./gen/process.ts"
 import { appRef, loadAppDocument } from "./ir/load.ts"
-import { checkedOptions, type Options, type Target, type TargetOptions } from "./gen/targets.ts"
+import { checkedMetadata, type Metadata } from "./emit/shared/metadata.ts"
+import { type Options, optionsFor, type Target, type TargetOptions } from "./gen/targets.ts"
 import { writeTarget } from "./gen/write.ts"
 
 /** One SDK target's generation: its files and what it reports (a name it renamed). */
@@ -79,6 +80,12 @@ export type GenerateRun = {
 	 * is checked by its target's schema (`targetOptionSchemas`) before anything generates.
 	 */
 	readonly options?: { readonly [T in Target]?: TargetOptions<T> }
+	/**
+	 * The package metadata given once for every target (`description`, `homepage`, `repository`, `license`,
+	 * `authors`, ...): each target fills its options of the same meaning from it, its own option winning. Checked
+	 * against the shared grammars before anything generates.
+	 */
+	readonly metadata?: Metadata
 	/** The targets to generate, in the order given. */
 	readonly targets: readonly Target[]
 }
@@ -115,7 +122,10 @@ export async function generated(
 	document: Record<string, unknown>,
 	{ env, oxfmt, report }: GenerateContext,
 ): Promise<GeneratedFiles> {
-	const options = new Map(run.targets.map((target) => [target, checkedOptions(target, run.options?.[target] ?? {})]))
+	const metadata = checkedMetadata(run.metadata ?? {})
+	const options = new Map(
+		run.targets.map((target) => [target, optionsFor(target, metadata, run.options?.[target] ?? {})]),
+	)
 	const out: GeneratedFiles = {}
 	for (const [target, checked] of options) {
 		let files = filesOf(target, document, checked, report)
