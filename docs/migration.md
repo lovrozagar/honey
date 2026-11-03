@@ -1089,3 +1089,29 @@ app
 	.output({ "application/octet-stream": { ok: true } })
 	.handler((ctx) => ctx.res.binary("ok", new Blob(["bytes"]).stream()))
 ```
+
+## A handler may return the body, and `{ ok: schema }` declares JSON
+
+Status keys alone are the shorthand for the `application/json` form. With one 2xx status under one media type (not an
+event stream, and no headers declared for it), the handler may return the body and honey answers it at that status.
+Routes with two success statuses or two media types still build the answer with `ctx.res`.
+
+```ts v0
+app
+	.get("/tables")
+	.output({ "application/json": { ok: tables } })
+	.handler(async (ctx) => ctx.res.json("ok", await listTables(ctx)))
+```
+
+```ts
+import { honey } from "@lovrozagar/honey"
+import * as z from "zod"
+
+const tables = z.object({ id: z.string() }).array()
+
+const app = honey()
+app
+	.get("/tables")
+	.output({ ok: tables })
+	.handler(async () => [{ id: "t-1" }])
+```

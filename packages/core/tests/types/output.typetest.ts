@@ -2,7 +2,8 @@
  * `.output()` as typed: ctx.res narrowed to the declared media types (a helper's status keys and
  * body typed by the status's schema, an undeclared helper removed, noContent/raw/redirect/stream
  * always there, sse only for a declared event stream), AllowedResMethods, `.output()` one-shot, and
- * InferRouteOutput carrying the declaration. No `.output()` leaves ctx.res whole. Checked by typecheck.
+ * InferRouteOutput carrying the declaration, the status-key shorthand as JSON, and the body a handler may return
+ * in place of an answer. No `.output()` leaves ctx.res whole. Checked by typecheck.
  */
 import { describe, expectTypeOf, it } from "vitest"
 import * as z from "zod"
@@ -142,7 +143,7 @@ describe("the handler's return under .output(): only what the route declares", (
 			.handler((c) => (c.res as unknown as HoneyRes).json("created", { id: "1" }))
 		app.get("/d").handler((c) => c.res.raw(new Response("x")))
 		expectTypeOf<DeclaredAnswer<typeof out>>().toEqualTypeOf<
-			TypedResponse<"application/json", "ok"> | TypedResponse<"none">
+			TypedResponse<"application/json", "ok"> | TypedResponse<"none"> | { id: string }
 		>()
 	})
 
@@ -166,6 +167,95 @@ describe("the handler's return under .output(): only what the route declares", (
 			.output({ "application/octet-stream": { ok: true } })
 			.handler((c) => c.res.stream(async () => {}))
 		expectTypeOf<Parameters<HoneyRes["csv"]>[1]>().toEqualTypeOf<string | ReadableStream<Uint8Array>>()
+	})
+})
+
+describe(".output() shorthand and a returned body", () => {
+	const tables = z.object({ id: z.string() }).array()
+	const location = z.object({ location: z.string() })
+
+	it("status keys alone declare JSON: the shorthand is the application/json form", () => {
+		const app = honey<{}>()
+			.get("/t")
+			.output({ headers: { created: location }, ok: tables })
+			.handler((c) => c.res.json("ok", [{ id: "1" }]))
+		expectTypeOf<InferRouteOutput<typeof app, "/t", "get">>().toEqualTypeOf<{
+			readonly "application/json": { readonly ok: typeof tables }
+			readonly headers: { readonly created: typeof location }
+		}>()
+		const route = honey<{}>().get("/u")
+		// @ts-expect-error a status key beside a media type: the two forms do not mix
+		route.output({ "text/csv": { ok: true }, ok: tables })
+		// @ts-expect-error a shorthand key that names no status
+		route.output({ okay: tables })
+	})
+})
+
+describe("the handler's return under .output(): the body itself", () => {
+	const tables = z.object({ id: z.string() }).array()
+
+	it("one 2xx status under one media type: the handler may return the body itself", () => {
+		expectTypeOf<DeclaredAnswer<{ readonly "text/csv": { readonly ok: true } }>>().toEqualTypeOf<
+			TypedResponse<"text/csv", "ok"> | TypedResponse<"none"> | string | ReadableStream<Uint8Array>
+		>()
+		const app = honey<{}>()
+		app
+			.get("/json")
+			.output({ not_found: true, ok: tables })
+			.handler(async () => [{ id: "1" }])
+		app
+			.get("/csv")
+			.output({ "text/csv": { ok: true } })
+			.handler(() => "id\n1")
+		app
+			.get("/png")
+			.output({ "image/png": { ok: true } })
+			.handler(() => new Uint8Array([1]))
+		app
+			.get("/answer")
+			.output({ created: tables })
+			.handler((c) => c.res.json("created", []))
+		app
+			.get("/bad")
+			.output({ ok: tables })
+			// @ts-expect-error a body of another shape than the schema's
+			.handler(() => [{ id: 1 }])
+	})
+})
+
+describe("the handler's return under .output(): no body where honey cannot pick the answer", () => {
+	const tables = z.object({ id: z.string() }).array()
+
+	it("refuses the body for two statuses, two media types, declared headers or an event stream", () => {
+		expectTypeOf<
+			DeclaredAnswer<{ readonly "application/json": { readonly created: typeof tables; readonly ok: typeof tables } }>
+		>().toEqualTypeOf<TypedResponse<"application/json", "created" | "ok"> | TypedResponse<"none">>()
+		const app = honey<{}>()
+		app
+			.get("/a")
+			.output({ created: tables, ok: tables })
+			// @ts-expect-error two 2xx statuses: which one is ambiguous
+			.handler(() => [])
+		app
+			.get("/b")
+			.output({ "application/json": { ok: tables }, "text/csv": { ok: true } })
+			// @ts-expect-error two media types
+			.handler(() => [])
+		app
+			.get("/c")
+			.output({ headers: { ok: z.object({ etag: z.string() }) }, ok: tables })
+			// @ts-expect-error the status declares a header the body cannot carry
+			.handler(() => [])
+		app
+			.get("/d")
+			.output({ "text/event-stream": { ok: true } })
+			// @ts-expect-error an event stream answers through sse
+			.handler(() => "data: x\n\n")
+		app
+			.get("/e")
+			.output({ no_content: true })
+			// @ts-expect-error no content carries no body
+			.handler(() => "x")
 	})
 })
 

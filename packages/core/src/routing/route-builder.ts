@@ -5,9 +5,10 @@
  */
 import type { ERROR_META } from "../errors/errors.ts"
 import { compileInput, type InputSchemas, type InputStep, type InputTypes } from "../input/input.ts"
-import type { DeclaredAnswer, KnownStatusKeys, OutputSchemas } from "./output-types.ts"
+import type { DeclaredAnswer, JsonShorthand, KnownStatusKeys, NormalizeOutput, OutputSchemas } from "./output-types.ts"
 import type { ErrorFactories } from "./settings.ts"
 import type { MaybePromise, MiddlewareFn, RuntimeMiddleware } from "../middleware/middleware.ts"
+import { answeringBody, normalizeOutput } from "../validation/validate-output.ts"
 import type { Honey } from "./app.ts"
 import type {
 	ApplyScoped,
@@ -332,19 +333,22 @@ export class RouteBuilder<B extends BuilderTypes> {
 		return this.#next({ input: { schemas, step } })
 	}
 
-	/** Declare what the route answers: ctx.res narrows to it, and `outputValidation` checks it. */
-	output<const TOutput extends OutputSchemas>(
+	/**
+	 * Declare what the route answers: ctx.res narrows to it, and `outputValidation` checks it. Status keys alone
+	 * (`{ ok: schema }`) declare JSON. With one 2xx status under one media type the handler may return the body.
+	 */
+	output<const TOutput extends OutputSchemas | JsonShorthand>(
 		schemas: TOutput & KnownStatusKeys<TOutput>,
 	): BuilderChain<
 		Next<
 			B,
 			{
-				/** The declared output. */ output: TOutput
+				/** The declared output, the shorthand as its `application/json` form. */ output: NormalizeOutput<TOutput>
 				/** Records `.output()` as called. */ used: B["used"] | "output"
 			}
 		>
 	> {
-		return this.#next({ output: schemas })
+		return this.#next({ output: normalizeOutput(schemas) })
 	}
 
 	/** Route-level middleware, after the chain and the scopes; the meta it gives counts as supplied for `.meta()`. */
@@ -375,7 +379,7 @@ export class RouteBuilder<B extends BuilderTypes> {
 			cv: s.view.contextValues,
 			dk: new Set([...s.errorKeys, ...(errorsOf(fn) ?? [])]),
 			ef: s.errorSource,
-			fn: fn as unknown as RouteSource["fn"],
+			fn: answeringBody(s.output, fn as unknown as RouteSource["fn"]),
 			in: s.input?.step ?? null,
 			iv: s.input?.schemas ?? null,
 			out: s.output,

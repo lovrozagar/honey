@@ -116,7 +116,9 @@ describe("the runtime bundle of an installed core (bit 19 i)", () => {
 			 * carries its declared body as data, and a delegated leaf checks it. The pin's move to bun 1.4.4 measured
 			 * the same tree 25,815 (its --minify, not the code): locked at 25,900. Plan 39 5.1 added 35 bytes (25,894 to
 			 * 25,929) so text, html, csv, xml and binary stream a typed body: one ReadableStream branch in the body
-			 * helpers. Locked at 26,000.
+			 * helpers. Locked at 26,000. Plan 39 5.2 added 251 (25,929 to 26,180) so a handler may return its sole
+			 * declared body and status keys alone declare JSON: the body wrap, the media type to helper map and the
+			 * shorthand's normalization, all reached from RouteBuilder methods. Locked at 26,200.
 			 */
 			const gzipped = gzipSync(js, { level: 9 }).length
 			const builtBy = run(BUN as string, ["--version"], full).out.trim()
@@ -125,7 +127,7 @@ describe("the runtime bundle of an installed core (bit 19 i)", () => {
 					leaked,
 					features,
 					routeModules("minimal", entry, [...WS_ROUTE, ...MCP_ROUTE, ...GENERATION_ONLY]),
-					gzipped < 26_000,
+					gzipped < 26_200,
 					builtBy,
 				],
 				`${gzipped} bytes gzipped`,

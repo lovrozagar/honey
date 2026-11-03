@@ -147,7 +147,7 @@ function mergeAdditions(ctx: object, additions: Record<string, unknown>): void {
 }
 
 /** Whether a layer answered: a Response, or honey's own built one. */
-const isAnswer = (value: unknown): value is Response => isHoneyResponse(value) || value instanceof Response
+export const isAnswer = (value: unknown): value is Response => isHoneyResponse(value) || value instanceof Response
 
 /** Settle one layer's result: anything but a Response (nothing, a string…) and a throw both go to the boundary. */
 function settle(

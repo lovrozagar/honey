@@ -88,3 +88,65 @@ describe("RouteBuilder: every one-shot at once", () => {
 		])
 	})
 })
+
+const fetchOf = (app: { fetch: (r: Request, env: {}) => Response | Promise<Response> }, path: string) =>
+	Promise.resolve(app.fetch(new Request(`http://localhost${path}`), {}))
+
+describe("RouteBuilder: the .output() shorthand and a returned body", () => {
+	it("{ ok: schema } is stored as the application/json form, headers and redirect beside it", () => {
+		const app = honey<{}>()
+		app
+			.get("/t")
+			.output({ created: true, headers: { created: z.object({ location: z.string() }) }, redirect: { found: true } })
+			.handler((c) => c.res.noContent())
+		expect(finalTable(app[GRAPH]).plans.size).toBe(1)
+		expect(app[GRAPH].records.get("GET /t")?.out).toEqual({
+			"application/json": { created: true },
+			headers: { created: expect.any(Object) },
+			redirect: { found: true },
+		})
+	})
+
+	it("a returned body answers at the sole 2xx status, through its media type's helper, sync or async", async () => {
+		const app = honey<{}>().logger(false).outputValidation("always")
+		app
+			.get("/json")
+			.output({ created: z.object({ id: z.string() }), not_found: true })
+			.handler(async () => ({ id: "1" }))
+		app
+			.get("/csv")
+			.output({ "text/csv": { ok: true } })
+			.handler(() => "id\n1")
+		app
+			.get("/png")
+			.output({ "image/png": { accepted: true } })
+			.handler(() => new Uint8Array([1, 2]))
+		const json = await fetchOf(app, "/json")
+		const csv = await fetchOf(app, "/csv")
+		const png = await fetchOf(app, "/png")
+		expect([json.status, await json.json(), csv.headers.get("content-type"), await csv.text()]).toEqual([
+			201,
+			{ id: "1" },
+			"text/csv; charset=utf-8",
+			"id\n1",
+		])
+		expect([png.status, png.headers.get("content-type"), [...new Uint8Array(await png.arrayBuffer())]]).toEqual([
+			202,
+			"image/png",
+			[1, 2],
+		])
+	})
+
+	it("an answer still passes as it is, and nothing returned is still the handler's error", async () => {
+		const app = honey<{}>().logger(false)
+		app
+			.get("/answer")
+			.output({ ok: true })
+			.handler((c) => c.res.noContent())
+		app
+			.get("/nothing")
+			.output({ ok: true })
+			.handler((() => undefined) as never)
+		expect([(await fetchOf(app, "/answer")).status, (await fetchOf(app, "/nothing")).status]).toEqual([204, 500])
+	})
+})

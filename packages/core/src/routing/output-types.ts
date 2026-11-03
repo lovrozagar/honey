@@ -4,7 +4,9 @@
  * takes only the declared status keys, each body typed by its status's schema and its options
  * carrying the status's declared headers; an undeclared one is gone, and so is raw; noContent,
  * redirect and stream stay; sse only for an event stream; binary for octet-stream or an open type.
- * The handler's return is narrowed the same way: a declared media type at one of its status keys.
+ * The handler's return is narrowed the same way: a declared media type at one of its status keys, or the body
+ * itself when the route declares one 2xx status under one media type. Status keys alone (`{ ok: schema }`) are the
+ * shorthand for `{ "application/json": { ok: schema } }`.
  */
 import type { BinaryBody } from "../response/binary.ts"
 import type { HoneyRes, ResponseOptions, StreamBody, TypedResponse } from "../response/response.ts"
@@ -32,15 +34,47 @@ export type OutputSchemas = {
 	/** Redirect statuses the route may answer with, recorded for the generators; `ctx.res.redirect` stays unnarrowed. */ readonly redirect?: RedirectStatuses
 }
 
+/** `.output()`'s shorthand: JSON bodies by status key, beside the headers and redirects of the explicit form. */
+export type JsonShorthand = StatusSchemas & {
+	/** The schema of the headers each status carries, by status key; that status's helper then requires them. */ readonly headers?: HeaderSchemas
+	/** Redirect statuses the route may answer with, recorded for the generators. */ readonly redirect?: RedirectStatuses
+}
+
+/** The media types a declaration names. */
+type MediaTypes<TOutput> = Extract<keyof TOutput, `${string}/${string}`>
+
+/** Whether `TOutput` is the shorthand: no media type, and a status key. */
+type IsShorthand<TOutput> = [MediaTypes<TOutput>] extends [never]
+	? [Extract<keyof TOutput, StatusKey>] extends [never]
+		? false
+		: true
+	: false
+
+/** The declaration `.output()` records: the shorthand as its `application/json` form, the explicit one as written. */
+export type NormalizeOutput<TOutput> = [TOutput] extends [never]
+	? never
+	: IsShorthand<TOutput> extends true
+		? {
+				readonly [K in "application/json" | Extract<keyof TOutput, "headers" | "redirect">]: K extends keyof TOutput
+					? TOutput[K]
+					: { readonly [S in Exclude<keyof TOutput, "headers" | "redirect">]: TOutput[S] }
+			}
+		: TOutput
+
 /**
  * `TOutput` with every key under a media type, `headers` or `redirect` that names no status, and every outer key
- * that is none of those, mapped to `never`: intersected with the declaration, a typo is an error where it is
- * written. `assertOutputKeys` (openapi/output-keys.ts) refuses the same keys where an app is documented.
+ * that is none of those (a status key, in the shorthand), mapped to `never`: intersected with the declaration, a
+ * typo or a status key beside a media type is an error where it is written. `assertOutputKeys`
+ * (openapi/output-keys.ts) refuses the same keys where an app is documented.
  */
 export type KnownStatusKeys<TOutput> = {
 	readonly [CT in keyof TOutput]: CT extends `${string}/${string}` | "headers" | "redirect"
 		? { readonly [K in keyof TOutput[CT]]: K extends StatusKey ? TOutput[CT][K] : never }
-		: never
+		: CT extends StatusKey
+			? IsShorthand<TOutput> extends true
+				? TOutput[CT]
+				: never
+			: never
 }
 
 /** The helper each media type is answered with. */
@@ -70,21 +104,62 @@ export type AllowedResMethods<TOutput> =
 /** The helpers a route that declares an output keeps; `raw` is gone, since a raw Response declares nothing. */
 type UniversalRes = Pick<HoneyRes, "noContent" | "redirect" | "stream">
 
-/** The media types a declaration names. */
-type MediaTypes<TOutput> = Extract<keyof TOutput, `${string}/${string}`>
-
 /**
  * What a handler may return: any typed answer without `.output()`; with one, a declared media type at one of its
- * status keys, or a bodiless answer (no content, a redirect).
+ * status keys, a bodiless answer (no content, a redirect), or the sole body.
  */
 export type DeclaredAnswer<TOutput> = [TOutput] extends [never]
 	? TypedResponse
 	:
 			| { [CT in MediaTypes<TOutput>]: TypedResponse<CT, Extract<keyof TOutput[CT], StatusKey>> }[MediaTypes<TOutput>]
 			| TypedResponse<"none">
+			| SoleBody<TOutput>
 
 /** A declared body's type: its schema's input, what output validation accepts; `unknown` without a schema. */
 type BodyOf<S> = S extends StandardSchemaLike ? InferInput<S> : unknown
+
+/** The 2xx status keys. */
+type SuccessKey =
+	| "accepted"
+	| "already_reported"
+	| "created"
+	| "im_used"
+	| "multi_status"
+	| "no_content"
+	| "non_authoritative_information"
+	| "ok"
+	| "partial_content"
+	| "reset_content"
+
+/** Whether `T` is exactly one member: not `never`, not a union. */
+type IsOne<T, TAll = T> = [T] extends [never] ? false : T extends unknown ? ([TAll] extends [T] ? true : false) : never
+
+/**
+ * The body a handler may return for honey to answer: with one media type and one 2xx status under it, that status's
+ * body as its helper takes it. Never for an event stream, a bodiless status, or a status that declares headers.
+ */
+type SoleBody<TOutput> = IsOne<MediaTypes<TOutput>> extends true ? SoleBodyAt<TOutput, MediaTypes<TOutput>> : never
+
+/** `SoleBody` under media type `CT`. */
+type SoleBodyAt<TOutput, CT extends keyof TOutput> =
+	IsOne<Extract<keyof TOutput[CT], SuccessKey>> extends true
+		? SoleBodyOf<TOutput, CT, Extract<keyof TOutput[CT], SuccessKey>>
+		: never
+
+/** `SoleBody` at status `K` of media type `CT`. */
+type SoleBodyOf<TOutput, CT extends keyof TOutput, K extends keyof TOutput[CT]> = K extends
+	| "no_content"
+	| "reset_content"
+	? never
+	: [HeadersOf<TOutput, K>] extends [never]
+		? CT extends "application/json"
+			? BodyOf<TOutput[CT][K]>
+			: CT extends "text/event-stream"
+				? never
+				: CT extends Exclude<keyof HelperOf, "application/json">
+					? string | StreamBody
+					: BinaryBody | StreamBody
+		: never
 
 /** The header schema status `K` declares, or `never`. */
 type HeadersOf<TOutput, K> = TOutput extends { readonly headers?: infer H }
