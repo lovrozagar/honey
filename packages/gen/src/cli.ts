@@ -20,10 +20,11 @@ import { generatePythonSdk } from "./emit/python/sdk.ts"
 import { generateRustSdk } from "./emit/rust/sdk.ts"
 import { formatFiles } from "./emit/shared/format.ts"
 import { generateSdk } from "./emit/ts/sdk.ts"
-import { type Generate, type Options, parseGenerate, type Target, usage, UsageError } from "./gen/args.ts"
+import { type Generate, parseGenerate, usage, UsageError } from "./gen/args.ts"
 import { FORMATTERS, formatterFor, missingFormatter } from "./gen/formatters.ts"
 import { runCli } from "./gen/process.ts"
 import { appRef, loadAppDocument } from "./ir/load.ts"
+import { checkedOptions, type Options, type Target, type TargetOptions } from "./gen/targets.ts"
 import { writeTarget } from "./gen/write.ts"
 
 /** One SDK target's generation: its files and what it reports (a name it renamed). */
@@ -73,8 +74,11 @@ function filesOf(
  * takes its generator's defaults). The CLI parses `generate` into one of these; a consumer writes one by hand.
  */
 export type GenerateRun = {
-	/** Each target's options by name, as `--<target>-<option>` carries them; a target left out takes its defaults. */
-	readonly options?: Readonly<Partial<Record<Target, Options>>>
+	/**
+	 * Each target's options by name, as `--<target>-<option>` carries them; a target left out takes its defaults. Each
+	 * is checked by its target's schema (`targetOptionSchemas`) before anything generates.
+	 */
+	readonly options?: { readonly [T in Target]?: TargetOptions<T> }
 	/** The targets to generate, in the order given. */
 	readonly targets: readonly Target[]
 }
@@ -111,9 +115,10 @@ export async function generated(
 	document: Record<string, unknown>,
 	{ env, oxfmt, report }: GenerateContext,
 ): Promise<GeneratedFiles> {
+	const options = new Map(run.targets.map((target) => [target, checkedOptions(target, run.options?.[target] ?? {})]))
 	const out: GeneratedFiles = {}
-	for (const target of run.targets) {
-		let files = filesOf(target, document, run.options?.[target] ?? {}, report)
+	for (const [target, checked] of options) {
+		let files = filesOf(target, document, checked, report)
 		const pass = FORMATTERS[target]
 		if (pass !== undefined) {
 			const formatter = await formatterFor(target, { env, oxfmt })

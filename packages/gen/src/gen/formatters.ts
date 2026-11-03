@@ -10,7 +10,7 @@ import type { Formatter } from "../emit/shared/format.ts"
 import { gofmtFormatter } from "../emit/shared/gofmt.ts"
 import { ruffFormatter } from "../emit/shared/ruff.ts"
 import { rustfmtFormatter } from "../emit/shared/rustfmt.ts"
-import type { Target } from "./args.ts"
+import type { Target } from "./targets.ts"
 
 /**
  * The binary a caller named through an environment variable, checked here at the edge. An override that

@@ -13,7 +13,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, symlinkS
 import { join, resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 import { format } from "oxfmt"
-import { generated, type GenerateContext, main } from "./cli.ts"
+import { generated, type GenerateContext, type GenerateRun, main } from "./cli.ts"
 import { findGofmt, loadOxfmt } from "./gen/formatters.ts"
 import { shop } from "./emit/cli/__fixtures__/shop.ts"
 import { EMIT_STYLE } from "./emit/shared/format.ts"
@@ -100,7 +100,7 @@ describe("generated: a run with no options bag (bit 22 a)", () => {
 				openapi: "3.1.0",
 				paths: { "/ping": { get: { responses: { "200": { description: "ok" } } } } },
 			}
-			const run = { options: { ts: { tanstackQuery: "true" } }, targets: ["ts"] as const }
+			const run: GenerateRun = { options: { ts: { tanstackQuery: "true" } }, targets: ["ts"] }
 			const files = await generated(run, document, { env: {}, report: () => undefined })
 			expect(Object.keys(files.ts ?? {})).toContain("sdk.tanstack-query.gen.ts")
 			/* the string the parser stores must not be what decides it: "false" is off, not truthy */

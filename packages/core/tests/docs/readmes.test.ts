@@ -107,12 +107,12 @@ const dxAreas = (): string[] =>
 		.flatMap((line) => [...line.matchAll(/^\| `([a-z-]+)\.md` \|/g)].map(([, area]) => area as string))
 
 /**
- * The generate CLI's flags, read from gen's argument parser rather than listed here: the targets and their
- * `--<target>-<option>` options from its `TARGETS` table, and the global flags from the ones `takeFlag` matches. An
- * option added there and left out of gen's README reds the coverage leg below.
+ * The generate CLI's flags, read from gen's sources rather than listed here: the targets and their
+ * `--<target>-<option>` options from targets.ts's `TARGET_OPTIONS` table, and the global flags from the ones args.ts's
+ * `takeFlag` matches. An option added there and left out of gen's README reds the coverage leg below.
  */
 export function generateFlags(source: string): { flags: string[]; targets: string[] } {
-	const table = /const TARGETS = \{(.*?)\n\} as const/s.exec(source)?.[1] ?? ""
+	const table = /const TARGET_OPTIONS = \{(.*?)\n\} as const/s.exec(source)?.[1] ?? ""
 	const kebab = (key: string) => key.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)
 	const targets: string[] = []
 	/* a target's options on one line, or wrapped one per line once the formatter breaks a long list */
@@ -231,7 +231,9 @@ describe("the npm READMEs cover their package's surface", () => {
 
 	it("gen's README names every target, every flag its parser takes, and both its subpaths", () => {
 		const readme = read("packages/gen/README.md")
-		const { flags, targets } = generateFlags(read("packages/gen/src/gen/args.ts"))
+		const { flags, targets } = generateFlags(
+			`${read("packages/gen/src/gen/targets.ts")}\n${read("packages/gen/src/gen/args.ts")}`,
+		)
 		const subpaths = specifiers(read("packages/gen/package.json"), "@lovrozagar/honey-clients")
 		expect([
 			targets.length,
@@ -247,7 +249,9 @@ describe("the npm READMEs cover their package's surface", () => {
 		expect(specifiers('{"exports":{".":{},"./ws/bun":{},"./package.json":"x"}}', "pkg")).toEqual(["pkg", "pkg/ws/bun"])
 		const index = ['export { honey, type Honey } from "./a.ts"', "export type {\n\tOne,\n} from './b.ts'"].join("\n")
 		expect(valueExports(index)).toEqual(["honey"])
-		const args = ["const TARGETS = {", '\tts: ["name", "modulePath"],', "} as const satisfies X"].join("\n")
+		const args = ["export const TARGET_OPTIONS = {", '\tts: ["name", "modulePath"],', "} as const satisfies X"].join(
+			"\n",
+		)
 		expect(generateFlags(`${args}\nif (flag === "spec") x()`)).toEqual({
 			flags: ["--spec", "--ts-name", "--ts-module-path"],
 			targets: ["ts"],

@@ -510,6 +510,18 @@ rules, keeping `MANIFEST` (`.honey-generated.json`) there. A file the last call 
 stale: deleted if unedited, kept and named in the result's `kept` if you changed it, and dropped from the manifest
 either way, so a file you take over by editing is never touched again.
 
+A run kept as data (a release manifest, say) is checked with the same tables the command parses. `TARGETS` lists
+every target, and `targetOptionSchemas[target]` is a Standard Schema for that target's options: its option names only,
+each a non-empty string, a switch `"true"` or `"false"`. `generated` checks each target's options with it before
+anything generates, and `GenerateRun` types them by target, so a misspelled option is a type error, then a refusal.
+
+```ts
+import { TARGETS, targetOptionSchemas } from "@lovrozagar/honey-clients"
+
+const result = targetOptionSchemas.go["~standard"].validate({ modulePath: "github.com/acme/shop-go" })
+export const ok = result.issues === undefined && TARGETS.includes("go")
+```
+
 This package also exports the app-side generators the honey CLI and Vite plugin use: `generateRouteTree`,
 `generateTypes` and `extractTypes` from `@lovrozagar/honey-clients`, and the command's own entry at
 `@lovrozagar/honey-clients/cli`.

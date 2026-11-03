@@ -8,7 +8,14 @@ export { type GeneratedMcpHandler, generateMcpHandler } from "./emit/mcp/mounted
 export { generateRouteTree, type RouteTreeV2 } from "./emit/ts/route-tree.ts"
 export { type GenerateTypesOptions, generateTypes } from "./emit/ts/type-gen.ts"
 export { generated, type GenerateContext, type GenerateRun, type Io, writeGenerated } from "./cli.ts"
-export { type Options, type Target } from "./gen/args.ts"
+export {
+	type Options,
+	type Target,
+	TARGETS,
+	type TargetOptions,
+	type TargetOptionsSchema,
+	targetOptionSchemas,
+} from "./gen/targets.ts"
 /* `writeTarget` writes one target's files into a directory the caller picks, keeping `MANIFEST` there: for a caller
    that lays out `generated`'s files itself rather than as `writeGenerated`'s `<out>/<target>` */
 export { MANIFEST, writeFileIfChanged, type Written, writeTarget } from "./gen/write.ts"

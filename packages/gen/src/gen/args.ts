@@ -5,85 +5,7 @@
  * untouched (each generator validates its own). Strict: an unknown flag, a missing value, a stray argument, an unknown
  * target or an option for a target not asked for is a usage error.
  */
-/**
- * Each target and the names of its generate function's options, which `--<target>-<option>` carries as strings.
- * `--ts-tanstack-query` is the one switch that takes no value: it turns the TanStack Query adapter on.
- */
-const TARGETS = {
-	cli: [
-		"aur",
-		"baseUrl",
-		"binaryName",
-		"description",
-		"envPrefix",
-		"homebrewTap",
-		"homepage",
-		"installUrl",
-		"license",
-		"maintainer",
-		"modulePath",
-		"packages",
-		"repo",
-		"scoopBucket",
-		"wingetFork",
-		"wingetPublisher",
-	],
-	csharp: [
-		"authors",
-		"clientName",
-		"description",
-		"homepage",
-		"license",
-		"packageId",
-		"repository",
-		"rootNamespace",
-		"version",
-	],
-	go: ["modulePath"],
-	java: [
-		"artifactId",
-		"clientName",
-		"description",
-		"developer",
-		"groupId",
-		"homepage",
-		"license",
-		"packageName",
-		"repository",
-		"version",
-	],
-	mcp: ["envPrefix", "name", "version"],
-	python: ["packageName", "version"],
-	rust: ["crateName", "description", "homepage", "keywords", "license", "repository", "version"],
-	ts: ["name", "stem", "tanstackQuery"],
-} as const satisfies Record<string, readonly string[]>
-
-/**
- * The target options that take no value, since their name already says what they turn on
- * (`--ts-tanstack-query`, not `--ts-query tanstack`). They stay listed in `TARGETS` above, which is what
- * `packages/core/tests/docs/readmes.test.ts` reads to hold every flag to its README row; this table only
- * says how one is parsed. Bare is `true` and an inline `true`/`false` is read, exactly as `--watch` is.
- */
-const BOOLEAN_OPTIONS = { cli: ["aur"], ts: ["tanstackQuery"] } as const satisfies Partial<
-	Record<keyof typeof TARGETS, readonly string[]>
->
-
-/**
- * What `generate` can produce: an SDK per language (`csharp`, `go`, `java`, `python`, `rust`, `ts`), a Go `cli`, or an
- * `mcp` server.
- */
-export type Target = keyof typeof TARGETS
-/**
- * One target's options by camelCase name (`--ts-tanstack-query` is `tanstackQuery`), each a string; a switch is
- * `"true"` or `"false"`.
- */
-export type Options = Record<string, string>
-
-/** Whether `target`'s option `key` takes no value. */
-function isBooleanOption(target: Target, key: string): boolean {
-	const keys: readonly string[] = (BOOLEAN_OPTIONS as Partial<Record<Target, readonly string[]>>)[target] ?? []
-	return keys.includes(key)
-}
+import { isBooleanOption, type Target, TARGET_OPTIONS, type TargetOptions, TARGETS } from "./targets.ts"
 
 /** What one `generate` run asks for: a spec file or an app module (one, never both). */
 export type Generate = {
@@ -91,8 +13,14 @@ export type Generate = {
 	readonly spec: string
 	readonly out: string
 	readonly targets: readonly Target[]
-	readonly options: Readonly<Record<Target, Options>>
+	readonly options: { readonly [T in Target]: TargetOptions<T> }
 	readonly watch: boolean
+}
+
+/** A run as its flags are read: each target's options by name, filled in place. */
+type Parsing = { -readonly [K in keyof Generate]: Generate[K] } & {
+	options: Record<Target, Record<string, string>>
+	targets: Target[]
 }
 
 /** The usage text, the options listed by target. */
@@ -104,13 +32,13 @@ export function usage(): string {
   --app <module>    a honey app module instead: its export (#name, else app, else default) is the app, and its
                     openApi export, if any, the document's options (core's generateOpenApi); the module
                     exports the app and serves nothing: one that calls serve() as it loads is outside --app
-  --target <name>   ${Object.keys(TARGETS).join(", ")}; repeat for more than one
+  --target <name>   ${TARGETS.join(", ")}; repeat for more than one
   --out <dir>       each target's files go under <dir>/<target>
   --watch           generate again on each change of the spec or the app module
   -h, --help        this text
 
 A target's options are its generator's, as --<target>-<option> <value>:
-${Object.entries(TARGETS)
+${Object.entries(TARGET_OPTIONS)
 	.map(([target, options]) => `  ${target}: ${options.map((key) => `--${target}-${kebab(key)}`).join(" ")}`)
 	.join("\n")}
 
@@ -129,7 +57,7 @@ function kebab(key: string): string {
 
 /** The `--<target>-<option>` flag `flag` names: its target and its option's name; none for another flag. */
 function optionFlag(flag: string): { key: string; target: Target } | undefined {
-	for (const [target, options] of Object.entries(TARGETS))
+	for (const [target, options] of Object.entries(TARGET_OPTIONS))
 		for (const key of options) if (flag === `${target}-${kebab(key)}`) return { key, target: target as Target }
 	return undefined
 }
@@ -150,11 +78,7 @@ function booleanOf(flag: string, inline: string | undefined): boolean {
 }
 
 /** One flag of `generate` into `into`. */
-function takeFlag(
-	arg: string,
-	rest: string[],
-	into: { -readonly [K in keyof Generate]: Generate[K] } & { targets: Target[] },
-) {
+function takeFlag(arg: string, rest: string[], into: Parsing) {
 	const [flag, inline] = arg.slice(2).split(/=(.*)/s, 2) as [string, string | undefined]
 	if (flag === "spec") into.spec = valueOf(flag, inline, rest)
 	else if (flag === "app") into.app = valueOf(flag, inline, rest)
@@ -162,8 +86,8 @@ function takeFlag(
 	else if (flag === "watch") into.watch = booleanOf(flag, inline)
 	else if (flag === "target") {
 		const target = valueOf(flag, inline, rest)
-		if (!Object.hasOwn(TARGETS, target))
-			throw new UsageError(`--target ${JSON.stringify(target)}: want one of ${Object.keys(TARGETS).join(", ")}`)
+		if (!(TARGETS as readonly string[]).includes(target))
+			throw new UsageError(`--target ${JSON.stringify(target)}: want one of ${TARGETS.join(", ")}`)
 		if (!into.targets.includes(target as Target)) into.targets.push(target as Target)
 	} else {
 		const option = optionFlag(flag)
@@ -177,9 +101,9 @@ function takeFlag(
 /** `argv` after `generate` as a run, or a usage error. */
 export function parseGenerate(argv: readonly string[]): Generate {
 	const rest = [...argv]
-	const into = {
+	const into: Parsing = {
 		app: "",
-		options: Object.fromEntries(Object.keys(TARGETS).map((target) => [target, {}])) as Record<Target, Options>,
+		options: Object.fromEntries(TARGETS.map((target) => [target, {}])) as Parsing["options"],
 		out: "",
 		spec: "",
 		targets: [] as Target[],
