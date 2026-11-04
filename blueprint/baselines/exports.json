@@ -46,6 +46,7 @@
 		"MiddlewareOptions",
 		"PayloadErrorFormatter",
 		"PrefixRoutes",
+		"Preset",
 		"ProxyConfig",
 		"RealtimeBus",
 		"RealtimeLimits",
@@ -69,6 +70,7 @@
 		"WithOutput",
 		"createMiddleware",
 		"defineErrors",
+		"definePreset",
 		"honey",
 		"mergeTree",
 		"toFetchRequest"

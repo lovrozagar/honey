@@ -19,7 +19,7 @@ import {
 	isServed,
 	type RouteHandler,
 } from "./register.ts"
-import type { AppSettings, ErrorFactories } from "./settings.ts"
+import { copySettings, type ErrorFactories } from "./settings.ts"
 import { SettingsChain } from "./settings-chain.ts"
 import {
 	assertTreeFormat,
@@ -32,16 +32,6 @@ import {
 	type RouteTree,
 } from "./tree.ts"
 import { declaredBody } from "../validation/content-type.ts"
-
-/** `s` as a new app's own: a setter on one app leaves the other's alone. */
-function copySettings(s: AppSettings<unknown>): AppSettings<unknown> {
-	return {
-		...s,
-		defaultErrorKeys: new Set(s.defaultErrorKeys),
-		metaSpec: { absorbed: [...s.metaSpec.absorbed], declared: s.metaSpec.declared },
-		taps: s.taps === null ? null : new Map(s.taps),
-	}
-}
 
 /**
  * A new graph serving `tree`, frozen in place with its live records copied: `g`'s settings copied, its scopes, and

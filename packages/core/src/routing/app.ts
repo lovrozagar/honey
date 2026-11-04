@@ -18,9 +18,11 @@ import {
 	markUsed,
 	mount,
 	ROOT_VIEW,
+	SEED,
 	VIEW,
 } from "./register.ts"
 import { type StartOf, startRoute } from "./route-builder.ts"
+import type { Preset } from "./preset.ts"
 import type { AppSettings } from "./settings.ts"
 import { RouteTreeChain } from "./route-tree.ts"
 import type { HttpMethod, MergePath, PrefixRoutes } from "./types.ts"
@@ -99,72 +101,12 @@ export class Honey<
 		return this.#derive({ contextValues: { ...this[VIEW].contextValues, ...values } })
 	}
 
-	/**
-	 * The app's error factory. A route mounted from an app that set its own keeps that one; a route from an app without a
-	 * factory uses this one. The keys `not_found`, `method_not_allowed` and `bad_request`, when the factory has them, build
-	 * honey's own 404, 405 and 400 answers.
-	 */
-	errorFactory<TFactory extends Record<string, (...args: never[]) => unknown>>(
-		factory: TFactory,
-	): Honey<TEnv, TCtx, TRoutes, TMeta, TFactory, TDefaultErrors, TBasePath, TTaps, TScopedMw> {
-		this.settings.errorFactory = factory
-		this.#graph.epoch++
-		return this as never
-	}
-
-	/**
-	 * Error keys every route of this app declares, registered before or after the call, except a route mounted from an app
-	 * with its own factory, which keeps that app's defaults. A declared key closes a route: `ctx.errors` holds declared keys
-	 * only, and a thrown `HoneyError` with another key (honey's own keys excepted) answers as the boundary error, or a 500.
-	 * The keys are typed from the factory, so call `errorFactory()` first.
-	 */
-	defaultErrors<TKeys extends ([TErrorFactory] extends [never] ? never : keyof TErrorFactory & string)>(
-		...keys: TKeys[]
-	): Honey<TEnv, TCtx, TRoutes, TMeta, TErrorFactory, TDefaultErrors | TKeys, TBasePath, TTaps, TScopedMw> {
-		for (const key of keys) this.settings.defaultErrorKeys.add(key)
-		this.#graph.epoch++
-		return this as never
-	}
-
-	/**
-	 * The error an undeclared or unknown throw becomes on routes without their own `.boundary()`, except a route mounted
-	 * from an app with its own factory, which keeps that app's. `key` also counts as a default error, so it closes every
-	 * route as `defaultErrors()` does. A key with a payload schema cannot be built here: the answer is a 500 under that key.
-	 * The key is typed from the factory, so call `errorFactory()` first.
-	 */
-	defaultBoundary<TKey extends ([TErrorFactory] extends [never] ? never : keyof TErrorFactory & string)>(
-		key: TKey,
-	): Honey<TEnv, TCtx, TRoutes, TMeta, TErrorFactory, TDefaultErrors | TKey, TBasePath, TTaps, TScopedMw> {
-		this.settings.defaultBoundaryKey = key
-		this.settings.defaultErrorKeys.add(key)
-		this.#graph.epoch++
-		return this as never
-	}
-
 	protected override invalidate(): void {
 		this.#graph.epoch++
 	}
 
 	protected override onGraph(graph: HoneyGraph): this {
 		return new Honey<TEnv>(graph, this[VIEW]) as never
-	}
-
-	/**
-	 * Type only: declare the route meta type, which constrains what route `.meta()` accepts (declared tap keys stay
-	 * allowed) and types `ctx.meta`. Returns this same handle; set values with `.meta({ … })`.
-	 */
-	metaType<TNewMeta extends Record<string, unknown>>(): Honey<
-		TEnv,
-		TCtx,
-		TRoutes,
-		[keyof TTaps] extends [never] ? TNewMeta : TNewMeta & Partial<TTaps>,
-		TErrorFactory,
-		TDefaultErrors,
-		TBasePath,
-		TTaps,
-		TScopedMw
-	> {
-		return this as never
 	}
 
 	/**
@@ -403,7 +345,17 @@ export class Honey<
 	}
 }
 
+/**
+ * A new app started from `preset` (`definePreset()`): its own copy of the preset's settings, its chain middleware first
+ * on every route, and the types they give. A setter on the app, or on the preset later, changes neither the other nor
+ * another app started from it.
+ */
+export function honey<TEnv, TCtx, TMeta, TFactory, TDefaults extends string, TTaps extends Record<string, unknown>>(
+	preset: Preset<TEnv, TCtx, TMeta, TFactory, TDefaults, TTaps>,
+): Honey<TEnv, TCtx, {}, TMeta, TFactory, TDefaults, "/", TTaps>
+/* last, so `ReturnType<typeof honey>` is the plain app */
 /** A new app typed to the runtime env `TEnv`. */
-export function honey<TEnv>(): Honey<TEnv> {
-	return new Honey<TEnv>()
+export function honey<TEnv>(): Honey<TEnv>
+export function honey<TEnv>(preset?: Preset<TEnv, unknown, unknown, unknown, string, {}>): Honey<TEnv> {
+	return preset?.[SEED]() ?? new Honey<TEnv>()
 }

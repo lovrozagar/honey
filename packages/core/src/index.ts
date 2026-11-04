@@ -32,6 +32,7 @@ export { HoneyRes, type ResponseOptions, type TypedResponse } from "./response/r
 export type { SSEEvent, SSEOptions, SSEStream } from "./response/sse.ts"
 export type { StatusKey } from "./response/status.ts"
 export { Honey, honey } from "./routing/app.ts"
+export { definePreset, Preset } from "./routing/preset.ts"
 export type {
 	ComputeErrorsByStatus,
 	HoneyCtx,

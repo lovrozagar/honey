@@ -114,16 +114,18 @@ describe("the runtime bundle of an installed core (bit 19 i)", () => {
 			 * its original's private state: the SELF field, read once in each of the context's nine accessors.
 			 * Locked at 26,300. The generated tree's body gate added 58 bytes (26,237 to 26,295): every leaf
 			 * carries its declared body as data, and a delegated leaf checks it. The pin's move to bun 1.4.4 measured
-			 * the same tree 25,815 (its --minify, not the code): locked at 25,900. Plan 39 5.1 added 35 bytes (25,894 to
-			 * 25,929) so text, html, csv, xml and binary stream a typed body: one ReadableStream branch in the body
-			 * helpers. Locked at 26,000. Plan 39 5.2 added 251 (25,929 to 26,180) so a handler may return its sole
-			 * declared body and status keys alone declare JSON: the body wrap, the media type to helper map and the
-			 * shorthand's normalization, all reached from RouteBuilder methods. Locked at 26,200. Plan 39 5.3 took 23 off
-			 * (26,157): no numeric status. Plan 39 5.4 added 272 (26,157 to 26,429) so params take a schema per param onto
-			 * ctx.params: the per-param validation with one 400 naming every refused param and an async validator
-			 * awaited, the registration check that a key is a param of the path, and the read that places the values.
-			 * Locked at 26,500. Plan 39 5.5 took 18 off (26,408). Plan 39 5.6 added 74 (26,408 to 26,482) so routeTree()
-			 * returns a new app: the settings copy and the replay of every registered route onto the tree's graph.
+			 * the same tree 25,815 (its --minify, not the code): locked at 25,900. Plan 39, measured on its base of 25,897:
+			 * 5.1 added 32 (25,929) so text, html, csv, xml and binary stream a typed body: one ReadableStream branch in the
+			 * body helpers. Locked at 26,000. 5.2 added 265 (26,194) so a handler may return its sole declared body and
+			 * status keys alone declare JSON: the body wrap, the media type to helper map and the shorthand's
+			 * normalization, all reached from RouteBuilder methods. Locked at 26,200. 5.3 took 25 off (26,169): no numeric
+			 * status. 5.4 added 267 (26,436) so params take a schema per param onto ctx.params: the per-param validation
+			 * with one 400 naming every refused param and an async validator awaited, the registration check that a key is
+			 * a param of the path, and the read that places the values. Locked at 26,500. 5.5 took 8 off (26,428). 5.6
+			 * added 69 (26,497) so routeTree() returns a new app: the settings copy and the replay of every registered
+			 * route onto the tree's graph. 7.1 added 27 (26,496 to 26,523) so honey(preset) starts an app from a preset:
+			 * the call through the SEED slot and its symbol; the app's build from the preset lives in preset.ts, out of an
+			 * app that defines none. Locked at 26,600.
 			 */
 			const gzipped = gzipSync(js, { level: 9 }).length
 			const builtBy = run(BUN as string, ["--version"], full).out.trim()
@@ -132,7 +134,7 @@ describe("the runtime bundle of an installed core (bit 19 i)", () => {
 					leaked,
 					features,
 					routeModules("minimal", entry, [...WS_ROUTE, ...MCP_ROUTE, ...GENERATION_ONLY]),
-					gzipped < 26_500,
+					gzipped < 26_600,
 					builtBy,
 				],
 				`${gzipped} bytes gzipped`,
@@ -255,8 +257,9 @@ describe("the runtime bundle of an installed core (bit 19 i)", () => {
 			 * The generated tree's body gate added its 58 bytes here too (27,480 to 27,538). Plan 38 added 166
 			 * (27,538 to 27,704) though this call takes no auth: 63 for refusing auth beside a cacheControl at
 			 * runtime, 103 for the docs map's two refusals and the guarded branch in answering and mountAll. The
-			 * guard itself is basic()'s, so none of it is here. Locked at 27,800. Plan 39 5.6 added 75 (27,743 to
-			 * 27,818): routeTree()'s settings copy and route replay, as in the minimal bundle. Locked at 27,900.
+			 * guard itself is basic()'s, so none of it is here. Locked at 27,800. Plan 39 5.6 added 74 (27,752 to
+			 * 27,826): routeTree()'s settings copy and route replay, as in the minimal bundle. Locked at 27,900. 7.1
+			 * added 18 (27,823 to 27,841): honey(preset)'s call through the SEED slot.
 			 */
 			const gzipped = gzipSync(bunBundle("static-doc", served), { level: 9 }).length
 			expect(

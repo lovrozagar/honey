@@ -169,6 +169,26 @@ app.get("/").handler((ctx) => ctx.res.text("ok", "up"))
 | `wsAdapter(adapter)`                             | the WebSocket adapter, when `serve()` does not pick one                |
 | `fetch(request, env, ctx)`                       | the Fetch handler an adapter calls                                     |
 
+Apps that share their settings write them once with `definePreset<TEnv>()`, which takes the same setters and
+`use(mw)`. `honey(preset)` starts an app with its own copy, typed as the same chain on `honey()` would be:
+
+```ts
+import { defineErrors, definePreset, honey } from "@lovrozagar/honey"
+import { requestId } from "@lovrozagar/honey/request-id"
+
+const errors = defineErrors({ internal_server_error: "internal_server_error" })
+
+export const platform = definePreset<{ REGION: string }>()
+	.errorFactory(errors)
+	.defaultBoundary("internal_server_error")
+	.requestLog(true)
+	.use(requestId())
+
+const app = honey(platform)
+
+app.get("/id").handler((ctx) => ctx.res.json("ok", { id: ctx.requestId }))
+```
+
 Full reference: [the app](https://github.com/lovrozagar/honey/blob/main/docs/app-settings.md).
 
 ## Routing
@@ -1303,7 +1323,7 @@ generator.
 | `@lovrozagar/honey/build`           | `createBuildPlugin`, a production bundle for a deploy target                                                             |
 
 The root export's values: `honey()` and the `Honey` class behind it, `HoneyContext` and `HoneyRes` (the handler's
-`ctx` and its `ctx.res`), `HoneyError`, `defineErrors` and `ERROR_META`, `createMiddleware`,
+`ctx` and its `ctx.res`), `HoneyError`, `defineErrors` and `ERROR_META`, `definePreset` and `Preset`, `createMiddleware`,
 `mergeTree` and `toFetchRequest`.
 
 ## Type helpers

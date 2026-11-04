@@ -29,6 +29,9 @@ export const GRAPH: unique symbol = /* @__PURE__ */ Symbol("honey.graph")
 /** A handle's view slot: what a handle-level helper (serving a document) reads its basePath off. */
 export const VIEW: unique symbol = /* @__PURE__ */ Symbol("honey.view")
 
+/** A preset's seed slot: what `honey(preset)` copies, read without importing the preset module. */
+export const SEED: unique symbol = /* @__PURE__ */ Symbol("honey.seed")
+
 /**
  * The meta marker of a route an app serves about itself (its document, docs page or manifest).
  * Such a route belongs to the app that registered it: mounting another app copies none of its

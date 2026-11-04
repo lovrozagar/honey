@@ -23,11 +23,48 @@ app.get("/hello").handler((ctx) => ctx.res.json("ok", { greeting: ctx.env.GREETI
 export default app
 ```
 
+## Presets
+
+Several apps that share their settings write them once as a preset: `definePreset<TEnv>()` takes every setter an app
+does, and `use(mw)` for chain middleware, each typed as on an app. `honey(preset)` starts an app from it, with the
+same types the chain on `honey()` would give: the meta type, the error factory and its default keys, and what the
+middleware adds to `ctx`. Each app copies the preset, so a setter on one app, or on the preset later, changes no other.
+
+```ts
+import { defineErrors, definePreset, honey } from "@lovrozagar/honey"
+import { createErrorTranslator } from "@lovrozagar/honey/i18n"
+import { createLogger } from "@lovrozagar/honey/logger"
+import { requestId } from "@lovrozagar/honey/request-id"
+
+type Env = { REGION: string }
+type RouteMeta = { team?: string; worker?: "billing" | "search" }
+
+const errors = defineErrors({ internal_server_error: "internal_server_error" })
+
+export const platform = definePreset<Env>()
+	.metaType<RouteMeta>()
+	.metaSpec({ meta: { team: "x-team", worker: "x-worker" } })
+	.logger(createLogger({ base: { service: "platform" } }))
+	.errorFactory(errors)
+	.errorI18n(
+		createErrorTranslator({ errors: { en: { internal_server_error: "Something broke" } }, resolveLocale: () => "en" }),
+	)
+	.defaultBoundary("internal_server_error")
+	.requestLog(true)
+	.use(requestId())
+
+const app = honey(platform).meta({ worker: "billing" })
+
+app.get("/whoami").handler((ctx) => ctx.res.json("ok", { id: ctx.requestId, worker: ctx.meta.worker }))
+```
+
 ## Reference
 
 | Value                       | Default                  | What it does                                                                                                                            | Watch for                                                                                                           |
 | --------------------------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | `honey<TEnv>()`             | —                        | a fresh app typed to `TEnv`                                                                                                             | `TEnv` is the runtime env (Workers bindings); it is not request data                                                |
+| `definePreset<TEnv>()`      | —                        | settings and chain middleware an app starts from, set with the app's own setters and `use(mw)`                                          | a preset serves nothing: routes, `basePath()` and `context()` belong on the app                                     |
+| `honey(preset)`             | —                        | a fresh app with its own copy of the preset's settings and middleware, typed as the same chain on `honey()`                             | the copy is taken at the call: setters on the preset afterwards reach apps started later, not this one              |
 | `.basePath(prefix)`         | `/`                      | rebases every route and the OpenAPI path under `prefix`                                                                                 | patterns are rebased at `.use` time; registering before `basePath` is a different path                              |
 | `.context(values)`          | none                     | static values every route registered through the new handle finds on `ctx`, typed into the handler                                      | values are fixed at registration; per-request data belongs in middleware (`next({ … })`); a reserved ctx key throws |
 | `.use(mw)`                  | —                        | installs middleware on this handle and its descendants                                                                                  | a `use()` that never registers a route is reported at finalize                                                      |

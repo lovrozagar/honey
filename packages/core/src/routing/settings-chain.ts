@@ -1,5 +1,5 @@
 /**
- * The settings setters every app handle shares: each applies to the whole app and returns the handle.
+ * The settings setters every app handle and preset shares: each applies to the whole app and returns the handle.
  */
 import type { HoneyError } from "../errors/error.ts"
 import type { ErrorFormat } from "../errors/problem-json.ts"
@@ -10,7 +10,7 @@ import type { Telemetry } from "../telemetry/request-trace.ts"
 import type { InferOutput, StandardSchemaLike } from "../validation/standard-schema.ts"
 import type { OutputValidationMode } from "../validation/validate-output.ts"
 import type { WSAdapter } from "../ws/contract.ts"
-import type { WithTaps } from "./app-types.ts"
+import type { AddDefaults, FactoryKeys, Retyped, SetFactory, WithMetaType, WithTaps } from "./retype.ts"
 import {
 	type AppSettings,
 	type ErrorI18n,
@@ -22,8 +22,14 @@ import {
 } from "./settings.ts"
 import type { TapFn, TapHandler } from "./tap.ts"
 
-/** The settings surface every handle shares: each setter applies to the whole app and returns the handle. */
+/** The settings surface every handle and preset shares: each setter applies to the whole app and returns the handle. */
 export abstract class SettingsChain<TEnv> {
+	/** The type of the factory set with `errorFactory()`; `never` until then. Type only. */
+	declare readonly $errorFactory: unknown
+	/** The route meta type declared with `metaType<T>()`; `never` until then. Type only. */
+	declare readonly $meta: unknown
+	/** The declared tap payloads. Type only. */
+	declare readonly $taps: Record<string, unknown>
 	protected readonly settings: AppSettings<TEnv>
 
 	/** Takes the settings object shared by every handle of one app. */
@@ -46,6 +52,60 @@ export abstract class SettingsChain<TEnv> {
 		;(this.settings.taps ??= new Map()).set(key, handler as TapFn<TEnv>)
 		this.invalidate()
 		return this
+	}
+
+	/**
+	 * Type only: declare the route meta type, which constrains what route `.meta()` accepts (declared tap keys stay
+	 * allowed) and types `ctx.meta`. Returns this same handle; set values with `.meta({ … })`.
+	 */
+	metaType<TNewMeta extends Record<string, unknown>>(): WithMetaType<this, TNewMeta> {
+		return this as never
+	}
+
+	/**
+	 * The app's error factory. A route mounted from an app that set its own keeps that one; a route from an app without a
+	 * factory uses this one. The keys `not_found`, `method_not_allowed` and `bad_request`, when the factory has them, build
+	 * honey's own 404, 405 and 400 answers.
+	 */
+	errorFactory<TFactory extends Record<string, (...args: never[]) => unknown>>(
+		factory: TFactory,
+	): Retyped<this, SetFactory<TFactory>> {
+		this.settings.errorFactory = factory
+		this.invalidate()
+		return this as never
+	}
+
+	/**
+	 * Error keys every route of this app declares, registered before or after the call, except a route mounted from an app
+	 * with its own factory, which keeps that app's defaults. A declared key closes a route: `ctx.errors` holds declared keys
+	 * only, and a thrown `HoneyError` with another key (honey's own keys excepted) answers as the boundary error, or a 500.
+	 * The keys are typed from the factory, so call `errorFactory()` first.
+	 */
+	defaultErrors<TThis, const TKeys extends FactoryKeys<TThis>>(
+		this: TThis,
+		...keys: TKeys[]
+	): Retyped<TThis, AddDefaults<TKeys>> {
+		const settings = (this as unknown as SettingsChain<unknown>).settings
+		for (const key of keys) settings.defaultErrorKeys.add(key)
+		;(this as unknown as SettingsChain<unknown>).invalidate()
+		return this as never
+	}
+
+	/**
+	 * The error an undeclared or unknown throw becomes on routes without their own `.boundary()`, except a route mounted
+	 * from an app with its own factory, which keeps that app's. `key` also counts as a default error, so it closes every
+	 * route as `defaultErrors()` does. A key with a payload schema cannot be built here: the answer is a 500 under that key.
+	 * The key is typed from the factory, so call `errorFactory()` first.
+	 */
+	defaultBoundary<TThis, const TKey extends FactoryKeys<TThis>>(
+		this: TThis,
+		key: TKey,
+	): Retyped<TThis, AddDefaults<TKey>> {
+		const settings = (this as unknown as SettingsChain<unknown>).settings
+		settings.defaultBoundaryKey = key
+		settings.defaultErrorKeys.add(key)
+		;(this as unknown as SettingsChain<unknown>).invalidate()
+		return this as never
 	}
 
 	/** Type only: each tap key's payload, for `ctx.tap()`, tap handlers and route meta. */

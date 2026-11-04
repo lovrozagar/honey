@@ -75,11 +75,11 @@ type UpdateMethodsResourceRequest = { name?: string }
 export type Routes = {
 	"/in/all/:resourceId": {
 		put: {
-			ctx: WithOutput<Omit<BaseCtx, "errors"> & { readonly input: { headers: { "if-match": string }; json: { data: Record<string, unknown> }; search: { version: number; force?: false | true } }; readonly params: { resourceId: string }; readonly errors: { unauthorized: (opts?: { cause?: unknown; fields?: Record<string, { error_key: string; message: string; path: string }[]>; headers?: Record<string, string>; vars?: Record<string, number | string> }) => HoneyError; validation_error: (opts?: { cause?: unknown; fields?: Record<string, { error_key: string; message: string; path: string }[]>; headers?: Record<string, string>; vars?: Record<string, number | string> }) => HoneyError }; readonly meta: Readonly<Partial<Omit<HoneyMeta, keyof { auth?: "public" | "required"; rateLimit?: "default" | "strict" }>> & { auth?: "public" | "required"; rateLimit?: "default" | "strict" }>; readonly routePattern: "/in/all/:resourceId" }, { "application/json": { ok: ReplaceInAllResponse200 } }>
+			ctx: WithOutput<Omit<BaseCtx, "errors"> & { readonly input: { json: { data: Record<string, unknown> }; search: { version: number; force?: false | true }; headers: { "if-match": string } }; readonly params: { resourceId: string }; readonly errors: { unauthorized: (opts?: { cause?: unknown; fields?: Record<string, { error_key: string; message: string; path: string }[]>; headers?: Record<string, string>; vars?: Record<string, number | string> }) => HoneyError; validation_error: (opts?: { cause?: unknown; fields?: Record<string, { error_key: string; message: string; path: string }[]>; headers?: Record<string, string>; vars?: Record<string, number | string> }) => HoneyError }; readonly meta: Readonly<Partial<Omit<HoneyMeta, keyof { auth?: "public" | "required"; rateLimit?: "default" | "strict" }>> & { auth?: "public" | "required"; rateLimit?: "default" | "strict" }>; readonly routePattern: "/in/all/:resourceId" }, { "application/json": { ok: ReplaceInAllResponse200 } }>
 			errors: "unauthorized" | "validation_error"
 			errorShapes: { unauthorized: null; validation_error: null }
 			errorsByStatus: { 400: null; 401: null }
-			input: { headers: { "if-match": string }; json: { data: Record<string, unknown> }; search: { version: number; force?: false | true } }
+			input: { json: { data: Record<string, unknown> }; search: { version: number; force?: false | true }; headers: { "if-match": string } }
 			meta: {}
 			output: { "application/json": { ok: ReplaceInAllResponse200 } }
 		}

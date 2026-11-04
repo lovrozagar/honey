@@ -137,6 +137,16 @@ export function defaultErrorFormatter(
 	return defaultShape
 }
 
+/** `s` as a new app's own: a setter on one app leaves the other's alone. */
+export function copySettings<TEnv>(s: AppSettings<TEnv>): AppSettings<TEnv> {
+	return {
+		...s,
+		defaultErrorKeys: new Set(s.defaultErrorKeys),
+		metaSpec: { absorbed: [...s.metaSpec.absorbed], declared: s.metaSpec.declared },
+		taps: s.taps === null ? null : new Map(s.taps),
+	}
+}
+
 export function createSettings<TEnv>(): AppSettings<TEnv> {
 	return {
 		outputValidation: "off",

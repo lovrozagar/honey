@@ -371,29 +371,3 @@ export type InferRouteErrors<T, TPath extends InferRoutePaths<T>, TMethod extend
 export type InferErrorFactory<T> = T extends { readonly $errorFactory: infer F } ? F : never
 /** The base path set on a handle with `basePath()`; `/` when none was set. */
 export type InferBasePath<T> = T extends { readonly $basePath: infer P } ? P : never
-
-/** `H` with tap payloads `TNewTaps` declared: they join its taps, and route meta may carry any of them. */
-export type WithTaps<H, TNewTaps extends Record<string, unknown>> =
-	H extends Honey<
-		infer TEnv,
-		infer TCtx,
-		infer TRoutes,
-		infer TMeta,
-		infer TFactory,
-		infer TDefaults extends string,
-		infer TBase extends string,
-		infer TTaps extends Record<string, unknown>,
-		infer TScoped extends readonly ScopedMwEntry[]
-	>
-		? Honey<
-				TEnv,
-				TCtx,
-				TRoutes,
-				[TMeta] extends [never] ? Partial<TNewTaps> : TMeta & Partial<TNewTaps>,
-				TFactory,
-				TDefaults,
-				TBase,
-				TTaps & TNewTaps,
-				TScoped
-			>
-		: never
