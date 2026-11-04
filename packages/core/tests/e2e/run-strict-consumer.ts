@@ -18,6 +18,7 @@ import { type AddressInfo, createServer } from "node:net"
 import { tmpdir } from "node:os"
 import { basename, dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
+import { treeShake } from "./tree-shake.ts"
 
 const here = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(here, "../../../..")
@@ -119,7 +120,8 @@ await Bun.write(
 	`${JSON.stringify(
 		{
 			dependencies: { [PKG]: `file:${coreTarball}`, "@lovrozagar/honey-clients": `file:${genTarball}`, zod: "4.3.6" },
-			devDependencies: { typescript: "7.0.2", vite: "8.1.4" },
+			/* esbuild at the version wrangler pins, for the tree-shake gate beside vite's rolldown */
+			devDependencies: { esbuild: "0.28.1", typescript: "7.0.2", vite: "8.1.4" },
 			name: "strict-consumer-sandbox",
 			private: true,
 			type: "module",
@@ -263,6 +265,15 @@ if (inPackage.length === 0 && inGenerated.length === 0 && inConsumer.length === 
 		if (!keep) rmSync(sandbox, { force: true, recursive: true })
 		process.exit(1)
 	}
+
+	/* 5. what a consumer's bundler keeps of a subpath it imports and never uses: nothing, a top-level effect included */
+	const unshaken = await treeShake(consumer)
+	if (unshaken.length > 0) {
+		console.log(`FAIL  ${unshaken.length} tree-shake failures\n${unshaken.join("\n")}`)
+		if (!keep) rmSync(sandbox, { force: true, recursive: true })
+		process.exit(1)
+	}
+	console.log("tree-shake ok (esbuild, rolldown)")
 }
 
 if (!keep) rmSync(sandbox, { force: true, recursive: true })

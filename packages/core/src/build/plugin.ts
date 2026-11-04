@@ -21,7 +21,12 @@ import { compileGlobs, WATCH_IGNORE_RE } from "./glob.ts"
 export type { HoneyCodegenConfig, HoneyOpenApiOutputConfig, HoneyVitePluginConfig } from "./config.ts"
 
 const VIRTUAL = { manifest: "virtual:honey/manifest", openApi: "virtual:honey/openapi", routes: "virtual:honey/routes" }
-const RESOLVED = { manifest: `\0${VIRTUAL.manifest}`, openApi: `\0${VIRTUAL.openApi}`, routes: `\0${VIRTUAL.routes}` }
+/* written out, not built from VIRTUAL: a property read at the top level is a statement a bundler must keep */
+const RESOLVED = {
+	manifest: "\0virtual:honey/manifest",
+	openApi: "\0virtual:honey/openapi",
+	routes: "\0virtual:honey/routes",
+}
 
 /** The part of Vite's module graph the plugin reads. */
 type ModuleGraph = {
