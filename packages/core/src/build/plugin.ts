@@ -1,5 +1,5 @@
 /**
- * `honey()`, the Vite plugin (`@lovrozagar/honey/plugin`, bit 19 h2): it writes the app's artifacts at build start
+ * `honeyPlugin()`, the Vite plugin (`@lovrozagar/honey/plugin`, bit 19 h2): it writes the app's artifacts at build start
  * and, in dev, again on each save a `watch` glob matches, one generation at a time with at most one more queued, and
  * one per save across Vite's environments. With a config file, each generation runs in a `honey generate` child, so
  * it sees edits to every module the app imports and nothing the app starts outlives it. `virtual:honey/routes`,
@@ -41,7 +41,7 @@ type ResolvedViteConfig = {
 	configFile?: string
 	/** Vite's mode; when unset, `"development"` under `serve` and `"production"` otherwise. */
 	mode?: string
-	/** Every plugin in the config, used to find this plugin's position among the `honey()` ones. */
+	/** Every plugin in the config, used to find this plugin's position among the `honeyPlugin()` ones. */
 	plugins?: readonly unknown[]
 	/** The project root, which relative `watch` globs and output paths resolve against. */
 	root: string
@@ -61,11 +61,11 @@ type HotUpdate = {
 	timestamp?: number
 }
 
-/** The plugin object `honey()` returns, shaped for Vite. */
+/** The plugin object `honeyPlugin()` returns, shaped for Vite. */
 export type HoneyVitePlugin = {
 	/** Carries the plugin's config so `honey generate` can read it from a loaded Vite config. */
 	api: {
-		/** The config passed to `honey()`, as given. */
+		/** The config passed to `honeyPlugin()`, as given. */
 		honeyConfig: HoneyVitePluginConfig
 	}
 	/**
@@ -188,7 +188,7 @@ async function virtualModule(id: string, config: ResolvedHoneyConfig, root: stri
 	return kind === "routes" ? toJavaScript(code) : { code, moduleType: "js" }
 }
 
-/** Whether `plugin` is a `honey()` plugin, as `honey generate` finds one. */
+/** Whether `plugin` is one `honeyPlugin()` returned, as `honey generate` finds one. */
 const isHoneyPlugin = (plugin: unknown) =>
 	(plugin as { name?: unknown } | null)?.name === "honey" &&
 	(plugin as { api?: { honeyConfig?: unknown } }).api?.honeyConfig !== undefined
@@ -199,7 +199,7 @@ const isHoneyPlugin = (plugin: unknown) =>
  * OpenAPI output) when configured. Throws on a `codegen.sdk` or `codegen.cli` key, which belong to honey-clients, and
  * on an MCP output path that is not a `.ts` module.
  */
-export function honey(config: HoneyVitePluginConfig): [HoneyVitePlugin] {
+export function honeyPlugin(config: HoneyVitePluginConfig): [HoneyVitePlugin] {
 	const resolved = resolveHoneyConfig(config)
 	const matchesWatch = compileGlobs(resolved.watch)
 	const at = { command: "build" as "build" | "serve", configFile: undefined as string | undefined, index: -1 }

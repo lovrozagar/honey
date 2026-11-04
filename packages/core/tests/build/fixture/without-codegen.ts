@@ -14,16 +14,16 @@ const step = async (run: () => Promise<unknown>) =>
 	)
 type Plugin = Record<string, (...args: unknown[]) => Promise<unknown> | unknown>
 const loaded = await import(join(core, "src", ["bui", "ld"].join(""), "plugin.ts")).then(
-	(mod: { honey: (config: object) => [Plugin] }) => mod,
+	(mod: { honeyPlugin: (config: object) => [Plugin] }) => mod,
 	(error: Error) => error,
 )
 if (loaded instanceof Error) {
 	process.stdout.write(`${JSON.stringify({ load: loaded.message.split("\n")[0] })}\n`)
 	process.exit(0)
 }
-const { honey } = loaded
+const { honeyPlugin } = loaded
 const plugin = (config: object) => {
-	const [made] = honey(config)
+	const [made] = honeyPlugin(config)
 	made.configResolved?.({ root: dir })
 	return made
 }

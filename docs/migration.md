@@ -519,13 +519,13 @@ The plugin writes the app's own artifacts (the route tree, the manifest, the Ope
 command.
 
 ```ts v0
-honey({ app: "src/app.ts", codegen: { sdk: { out: "sdk" } } })
+honeyPlugin({ app: "src/app.ts", codegen: { sdk: { out: "sdk" } } })
 ```
 
 ```ts
-import { honey } from "@lovrozagar/honey/plugin"
+import { honeyPlugin } from "@lovrozagar/honey/plugin"
 
-export const plugin = honey({ app: "src/app.ts" })
+export const plugin = honeyPlugin({ app: "src/app.ts" })
 ```
 
 ## `meta<T>()` is `metaType<T>()`, and a route need not repeat a meta default
@@ -762,7 +762,7 @@ document over all of them, and `honey-clients generate --spec` takes it. Merging
 relates is planned after 1.0.
 
 ```ts v0
-honey({ codegen: { sdk: { name: "ShopSDK", specs: ["../a/openapi.json", "../b/openapi.json"] } } })
+honeyPlugin({ codegen: { sdk: { name: "ShopSDK", specs: ["../a/openapi.json", "../b/openapi.json"] } } })
 ```
 
 ```sh
@@ -795,13 +795,13 @@ merged routes plus the gateway's own, and the documents, manifest and types come
 services' schemas. A first run bootstraps the merged tree.
 
 ```ts v0
-honey({ app: "src/gateway.ts", codegen: { mergeTree: { users: "../users", billing: "../billing" } } })
+honeyPlugin({ app: "src/gateway.ts", codegen: { mergeTree: { users: "../users", billing: "../billing" } } })
 ```
 
 ```ts
-import { honey } from "@lovrozagar/honey/plugin"
+import { honeyPlugin } from "@lovrozagar/honey/plugin"
 
-export const plugin = honey({ app: "src/gateway.ts", codegen: { mergeTree: "src/merge.ts" } })
+export const plugin = honeyPlugin({ app: "src/gateway.ts", codegen: { mergeTree: "src/merge.ts" } })
 ```
 
 ## A gateway with its own routes exports its app built without its tree
@@ -1244,4 +1244,22 @@ import { scalar } from "@lovrozagar/honey/openapi/scalar"
 
 export const errors = defineErrors({ not_found: "not_found" })
 export const docs = { "/docs": scalar }
+```
+
+## The Vite plugin is `honeyPlugin()`
+
+`@lovrozagar/honey/plugin` exports the plugin as `honeyPlugin`, so it no longer shares a name with the app factory, and
+`@lovrozagar/honey/build` exports the build target plugin alone: the plugin and its config types come from `./plugin`
+only. The CLI's messages name `honeyPlugin()` too.
+
+```ts v0
+import { honey } from "@lovrozagar/honey/plugin"
+import { type HoneyVitePluginConfig } from "@lovrozagar/honey/build"
+```
+
+```ts
+import { honeyPlugin, type HoneyVitePluginConfig } from "@lovrozagar/honey/plugin"
+
+const config: HoneyVitePluginConfig = { app: "src/app.ts" }
+export default { plugins: [honeyPlugin(config)] }
 ```

@@ -179,7 +179,7 @@ describe.sequential("the tarballs, installed (bit 19 i)", () => {
 		try {
 			write(app, {
 				"vite.config.ts":
-					'import { defaultClientConditions } from "vite"\nimport { honey } from "@lovrozagar/honey/plugin"\nexport default { resolve: { conditions: [...defaultClientConditions] }, plugins: [honey({ app: "src/app.ts" })] }\n',
+					'import { defaultClientConditions } from "vite"\nimport { honeyPlugin } from "@lovrozagar/honey/plugin"\nexport default { resolve: { conditions: [...defaultClientConditions] }, plugins: [honeyPlugin({ app: "src/app.ts" })] }\n',
 			})
 			const read = generate()
 			write(app, {

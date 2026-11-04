@@ -1,5 +1,5 @@
 /**
- * The `honey()` plugin's config (bit 19 h2): what it takes, resolved with its defaults (the route tree on, every
+ * `honeyPlugin()`'s config (bit 19 h2): what it takes, resolved with its defaults (the route tree on, every
  * other artifact off), and every path a generation writes, which a watcher must never take for an edit. An OpenAPI
  * output path ending `.yaml` or `.yml` is that YAML file alone; any other is JSON there plus its `.yaml` sibling
  * (Q7: core's openapi/yaml.ts writes it). The SDKs, the CLI and the MCP server package are honey-clients's (Q1), so
@@ -72,7 +72,7 @@ export type HoneyCodegenConfig = {
 		  }
 }
 
-/** What `honey()` takes: the app module, the artifacts to generate, and the files whose edits regenerate them. */
+/** What `honeyPlugin()` takes: the app module, the artifacts to generate, and the files whose edits regenerate them. */
 export type HoneyVitePluginConfig = {
 	/** the module exporting the app (`app`, else the default export) */
 	readonly app?: string

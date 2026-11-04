@@ -1,5 +1,5 @@
 /**
- * `@lovrozagar/honey/plugin`: `honey()`, the Vite plugin, and its config types. The generation runner the CLI shares
+ * `@lovrozagar/honey/plugin`: `honeyPlugin()`, the Vite plugin, and its config types. The generation runner the CLI shares
  * with it stays internal.
  */
 export {
@@ -7,5 +7,5 @@ export {
 	type HoneyOpenApiOutputConfig,
 	type HoneyVitePlugin,
 	type HoneyVitePluginConfig,
-	honey,
+	honeyPlugin,
 } from "./plugin.ts"

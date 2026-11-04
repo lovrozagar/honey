@@ -320,8 +320,8 @@ async function nodeConsumer(dir: string): Promise<boolean> {
 	await Bun.write(
 		join(dir, "vite.config.ts"),
 		[
-			'import { honey } from "@lovrozagar/honey/plugin"',
-			'export default { plugins: [honey({ app: "src/server-app.ts", codegen: { openApi: { title: "T", version: "1" } } })] }',
+			'import { honeyPlugin } from "@lovrozagar/honey/plugin"',
+			'export default { plugins: [honeyPlugin({ app: "src/server-app.ts", codegen: { openApi: { title: "T", version: "1" } } })] }',
 		].join("\n"),
 	)
 	const generated = await run(["node", join("node_modules", ".bin", "honey"), "generate"], dir)

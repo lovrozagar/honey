@@ -88,7 +88,7 @@ export function findViteConfig(cwd: string): string | undefined {
 export type ViteConfigEnv = { command: "build" | "serve"; mode: string }
 
 /**
- * The config each `honey()` plugin in a Vite config file carries, in plugin order: a function-form config is called
+ * The config each `honeyPlugin()` in a Vite config file carries, in plugin order: a function-form config is called
  * with `env`, and nested and promised plugin arrays flatten as Vite flattens them. Read off the plugin object (its
  * name `honey`, its `api.honeyConfig`), so it holds across module instances and runtimes.
  */

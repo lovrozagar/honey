@@ -26,7 +26,7 @@ function fresh(files: Record<string, string> = {}): Project {
 }
 
 const CONFIG = (options: string) =>
-	`import { honey } from "@lovrozagar/honey/plugin"\nexport default { plugins: [honey(${options})] }\n`
+	`import { honeyPlugin } from "@lovrozagar/honey/plugin"\nexport default { plugins: [honeyPlugin(${options})] }\n`
 const read = (dir: string, path: string) => (existsSync(join(dir, path)) ? readFileSync(join(dir, path), "utf8") : "")
 
 /** `honey generate <args>` on Bun with `env` over the test's own, its TMPDIR an empty one: a cold jiti cache. */

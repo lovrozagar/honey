@@ -13,7 +13,7 @@ import { type Project, project } from "./__fixtures__/project.ts"
 import { type HoneyVitePluginConfig, resolveHoneyConfig } from "./config.ts"
 import { generateAndWrite } from "./generate.ts"
 import { sourceOf } from "./source.ts"
-import { honey } from "./plugin.ts"
+import { honeyPlugin } from "./plugin.ts"
 
 const SLOW = 60_000
 const BIN = resolve(import.meta.dirname, "../../bin/honey.js")
@@ -249,7 +249,7 @@ describe("a gateway over its own tree on Bun (bit 20 k-fix)", () => {
 			made.write("src/down.ts", downSource(['\t.get("/added").handler((c) => c.res.text("ok", "new"))']))
 			made.write(
 				"vite.config.ts",
-				`import { honey } from "@lovrozagar/honey/plugin"\nexport default { plugins: [honey(${JSON.stringify(SERVED)})] }\n`,
+				`import { honeyPlugin } from "@lovrozagar/honey/plugin"\nexport default { plugins: [honeyPlugin(${JSON.stringify(SERVED)})] }\n`,
 			)
 			/* Bun keeps each module for the process: the redo pass's fresh graph must not be the first pass's */
 			const done = spawnSync("bun", [BIN, "generate"], {
@@ -306,7 +306,7 @@ describe("a gateway through the plugin in dev (bit 19 h2)", () => {
 				codegen: { ...OUTPUTS, mergeTree: "src/route-tree.ts" },
 				watch: ["src/**"],
 			}
-			const [plugin] = honey(config)
+			const [plugin] = honeyPlugin(config)
 			plugin.configResolved({ root: made.dir })
 			const server = { moduleGraph: { getModuleById: () => undefined } }
 			made.write("src/down.ts", downSource(['\t.get("/added").handler((c) => c.res.text("ok", "new"))']))

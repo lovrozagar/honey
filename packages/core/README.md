@@ -904,11 +904,11 @@ No copy script is needed to put the bytes where a Worker can read them: point th
 assets directory wrangler serves, and codegen writes both files there on every generate.
 
 ```ts
-import { honey } from "@lovrozagar/honey/plugin"
+import { honeyPlugin } from "@lovrozagar/honey/plugin"
 
 export default {
 	plugins: [
-		honey({
+		honeyPlugin({
 			app: "src/app.ts",
 			codegen: { openApi: { path: "assets/openapi.json", title: "Shop", version: "1.2.0" } },
 		}),
@@ -1123,22 +1123,22 @@ The Vite plugin writes the app's artifacts — the route tree, the types, the ma
 MCP handler — at build start, and again on each save in dev:
 
 ```ts
-import { honey } from "@lovrozagar/honey/plugin"
+import { honeyPlugin } from "@lovrozagar/honey/plugin"
 import { defineConfig } from "vite"
 
 export default defineConfig({
-	plugins: [honey({ app: "src/app.ts" })],
+	plugins: [honeyPlugin({ app: "src/app.ts" })],
 })
 ```
 
 What it generates is `codegen`, and each output takes a path or a config of its own:
 
 ```ts
-import { honey } from "@lovrozagar/honey/plugin"
+import { honeyPlugin } from "@lovrozagar/honey/plugin"
 
 export default {
 	plugins: [
-		honey({
+		honeyPlugin({
 			app: "src/app.ts",
 			codegen: {
 				manifest: true,
@@ -1167,23 +1167,23 @@ export default defineConfig({
 The `honey` CLI does the same generation without Vite, which is what a CI step or a `package.json` script wants:
 
 ```sh
-honey generate                       # reads vite.config.* and the honey() plugin in it
+honey generate                       # reads vite.config.* and the honeyPlugin() in it
 honey generate --app src/app.ts --tree --types --manifest
 honey generate --config vite.config.ts --plugin 0 --watch
 honey generate --merge-tree src/_gen/routes.gen.ts   # a gateway's merged tree
 honey init --workers --force
 ```
 
-| Flag                  | What it does                                                               |
-| --------------------- | -------------------------------------------------------------------------- |
-| `--config <path>`     | the Vite config holding `honey()` (default: `vite.config.{ts,mts,js,mjs}`) |
-| `--plugin <n>`        | which `honey()` plugin in the config, 0-based                              |
-| `--app <path>`        | the app entry; overrides the config's app, or replaces the config          |
-| `--tree`              | the route tree module                                                      |
-| `--types`             | the ambient types                                                          |
-| `--manifest`          | the route manifest                                                         |
-| `--merge-tree <path>` | the route tree source of a gateway                                         |
-| `--watch`             | generate again when files next to the app change                           |
+| Flag                  | What it does                                                                     |
+| --------------------- | -------------------------------------------------------------------------------- |
+| `--config <path>`     | the Vite config holding `honeyPlugin()` (default: `vite.config.{ts,mts,js,mjs}`) |
+| `--plugin <n>`        | which `honeyPlugin()` in the config, 0-based                                     |
+| `--app <path>`        | the app entry; overrides the config's app, or replaces the config                |
+| `--tree`              | the route tree module                                                            |
+| `--types`             | the ambient types                                                                |
+| `--manifest`          | the route manifest                                                               |
+| `--merge-tree <path>` | the route tree source of a gateway                                               |
+| `--watch`             | generate again when files next to the app change                                 |
 
 The SDKs, the CLI and the MCP server are honey-clients's: `honey-clients generate --app <path>`.
 
@@ -1302,7 +1302,7 @@ generator.
 | `@lovrozagar/honey/request-to-curl` | `requestToCurl`                                                                                                          |
 | `@lovrozagar/honey/testing`         | `testClient`, an app called in process or over a runtime's `serve`                                                       |
 | `@lovrozagar/honey/tree`            | the route tree's types                                                                                                   |
-| `@lovrozagar/honey/plugin`          | `honey()`, the Vite plugin that generates the app's artifacts                                                            |
+| `@lovrozagar/honey/plugin`          | `honeyPlugin()`, the Vite plugin that generates the app's artifacts                                                      |
 | `@lovrozagar/honey/build`           | `createBuildPlugin`, a production bundle for a deploy target                                                             |
 
 The root export's values: `honey()` and the `Honey` class behind it, `HoneyContext` and `HoneyRes` (the handler's

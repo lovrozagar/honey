@@ -1,4 +1,4 @@
-import { honey } from "@lovrozagar/honey/plugin"
+import { honeyPlugin } from "@lovrozagar/honey/plugin"
 
 /* Anyrow's public scheme: an API key in Authorization, its prefix in the description */
 const apiKey = {
@@ -10,7 +10,7 @@ const apiKey = {
 
 export default {
 	plugins: [
-		honey({
+		honeyPlugin({
 			app: "src/gen-app.ts",
 			codegen: {
 				mcp: true,

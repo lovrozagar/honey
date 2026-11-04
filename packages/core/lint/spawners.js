@@ -14,7 +14,7 @@ export const DEFERRED = new Map([
 	[
 		"packages/core/src/build/plugin.ts",
 		new Map([
-			["honey", "builds the Vite plugin; runGenerate runs from its hooks, through serialized()'s held callback"],
+			["honeyPlugin", "builds the Vite plugin; runGenerate runs from its hooks, through serialized()'s held callback"],
 		]),
 	],
 ])

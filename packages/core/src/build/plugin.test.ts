@@ -1,5 +1,5 @@
 /**
- * honey(), the Vite plugin (bit 19 h2): one plugin named honey carrying its config for `honey generate`; the virtual
+ * honeyPlugin(), the Vite plugin (bit 19 h2): one plugin named honey carrying its config for `honey generate`; the virtual
  * route tree (JavaScript, in a real dev server too), manifest and document; a generation at build start (one across
  * Vite's environments), and on a watched save in dev (one per save across environments, never for a generated file
  * or a temp file, the route tree joining HMR); with a config file, each generation a child that sees edited imports.
@@ -9,7 +9,7 @@ import { join } from "node:path"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { appSource, type Project, project } from "./__fixtures__/project.ts"
 import type { HoneyVitePluginConfig } from "./config.ts"
-import { honey, oncePerKey, SAVES_REMEMBERED, toJavaScript } from "./plugin.ts"
+import { honeyPlugin, oncePerKey, SAVES_REMEMBERED, toJavaScript } from "./plugin.ts"
 
 const SLOW = 60_000
 const ROUTES = "\0virtual:honey/routes"
@@ -25,9 +25,9 @@ function fresh(files: Record<string, string> = {}): Project {
 	return made
 }
 
-/** honey()'s plugin, resolved at `root` as Vite resolves it. */
+/** The plugin honeyPlugin() returns, resolved at `root` as Vite resolves it. */
 function pluginAt(config: HoneyVitePluginConfig, root?: string) {
-	const [plugin] = honey(config)
+	const [plugin] = honeyPlugin(config)
 	if (root !== undefined) plugin.configResolved({ root })
 	return plugin
 }
@@ -45,13 +45,13 @@ function counted(made: Project): () => number {
 const graph = (found: unknown) => ({ moduleGraph: { getModuleById: vi.fn(() => found) } })
 const tree = (dir: string) => readFileSync(join(dir, "src/_gen/routes.gen.ts"), "utf8")
 
-describe("honey() (bit 19 h2)", () => {
+describe("honeyPlugin() (bit 19 h2)", () => {
 	// v0: 82d46bf4d5
 	// v0: 6c71b279c9
 	// v0: a242b669a8
 	it("is one plugin named honey that carries its config for honey generate", () => {
 		const config = { app: "src/app.ts" }
-		const plugins = honey(config)
+		const plugins = honeyPlugin(config)
 		expect([plugins.length, plugins[0].name, plugins[0].api.honeyConfig]).toEqual([1, "honey", config])
 	})
 
@@ -95,7 +95,7 @@ describe("honey() (bit 19 h2)", () => {
 	)
 })
 
-describe("honey() (bit 19 h2), continued (2)", () => {
+describe("honeyPlugin() (bit 19 h2), continued (2)", () => {
 	// v0: add50a69c3
 	it(
 		"builds the virtual document with its output's profile",
@@ -120,7 +120,7 @@ describe("honey() (bit 19 h2), continued (2)", () => {
 			const server = await createServer({
 				configFile: false,
 				logLevel: "silent",
-				plugins: honey({ app: "src/app.ts", codegen: { tree: false } }),
+				plugins: honeyPlugin({ app: "src/app.ts", codegen: { tree: false } }),
 				root: dir,
 				server: { middlewareMode: true, ws: false },
 			})
@@ -135,7 +135,7 @@ describe("honey() (bit 19 h2), continued (2)", () => {
 	)
 })
 
-describe("honey() at build start (bit 19 h2)", () => {
+describe("honeyPlugin() at build start (bit 19 h2)", () => {
 	// v0: 0bc0d6a701
 	// v0: e459c5305b
 	// v0: d27db436ac
@@ -187,7 +187,7 @@ describe("honey() at build start (bit 19 h2)", () => {
 	)
 })
 
-describe("honey() at build start (bit 19 h2), continued (2)", () => {
+describe("honeyPlugin() at build start (bit 19 h2), continued (2)", () => {
 	// v0: 56527a95bd
 	it(
 		"runs one generation when Vite starts two environments back to back, and anew on a later build",
@@ -212,9 +212,9 @@ describe("honey() at build start (bit 19 h2), continued (2)", () => {
 					'import { honey } from "@lovrozagar/honey"\nimport { path } from "./routes.ts"\nexport const app = honey().get(path).handler((c) => c.res.text("ok", "ok"))\n',
 				"src/routes.ts": 'export const path = "/first"\n',
 				"vite.config.ts":
-					'import { honey } from "@lovrozagar/honey/plugin"\nexport default { plugins: [honey({ app: "src/app.ts", codegen: { tree: "src/_gen/routes.gen.ts" } })] }\n',
+					'import { honeyPlugin } from "@lovrozagar/honey/plugin"\nexport default { plugins: [honeyPlugin({ app: "src/app.ts", codegen: { tree: "src/_gen/routes.gen.ts" } })] }\n',
 			})
-			const [plugin] = honey({ app: "src/app.ts" })
+			const [plugin] = honeyPlugin({ app: "src/app.ts" })
 			const configFile = join(made.dir, "vite.config.ts")
 			plugin.configResolved({ command: "build", configFile, plugins: [{ name: "other" }, plugin], root: made.dir })
 			await plugin.buildStart()
@@ -230,7 +230,7 @@ describe("honey() at build start (bit 19 h2), continued (2)", () => {
 		"fails a build start whose child generation fails, naming how it ended",
 		async () => {
 			const made = fresh({ "vite.config.ts": "export default { plugins: [] }\n" })
-			const [plugin] = honey({ app: "src/app.ts" })
+			const [plugin] = honeyPlugin({ app: "src/app.ts" })
 			plugin.configResolved({ configFile: join(made.dir, "vite.config.ts"), plugins: [plugin], root: made.dir })
 			await expect(plugin.buildStart()).rejects.toThrow("honey generate failed (exit 1)")
 		},
@@ -238,7 +238,7 @@ describe("honey() at build start (bit 19 h2), continued (2)", () => {
 	)
 })
 
-describe("honey() on a save in dev (bit 19 h2)", () => {
+describe("honeyPlugin() on a save in dev (bit 19 h2)", () => {
 	// v0: 88cc84efdc
 	it(
 		"regenerates on a watched save and lets HMR go on, the route tree joining the update",
@@ -289,7 +289,7 @@ describe("honey() on a save in dev (bit 19 h2)", () => {
 	)
 })
 
-describe("honey() on a save in dev (bit 19 h2), continued (2)", () => {
+describe("honeyPlugin() on a save in dev (bit 19 h2), continued (2)", () => {
 	// v0: 28ce361b76
 	// v0: 82f8d40099
 	// v0: 1257be6d78
@@ -336,7 +336,7 @@ describe("honey() on a save in dev (bit 19 h2), continued (2)", () => {
 	)
 })
 
-describe("honey() under load (bit 19 h2)", () => {
+describe("honeyPlugin() under load (bit 19 h2)", () => {
 	it(
 		"queues one generation behind a running one, every save meanwhile joining it",
 		async () => {
@@ -369,9 +369,9 @@ describe("honey() under load (bit 19 h2)", () => {
 			const made = fresh({
 				"src/app.ts": appSource(),
 				"vite.config.ts":
-					'import { honey } from "@lovrozagar/honey/plugin"\nexport default ({ mode }) => ({ plugins: [honey({ app: "src/app.ts", codegen: { manifest: mode === "staging" } })] })\n',
+					'import { honeyPlugin } from "@lovrozagar/honey/plugin"\nexport default ({ mode }) => ({ plugins: [honeyPlugin({ app: "src/app.ts", codegen: { manifest: mode === "staging" } })] })\n',
 			})
-			const [plugin] = honey({ app: "src/app.ts" })
+			const [plugin] = honeyPlugin({ app: "src/app.ts" })
 			plugin.configResolved({
 				command: "serve",
 				configFile: join(made.dir, "vite.config.ts"),
@@ -386,7 +386,7 @@ describe("honey() under load (bit 19 h2)", () => {
 	)
 })
 
-describe("honey() under load (bit 19 h2), continued (2)", () => {
+describe("honeyPlugin() under load (bit 19 h2), continued (2)", () => {
 	it("serves the route tree as TypeScript when Vite or its transform is not there", async () => {
 		const code = "const a: number = 1\n"
 		const missing = await toJavaScript(code, () => Promise.reject(new Error("no vite")))
@@ -398,7 +398,7 @@ describe("honey() under load (bit 19 h2), continued (2)", () => {
 	})
 })
 
-describe("honey() under load, failing (bit 19 h2)", () => {
+describe("honeyPlugin() under load, failing (bit 19 h2)", () => {
 	it(
 		"runs the generation queued behind a failed one, each failure reported",
 		async () => {
@@ -423,9 +423,9 @@ describe("honey() under load, failing (bit 19 h2)", () => {
 			const made = fresh({
 				"src/app.ts": appSource(),
 				"vite.config.ts":
-					'import { honey } from "@lovrozagar/honey/plugin"\nexport default ({ mode }) => ({ plugins: [honey({ app: "src/app.ts", codegen: { manifest: mode === "development" } })] })\n',
+					'import { honeyPlugin } from "@lovrozagar/honey/plugin"\nexport default ({ mode }) => ({ plugins: [honeyPlugin({ app: "src/app.ts", codegen: { manifest: mode === "development" } })] })\n',
 			})
-			const [plugin] = honey({ app: "src/app.ts" })
+			const [plugin] = honeyPlugin({ app: "src/app.ts" })
 			plugin.configResolved({
 				command: "serve",
 				configFile: join(made.dir, "vite.config.ts"),

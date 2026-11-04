@@ -190,18 +190,18 @@ SHOP_MCP_TOKEN=$(openssl rand -hex 32) SHOP_API_KEY=… shop-mcp --http --port 8
 An app can serve its own tools itself, at a path of its own, over Streamable HTTP: the same tools, each call
 dispatched in process through the app, so its middleware, limits and every route's own auth run again.
 
-| Value                               | What it is                                                                                                                                                                                           |
-| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `codegen.mcp`                       | the `honey()` plugin output that writes the mounted handler: the entry `src/_gen/mcp.gen.ts` (exporting `mcpHandler`) plus its companion directory `src/_gen/mcp/`, the runtime and the API's TS SDK |
-| `mcp(app, path, handler, options?)` | from `@lovrozagar/honey/mcp`: mounts the generated handler at `path`, POST only (GET and DELETE answer 405), under the app's basePath and middleware, auth before any dispatch                       |
-| `authenticate(request, ctx)`        | required when any mounted tool's operation declares security, else `mcp()` throws at mount; it returns a boolean only, and `false` gets HTTP 401 with `WWW-Authenticate`                             |
+| Value                               | What it is                                                                                                                                                                                          |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `codegen.mcp`                       | the `honeyPlugin()` output that writes the mounted handler: the entry `src/_gen/mcp.gen.ts` (exporting `mcpHandler`) plus its companion directory `src/_gen/mcp/`, the runtime and the API's TS SDK |
+| `mcp(app, path, handler, options?)` | from `@lovrozagar/honey/mcp`: mounts the generated handler at `path`, POST only (GET and DELETE answer 405), under the app's basePath and middleware, auth before any dispatch                      |
+| `authenticate(request, ctx)`        | required when any mounted tool's operation declares security, else `mcp()` throws at mount; it returns a boolean only, and `false` gets HTTP 401 with `WWW-Authenticate`                            |
 
 The plugin writes the handler from the app's own routes marked `mcp: true`:
 
 ```ts
-import { honey } from "@lovrozagar/honey/plugin"
+import { honeyPlugin } from "@lovrozagar/honey/plugin"
 
-export default { plugins: [honey({ app: "src/app.ts", codegen: { mcp: true } })] }
+export default { plugins: [honeyPlugin({ app: "src/app.ts", codegen: { mcp: true } })] }
 ```
 
 The app mounts it, checking the credential before any tool runs:
@@ -461,13 +461,13 @@ host.
 The plugin writes the handler, the scheme naming the header:
 
 ```ts
-import { honey } from "@lovrozagar/honey/plugin"
+import { honeyPlugin } from "@lovrozagar/honey/plugin"
 
 const apiKey = { description: "Format: ApiKey {key}", in: "header", name: "Authorization", type: "apiKey" }
 
 export default {
 	plugins: [
-		honey({
+		honeyPlugin({
 			app: "src/app.ts",
 			codegen: { mcp: true, openApi: { securitySchemes: { apiKey }, title: "Anyrow", version: "1.0.0" } },
 		}),

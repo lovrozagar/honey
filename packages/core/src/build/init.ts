@@ -33,11 +33,11 @@ import { app } from "./app.ts"
 await serve(app, { port: Number(process.env.PORT ?? 3000) })
 `
 
-const VITE_CONFIG_TS = `import { honey } from "@lovrozagar/honey/plugin"
+const VITE_CONFIG_TS = `import { honeyPlugin } from "@lovrozagar/honey/plugin"
 
 export default {
 	plugins: [
-		honey({
+		honeyPlugin({
 			app: "src/app.ts",
 		}),
 	],

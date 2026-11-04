@@ -1,5 +1,5 @@
 /**
- * The `honey` CLI (bit 19 h2): `generate` from the honey() config of a Vite config (a function-form one too, the
+ * The `honey` CLI (bit 19 h2): `generate` from the honeyPlugin() config of a Vite config (a function-form one too, the
  * plugin asked for when there are several), from `--app` alone or over the config's app, strict about its flags;
  * through the bin on Node and Bun, ending once it has written whatever the app left running, and handing its Bun child
  * a signal that lands as it spawns it; `--watch`, each
@@ -45,7 +45,7 @@ function fresh(files: Record<string, string> = {}): Project {
 }
 
 const CONFIG = (options: string) =>
-	`import { honey } from "@lovrozagar/honey/plugin"\nexport default { plugins: [honey(${options})] }\n`
+	`import { honeyPlugin } from "@lovrozagar/honey/plugin"\nexport default { plugins: [honeyPlugin(${options})] }\n`
 
 /** `honey <argv>` in process from `dir`: its exit code and what it wrote. */
 async function run(argv: readonly string[], dir: string, signal?: AbortSignal) {
@@ -76,7 +76,7 @@ describe("honey generate (bit 19 h2)", () => {
 			expect(runs.map(({ err, status }) => [status, err.split("\n")[0]])).toEqual([
 				[1, "honey: missing command"],
 				[1, "honey: unknown command: serve"],
-				[1, "honey: no config found: add honey() to a vite.config.ts, or pass --app"],
+				[1, "honey: no config found: add honeyPlugin() to a vite.config.ts, or pass --app"],
 			])
 			expect(runs[0]?.err.endsWith(`${USAGE}\n`)).toBe(true)
 			expect([await run(["--help"], dir), await run(["generate", "-h"], dir)]).toEqual([
@@ -89,7 +89,7 @@ describe("honey generate (bit 19 h2)", () => {
 	// v0: 62e5575589
 	// v0: 6e3d7e688e
 	it(
-		"generates by the Vite config's honey(), with --app over its app",
+		"generates by the Vite config's honeyPlugin(), with --app over its app",
 		async () => {
 			const { dir } = fresh({
 				"src/app.ts": appSource(),
@@ -125,7 +125,7 @@ describe("honey generate (bit 19 h2)", () => {
 describe("honey generate (bit 19 h2), continued (2)", () => {
 	// v0: f3c257c447
 	it(
-		"refuses an unknown flag and a missing explicit config even with --app, and a config without honey()",
+		"refuses an unknown flag and a missing explicit config even with --app, and a config without honeyPlugin()",
 		async () => {
 			const { dir } = fresh({ "src/app.ts": appSource(), "vite.config.ts": "export default { plugins: [] }\n" })
 			const runs = [
@@ -136,7 +136,7 @@ describe("honey generate (bit 19 h2), continued (2)", () => {
 			expect(runs.map(({ err, status }) => [status, err.split("\n")[0]])).toEqual([
 				[1, "honey: unknown option --manifset"],
 				[1, "honey: config file not found: nope.ts"],
-				[1, `honey: no honey() plugin found in ${join(dir, "vite.config.ts")}; add honey() to it or pass --app`],
+				[1, `honey: no honeyPlugin() found in ${join(dir, "vite.config.ts")}; add honeyPlugin() to it or pass --app`],
 			])
 			expect(read(dir, "src/_gen/routes.gen.ts")).toBe("")
 		},
@@ -149,7 +149,7 @@ describe("honey generate (bit 19 h2), continued (2)", () => {
 		async () => {
 			const { dir } = fresh({
 				"src/app.ts": appSource(),
-				"vite.config.ts": `import { honey } from "@lovrozagar/honey/plugin"\nexport default ({ command, mode }) => ({ plugins: [honey({ app: "src/app.ts", codegen: { manifest: command === "build" && mode === "production" } })] })\n`,
+				"vite.config.ts": `import { honeyPlugin } from "@lovrozagar/honey/plugin"\nexport default ({ command, mode }) => ({ plugins: [honeyPlugin({ app: "src/app.ts", codegen: { manifest: command === "build" && mode === "production" } })] })\n`,
 			})
 			expect((await run(["generate"], dir)).status).toBe(0)
 			expect(read(dir, "src/_gen/manifest.gen.json")).not.toBe("")
@@ -166,13 +166,13 @@ describe("honey generate (bit 19 h2), continued (3)", () => {
 			const { dir } = fresh({
 				"src/a.ts": appSource(),
 				"src/b.ts": appSource({ extra: ['\t.get("/b").handler((c) => c.res.text("ok", "b"))'] }),
-				"vite.config.ts": `import { honey } from "@lovrozagar/honey/plugin"\nexport default { plugins: [honey({ app: "src/a.ts" }), [honey({ app: "src/b.ts" })], honey({})] }\n`,
+				"vite.config.ts": `import { honeyPlugin } from "@lovrozagar/honey/plugin"\nexport default { plugins: [honeyPlugin({ app: "src/a.ts" }), [honeyPlugin({ app: "src/b.ts" })], honeyPlugin({})] }\n`,
 			})
 			const asked = await run(["generate"], dir)
 			expect([asked.status, asked.err.split("\n").slice(0, 4)]).toEqual([
 				1,
 				[
-					`honey: ${join(dir, "vite.config.ts")} has 3 honey() plugins; pick one with --plugin <n>:`,
+					`honey: ${join(dir, "vite.config.ts")} has 3 honeyPlugin() entries; pick one with --plugin <n>:`,
 					"  0: src/a.ts",
 					"  1: src/b.ts",
 					"  2: (no app)",
@@ -183,7 +183,7 @@ describe("honey generate (bit 19 h2), continued (3)", () => {
 			expect((await run(["generate", "--app", "src/a.ts"], dir)).status).toBe(0)
 			expect(read(dir, "src/_gen/routes.gen.ts")).not.toContain('"GET /b"')
 			expect((await run(["generate", "--plugin", "7"], dir)).err.split("\n")[0]).toBe(
-				`honey: --plugin 7: ${join(dir, "vite.config.ts")} has 3 honey() plugin(s)`,
+				`honey: --plugin 7: ${join(dir, "vite.config.ts")} has 3 honeyPlugin() entries`,
 			)
 		},
 		SLOW,
@@ -370,7 +370,7 @@ describe("honey generate --watch (bit 19 h2), continued (2)", () => {
 		async () => {
 			const { dir } = fresh({ "vite.config.ts": CONFIG("{}") })
 			expect((await run(["generate", "--watch"], dir)).err.split("\n")[0]).toBe(
-				"honey: --watch requires --app or a honey() config with app",
+				"honey: --watch requires --app or a honeyPlugin() config with app",
 			)
 			const child = await main(
 				["generate", "--watch", "--app", "src/app.ts"],
@@ -412,7 +412,7 @@ describe("honey generate's edges (bit 19 h2)", () => {
 		async () => {
 			const { dir } = fresh({
 				"src/app.ts": appSource({ extra: HIDDEN_ADDITION }),
-				"vite.config.ts": `import { honey } from "@lovrozagar/honey/plugin"\nexport default ({ command, mode }) => ({ plugins: [honey({ app: "src/app.ts", codegen: { manifest: command === "serve" && mode === "development", tree: false, types: true } })] })\n`,
+				"vite.config.ts": `import { honeyPlugin } from "@lovrozagar/honey/plugin"\nexport default ({ command, mode }) => ({ plugins: [honeyPlugin({ app: "src/app.ts", codegen: { manifest: command === "serve" && mode === "development", tree: false, types: true } })] })\n`,
 			})
 			let err = ""
 			const io = { err: (text: string) => void (err += text), out: () => {} }

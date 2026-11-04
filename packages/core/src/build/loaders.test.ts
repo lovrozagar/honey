@@ -1,6 +1,6 @@
 /**
  * The build tooling's loaders (bit 19 h2): a TypeScript Vite config found and read on plain Node through jiti (v0
- * H70b), each module evaluated once per loader, through Bun's own import on Bun, the `honey()` configs read off the
+ * H70b), each module evaluated once per loader, through Bun's own import on Bun, the `honeyPlugin()` configs read off the
  * plugin objects, and Effect's converter when effect is installed.
  */
 import { execFile } from "node:child_process"
@@ -32,7 +32,7 @@ function project(files: Record<string, string>): string {
 	return dir
 }
 
-/** A `honey()` plugin object as the plugin presents one, carrying `config`. */
+/** A `honeyPlugin()` plugin object as the plugin presents one, carrying `config`. */
 const honeyPlugin = (config: string) => `{ name: "honey", api: { honeyConfig: ${config} } }`
 
 describe("a Vite config read on plain Node (bit 19 h2)", () => {
@@ -63,7 +63,7 @@ describe("a Vite config read on plain Node (bit 19 h2)", () => {
 	})
 })
 
-describe("each honey() config in a Vite config, in plugin order (bit 19 h2)", () => {
+describe("each honeyPlugin() config in a Vite config, in plugin order (bit 19 h2)", () => {
 	const configsOf = async (config: string) => {
 		const dir = project({ "vite.config.ts": config })
 		return loadPluginConfigs(join(dir, "vite.config.ts"), await createModuleLoader({ fresh: true, from: dir }), ENV)

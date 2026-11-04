@@ -64,7 +64,7 @@ generator.
 | `@lovrozagar/honey/request-to-curl` | `requestToCurl`                                                                                                                                     |
 | `@lovrozagar/honey/testing`         | `testClient`, an app called in process or over a runtime's `serve`                                                                                  |
 | `@lovrozagar/honey/tree`            | the route tree's types                                                                                                                              |
-| `@lovrozagar/honey/plugin`          | `honey()`, the Vite plugin that generates the app's artifacts                                                                                       |
+| `@lovrozagar/honey/plugin`          | `honeyPlugin()`, the Vite plugin that generates the app's artifacts                                                                                 |
 | `@lovrozagar/honey/build`           | `createBuildPlugin`, a production bundle for a deploy target                                                                                        |
 
 ## @lovrozagar/honey-clients

@@ -369,8 +369,8 @@ describe("the runtime bundle of an installed core (bit 19 i)", () => {
 		const dir = consumer(join(files.out, "core-only"), { "@lovrozagar/honey": `file:${tarballs.core}` })
 		write(dir, {
 			"plugin.mjs": [
-				'import { honey } from "@lovrozagar/honey/plugin"',
-				'console.log([honey({ app: "src/app.ts" })].flat().map((plugin) => plugin.name).join())',
+				'import { honeyPlugin } from "@lovrozagar/honey/plugin"',
+				'console.log([honeyPlugin({ app: "src/app.ts" })].flat().map((plugin) => plugin.name).join())',
 				"",
 			].join("\n"),
 			"src/app.ts":

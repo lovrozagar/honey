@@ -1,8 +1,8 @@
-import { honey } from "@lovrozagar/honey/plugin"
+import { honeyPlugin } from "@lovrozagar/honey/plugin"
 
 export default {
 	plugins: [
-		honey({
+		honeyPlugin({
 			app: "src/gen-app.ts",
 			codegen: {
 				manifest: true,

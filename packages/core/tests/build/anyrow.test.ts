@@ -86,14 +86,14 @@ const FILES = {
 		"export const app = gateway",
 		"",
 	].join("\n"),
-	"vite.config.ts": `import { honey } from "@lovrozagar/honey/plugin"
+	"vite.config.ts": `import { honeyPlugin } from "@lovrozagar/honey/plugin"
 
 const isContractRoute = (meta) => meta.kind === "contract"
 const hasApiKey = (meta) => [meta.security].flat().includes("apiKey")
 
 export default {
 	plugins: [
-		honey({
+		honeyPlugin({
 			app: "src/gateway.app.ts",
 			codegen: {
 				mergeTree: "src/route-tree.ts",

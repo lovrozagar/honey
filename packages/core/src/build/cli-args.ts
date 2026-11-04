@@ -9,8 +9,8 @@ export const USAGE = `usage: honey generate [options]
        honey init [--workers] [--force]
 
 generate options:
-  --config <path>      the Vite config holding honey() (default: vite.config.{ts,mts,js,mjs})
-  --plugin <n>         which honey() plugin in the config, 0-based, when there are several
+  --config <path>      the Vite config holding honeyPlugin() (default: vite.config.{ts,mts,js,mjs})
+  --plugin <n>         which honeyPlugin() in the config, 0-based, when there are several
   --app <path>         the app entry; overrides the config's app, or replaces the config
   --watch              generate again when files next to the app change
   --tree --types --manifest

@@ -85,11 +85,7 @@
 		"BuildApp",
 		"BuildTarget",
 		"HoneyBuildConfig",
-		"HoneyCodegenConfig",
-		"HoneyOpenApiOutputConfig",
-		"HoneyVitePluginConfig",
-		"createBuildPlugin",
-		"honey"
+		"createBuildPlugin"
 	],
 	"./bun": [
 		"BunServeOptions",
@@ -301,7 +297,7 @@
 		"HoneyOpenApiOutputConfig",
 		"HoneyVitePlugin",
 		"HoneyVitePluginConfig",
-		"honey"
+		"honeyPlugin"
 	],
 	"./powered-by": [
 		"PoweredByOptions",

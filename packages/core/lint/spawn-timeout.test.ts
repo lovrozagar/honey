@@ -53,13 +53,13 @@ describe("honey/spawn-timeout: a test that spawns", () => {
 		expect(messages(code)).toEqual(Array(4).fill(MESSAGES.test))
 	})
 
-	it("is not one when nothing it reaches spawns: a plain leg, honey()'s held hooks, a function kept in an object", () => {
+	it("is not one when nothing it reaches spawns: a plain leg, honeyPlugin()'s held hooks, a function kept in an object", () => {
 		const quiet = [
 			'it("a", () => { expect(1).toBe(1) })',
-			'it("b", () => { expect(honey({ app: "x" })).toHaveLength(1) })',
+			'it("b", () => { expect(honeyPlugin({ app: "x" })).toHaveLength(1) })',
 			'it("c", () => { const hooks = { start() { spawnSync("git") } }; expect(hooks).toBeDefined() })',
 		]
-		const code = `${VITEST}${CHILD}import { honey } from "../../src/build/plugin.ts"\n${quiet.join("\n")}\n`
+		const code = `${VITEST}${CHILD}import { honeyPlugin } from "../../src/build/plugin.ts"\n${quiet.join("\n")}\n`
 		expect(messages(code, "packages/core/tests/build/x.test.ts")).toEqual([])
 	})
 })
