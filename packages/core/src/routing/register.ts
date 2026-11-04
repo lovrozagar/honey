@@ -3,6 +3,8 @@
  * registered into it, and mounting a sub-app. Records are per graph, keyed by `RouteId`; the
  * tree holds ids only, so a sub-app mounted into two parents never shares a record.
  */
+import { ERROR_META, type ErrorMetaEntry } from "../errors/errors.ts"
+import type { ErrorFactoryRecord } from "../errors/projector.ts"
 import type { InputSchemas, InputStep } from "../input/input.ts"
 import type { OutputSchemas } from "./output-types.ts"
 import type { MaybePromise, RuntimeMiddleware } from "../middleware/middleware.ts"
@@ -284,7 +286,15 @@ export function chainErrorKeys(chain: readonly RuntimeMiddleware[]): string[] {
 	return chain.flatMap((mw) => errorsOf(mw) ?? [])
 }
 
-/** The factories a middleware chain's keys come from, each once, in run order. */
-export function chainErrorFactories(chain: readonly RuntimeMiddleware[]): ErrorFactories[] {
-	return [...new Set(chain.flatMap((mw) => errorFactoryOf(mw) ?? []))] as ErrorFactories[]
+/**
+ * What a middleware chain's factories say of the keys each middleware declares, the first in run order winning. A
+ * key it does not declare is never read off its factory, which carries honey's own keys at honey's statuses.
+ */
+export function chainErrorMeta(chain: readonly RuntimeMiddleware[]): ErrorFactoryRecord {
+	const meta: Record<string, ErrorMetaEntry> = Object.create(null)
+	for (const mw of chain) {
+		const own = (errorFactoryOf(mw) as ErrorFactoryRecord | undefined)?.[ERROR_META] ?? {}
+		for (const key of errorsOf(mw) ?? []) if (Object.hasOwn(own, key)) meta[key] ??= own[key] as ErrorMetaEntry
+	}
+	return { [ERROR_META]: meta }
 }

@@ -267,4 +267,20 @@ describe("collectRoutes: a middleware's keys, from the factory it brings", () =>
 			["/y", { conflict_seen: { schema: null, status: 503, statusKey: "service_unavailable" } }],
 		])
 	})
+
+	it("reads a key the middleware does not declare off the app's factory, though its own carries honey's", () => {
+		const audited = createMiddleware(async (_c, next) => next(), {
+			errors: [defineErrors({ audit_failed: "bad_gateway" }), "audit_failed"],
+		})
+		const app = honey<{}>().errorFactory(defineErrors({ request_timeout: "request_timeout" }))
+		app
+			.get("/x")
+			.use(audited)
+			.errors("request_timeout")
+			.handler((c) => c.res.text("ok", "x"))
+		expect(collectRoutes(app).http[0]?.errorMeta).toEqual({
+			audit_failed: { schema: null, status: 502, statusKey: "bad_gateway" },
+			request_timeout: { schema: null, status: 408, statusKey: "request_timeout" },
+		})
+	})
 })

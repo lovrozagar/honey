@@ -337,6 +337,24 @@ describe("toRouteTree(): what a snapshot knows of errors", () => {
 	})
 })
 
+describe("toRouteTree(): a key no middleware of the route declares", () => {
+	it("records a key the middleware does not declare off the app's factory, though its own carries honey's", () => {
+		const app = honey<{}>().errorFactory(defineErrors({ request_timeout: "request_timeout" }))
+		const audited = createMiddleware(async (_c, next) => next(), {
+			errors: [defineErrors({ audit_failed: "bad_gateway" }), "audit_failed"],
+		})
+		app
+			.get("/x")
+			.use(audited)
+			.errors("request_timeout")
+			.handler((c) => c.res.text("ok", "x"))
+		expect(app.toRouteTree().routes["GET /x"]?.es).toEqual({
+			audit_failed: "bad_gateway",
+			request_timeout: "request_timeout",
+		})
+	})
+})
+
 describe("toRouteTree(): loading a snapshot beside registrations", () => {
 	// v0: 2925cec087
 	// v0: 0b67c3421d

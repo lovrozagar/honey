@@ -7,12 +7,12 @@ import { ERROR_META, type ErrorMetaEntry } from "../errors/errors.ts"
 import type { InputSchemas } from "../input/input.ts"
 import { type StatusKey, statusKeyToCode } from "../response/status.ts"
 import { compareCodeUnits } from "../schema/canonicalize.ts"
-import { chainErrorFactories, type HoneyGraph } from "../routing/register.ts"
+import { chainErrorMeta, type HoneyGraph } from "../routing/register.ts"
 import { GRAPH } from "../routing/app.ts"
 import { finalTable } from "../routing/dispatch.ts"
 import type { Plan } from "../routing/finalize.ts"
 import type { OutputSchemas } from "../routing/output-types.ts"
-import type { ErrorFactories } from "../routing/settings.ts"
+import type { ErrorFactoryRecord } from "../errors/projector.ts"
 import {
 	expandOptional,
 	parsePattern,
@@ -79,7 +79,7 @@ function inferred(key: string): CollectedError | null {
 }
 
 /** Where a key's status is looked up: an app's factory, or a generated tree's record of its status keys. */
-type ErrorSource = ErrorFactories | Readonly<Record<string, string>> | null | undefined
+type ErrorSource = ErrorFactoryRecord | Readonly<Record<string, string>> | null | undefined
 
 /** What `source` holds for `key`: its factory's ERROR_META entry, or the status key a tree recorded. */
 function lookup(source: ErrorSource, key: string): ErrorMetaEntry | undefined {
@@ -146,7 +146,7 @@ export function collectRoutes(app: { readonly [GRAPH]: HoneyGraph }): CollectedR
 		const chain = plans.get(id)?.mw ?? []
 		const errorMeta = errorMetaOf(errorKeys, [
 			record?.ef,
-			...chainErrorFactories(chain),
+			chainErrorMeta(chain),
 			record?.own.errorFactory,
 			g.loaded?.[id]?.es,
 			g.settings.errorFactory,

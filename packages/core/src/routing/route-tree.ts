@@ -6,20 +6,21 @@
  * and a live record carrying the scopes that cover it here.
  */
 import { ERROR_META, type ErrorMetaEntry } from "../errors/errors.ts"
+import type { ErrorFactoryRecord } from "../errors/projector.ts"
 import { compareCodeUnits } from "../schema/canonicalize.ts"
 import { finalTable } from "./dispatch.ts"
 import { type Plan, scopesFor } from "./finalize.ts"
 import { expandOptional, splitRouteId } from "./pattern.ts"
 import {
 	addRoute,
-	chainErrorFactories,
+	chainErrorMeta,
 	createGraph,
 	GRAPH,
 	type HoneyGraph,
 	isServed,
 	type RouteHandler,
 } from "./register.ts"
-import { copySettings, type ErrorFactories } from "./settings.ts"
+import { copySettings } from "./settings.ts"
 import { SettingsChain } from "./settings-chain.ts"
 import {
 	assertTreeFormat,
@@ -59,13 +60,11 @@ export function routeTreeGraph(g: HoneyGraph, tree: RouteTree): HoneyGraph {
 /** Each key's status key from the first factory whose ERROR_META knows it; `null` when none does. */
 function statusKeysOf(
 	keys: readonly string[],
-	factories: readonly (ErrorFactories | null)[],
+	factories: readonly (ErrorFactoryRecord | null)[],
 ): Record<string, string> | null {
 	const out: Record<string, string> = {}
 	for (const key of keys) {
-		const meta = factories
-			.map((f) => (f as { [ERROR_META]?: Record<string, ErrorMetaEntry> } | null)?.[ERROR_META])
-			.find((m) => m !== undefined && Object.hasOwn(m, key))
+		const meta = factories.map((f) => f?.[ERROR_META]).find((m) => m !== undefined && Object.hasOwn(m, key))
 		if (meta !== undefined) out[key] = (meta[key] as ErrorMetaEntry).statusKey
 	}
 	return Object.keys(out).length === 0 ? null : out
@@ -87,7 +86,7 @@ export function snapshotRouteTree(g: HoneyGraph): RouteTree {
 		/* the record resolves the same way anywhere: its chain carries the scopes covering it here */
 		const cm = [...r.cm, ...scopesFor(g, expandOptional(r.sg))]
 		const h: RouteHandler = { ...r, cm, dk: new Set(ek), rb: policy.boundaryKey, xm: route.meta }
-		const es = statusKeysOf(ek, [r.ef, ...chainErrorFactories(mw), r.own.errorFactory])
+		const es = statusKeysOf(ek, [r.ef, chainErrorMeta(mw), r.own.errorFactory])
 		const bd = declaredBody(r.iv)
 		routes[id] = {
 			...(bd === null ? {} : { bd }),
