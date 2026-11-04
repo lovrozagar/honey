@@ -223,9 +223,9 @@ describe("v1 adversarial: cookie codec fuzz", () => {
 
 describe("v1 adversarial: signed-cookie tamper", () => {
 	it("only the untouched value under a known secret and its name verifies", async () => {
-		const signer = createCookieSigner(["current", "previous"])
-		const signed = await signer.sign("u-42", { name: "sid" })
-		const rotated = await createCookieSigner(["previous"]).sign("u-42", { name: "sid" })
+		const signer = createCookieSigner({ name: "sid", secrets: ["current", "previous"] })
+		const signed = await signer.sign("u-42")
+		const rotated = await createCookieSigner({ name: "sid", secrets: ["previous"] }).sign("u-42")
 		const tampered = [
 			signed.replace("u-42", "u-43"),
 			`${signed.slice(0, -1)}${signed.endsWith("A") ? "B" : "A"}`,
@@ -233,12 +233,12 @@ describe("v1 adversarial: signed-cookie tamper", () => {
 			"u-42",
 			"u-42.",
 			`${signed}.x`,
-			await createCookieSigner(["stranger"]).sign("u-42", { name: "sid" }),
-			await signer.sign("u-42", { name: "other" }),
+			await createCookieSigner({ name: "sid", secrets: ["stranger"] }).sign("u-42"),
+			await createCookieSigner({ name: "other", secrets: ["current"] }).sign("u-42"),
 		]
-		expect(await signer.verify(signed, { legacy: false, name: "sid" })).toBe("u-42")
-		expect(await signer.verify(rotated, { legacy: false, name: "sid" })).toBe("u-42")
-		for (const value of tampered) expect(await signer.verify(value, { legacy: false, name: "sid" }), value).toBeNull()
+		expect(await signer.verify(signed)).toBe("u-42")
+		expect(await signer.verify(rotated)).toBe("u-42")
+		for (const value of tampered) expect(await signer.verify(value), value).toBeNull()
 	})
 })
 

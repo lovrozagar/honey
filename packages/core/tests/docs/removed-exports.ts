@@ -90,6 +90,7 @@ export const REMOVED_NAMES: Readonly<Record<string, Verdict>> = {
 	ResolvedSdkPorts: { kind: "internal", why: PLUGIN },
 	RouteHandler: { kind: "internal", why: TREE },
 	RouteId: { kind: "internal", why: TREE },
+	SignOptions: { kind: "guide" },
 	ServeRuntime: {
 		kind: "internal",
 		why: "the runtime name the request log records; a server imports its runtime's serve, so an app never names one",
@@ -97,6 +98,7 @@ export const REMOVED_NAMES: Readonly<Record<string, Verdict>> = {
 	SuccessStatusKey: { kind: "internal", why: SHAPE },
 	TranslationRegistry: { kind: "internal", why: "the i18n registry core fills; an app passes errorI18n() instead" },
 	TrustProxy: { kind: "guide" },
+	VerifyOptions: { kind: "guide" },
 	WSContextImpl: { kind: "internal", why: ADAPTER },
 	WSPreUpgrade: { kind: "internal", why: ADAPTER },
 	WSRouteHandler: { kind: "internal", why: TREE },
@@ -120,7 +122,9 @@ export const REMOVED_NAMES: Readonly<Record<string, Verdict>> = {
 	resolveFieldName: { kind: "internal", why: "the i18n lookup core calls; an app passes errorI18n() instead" },
 	resolveHoneyConfig: { kind: "internal", why: PLUGIN },
 	resolveTranslation: { kind: "internal", why: "the i18n lookup core calls; an app passes errorI18n() instead" },
+	sign: { kind: "guide" },
 	spec: { kind: "guide" },
+	verify: { kind: "guide" },
 }
 
 /** The names a module's source exports, however it writes them: a list, a re-export, or a declaration. */

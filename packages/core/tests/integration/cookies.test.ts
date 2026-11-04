@@ -205,13 +205,13 @@ describe("a cookie's trip to the client and back", () => {
 	)
 
 	it("a signed value comes back verified; a tampered one, or one checked under another name, is refused", async () => {
-		const signer = createCookieSigner(["secret-1"])
-		const signed = await signer.sign("u-42", { name: "token" })
-		const app = roundTripApp({ value: signed }, async (raw) => (raw ? signer.verify(raw, { name: "token" }) : null))
+		const signer = createCookieSigner({ name: "token", secrets: ["secret-1"] })
+		const signed = await signer.sign("u-42")
+		const app = roundTripApp({ value: signed }, async (raw) => (raw ? signer.verify(raw) : null))
 		const [setCookie] = (await send(app, "/set")).setCookie
 		const pair = sentBack(setCookie as string)
 		expect((await send(app, "/read", pair)).body).toEqual({ token: "u-42" })
 		expect((await send(app, "/read", pair.replace("u-42", "u-43"))).body).toEqual({ token: null })
-		expect(await signer.verify(signed, { legacy: false, name: "session" })).toBeNull()
+		expect(await createCookieSigner({ name: "session", secrets: ["secret-1"] }).verify(signed)).toBeNull()
 	})
 })

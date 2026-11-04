@@ -60,7 +60,7 @@ generator.
 | `@lovrozagar/honey/proxy`           | `proxy`, a route that forwards to an upstream                                                                                                       |
 | `@lovrozagar/honey/accepts`         | `accepts`, content negotiation                                                                                                                      |
 | `@lovrozagar/honey/cookie`          | `serializeCookie`, `parseCookieHeader`                                                                                                              |
-| `@lovrozagar/honey/cookie-sign`     | `sign`, `verify`, `createCookieSigner`                                                                                                              |
+| `@lovrozagar/honey/cookie-sign`     | `createCookieSigner`                                                                                                                                |
 | `@lovrozagar/honey/crypto`          | `timingSafeEqual`                                                                                                                                   |
 | `@lovrozagar/honey/request-to-curl` | `requestToCurl`                                                                                                                                     |
 | `@lovrozagar/honey/testing`         | `testClient`, an app called in process or over a runtime's `serve`                                                                                  |
@@ -82,7 +82,7 @@ The SDK, CLI and MCP generators run through `honey-clients generate` ([code gene
 ```ts
 import { accepts } from "@lovrozagar/honey/accepts"
 import { serializeCookie } from "@lovrozagar/honey/cookie"
-import { sign, verify } from "@lovrozagar/honey/cookie-sign"
+import { createCookieSigner } from "@lovrozagar/honey/cookie-sign"
 import { timingSafeEqual } from "@lovrozagar/honey/crypto"
 import { requestToCurl } from "@lovrozagar/honey/request-to-curl"
 
@@ -95,9 +95,9 @@ const type = accepts(req, ["application/json", "text/html"])
 
 const cookie = serializeCookie("theme", { value: "dark", httpOnly: true, path: "/", sameSite: "lax" })
 
-/* a signature bound to the cookie's name; verify takes every secret still accepted, newest first */
-const signed = await sign("abc", SECRET, { name: "sid" })
-const value = await verify(signed, [SECRET, OLD_SECRET], { name: "sid" })
+/* one signer per cookie, its name bound into each signature; every secret still accepted, newest first */
+const sid = createCookieSigner({ name: "sid", secrets: [SECRET, OLD_SECRET] })
+const value = await sid.verify(await sid.sign("abc"))
 
 const same = await timingSafeEqual("token-a", "token-b")
 

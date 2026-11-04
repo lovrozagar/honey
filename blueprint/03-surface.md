@@ -16,7 +16,8 @@ Every public export of both packages, tagged **KEEP** (re-homed and split, behav
 | `./codegen` | MOVE→gen [H3] | **removed from core** (→ `honey-clients` `.` entry) |
 | `./codegen-go-cli` | MOVE→gen [H3] | **removed from core** (→ `honey-clients` CLI emitter) |
 | `./codegen/extract` | MOVE→gen [H3] | **removed from core** (→ `honey-clients` `extract/`) |
-| `./cookie`, `./cookie-sign` | KEEP | |
+| `./cookie` | KEEP | |
+| `./cookie-sign` | KEEP, MODIFY (plan 39 6.7) | only `createCookieSigner({ name, secrets })`; the one-shot `sign`/`verify`, `legacy` and the unbound v1 format are deleted |
 | `./cors` | MODIFY [F1] | credential-reflection hardening kept under the adversarial gate |
 | `./crypto` | KEEP | |
 | `./csrf` | KEEP | |

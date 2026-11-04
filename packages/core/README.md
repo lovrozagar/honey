@@ -562,14 +562,15 @@ and `HoneyRes` the response builder, both exported for a helper of your own that
 
 ## Cookies
 
-`ctx.cookies` reads them, and a response sets them. Signed cookies are a signer you build from your secrets, newest
-first, so a rotation keeps the old ones verifying:
+`ctx.cookies` reads them, and a response sets them. A signed cookie has a signer you build from its name and your
+secrets, newest first, so a rotation keeps the old ones verifying and a value signed for one cookie never passes as
+another:
 
 ```ts
 import { honey } from "@lovrozagar/honey"
 import { createCookieSigner } from "@lovrozagar/honey/cookie-sign"
 
-const signer = createCookieSigner([process.env.COOKIE_SECRET ?? ""])
+const signer = createCookieSigner({ name: "session", secrets: [process.env.COOKIE_SECRET ?? ""] })
 
 const app = honey()
 
@@ -586,23 +587,15 @@ app.get("/me").handler(async (ctx) => {
 })
 ```
 
-`@lovrozagar/honey/cookie` has the header functions on their own (`serializeCookie`, `parseCookieHeader`) and
-`@lovrozagar/honey/cookie-sign` the one-shot `sign` and `verify`:
+`@lovrozagar/honey/cookie` has the header functions on their own (`serializeCookie`, `parseCookieHeader`):
 
 ```ts
 import { parseCookieHeader, serializeCookie } from "@lovrozagar/honey/cookie"
-import { sign, verify } from "@lovrozagar/honey/cookie-sign"
 
 declare const req: Request
-declare const SECRET: string
-declare const OLD_SECRET: string
 
 const jar = parseCookieHeader(req.headers.get("cookie") ?? "")
 const header = serializeCookie("theme", { value: "dark", httpOnly: true, path: "/", sameSite: "lax" })
-
-/* a signature bound to the cookie's name; verify takes every secret still accepted, newest first */
-const signed = await sign("abc", SECRET, { name: "sid" })
-const value = await verify(signed, [SECRET, OLD_SECRET], { name: "sid" })
 ```
 
 Full reference: [cookies](https://github.com/lovrozagar/honey/blob/main/docs/cookies.md).
@@ -1302,7 +1295,7 @@ generator.
 | `@lovrozagar/honey/proxy`           | `proxy`, a route that forwards to an upstream                                                                            |
 | `@lovrozagar/honey/accepts`         | `accepts`, content negotiation                                                                                           |
 | `@lovrozagar/honey/cookie`          | `serializeCookie`, `parseCookieHeader`                                                                                   |
-| `@lovrozagar/honey/cookie-sign`     | `sign`, `verify`, `createCookieSigner`                                                                                   |
+| `@lovrozagar/honey/cookie-sign`     | `createCookieSigner`                                                                                                     |
 | `@lovrozagar/honey/crypto`          | `timingSafeEqual`                                                                                                        |
 | `@lovrozagar/honey/request-to-curl` | `requestToCurl`                                                                                                          |
 | `@lovrozagar/honey/testing`         | `testClient`, an app called in process or over a runtime's `serve`                                                       |

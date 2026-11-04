@@ -2,11 +2,10 @@
  * Signed cookie values: HMAC-SHA256 over WebCrypto, verified in constant time by
  * `crypto.subtle.verify`. Key rotation is a secret list: the first signs, any verifies.
  *
- * - v2 (current): `<value>.~<sig>`, the HMAC of `"honey-cookie-v2\0" + name + "\0" + value`. The
- *   cookie name is bound into the MAC, so a signature cannot be replayed under another cookie that
- *   shares the secret. `~` is outside the base64url alphabet, so the two formats never overlap.
- * - v1 (legacy): `<value>.<sig>`, the HMAC of the value alone. `verify` accepts it while `legacy` is
- *   true (the default), so cookies issued before v2 keep working during a migration window.
+ * The format is `<value>.~<sig>`, the HMAC of `"honey-cookie-v2\0" + name + "\0" + value`. The
+ * cookie name is bound into the MAC, so a signature cannot be replayed under another cookie that
+ * shares the secret. The unbound v1 format (`<value>.<sig>`, the HMAC of the value alone) is gone:
+ * it never verifies.
  */
 
 // per-process-constant: text-codec
@@ -17,21 +16,12 @@ const V2_DOMAIN = "honey-cookie-v2\0"
 /* an HMAC-SHA256 tag is 32 bytes: 43 base64url characters, no padding */
 const SIG_RE = /^[A-Za-z0-9_-]{43}$/
 
-/** Options for `sign()` and `CookieSigner.sign()`. */
-export type SignOptions = {
-	/** The cookie name to bind the signature to. Pass the same name to `verify`. */
-	name?: string
-}
-
-/** Options for `verify()` and `CookieSigner.verify()`. */
-export type VerifyOptions = {
-	/**
-	 * Also accept legacy (v1) signatures, which are not bound to a name.
-	 * Default `true`; set `false` once every v1 cookie has expired.
-	 */
-	legacy?: boolean
-	/** The cookie name the signature must be bound to. */
-	name?: string
+/** Options for `createCookieSigner()`: the cookie it signs for, and its secrets. */
+export type CookieSignerOptions = {
+	/** The cookie's name, bound into every signature: a value signed for one cookie never verifies as another. */
+	name: string
+	/** The first signs and any verifies, so secrets can rotate. */
+	secrets: readonly [string, ...string[]]
 }
 
 /**
@@ -72,18 +62,13 @@ function v2Payload(name: string, value: string): Uint8Array<ArrayBuffer> {
 type Parsed = { payload: Uint8Array<ArrayBuffer>; sig: Uint8Array<ArrayBuffer>; value: string }
 
 /** Split a signed value into the value, its tag and the payload the tag covers; `null` when malformed. */
-function parseSigned(signed: string, opts: VerifyOptions): Parsed | null {
-	if (typeof signed !== "string" || signed.length === 0) return null
-	const lastDot = signed.lastIndexOf(".")
-	if (lastDot === -1) return null
-	const value = signed.slice(0, lastDot)
-	let sigText = signed.slice(lastDot + 1)
-	const isV2 = sigText.startsWith(V2_MARKER)
-	if (isV2) sigText = sigText.slice(V2_MARKER.length)
-	else if (opts.legacy === false) return null
-	const sig = fromBase64Url(sigText)
+function parseSigned(signed: string, name: string): Parsed | null {
+	const marker = signed.lastIndexOf(`.${V2_MARKER}`)
+	if (marker === -1) return null
+	const value = signed.slice(0, marker)
+	const sig = fromBase64Url(signed.slice(marker + 1 + V2_MARKER.length))
 	if (sig === null) return null
-	return { payload: isV2 ? v2Payload(opts.name ?? "", value) : encoder.encode(value), sig, value }
+	return { payload: v2Payload(name, value), sig, value }
 }
 
 async function verifiesWith(
@@ -99,43 +84,39 @@ async function verifiesWith(
 	}
 }
 
-/** Signs and verifies cookie values: the first secret signs, any secret verifies, so secrets can rotate. */
+/** Signs and verifies one cookie's values: the first secret signs, any secret verifies, so secrets can rotate. */
 export type CookieSigner = {
-	/** Sign with the first secret. Rejects with a `TypeError` when the list has none. */
-	sign(value: string, opts?: SignOptions): Promise<string>
-	/** The original value, or `null` when no secret verifies it or the input is malformed. */
-	verify(signed: string, opts?: VerifyOptions): Promise<string | null>
+	/** Sign with the first secret, bound to the cookie's name. Rejects when WebCrypto cannot import that secret. */
+	sign(value: string): Promise<string>
+	/** The original value, or `null` when no secret verifies it for this cookie or the input is malformed. */
+	verify(signed: string): Promise<string | null>
 }
 
 /**
- * A signer over a secret list: the first signs, any verifies. Each key is imported once, on first
- * use, and held by the signer, so a per-request verify costs no key import. Build one per app.
+ * The signer for one cookie: its name is bound into every signature, the first secret signs and any verifies.
+ * Each key is imported once, on first use, and held by the signer, so a per-request verify costs no key import.
+ * Build one per cookie, once. Throws `TypeError` for an empty name or no secret.
  */
-export function createCookieSigner(secrets: readonly string[]): CookieSigner {
+export function createCookieSigner(options: CookieSignerOptions): CookieSigner {
+	const { name, secrets } = options
+	if (secrets.length === 0) throw new TypeError("createCookieSigner: secrets needs at least one secret")
+	if (!name) throw new TypeError("createCookieSigner: name must be the cookie's name")
 	let keys: Promise<CryptoKey>[] | null = null
 	const keysOf = (): Promise<CryptoKey>[] => (keys ??= secrets.map(importKey))
 	return {
-		async sign(value, opts = {}) {
-			const first = keysOf()[0]
-			if (first === undefined) throw new TypeError("no secret to sign with")
-			const signature = await crypto.subtle.sign("HMAC", await first, v2Payload(opts.name ?? "", value))
+		async sign(value) {
+			const signature = await crypto.subtle.sign(
+				"HMAC",
+				await (keysOf()[0] as Promise<CryptoKey>),
+				v2Payload(name, value),
+			)
 			return `${value}.${V2_MARKER}${toBase64Url(new Uint8Array(signature))}`
 		},
-		async verify(signed, opts = {}) {
-			const parsed = parseSigned(signed, opts)
+		async verify(signed) {
+			const parsed = parseSigned(signed, name)
 			if (parsed === null) return null
 			for (const key of keysOf()) if (await verifiesWith(key, parsed.sig, parsed.payload)) return parsed.value
 			return null
 		},
 	}
-}
-
-/** Sign one value; imports the key each call. A hot path holds a `createCookieSigner` instead. */
-export function sign(value: string, secret: string, opts: SignOptions = {}): Promise<string> {
-	return createCookieSigner([secret]).sign(value, opts)
-}
-
-/** Verify one value; imports the keys each call. A hot path holds a `createCookieSigner` instead. */
-export function verify(signed: string, secrets: readonly string[], opts: VerifyOptions = {}): Promise<string | null> {
-	return createCookieSigner(secrets).verify(signed, opts)
 }

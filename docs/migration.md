@@ -700,6 +700,28 @@ app.errorI18n(
 )
 ```
 
+## `createCookieSigner({ name, secrets })` signs one cookie; `sign`, `verify` and `legacy` are gone
+
+`@lovrozagar/honey/cookie-sign` exports only `createCookieSigner`. The signer takes the cookie's name with its
+secrets and binds that name into every signature, so its `sign(value)` and `verify(signed)` take nothing else. The
+one-shot `sign` and `verify`, their `SignOptions` and `VerifyOptions`, and the `legacy` option are gone: a v1
+signature, the HMAC of the value alone, never verifies, so a value signed for one cookie cannot pass as another. A
+value the signer signed before keeps verifying under the same name and secrets.
+
+```ts v0
+import { sign, verify } from "@lovrozagar/honey/cookie-sign"
+const token = await sign("user-42", secret, { name: "sid" })
+const user = await verify(token, [secret, oldSecret], { legacy: false, name: "sid" })
+```
+
+```ts
+import { createCookieSigner } from "@lovrozagar/honey/cookie-sign"
+
+const sid = createCookieSigner({ name: "sid", secrets: ["current-secret", "previous-secret"] })
+const token = await sid.sign("user-42")
+const user = await sid.verify(token)
+```
+
 ## One removed name per subpath, and what it is now
 
 The rest of what 0.7.3 exported and 1.0 does not. Everything else it exported was its own internals — an
