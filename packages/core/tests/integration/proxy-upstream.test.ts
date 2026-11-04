@@ -234,6 +234,11 @@ for (const name of Object.keys(RUNTIMES)) {
 			expect([res.status, res.body.toString().match(/^data: /gm)?.length]).toEqual([200, 13])
 		}, 30_000)
 
+		it("a path whose test is not about a deadline waits out a slow upstream (700 ms): only hang and sse set one", async () => {
+			const res = await withConn(name, (conn) => conn.send(get("/up/slow")))
+			expect([res.status, res.body.toString()]).toEqual([200, '{"slow":true}'])
+		}, 30_000)
+
 		// v0: 639da2521d
 		it("no response headers within the timeout is a 504", async () => {
 			expect((await withConn(name, (conn) => conn.send(get("/up/hang")))).status).toBe(504)
@@ -276,6 +281,8 @@ for (const name of Object.keys(RUNTIMES)) {
 					`PROPFIND /up/echo HTTP/1.1\r\nHost: app.test\r\nContent-Length: 5\r\nExpect: 100-continue\r\n\r\n`,
 					Buffer.from("<x/>\n"),
 				)
+				/* the statuses first, so a 504 is named as one and not as a body without headers */
+				expect([up.status, removed.status, propfind.status]).toEqual([200, 200, 200])
 				type Seen = { bodySize: number; headers: Record<string, string>; method: string }
 				const [a, b, c] = [up, removed, propfind].map((res) => JSON.parse(res.body.toString()) as Seen) as [
 					Seen,

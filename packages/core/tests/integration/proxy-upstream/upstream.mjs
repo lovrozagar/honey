@@ -110,6 +110,8 @@ const ROUTES = {
 	"/gzip-large": gzipped(LARGE_GZ, "text/plain"),
 	"/gzip-small": gzipped(SMALL_GZ, "application/json"),
 	"/redirect": redirect,
+	/* answers after 700 ms, as a loaded runner's upstream can */
+	"/slow": (_req, res) => setTimeout(() => json(res, { slow: true }), 700),
 	"/sse": sse,
 	"/stall": stall,
 }

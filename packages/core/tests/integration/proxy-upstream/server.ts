@@ -31,6 +31,8 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
 	})
 }
 
+const HEADER_TIMEOUTS: Record<string, number> = { "/up/hang": 300, "/up/sse": 500 }
+
 const app = honey<{}>()
 app.get("/state").handler(async (ctx) => ctx.res.json("ok", await (await fetch(`${base}/__state`)).json()))
 app
@@ -46,7 +48,12 @@ app.all("/up/*rest").handler(
 		destination: (_ctx, url, init) => fetch(base + url, init),
 		idleTimeout: (ctx: { path: string }) => (ctx.path === "/up/stall" ? 300 : 0),
 		rewriteUrl: (_ctx, url) => url.slice("/up".length),
-		timeout: (ctx: { path: string }) => (ctx.path === "/up/hang" ? 300 : 500),
+		/*
+		 * a header deadline only where a test is about one: 504 on hang, SSE streaming past 500 ms. Any other path has
+		 * none (0), since a 3 MB upload under load once took past 500 ms to its headers (plan 39); the test's own 30 s
+		 * timeout is its hang guard
+		 */
+		timeout: (ctx: { path: string }) => HEADER_TIMEOUTS[ctx.path] ?? 0,
 	}),
 )
 
