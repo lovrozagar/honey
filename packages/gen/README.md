@@ -154,7 +154,7 @@ One table, since a flag that is not written down is a flag nobody finds:
 | `--java-homepage`          | java   | the POM's https project URL                                                       |
 | `--java-license`           | java   | its SPDX license id, linked to spdx.org                                           |
 | `--java-repository`        | java   | the https URL of its git repository, the POM's scm                                |
-| `--java-developer`         | java   | `Name <email>`, the POM's developer                                               |
+| `--java-developers`        | java   | the POM's developers, comma separated: each a name or `Name <email>`              |
 | `--cli-binary-name`        | cli    | the command's own name (`shop`)                                                   |
 | `--cli-base-url`           | cli    | the base URL it calls by default; the document's server by default                |
 | `--cli-module-path`        | cli    | the Go module path the CLI is built from                                          |
@@ -412,7 +412,8 @@ honey-clients generate --spec openapi.json --target java --out generated --java-
 ```
 
 Maven Central refuses a POM without a URL, a license, a developer and scm: give them with `--java-homepage`,
-`--java-license`, `--java-developer "Name <email>"` and `--java-repository`. Signing the publication stays yours.
+`--java-license`, `--java-developers "Name <email>, Other Name"` and `--java-repository`, or once for every target in
+the metadata block, whose authors are the POM's developers. Signing the publication stays yours.
 
 ```java
   static String listing(KitchenClient client) {

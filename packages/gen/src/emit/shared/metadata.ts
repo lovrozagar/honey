@@ -130,3 +130,7 @@ export const issuesUrl = (repository: string): string => `${repository.replace(/
 
 /** An author's name: what is left of it without ` <email>`. */
 export const authorName = (author: string): string => author.replace(/ <[^<>]*>$/, "")
+
+/** One author AUTHOR accepted, split: its name, and its email when it gives one. */
+export const authorOf = (author: string): { readonly name: string; readonly email?: string } =>
+	author.endsWith(">") ? personOf(author) : { name: author }

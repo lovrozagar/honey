@@ -8,7 +8,7 @@
  * written the same way, and is left out when not given.
  */
 import { escapeText } from "../shared/escape.ts"
-import { checked, HTTPS_URL, PERSON, personOf, SPDX_ID, TEXT } from "../shared/metadata.ts"
+import { AUTHOR, authorOf, checked, HTTPS_URL, SPDX_ID, TEXT } from "../shared/metadata.ts"
 
 /** The package's identity, each part validated. */
 export type JavaPackage = {
@@ -128,22 +128,31 @@ export type JavaPomMetadata = {
 	readonly license?: string
 	/** the https URL of its git repository, without a trailing `/` or `.git` */
 	readonly repository?: string
-	/** `Name <email>` */
-	readonly developer?: string
+	/** the POM's developers, comma separated: each a name, or `Name <email>` */
+	readonly developers?: string
 }
+
+/** The POM metadata validated: the developers one entry each. */
+type PomFields = Omit<JavaPomMetadata, "developers"> & { readonly developers?: readonly string[] }
 
 /* a repository is a path on its host: `https://host/owner/name` */
 const REPOSITORY_PATH = /^https:\/\/[^/]+\/[^/]/
+
+/** The developers option as one author each, or a refusal of the whole value when any is not a name or `Name <email>`. */
+function developersOf(value: string | undefined): readonly string[] | undefined {
+	const authors = value?.split(",").map((author) => author.trim())
+	return authors?.every((author) => AUTHOR.test(author)) === false ? refuse("developers", value as string) : authors
+}
 
 /**
  * The metadata options, each validated; the repository's trailing `/` and `.git` dropped, as the scm block adds `.git`
  * to its connections and shows the rest as its web URL.
  */
-function pomMetadata(options: JavaPomMetadata): JavaPomMetadata {
+function pomMetadata(options: JavaPomMetadata): PomFields {
 	const repository = checked("repository", options.repository, HTTPS_URL)
 	return {
 		description: checked("description", options.description, TEXT),
-		developer: checked("developer", options.developer, PERSON),
+		developers: developersOf(options.developers),
 		homepage: checked("homepage", options.homepage, HTTPS_URL),
 		license: checked("license", options.license, SPDX_ID),
 		repository: checked("repository", repository, REPOSITORY_PATH)
@@ -153,7 +162,7 @@ function pomMetadata(options: JavaPomMetadata): JavaPomMetadata {
 }
 
 /** The POM's words: the document's name and description (spec text, written only through `groovyString`), the rest. */
-export type JavaPom = JavaPomMetadata & { readonly name?: string }
+export type JavaPom = PomFields & { readonly name?: string }
 
 /** The POM for `options` over the document's `info`: the metadata validated, its description over the document's. */
 export function pomOf(
@@ -181,11 +190,18 @@ const assignments = (indent: string, entries: readonly (readonly [key: string, v
 /** A `key { … }` block at `indent` around `body`. */
 const nested = (indent: string, key: string, body: string) => `${indent}${key} {\n${body}${indent}}\n`
 
-/** The POM's url, license, developer and scm lines, each only when its option was given. */
-function pomMetadataLines(pom: JavaPomMetadata): string {
-	const developer = pom.developer === undefined ? undefined : personOf(pom.developer)
-	const member = (key: string, entries: readonly (readonly [key: string, value: string])[]) =>
-		nested(POM + IN, key, assignments(POM + IN + IN, entries))
+/** A `key { … }` block one level into the POM, its entries as Groovy strings. */
+const member = (key: string, entries: readonly (readonly [key: string, value: string])[]) =>
+	nested(POM + IN, key, assignments(POM + IN + IN, entries))
+
+/** One author's `developer { … }` block: its name, and its email when it gives one. */
+function developerBlock(author: string): string {
+	const { email, name } = authorOf(author)
+	return member("developer", [["name", name], ...(email === undefined ? [] : [["email", email] as const])])
+}
+
+/** The POM's url, license, developers and scm lines, each only when its option was given. */
+function pomMetadataLines(pom: PomFields): string {
 	const connection = `scm:git:${pom.repository}.git`
 	return [
 		pom.homepage === undefined ? "" : assignments(POM, [["url", pom.homepage]]),
@@ -199,16 +215,7 @@ function pomMetadataLines(pom: JavaPomMetadata): string {
 						["url", `https://spdx.org/licenses/${pom.license}.html`],
 					]),
 				),
-		developer === undefined
-			? ""
-			: nested(
-					POM,
-					"developers",
-					member("developer", [
-						["name", developer.name],
-						["email", developer.email],
-					]),
-				),
+		pom.developers === undefined ? "" : nested(POM, "developers", pom.developers.map(developerBlock).join("")),
 		pom.repository === undefined
 			? ""
 			: nested(

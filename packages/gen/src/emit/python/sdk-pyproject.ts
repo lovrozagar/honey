@@ -4,7 +4,7 @@
  * (plan 39 8.4), each value already held to its grammar (no control character), and lands as a TOML basic string,
  * whose escapes JSON's are. The package name and version are validated before anything is emitted.
  */
-import { issuesUrl, type Metadata, personOf } from "../shared/metadata.ts"
+import { issuesUrl, type Metadata, authorOf } from "../shared/metadata.ts"
 
 /** The `requires-python` every emitted package declares: the floor CI installs (PY_FLOOR). */
 export const PYTHON_REQUIRES = ">=3.11"
@@ -57,9 +57,8 @@ const toml = (text: string) => JSON.stringify(text)
 
 /** One author as PEP 621's inline table: its name, and its email when given. */
 function authorTable(author: string): string {
-	if (!author.endsWith(">")) return `{ name = ${toml(author)} }`
-	const { email, name } = personOf(author)
-	return `{ name = ${toml(name)}, email = ${toml(email)} }`
+	const { email, name } = authorOf(author)
+	return email === undefined ? `{ name = ${toml(name)} }` : `{ name = ${toml(name)}, email = ${toml(email)} }`
 }
 
 /** The `[project]` lines the metadata block fills, each only when given, in PEP 621's order. */

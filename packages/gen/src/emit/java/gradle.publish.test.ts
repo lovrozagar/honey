@@ -5,9 +5,10 @@
  * (`-Xdoclint:all,-missing -Werror`, C#'s `TreatWarningsAsErrors` with only CS1591 waived). An offline
  * `publishToMavenLocal` on Gradle's JDK 21 writes the four artifacts; spec text reaches the POM as written, never as
  * Groovy; a broken `{@link}` fails the build. What else Central requires of a POM comes from options:
- * `--java-homepage` (its url), `--java-license` (an SPDX id, linked to spdx.org), `--java-developer` (`Name <email>`) and
- * `--java-repository` (scm's url, connection and developer connection), each left out when not given and refused at
- * generate when invalid; `--java-description` replaces the document's. Signing stays the publisher's.
+ * `--java-homepage` (its url), `--java-license` (an SPDX id, linked to spdx.org), `--java-developers` (one developer per
+ * author, each a name or `Name <email>`, comma separated; every author of the metadata block by default, plan 39 8.6)
+ * and `--java-repository` (scm's url, connection and developer connection), each left out when not given and refused
+ * at generate when invalid; `--java-description` replaces the document's. Signing stays the publisher's.
  */
 import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
@@ -27,9 +28,10 @@ const DOCUMENT = { info: { ...HOSTILE, version: "1" }, openapi: "3.1.0", paths: 
 
 const build = (options: JavaSdkOptions = {}) => generateJavaSdk(DOCUMENT, options).files["build.gradle"] ?? ""
 
-/** The POM metadata a Central publication needs, a developer whose name Groovy would read as code unescaped. */
+/** The POM metadata a Central publication needs: a developer whose name Groovy would read as code unescaped, and one
+ * named alone. */
 const METADATA = {
-	developer: "Ada O'Brien ${x} <ada@example.com>",
+	developers: "Ada O'Brien ${x} <ada@example.com>, Bo",
 	homepage: "https://shop.example.com",
 	license: "Apache-2.0",
 	repository: "https://github.com/acme/shop-java.git/",
@@ -70,7 +72,7 @@ describe("build.gradle: the publication (item 6)", () => {
 })
 
 describe("build.gradle: the POM metadata Central requires", () => {
-	it("writes the url, the license, the developer and the scm the options give, as escaped Groovy strings", () => {
+	it("writes the url, the license, the developers and the scm the options give, as escaped Groovy strings", () => {
 		expect(build(METADATA))
 			.toContain(`                description = 'It\\'s \\"one\\" line\\nand \${System.exit(1)} \\\\u0041 another'
                 url = 'https://shop.example.com'
@@ -84,6 +86,9 @@ describe("build.gradle: the POM metadata Central requires", () => {
                     developer {
                         name = 'Ada O\\'Brien \${x}'
                         email = 'ada@example.com'
+                    }
+                    developer {
+                        name = 'Bo'
                     }
                 }
                 scm {
@@ -112,10 +117,11 @@ describe("build.gradle: the POM metadata Central requires", () => {
 		["license", "MIT'"],
 		["repository", "https://github.com"],
 		["repository", "git@github.com:acme/shop.git"],
-		["developer", "Ada"],
-		["developer", "<ada@example.com>"],
-		["developer", "Ada <ada>"],
-		["developer", "Ada <ada@example.com> x"],
+		["developers", ""],
+		["developers", "<ada@example.com>"],
+		["developers", "Ada <ada>"],
+		["developers", "Ada <ada@example.com> x"],
+		["developers", "Ada,,Bo"],
 	])("refuses %s %j at generate", (option, value) => {
 		expect(() => build({ [option]: value })).toThrow(`Invalid ${option}: ${JSON.stringify(value)}`)
 	})
@@ -148,7 +154,7 @@ describe.skipIf(!JAVA)("the publication, built offline on Gradle's JDK 21 (item 
 			metadata: [
 				"https://shop.example.com",
 				"<license><name>Apache-2.0</name><url>https://spdx.org/licenses/Apache-2.0.html</url></license>",
-				"<developer><name>AdaO'Brien${x}</name><email>ada@example.com</email></developer>",
+				"<developer><name>AdaO'Brien${x}</name><email>ada@example.com</email></developer><developer><name>Bo</name></developer>",
 				"<connection>scm:git:https://github.com/acme/shop-java.git</connection><developerConnection>scm:git:https://github.com/acme/shop-java.git</developerConnection><url>https://github.com/acme/shop-java</url>",
 			],
 			status: 0,
