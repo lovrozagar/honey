@@ -11,18 +11,18 @@ import { compareCodeUnits } from "../shared/lang.ts"
 import { literalType, quoteKey } from "../shared/literals.ts"
 
 /** core's route-tree node (routing/tree.ts), field by field. */
-export type TreeNodeV2 = {
+export type TreeNode = {
 	/** The dynamic parameter child: the parameter's name `n` and its subtree `c`; null when the node has none. */
 	d: {
 		/** The subtree under the parameter. */
-		c: TreeNodeV2
+		c: TreeNode
 		/** The parameter's name. */
 		n: string
 	} | null
 	/** The route id for each HTTP method at exactly this path; null when no HTTP route ends here. */
 	m: Readonly<Record<string, string>> | null
 	/** The static children, by literal path segment. */
-	s: Readonly<Record<string, TreeNodeV2>>
+	s: Readonly<Record<string, TreeNode>>
 	/** The wildcard: its name `n` and the route id for each method `m`; null when the node has none. */
 	w: {
 		/** The route id for each HTTP method on the wildcard. */
@@ -35,7 +35,7 @@ export type TreeNodeV2 = {
 }
 
 /** One route's data in a snapshot; `h`, `iv` and `out` are live values, never emitted. */
-export type RouteEntryV2 = {
+export type RouteEntry = {
 	/** The declared body as data: `"json"`, `"form"`, or the binary media types. */
 	bd?: string | readonly string[]
 	/**
@@ -66,15 +66,15 @@ export type RouteEntryV2 = {
  * A route tree in core's format (`app.toRouteTree()` makes one) as `generateRouteTree` reads it: the topology and each
  * route's data.
  */
-export type RouteTreeV2 = {
+export type RouteTree = {
 	/** Not read by the generators: each route's meta comes from its entry's `mt`. */
 	meta?: Readonly<Record<string, unknown>>
 	/** The topology's root node; its leaves are route ids. */
-	root: TreeNodeV2
+	root: TreeNode
 	/**
 	 * Each route's data by route id. A route no leaf of `root` names is not emitted; a leaf with no entry here throws.
 	 */
-	routes: Readonly<Record<string, RouteEntryV2>>
+	routes: Readonly<Record<string, RouteEntry>>
 	/** The format version. `generateRouteTree` throws unless it is 2, so leaving it out throws too. */
 	v?: number
 }
@@ -91,7 +91,7 @@ type Emitted = {
 }
 
 /** Every route id a leaf of `root` names: method maps, wildcard method maps and WebSocket leaves. */
-function leafIds(root: TreeNodeV2): Set<string> {
+function leafIds(root: TreeNode): Set<string> {
 	const ids = new Set<string>()
 	const stack = [root]
 	for (let node = stack.pop(); node !== undefined; node = stack.pop()) {
@@ -151,7 +151,7 @@ function* stringsIn(value: unknown): Generator<string> {
 }
 
 /** Refuse a lone surrogate anywhere in the tree: printed through F2 it would become U+FFFD and re-key a route. */
-function assertWellFormed(tree: RouteTreeV2): void {
+function assertWellFormed(tree: RouteTree): void {
 	const data = Object.values(tree.routes).map(({ bek, ek, es, mt }) => ({ bek, ek, es, mt }))
 	for (const text of stringsIn([tree.root, tree.routes, data])) {
 		if (wellFormed(text) !== text)
@@ -160,14 +160,14 @@ function assertWellFormed(tree: RouteTreeV2): void {
 }
 
 /** The routes to emit: the input's `routes` order, restricted to leaf ids, each checked. */
-function emittedRoutes(tree: RouteTreeV2): Emitted[] {
+function emittedRoutes(tree: RouteTree): Emitted[] {
 	const leaves = leafIds(tree.root)
 	for (const id of leaves)
 		if (!Object.hasOwn(tree.routes, id)) throw new Error(`route tree leaf ${id} has no route entry`)
 	return Object.keys(tree.routes)
 		.filter((id) => leaves.has(id))
 		.map((id) => {
-			const entry = tree.routes[id] as RouteEntryV2
+			const entry = tree.routes[id] as RouteEntry
 			/* core's snapshot writes `mt: {}` for every route without meta: no key, no meta */
 			const mt = entry.mt && Object.keys(entry.mt).length > 0 ? entry.mt : null
 			if (mt !== null) assertJsonMeta(id, mt)
@@ -209,7 +209,7 @@ const methodMap = (m: Readonly<Record<string, string>>, intern: InternPool) =>
 		.join(", ")} })`
 
 /** A node as `N(s, m, d, w, ws)`, trailing defaults left out. */
-function nodeText(node: TreeNodeV2, intern: InternPool): string {
+function nodeText(node: TreeNode, intern: InternPool): string {
 	const statics = Object.entries(node.s)
 	const args = [
 		statics.length > 0
@@ -278,7 +278,7 @@ function selectorType(routes: readonly Emitted[], intern: InternPool): string {
 }
 
 /** The route-tree module for `tree` (a snapshot or a merged tree); throws on anything it cannot carry. */
-export function generateRouteTree(tree: RouteTreeV2): string {
+export function generateRouteTree(tree: RouteTree): string {
 	if (tree.v !== 2) throw new Error(`route tree version ${String(tree.v)} is not supported: generateRouteTree reads v2`)
 	const routes = emittedRoutes(tree)
 	assertWellFormed(tree)

@@ -2,7 +2,7 @@
  * Route-tree data in core's wire format v2 (core routing/tree.ts), placed by pattern the way core
  * places routes: what `app.toRouteTree()` hands `generateRouteTree`, built without core (H2).
  */
-import type { RouteEntryV2, RouteTreeV2, TreeNodeV2 } from "../route-tree.ts"
+import type { RouteEntry, RouteTree, TreeNode } from "../route-tree.ts"
 
 type Node = {
 	d: { c: Node; n: string } | null
@@ -13,7 +13,7 @@ type Node = {
 }
 
 /** A row of `treeOf`: a method (`WS` for the websocket slot), a pattern, and the route's data. */
-export type TreeRow = readonly [method: string, pattern: string, entry?: RouteEntryV2]
+export type TreeRow = readonly [method: string, pattern: string, entry?: RouteEntry]
 
 /** A null-prototype record, as core's `dict()`: a segment named `__proto__` is just a key. */
 const dict = <T>(): Record<string, T> => Object.create(null) as Record<string, T>
@@ -39,9 +39,9 @@ function place(root: Node, segments: readonly string[], method: string, id: stri
 }
 
 /** A v2 tree of `rows`: each placed by pattern (an optional last param at both leaves), its data keyed by route id. */
-export function treeOf(rows: readonly TreeRow[]): RouteTreeV2 {
+export function treeOf(rows: readonly TreeRow[]): RouteTree {
 	const root = createNode()
-	const routes: Record<string, RouteEntryV2> = {}
+	const routes: Record<string, RouteEntry> = {}
 	for (const [method, pattern, entry = {}] of rows) {
 		const segments = pattern.split("/").filter((seg) => seg !== "")
 		const id = `${method} /${segments.join("/")}`
@@ -53,5 +53,5 @@ export function treeOf(rows: readonly TreeRow[]): RouteTreeV2 {
 		} else place(root, segments, method, id)
 		routes[id] = entry
 	}
-	return { meta: {}, root: root as TreeNodeV2, routes, v: 2 }
+	return { meta: {}, root: root as TreeNode, routes, v: 2 }
 }

@@ -5,7 +5,7 @@
  */
 import * as tsMorph from "ts-morph"
 import { describe, expect, it } from "vitest"
-import type { RouteTreeV2 } from "./route-tree.ts"
+import type { RouteTree } from "./route-tree.ts"
 import { typechecker } from "./__fixtures__/typecheck.ts"
 import { generateTypes } from "./type-gen.ts"
 
@@ -14,7 +14,7 @@ type Json = Record<string, unknown>
 const typecheck = typechecker(tsMorph)
 
 const STRING = { type: "string" }
-const EMPTY_TREE: RouteTreeV2 = { root: { d: null, m: null, s: {}, w: null, ws: null }, routes: {}, v: 2 }
+const EMPTY_TREE: RouteTree = { root: { d: null, m: null, s: {}, w: null, ws: null }, routes: {}, v: 2 }
 
 /** A document of `operations` by path and method, each with `x-honey-route` set from its method and `pattern`. */
 function documentOf(operations: Record<string, Record<string, Json & { pattern?: string }>>): Json {

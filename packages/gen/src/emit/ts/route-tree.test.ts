@@ -8,18 +8,18 @@ import { Project, ts } from "ts-morph"
 import { describe, expect, it } from "vitest"
 import { emittedRouteTree } from "./__fixtures__/emitted.ts"
 import { treeOf } from "./__fixtures__/tree-data.ts"
-import { generateRouteTree, type RouteEntryV2, type RouteTreeV2, type TreeNodeV2 } from "./route-tree.ts"
+import { generateRouteTree, type RouteEntry, type RouteTree, type TreeNode } from "./route-tree.ts"
 
 type Loaded = {
 	readonly meta?: Readonly<Record<string, Readonly<Record<string, unknown>>>>
-	readonly routeTree: RouteTreeV2 & { readonly meta: Readonly<Record<string, unknown>> }
-	readonly routes: Readonly<Record<string, RouteEntryV2>>
+	readonly routeTree: RouteTree & { readonly meta: Readonly<Record<string, unknown>> }
+	readonly routes: Readonly<Record<string, RouteEntry>>
 	readonly text: string
-	readonly tree: TreeNodeV2
+	readonly tree: TreeNode
 }
 
 /** The module emitted for `tree`, imported. */
-const emitted = async (tree: RouteTreeV2) => (await emittedRouteTree(tree)) as unknown as Loaded
+const emitted = async (tree: RouteTree) => (await emittedRouteTree(tree)) as unknown as Loaded
 
 /** Core's tree types (core routing/tree.ts) restated: what `@lovrozagar/honey/tree` gives the emitted module. */
 const CORE_TREE = `export type TreeNode = {
@@ -65,7 +65,7 @@ const project = new Project({
 project.createSourceFile("/honey/tree.ts", CORE_TREE)
 
 /** Every diagnostic of the module emitted for `tree` and of a `consumer.ts` of type assertions beside it. */
-function typecheck(tree: RouteTreeV2, consumer: string): string[] {
+function typecheck(tree: RouteTree, consumer: string): string[] {
 	for (const file of project.getSourceFiles("/gen/**")) project.removeSourceFile(file)
 	project.createSourceFile("/gen/routes.gen.ts", generateRouteTree(tree))
 	project.createSourceFile("/gen/consumer.ts", `${PRELUDE}${consumer}\n`)
@@ -87,7 +87,7 @@ const cycle: Record<string, unknown> = {}
 cycle.self = cycle
 
 /** The static child `segment` of `node`, by a plain string key. */
-const child = (node: TreeNodeV2 | undefined, segment: string) => node?.s[segment]
+const child = (node: TreeNode | undefined, segment: string) => node?.s[segment]
 
 /** The message `run` throws, or `null`. */
 function thrown(run: () => unknown): string | null {
@@ -234,7 +234,7 @@ describe("generateRouteTree: route data", () => {
 		const iv = { json: { properties: { id: { type: "string" } }, type: "object" } }
 		const out = { "application/json": { ok: { properties: { secret: { type: "string" } } } } }
 		const h = { fn: () => "handler-body-marker", id: "POST /one" }
-		const live = { bek: null, ek: [], h, iv, mt: null, out, x: 1 } as RouteEntryV2
+		const live = { bek: null, ek: [], h, iv, mt: null, out, x: 1 } as RouteEntry
 		const { routes, text } = await emitted(
 			treeOf([
 				["POST", "/one", live],

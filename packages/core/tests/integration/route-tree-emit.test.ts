@@ -2,7 +2,7 @@
  * A live app's tree through gen's `generateRouteTree` and back: `app.toRouteTree()` → the emitted
  * `routes.gen.ts`, imported → `honey().routeTree(module.routeTree)` plus the same registrations,
  * which must serve exactly as the live app does. Gen is imported by path, test-only; calling it
- * on `toRouteTree()` typechecks core's `RouteTree` against gen's `RouteTreeV2` (the drift guard).
+ * on `toRouteTree()` typechecks core's `RouteTree` against gen's restatement of it (the drift guard).
  */
 import { describe, expect, it } from "vitest"
 import * as z from "zod"

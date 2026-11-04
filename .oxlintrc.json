@@ -85,7 +85,8 @@
 				"honey/no-module-side-effects": "error",
 				"honey/no-module-state": "error",
 				"honey/no-v8-ignore": "error",
-				"honey/public-jsdoc": "error"
+				"honey/public-jsdoc": "error",
+				"honey/unversioned-public": "error"
 			}
 		},
 		{

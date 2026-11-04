@@ -14,7 +14,7 @@ import { compareCodeUnits } from "../shared/lang.ts"
 import { literalType, quoteKey } from "../shared/literals.ts"
 import { statusKeyOf } from "../shared/status-keys.ts"
 import { irToTs, type TypeOptions } from "../shared/type-emitter.ts"
-import type { RouteTreeV2 } from "./route-tree.ts"
+import type { RouteTree } from "./route-tree.ts"
 import { componentNames } from "./sdk-types.ts"
 
 /**
@@ -31,7 +31,7 @@ export type GenerateTypesOptions = {
 	/** what could not be joined, said once each */
 	readonly report: (message: string) => void
 	/** the app's route tree, read for each route's meta */
-	readonly tree: RouteTreeV2
+	readonly tree: RouteTree
 }
 
 /* the names the file declares, which a component schema never takes */

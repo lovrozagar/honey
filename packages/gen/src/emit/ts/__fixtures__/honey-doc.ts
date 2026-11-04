@@ -6,7 +6,7 @@
  * openapi/responses.ts layout; gen imports nothing from core (H2).
  */
 import type { ExtractedProp, ExtractedTypes } from "../../../extract/extract.ts"
-import type { RouteTreeV2, TreeNodeV2 } from "../route-tree.ts"
+import type { RouteTree, TreeNode } from "../route-tree.ts"
 
 type Json = Record<string, unknown>
 
@@ -24,7 +24,7 @@ export type HoneyRoute = {
 	readonly meta?: Record<string, unknown>
 }
 
-export type HoneyApp = { readonly document: Json; readonly tree: RouteTreeV2 }
+export type HoneyApp = { readonly document: Json; readonly tree: RouteTree }
 
 const STATUS_CODES: Readonly<Record<string, number>> = { accepted: 202, created: 201, no_content: 204, ok: 200 }
 const ALL_METHODS = ["get", "post", "put", "patch", "delete"]
@@ -117,18 +117,18 @@ function operationOf(route: HoneyRoute, id: string): Json {
 	return op
 }
 
-const node = (): TreeNodeV2 => ({ d: null, m: null, s: Object.create(null), w: null, ws: null })
+const node = (): TreeNode => ({ d: null, m: null, s: Object.create(null), w: null, ws: null })
 
 /** Place route `id` in the tree under `root`. */
-function plant(root: TreeNodeV2, method: string, pattern: string, id: string): void {
-	let at = root as { -readonly [K in keyof TreeNodeV2]: TreeNodeV2[K] }
+function plant(root: TreeNode, method: string, pattern: string, id: string): void {
+	let at = root as { -readonly [K in keyof TreeNode]: TreeNode[K] }
 	for (const segment of pattern.split("/").filter(Boolean)) {
 		if (segment.startsWith("*")) {
 			at.w = { m: { ...at.w?.m, [method]: id }, n: segment.slice(1) || "*" }
 			return
 		}
 		if (segment.startsWith(":")) at = (at.d ??= { c: node(), n: segment.slice(1) }).c as typeof at
-		else at = ((at.s as Record<string, TreeNodeV2>)[segment] ??= node()) as typeof at
+		else at = ((at.s as Record<string, TreeNode>)[segment] ??= node()) as typeof at
 	}
 	if (method === "WS") at.ws = id
 	else at.m = { ...at.m, [method]: id }

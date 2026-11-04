@@ -8,6 +8,7 @@ import { rule as noModuleState } from "./no-module-state.js"
 import { rule as noV8Ignore } from "./no-v8-ignore.js"
 import { rule as publicJsdoc } from "./public-jsdoc.js"
 import { rule as spawnTimeout } from "./spawn-timeout.js"
+import { rule as unversionedPublic } from "./unversioned-public.js"
 
 export default {
 	meta: { name: "honey" },
@@ -21,5 +22,6 @@ export default {
 		"no-v8-ignore": noV8Ignore,
 		"public-jsdoc": publicJsdoc,
 		"spawn-timeout": spawnTimeout,
+		"unversioned-public": unversionedPublic,
 	},
 }

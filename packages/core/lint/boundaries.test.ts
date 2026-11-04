@@ -84,8 +84,8 @@ describe("honey/boundaries: packages", () => {
 			"packages/core/src/openapi/document.ts": 'import { generate } from "@lovrozagar/honey-clients"\n',
 			"packages/core/src/build/plugin.ts": 'import { generateTypes } from "@lovrozagar/honey-clients"\n',
 			"packages/core/src/build/generate.ts": [
-				'import type { RouteTreeV2 } from "@lovrozagar/honey-clients"',
-				'export type { RouteTreeV2 } from "@lovrozagar/honey-clients"',
+				'import type { RouteTree } from "@lovrozagar/honey-clients"',
+				'export type { RouteTree } from "@lovrozagar/honey-clients"',
 				'export { generateTypes } from "@lovrozagar/honey-clients"',
 				'export const codegen = () => import("@lovrozagar/honey-clients")',
 				"",

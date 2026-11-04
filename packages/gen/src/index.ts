@@ -12,7 +12,7 @@ export {
 } from "./emit/shared/metadata.ts"
 export { type ExtractedTypes, type ExtractOptions, extractTypes, loadTsMorph } from "./extract/extract.ts"
 export { type GeneratedMcpHandler, generateMcpHandler } from "./emit/mcp/mounted.ts"
-export { generateRouteTree, type RouteTreeV2 } from "./emit/ts/route-tree.ts"
+export { generateRouteTree, type RouteTree } from "./emit/ts/route-tree.ts"
 export { type GenerateTypesOptions, generateTypes } from "./emit/ts/type-gen.ts"
 export {
 	type Generated,
