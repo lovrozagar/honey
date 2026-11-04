@@ -515,7 +515,7 @@ app.get("/report").handler((ctx) => ctx.res.text("ok", "row\n".repeat(5000)))
 | `prettyJson(options?)`          | `@lovrozagar/honey/pretty-json`     | indents a JSON body when the query asks                                                   |
 | `requestId(options?)`           | `@lovrozagar/honey/request-id`      | one id per request, on the response and in the log                                        |
 | `timeout(options)`              | `@lovrozagar/honey/timeout`         | a deadline per request                                                                    |
-| `bodyLimit(options)`            | `@lovrozagar/honey/body-limit`      | refuses a body over a size                                                                |
+| `bodyLimit(options)`            | `@lovrozagar/honey/body-limit`      | refuses a body over a size, or of a media type it does not list                           |
 | `ipRestrict(options)`           | `@lovrozagar/honey/jwt`             | `signJwt`, `verifyJwt`, `remoteJwks`, `decodeJwtPayload`, `importPkcs8`, `isJwsAlgorithm` |
 | `@lovrozagar/honey/ip-restrict` | an allow or deny list over `ctx.ip` |
 | `ipAllowed(ip, lists)`          | `@lovrozagar/honey/ip-restrict`     | the same check for lists read per request                                                 |

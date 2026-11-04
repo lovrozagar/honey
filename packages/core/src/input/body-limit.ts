@@ -3,6 +3,7 @@
  * cap answers 413 before anything is read; otherwise the body is counted as it is read, whatever
  * the length claims, and the read that passes the cap fails with 413. Every method that carries a
  * body is limited, extension methods too; a request with no body and no declared length is not.
+ * With `rejectUnlisted`, a body whose media type no `limits` key matches answers 415 instead.
  */
 import { withBody } from "../adapters/fetch-request.ts"
 import { EK, HoneyError } from "../errors/error.ts"
@@ -21,6 +22,12 @@ export type BodyLimitOptions = {
 	/** The cap for a body no `limits` key matches, in bytes. */
 	maxSize: number
 	/**
+	 * Answer 415 `unsupported_media_type` for a body whose media type no `limits` key matches, a body with no
+	 * Content-Type included, before anything is read: `limits` is then the list of media types a body may have. A
+	 * request with no body, or a declared length of 0, passes. Needs `limits`.
+	 */
+	rejectUnlisted?: boolean
+	/**
 	 * Take a declared Content-Length within the cap at its word and count nothing. HTTP/1.1 and
 	 * HTTP/2 framing keep a body to its declared length, but only where the transport enforces
 	 * it; by default every byte is counted. A body with no declared length is always counted.
@@ -36,11 +43,11 @@ function tooLarge(): HoneyError {
 	return new HoneyError({ errorKey: EK.content_too_large, status: "content_too_large" })
 }
 
-/** The cap for `contentType` under `limits`: its essence's key, else its family's; `maxSize` when none. */
-function capFor(limits: Readonly<Record<string, number>>, maxSize: number, contentType: string | null): number {
+/** The cap `limits` lists for `contentType`: its essence's key, else its family's; `undefined` when none matches. */
+function listedCap(limits: Readonly<Record<string, number>>, contentType: string | null): number | undefined {
 	const mt = parseMediaType(contentType)
-	if (mt === null) return maxSize
-	return limits[mt.essence] ?? limits[`${mt.type}/`] ?? maxSize
+	if (mt === null) return undefined
+	return limits[mt.essence] ?? limits[`${mt.type}/`]
 }
 
 /** A declared length, or `null` when it is absent or not a whole number of bytes. */
@@ -91,34 +98,53 @@ function counted(body: ReadableStream<Uint8Array>, cap: number): ReadableStream<
 	})
 }
 
+/** The keys `bodyLimit(options)` answers with: `unsupported_media_type` too unless `rejectUnlisted` is off. */
+type BodyLimitErrors<TOptions extends BodyLimitOptions> = TOptions extends { readonly rejectUnlisted: infer R }
+	? R extends false | undefined
+		? "content_too_large"
+		: "content_too_large" | "unsupported_media_type"
+	: "content_too_large"
+
 /**
  * Limit the request body to `options.maxSize` bytes, or to the `limits` entry for its media type. A declared
  * Content-Length over the cap answers 413 before anything is read; otherwise the read that passes the cap fails with
- * 413. It declares `content_too_large` on each route behind it.
+ * 413. Under `rejectUnlisted`, a body of a media type `limits` does not list answers 415. It declares the keys it
+ * answers with on each route behind it. Throws `TypeError` for `rejectUnlisted` without `limits`.
  */
-export function bodyLimit(options: BodyLimitOptions): MiddlewareFn<
+export function bodyLimit<const TOptions extends BodyLimitOptions>(
+	options: TOptions,
+): MiddlewareFn<
 	{
 		/** The request whose body is limited. */
 		req: Request
 	},
 	{},
-	"content_too_large"
+	BodyLimitErrors<TOptions>
 > {
-	const { maxSize, trustContentLength = false } = options
+	const { maxSize, rejectUnlisted = false, trustContentLength = false } = options
+	if (rejectUnlisted && options.limits === undefined) {
+		throw new TypeError("bodyLimit: rejectUnlisted needs limits, the media types it lets through")
+	}
 	/* keys lowercased once, on a record with no prototype: a media type never finds a prototype member */
 	const limits: Record<string, number> = Object.create(null)
 	for (const [key, cap] of Object.entries(options.limits ?? {})) limits[key.trim().toLowerCase()] = cap
-	const mw: MiddlewareFn<{ req: Request }, {}, "content_too_large"> = (ctx, next) => {
+	const mw: MiddlewareFn<{ req: Request }, {}, BodyLimitErrors<TOptions>> = (ctx, next) => {
 		const req = ctx.req
 		const declared = declaredLength(req.headers.get("content-length"))
 		const body = req.body
 		if (body === null && declared === null) return next()
-		const cap = capFor(limits, maxSize, req.headers.get("content-type"))
+		const listed = listedCap(limits, req.headers.get("content-type"))
+		if (listed === undefined && rejectUnlisted && declared !== 0) {
+			throw new HoneyError({ errorKey: EK.unsupported_media_type, status: "unsupported_media_type" })
+		}
+		const cap = listed ?? maxSize
 		if (declared !== null && declared > cap) throw tooLarge()
 		if (body === null || (trustContentLength && declared !== null)) return next()
 		replaceRequest(ctx, withBody(req, counted(body, cap)))
 		return next()
 	}
-	mw.errors = ["content_too_large"]
+	mw.errors = (
+		rejectUnlisted ? ["content_too_large", "unsupported_media_type"] : ["content_too_large"]
+	) as BodyLimitErrors<TOptions>[]
 	return namedMiddleware("bodyLimit", mw)
 }

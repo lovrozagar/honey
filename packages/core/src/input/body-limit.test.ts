@@ -1,5 +1,5 @@
 import type { AddressInfo } from "node:net"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest"
 import { type HoneyServer, createNodeServer } from "../adapters/node/server.ts"
 import * as z from "zod"
 import { defineErrors } from "../errors/errors.ts"
@@ -469,5 +469,74 @@ describe("bodyLimit: the error it declares", () => {
 			Object.keys(paths["/upload"]?.post?.responses ?? {}),
 			Object.keys(paths["/open"]?.post?.responses ?? {}),
 		]).toEqual([["413"], ["200"]])
+	})
+})
+
+/** An app whose bodies may be JSON or any multipart type, and nothing else. */
+const listed = () =>
+	limited({ limits: { "application/json": 100, "multipart/": 1000 }, maxSize: 100, rejectUnlisted: true })
+
+describe("bodyLimit: rejectUnlisted, the media types a body may have", () => {
+	it("lets a listed essence or family through, and answers 415 for any other body, however close its name", async () => {
+		const app = listed()
+		const status = async (type: string | null) =>
+			(await app.fetch(to("POST", "{}", type === null ? {} : { "content-type": type }), {})).status
+		expect([
+			await status("application/json"),
+			await status("Application/JSON; charset=utf-8"),
+			await status("multipart/form-data; boundary=x"),
+			await status("application/jsonx"),
+			await status("application/json-patch+json"),
+			await status("text/plain"),
+			await status("not a media type"),
+			await status(null),
+		]).toEqual([200, 200, 200, 415, 415, 415, 415, 415])
+	})
+
+	it("answers 415 unsupported_media_type before reading, and lets a request with no body through", async () => {
+		const app = listed()
+		let pulled = false
+		/* no high-water mark, so nothing pulls until a read does */
+		const body = new ReadableStream<Uint8Array>(
+			{
+				pull(controller) {
+					pulled = true
+					controller.close()
+				},
+			},
+			{ highWaterMark: 0 },
+		)
+		const init = { body, duplex: "half", headers: { "content-type": "text/plain" }, method: "POST" }
+		const refused = await app.fetch(new Request("http://localhost/x", init as RequestInit), {})
+		const empty = await app.fetch(to("POST", null, { "content-length": "0" }), {})
+		expect([refused.status, ((await refused.json()) as { error_key: string }).error_key, pulled, empty.status]).toEqual(
+			[415, "unsupported_media_type", false, 200],
+		)
+		expect(await answer(app.fetch(to("GET", null), {}))).toEqual([200, "get"])
+	})
+})
+
+/** The keys a JSON-only bodyLimit declares, with rejectUnlisted on or off. */
+const keys = (rejectUnlisted: boolean) =>
+	bodyLimit({ limits: { "application/json": 1 }, maxSize: 1, rejectUnlisted }).errors
+
+describe("bodyLimit: rejectUnlisted, its declared keys and its options", () => {
+	it("declares unsupported_media_type beside content_too_large, and only when it is on", () => {
+		expect([keys(true), keys(false)]).toEqual([["content_too_large", "unsupported_media_type"], ["content_too_large"]])
+		type Answers<T extends { errors?: readonly string[] }> = NonNullable<T["errors"]>[number]
+		const limits = { "application/json": 1 }
+		expectTypeOf<
+			Answers<ReturnType<typeof bodyLimit<{ limits: typeof limits; maxSize: 1; rejectUnlisted: true }>>>
+		>().toEqualTypeOf<"content_too_large" | "unsupported_media_type">()
+		expectTypeOf<
+			Answers<ReturnType<typeof bodyLimit<{ limits: typeof limits; maxSize: 1; rejectUnlisted: boolean }>>>
+		>().toEqualTypeOf<"content_too_large" | "unsupported_media_type">()
+		expectTypeOf<Answers<ReturnType<typeof bodyLimit<{ maxSize: 1 }>>>>().toEqualTypeOf<"content_too_large">()
+	})
+
+	it("throws a TypeError when it has no limits to list", () => {
+		expect(() => bodyLimit({ maxSize: 1, rejectUnlisted: true })).toThrow(
+			new TypeError("bodyLimit: rejectUnlisted needs limits, the media types it lets through"),
+		)
 	})
 })
