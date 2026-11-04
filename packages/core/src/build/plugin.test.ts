@@ -144,7 +144,10 @@ describe("honeyPlugin() at build start (bit 19 h2)", () => {
 		async () => {
 			const { dir } = fresh({ "src/app.ts": appSource() })
 			await pluginAt(
-				{ app: "src/app.ts", codegen: { manifest: true, openApi: { title: "Test", version: "2.0" } } },
+				{
+					app: "src/app.ts",
+					codegen: { manifest: true, openApi: { formats: ["json", "yaml"], title: "Test", version: "2.0" } },
+				},
 				dir,
 			).buildStart()
 			expect(tree(dir)).toMatch(/"GET \/health"[\s\S]*"POST \/items"/)

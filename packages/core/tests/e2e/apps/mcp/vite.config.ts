@@ -14,7 +14,8 @@ export default {
 			app: "src/gen-app.ts",
 			codegen: {
 				mcp: true,
-				openApi: { securitySchemes: { apiKey }, title: "Honey MCP", version: "1.0.0" },
+				openApi: { title: "Honey MCP", version: "1.0.0" },
+				securitySchemes: { apiKey },
 				tree: true,
 			},
 		}),

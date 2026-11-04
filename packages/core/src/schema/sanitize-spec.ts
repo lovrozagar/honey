@@ -129,6 +129,21 @@ function withoutSchemes(
 	return Object.keys(kept).length === 0 ? rest : { ...rest, securitySchemes: kept }
 }
 
+/** Every scheme a security requirement of `spec` names, on its operations or its root. */
+export function securityNamed(spec: SchemaSpec): Set<string> {
+	const named = new Set<string>()
+	const add = (holder: Readonly<Record<string, unknown>>) => {
+		if (Array.isArray(holder.security))
+			for (const requirement of holder.security as readonly Requirement[])
+				for (const scheme of Object.keys(requirement)) named.add(scheme)
+	}
+	add(spec)
+	for (const item of Object.values(spec.paths))
+		for (const [key, value] of Object.entries(item))
+			if (METHODS.includes(key)) add(value as Readonly<Record<string, unknown>>)
+	return named
+}
+
 /** `spec` as the public sees it under `options`; `spec` itself is never changed. */
 export function sanitizeOpenApiSpec(spec: SchemaSpec, options: OpenApiSanitizeOptions): SchemaSpec {
 	const requirements = options.stripSecurityRequirements ?? []

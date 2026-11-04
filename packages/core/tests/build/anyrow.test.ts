@@ -2,8 +2,9 @@
  * Anyrow's gateway, in shape (bit 19 h2, §9 item 10 and its conditions, the gateway contract as re-ruled): three
  * services merged by `mergeTree`; a served gateway app with its own routes and errors that loads its own generated
  * tree, stale in one service's leaves as on a new downstream route; and its Vite config's three OpenAPI outputs
- * (internal: every route and scheme; contract: a filterRoutes subset reading `route.meta`, two schemes; public: the
- * API-key routes, sanitized of the internal schemes, the jwt requirements and every x- key but honey's own x-honey-*). `honey generate` writes
+ * (internal: every route and scheme; contract: a filterRoutes subset reading `route.meta`, the one scheme its routes
+ * name; public: the API-key routes showing only `security: ["apiKey"]`, every x- key dropped but honey's own
+ * x-honey-*), the schemes declared once beside them (plan 39 7.4). `honey generate` writes
  * the tree (the services' routes plus the gateway's) and the documents from the served gateway; each document's
  * operations, schemes and keys are its own; and `honey-clients generate --spec` builds an SDK from a filtered one.
  */
@@ -98,23 +99,23 @@ export default {
 			codegen: {
 				mergeTree: "src/route-tree.ts",
 				openApi: [
-					{ path: "src/_gen/openapi.gen.json", securitySchemes: ${SCHEMES}, title: "Anyrow API (internal)", version: "1.0.0" },
+					{ path: "src/_gen/openapi.gen.json", title: "Anyrow API (internal)", version: "1.0.0" },
 					{
 						filterRoutes: (route) => isContractRoute(route.meta),
 						path: "src/_gen/openapi.contract.gen.json",
-						securitySchemes: { apiKey: { in: "header", name: "Authorization", type: "apiKey" }, jwt: { bearerFormat: "JWT", scheme: "bearer", type: "http" } },
 						title: "Anyrow API (contract)",
 						version: "1.0.0",
 					},
 					{
 						filterRoutes: (route) => hasApiKey(route.meta),
 						path: "src/_gen/openapi.public.gen.json",
-						sanitize: { stripSecurityRequirements: ["jwt"], stripSecuritySchemes: ["iaKey", "iaActor"], stripXExtensions: true },
-						securitySchemes: ${SCHEMES},
+						sanitize: { stripXExtensions: true },
+						security: ["apiKey"],
 						title: "Anyrow API",
 						version: "1.0.0",
 					},
 				],
+				securitySchemes: ${SCHEMES},
 			},
 			watch: ["src/**/*.ts"],
 		}),
@@ -203,8 +204,8 @@ describe("an Anyrow-shaped gateway (bit 19 h2)", () => {
 		])
 		expect([internal, contract, published].map(schemes)).toEqual([
 			["apiKey", "iaActor", "iaKey", "jwt"],
-			["apiKey", "jwt"],
-			["apiKey", "jwt"],
+			["jwt"],
+			["apiKey"],
 		])
 		expect([internal, contract, published].map((document) => document.info.title)).toEqual([
 			"Anyrow API (internal)",

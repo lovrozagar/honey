@@ -345,7 +345,7 @@ describe("honey generate --watch (bit 19 h2), continued (2)", () => {
 			const made = fresh({
 				"src/app.ts": appSource(),
 				"vite.config.ts": CONFIG(
-					'{ app: "src/app.ts", codegen: { manifest: "src/manifest.json", openApi: { path: "src/openapi.json", title: "T", version: "1" }, tree: "src/routes.gen.ts" } }',
+					'{ app: "src/app.ts", codegen: { manifest: "src/manifest.json", openApi: { formats: ["json", "yaml"], path: "src/openapi.json", title: "T", version: "1" }, tree: "src/routes.gen.ts" } }',
 				),
 			})
 			const log = join(made.dir, "evaluations.log")

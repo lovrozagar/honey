@@ -58,7 +58,11 @@ async function generate(config: HoneyVitePluginConfig, dir: string) {
 }
 
 const read = (dir: string, path: string) => readFileSync(join(dir, path), "utf8")
-const ALL = { manifest: true, openApi: { title: "Gen", version: "1.0.0" }, tree: true } as const
+const ALL = {
+	manifest: true,
+	openApi: { formats: ["json", "yaml"], title: "Gen", version: "1.0.0" },
+	tree: true,
+} as const
 
 /** How many `[honey:invalidate]` reports one generation of `config` in `dir` made through its report channel. */
 async function invalidateReports(config: HoneyVitePluginConfig, dir: string): Promise<number> {
@@ -401,7 +405,8 @@ describe("the MCP handler output (bit 21 e)", () => {
 					app: "src/app.ts",
 					codegen: {
 						mcp: { filterRoutes: (route) => route.path !== "/hidden" },
-						openApi: { path: "out/doc.json", securitySchemes: { apiKey }, title: "Gen", version: "1.0.0" },
+						openApi: { path: "out/doc.json", title: "Gen", version: "1.0.0" },
+						securitySchemes: { apiKey },
 						tree: false,
 					},
 				},

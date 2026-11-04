@@ -14,7 +14,7 @@ import { toYaml } from "../openapi/yaml.ts"
 import type { InvalidateCheckConfig } from "../routing/invalidate-check.ts"
 import { routeId } from "../routing/pattern.ts"
 import type { RouteTree } from "../routing/tree.ts"
-import { sanitizeOpenApiSpec } from "../schema/sanitize-spec.ts"
+import { sanitizeOpenApiSpec, securityNamed } from "../schema/sanitize-spec.ts"
 import type { EffectConverter } from "../schema/to-json-schema.ts"
 import {
 	mcpPaths,
@@ -49,29 +49,45 @@ function onceEach(report: Report): { readonly warn: Report } {
 	}
 }
 
-/** How a document is built: its invalidate check, the effect converter, and where its warnings go. */
+/** Every security scheme the codegen declares, keyed by name; `undefined` when it declares none. */
+type Schemes = Readonly<Record<string, unknown>> | undefined
+
+/** How a document is built: its invalidate check, the effect converter, the declared schemes and its warnings. */
 type DocumentRun = {
 	readonly effect: EffectConverter | undefined
 	readonly invalidate: InvalidateCheckConfig | undefined
+	readonly securitySchemes: Schemes
 	readonly warnings?: Warnings
 }
 
-/** The document `entry` describes, sanitized as it asks. */
+/**
+ * The document `entry` describes: the schemes it lists, else the ones its routes name, with every other scheme's
+ * requirements and definition left out, and sanitized as it asks.
+ */
 export function documentOf(
 	app: Parameters<typeof generateOpenApi>[0],
 	entry: ResolvedOpenApiOutput,
-	{ effect, invalidate, warnings }: DocumentRun,
+	{ effect, invalidate, securitySchemes, warnings }: DocumentRun,
 ): object {
 	const document = generateOpenApi(app, {
 		converters: { effect },
+		externalDocs: entry.externalDocs,
 		filterRoutes: entry.filterRoutes,
 		info: { description: entry.description, title: entry.title, version: entry.version },
 		invalidate,
 		logger: warnings,
 		profile: entry.profile,
-		securitySchemes: entry.securitySchemes,
+		securitySchemes,
+		servers: entry.servers,
+		tags: entry.tags,
 	})
-	return entry.sanitize === undefined ? document : sanitizeOpenApiSpec(document, entry.sanitize)
+	const shown = new Set(entry.security ?? securityNamed(document))
+	const hidden = Object.keys(securitySchemes ?? {}).filter((name) => !shown.has(name))
+	return sanitizeOpenApiSpec(document, {
+		stripSecurityRequirements: hidden,
+		stripSecuritySchemes: hidden,
+		stripXExtensions: entry.sanitize?.stripXExtensions,
+	})
 }
 
 const json = (value: unknown) => `${JSON.stringify(value, null, 2)}\n`
@@ -98,12 +114,7 @@ async function typesOf(
 		info: { title: outputs[0]?.title ?? "API", version: outputs[0]?.version ?? "0.0.0" },
 		invalidate: outputs.length > 0 ? "off" : config.codegen.invalidate,
 		logger: run.warnings,
-		/* the first output's scheme wins a name, so a route naming any declared scheme is not reported; with no output
-		   nothing declares a scheme, and a named one is no error */
-		securitySchemes:
-			outputs.length === 0
-				? undefined
-				: Object.assign({}, ...outputs.map((entry) => entry.securitySchemes ?? {}).reverse()),
+		securitySchemes: config.codegen.securitySchemes,
 	})
 	const extracted = run.codegen.extractTypes({
 		entryPath: source.entry,
@@ -139,7 +150,12 @@ function mcpFiles(
 	app: Parameters<typeof generateOpenApi>[0],
 	mcp: ResolvedMcpOutput,
 	outputs: readonly ResolvedOpenApiOutput[],
-	{ codegen, effect, warnings }: Pick<Generation, "codegen" | "warnings"> & { effect: EffectConverter | undefined },
+	{
+		codegen,
+		effect,
+		securitySchemes,
+		warnings,
+	}: Pick<Generation, "codegen" | "warnings"> & { effect: EffectConverter | undefined; securitySchemes: Schemes },
 ): [string, string][] {
 	const document = generateOpenApi(app, {
 		converters: { effect },
@@ -147,9 +163,7 @@ function mcpFiles(
 		info: { title: outputs[0]?.title ?? "API", version: outputs[0]?.version ?? "0.0.0" },
 		invalidate: "off",
 		logger: warnings,
-		/* the first output's scheme wins a name, as the types' document has it */
-		securitySchemes:
-			mcp.securitySchemes ?? Object.assign({}, ...outputs.map((entry) => entry.securitySchemes ?? {}).reverse()),
+		securitySchemes,
 	})
 	const { entry, files } = codegen.generateMcpHandler(document as unknown as Record<string, unknown>, {
 		dir: mcp.dir,
@@ -162,7 +176,7 @@ function mcpFiles(
 /** Every artifact `config` asks for from `source`, by its path from the project root. */
 export async function artifactsOf(config: ResolvedHoneyConfig, run: Run, source: Source): Promise<[string, string][]> {
 	const generation: Generation = { ...run, warnings: onceEach(run.report) }
-	const { manifest, mcp, openApi, tree, types } = config.codegen
+	const { manifest, mcp, openApi, securitySchemes, tree, types } = config.codegen
 	const files: [string, string][] = []
 	if (tree !== false) files.push([tree, run.codegen.generateRouteTree(source.tree)])
 	const documented = await source.documented()
@@ -171,12 +185,13 @@ export async function artifactsOf(config: ResolvedHoneyConfig, run: Run, source:
 	for (const [index, entry] of openApi.entries()) {
 		/* one invalidate check per generation, not one per document */
 		const invalidate = index === 0 ? config.codegen.invalidate : "off"
-		const published = documentOf(documented.app, entry, { effect, invalidate, warnings: generation.warnings })
-		const { json: jsonPath, yaml } = openApiOutputPaths(entry.path)
+		const run = { effect, invalidate, securitySchemes, warnings: generation.warnings }
+		const published = documentOf(documented.app, entry, run)
+		const { json: jsonPath, yaml } = openApiOutputPaths(entry.path, entry.formats)
 		if (jsonPath !== null) files.push([jsonPath, json(published)])
-		files.push([yaml, toYaml(published)])
+		if (yaml !== null) files.push([yaml, toYaml(published)])
 	}
-	if (mcp !== false) files.push(...mcpFiles(documented.app, mcp, openApi, { ...generation, effect }))
+	if (mcp !== false) files.push(...mcpFiles(documented.app, mcp, openApi, { ...generation, effect, securitySchemes }))
 	if (types !== false)
 		files.push([types.path, await typesOf(config, { ...documented, tree: source.tree }, generation, types.path)])
 	return files
@@ -200,6 +215,7 @@ export async function virtualCode(
 			: documentOf(app, config.codegen.openApi[0] as ResolvedOpenApiOutput, {
 					effect: await effectConverter(),
 					invalidate: "off",
+					securitySchemes: config.codegen.securitySchemes,
 					warnings: SILENT,
 				})
 	return `export default ${JSON.stringify(value)}`

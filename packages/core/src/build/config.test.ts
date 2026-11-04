@@ -1,7 +1,8 @@
 /**
  * honey()'s config (bit 19 h2): the route tree on by default and every other artifact off, `true` as each default
- * path, the OpenAPI outputs as a list, the `.yaml`/`.yml` output rule (Q7), the SDK and CLI keys refused as
- * honey-clients's (Q1), and the outputs a watcher ignores.
+ * path, the OpenAPI outputs as a list with the security schemes declared once (plan 39 7.4), each output's formats
+ * (JSON unless its path is YAML), the SDK and CLI keys refused as honey-clients's (Q1), and the outputs a watcher
+ * ignores.
  */
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
@@ -74,11 +75,35 @@ describe("resolveHoneyConfig (bit 19 h2), continued (2)", () => {
 				],
 			},
 		}).codegen.openApi
-		expect(one).toEqual([{ path: "src/_gen/openapi.gen.json", title: "A", version: "1" }])
+		expect(one).toEqual([{ formats: ["json"], path: "src/_gen/openapi.gen.json", title: "A", version: "1" }])
 		expect(many).toEqual([
-			{ path: "src/_gen/openapi.gen.json", title: "A", version: "1" },
-			{ filterRoutes, path: "b.yaml", sanitize: { stripXExtensions: true }, title: "B", version: "2" },
+			{ formats: ["json"], path: "src/_gen/openapi.gen.json", title: "A", version: "1" },
+			{
+				filterRoutes,
+				formats: ["yaml"],
+				path: "b.yaml",
+				sanitize: { stripXExtensions: true },
+				title: "B",
+				version: "2",
+			},
 		])
+	})
+
+	it("declares the security schemes once; an output shows the ones it lists, and a name it lists must be declared", () => {
+		const securitySchemes = { apiKey: { in: "header", name: "x-key", type: "apiKey" } }
+		const doc = { name: "public", security: ["apiKey"], title: "A", version: "1" }
+		expect(resolveHoneyConfig({ codegen: { openApi: doc, securitySchemes } }).codegen.securitySchemes).toBe(
+			securitySchemes,
+		)
+		expect(() => resolveHoneyConfig({ codegen: { openApi: { ...doc, security: ["jwt"] }, securitySchemes } })).toThrow(
+			'codegen.openApi "public": security names "jwt", which codegen.securitySchemes does not declare',
+		)
+		expect(() =>
+			resolveHoneyConfig({ codegen: { openApi: [doc, { ...doc, path: "b.json" }], securitySchemes } }),
+		).toThrow('codegen.openApi: two documents are named "public"')
+		expect(() => resolveHoneyConfig({ codegen: { openApi: { ...doc, formats: [] }, securitySchemes } })).toThrow(
+			'codegen.openApi "public": formats is empty',
+		)
 	})
 
 	it("refuses the SDK and CLI keys, which are honey-clients's (Q1)", () => {
@@ -89,17 +114,21 @@ describe("resolveHoneyConfig (bit 19 h2), continued (2)", () => {
 	})
 })
 
-describe("openApiOutputPaths: the .yaml/.yml rule (bit 19 h2, Q7)", () => {
+describe("openApiOutputPaths: each format the output asks for (plan 39 7.4)", () => {
 	// v0: ae748154a5
 	// v0: ad73c602a0
 	// v0: b9beb5f0ab
-	it("writes JSON with a .yaml sibling, unless the path is YAML itself", () => {
-		expect(
-			["src/_gen/openapi.gen.json", "docs/openapi", "openapi.yml", "openapi.yaml"].map(openApiOutputPaths),
-		).toEqual([
+	it("writes the path in its own format and each other format beside it, under the same stem", () => {
+		const both = ["json", "yaml"] as const
+		expect([
+			...["src/_gen/openapi.gen.json", "docs/openapi", "openapi.yml"].map((path) => openApiOutputPaths(path, both)),
+			openApiOutputPaths("src/_gen/openapi.gen.json", ["json"]),
+			openApiOutputPaths("openapi.yaml", ["yaml"]),
+		]).toEqual([
 			{ json: "src/_gen/openapi.gen.json", yaml: "src/_gen/openapi.gen.yaml" },
 			{ json: "docs/openapi", yaml: "docs/openapi.yaml" },
-			{ json: null, yaml: "openapi.yml" },
+			{ json: "openapi.json", yaml: "openapi.yml" },
+			{ json: "src/_gen/openapi.gen.json", yaml: null },
 			{ json: null, yaml: "openapi.yaml" },
 		])
 	})
@@ -112,8 +141,9 @@ describe("generatedOutputs (bit 19 h2)", () => {
 				manifest: "out/m.json",
 				mcp: "gen/server.ts",
 				openApi: [
-					{ title: "A", version: "1" },
+					{ formats: ["json", "yaml"], title: "A", version: "1" },
 					{ path: "docs/b.yml", title: "B", version: "1" },
+					{ path: "docs/c.json", title: "C", version: "1" },
 				],
 				types: true,
 			},
@@ -130,6 +160,7 @@ describe("generatedOutputs (bit 19 h2)", () => {
 				"/p/src/_gen/openapi.gen.json",
 				"/p/src/_gen/openapi.gen.yaml",
 				"/p/docs/b.yml",
+				"/p/docs/c.json",
 			],
 		})
 		expect(

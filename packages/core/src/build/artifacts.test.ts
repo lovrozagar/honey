@@ -1,6 +1,6 @@
 /**
  * The artifacts as text (bit 19 h2): each OpenAPI output built from the same app with only its own filterRoutes
- * (shown the route's meta), securitySchemes and sanitize; the tree's topology holding every route, a websocket's
+ * (shown the route's meta), security, servers, tags and sanitize (plan 39 7.4); the tree's topology holding every route, a websocket's
  * included; the virtual modules' code; and the app imported here sharing this core.
  */
 import { join } from "node:path"
@@ -36,7 +36,12 @@ const SCHEMES = {
 function app() {
 	return honey<{}>()
 		.get("/public")
-		.meta({ extensions: { "x-team": "growth" }, public: true, security: ["apiKey", "jwt"] } as never)
+		.meta({
+			extensions: { "x-team": "growth" },
+			public: true,
+			security: ["apiKey", "jwt"],
+			tags: ["Tables", "Billing"],
+		} as never)
 		.handler((c) => c.res.text("ok", "p"))
 		.get("/internal")
 		.meta({ security: "iaKey" } as never)
@@ -48,30 +53,29 @@ function app() {
 
 type Document = {
 	components?: { securitySchemes?: Record<string, unknown> }
+	externalDocs?: unknown
 	paths: Record<string, { get: Record<string, unknown> }>
+	servers?: unknown
+	tags?: { description?: string; name: string }[]
 }
-const output = (entry: object) => ({ path: "x.json", title: "T", version: "1", ...entry })
+const output = (entry: object) => ({ formats: ["json"] as const, path: "x.json", title: "T", version: "1", ...entry })
+const off = { effect: undefined, invalidate: "off", securitySchemes: SCHEMES } as const
 
-describe("documentOf: each output its own (bit 19 h2)", () => {
-	it("filters by the route's meta, declares only its own schemes, and sanitizes only itself", () => {
+describe("documentOf: each output its own (bit 19 h2, plan 39 7.4)", () => {
+	it("filters by the route's meta, shows the schemes its routes name or the ones it lists, and sanitizes only itself", () => {
 		const served = app()
-		const off = { effect: undefined, invalidate: "off" } as const
-		const all = documentOf(served, output({ securitySchemes: SCHEMES }), off) as Document
+		const all = documentOf(served, output({}), off) as Document
 		const contract = documentOf(
 			served,
-			output({
-				filterRoutes: (route: { meta: { contract?: boolean } }) => route.meta.contract === true,
-				securitySchemes: { jwt: SCHEMES.jwt },
-			}),
+			output({ filterRoutes: (route: { meta: { contract?: boolean } }) => route.meta.contract === true }),
 			off,
 		) as Document
-		const sanitize = { stripSecurityRequirements: ["jwt"], stripSecuritySchemes: ["iaKey"], stripXExtensions: true }
 		const published = documentOf(
 			served,
 			output({
 				filterRoutes: (route: { meta: { public?: boolean } }) => route.meta.public === true,
-				sanitize,
-				securitySchemes: SCHEMES,
+				sanitize: { stripXExtensions: true },
+				security: ["apiKey"],
 			}),
 			off,
 		) as Document
@@ -80,9 +84,9 @@ describe("documentOf: each output its own (bit 19 h2)", () => {
 			["/contract"],
 			["/public"],
 		])
-		expect(Object.keys(all.components?.securitySchemes ?? {})).toEqual(["apiKey", "iaKey", "jwt"])
-		expect(Object.keys(contract.components?.securitySchemes ?? {})).toEqual(["jwt"])
-		expect(Object.keys(published.components?.securitySchemes ?? {})).toEqual(["apiKey", "jwt"])
+		expect(
+			[all, contract, published].map((document) => Object.keys(document.components?.securitySchemes ?? {})),
+		).toEqual([["apiKey", "iaKey", "jwt"], ["jwt"], ["apiKey"]])
 		const extensions = (document: Document, path: string) =>
 			Object.keys(document.paths[path]?.get ?? {}).filter((key) => key.startsWith("x-"))
 		/* the published document drops the app's own extension and keeps the one honey's generators read */
@@ -93,6 +97,23 @@ describe("documentOf: each output its own (bit 19 h2)", () => {
 		expect([all.paths["/public"]?.get.security, published.paths["/public"]?.get.security]).toEqual([
 			[{ apiKey: [] }, { jwt: [] }],
 			[{ apiKey: [] }],
+		])
+	})
+
+	it("carries its servers, external docs and tags, the tags in the order it lists them", () => {
+		const document = documentOf(
+			app(),
+			output({
+				externalDocs: { url: "https://docs.example.com" },
+				servers: [{ url: "https://api.example.com" }],
+				tags: [{ description: "Invoices", name: "Billing" }, { name: "Tables" }],
+			}),
+			off,
+		) as Document
+		expect([document.servers, document.externalDocs, document.tags]).toEqual([
+			[{ url: "https://api.example.com" }],
+			{ url: "https://docs.example.com" },
+			[{ description: "Invoices", name: "Billing" }, { name: "Tables" }],
 		])
 	})
 })
@@ -149,16 +170,12 @@ describe("artifactsOf (bit 19 h2)", () => {
 		async () => {
 			const { dir } = fresh({ "src/app.ts": appSource() })
 			const openApi = [
-				{
-					path: "a.json",
-					securitySchemes: { key: { in: "header", name: "x-key", type: "apiKey" } },
-					title: "A",
-					version: "2",
-				},
+				{ formats: ["json", "yaml"] as const, path: "a.json", title: "A", version: "2" },
 				{ path: "b.yaml", title: "B", version: "3" },
 			]
+			const securitySchemes = { key: { in: "header", name: "x-key", type: "apiKey" } }
 			const { files } = await artifacts(
-				{ app: "src/app.ts", codegen: { manifest: true, openApi, tree: false, types: true } },
+				{ app: "src/app.ts", codegen: { manifest: true, openApi, securitySchemes, tree: false, types: true } },
 				dir,
 			)
 			expect(Object.keys(files)).toEqual([
@@ -335,11 +352,11 @@ const WITH_TOOL = [
 ]
 
 describe("artifactsOf's MCP handler (bit 21 e)", () => {
-	it("writes the handler and its companions, its name, version and schemes its own or the first output's", async () => {
+	it("writes the handler and its companions, its name and version its own or the first output's, the schemes declared", async () => {
 		const { dir } = fresh({ "src/app.ts": appSource({ extra: WITH_TOOL }) })
 		const k = { in: "header", name: "X-K", type: "apiKey" }
 		const bare = (
-			await artifacts({ app: "src/app.ts", codegen: { mcp: { securitySchemes: { k } }, tree: false } }, dir)
+			await artifacts({ app: "src/app.ts", codegen: { mcp: true, securitySchemes: { k }, tree: false } }, dir)
 		).files
 		const own = (
 			await artifacts(
@@ -348,9 +365,10 @@ describe("artifactsOf's MCP handler (bit 21 e)", () => {
 					codegen: {
 						mcp: { name: "shop", path: "gen/shop.ts" },
 						openApi: [
-							{ path: "o.json", securitySchemes: { k: { ...k, name: "X-Other" } }, title: "T", version: "4" },
+							{ path: "o.json", title: "T", version: "4" },
 							{ path: "p.json", title: "P", version: "5" },
 						],
+						securitySchemes: { k: { ...k, name: "X-Other" } },
 						tree: false,
 					},
 				},

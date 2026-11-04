@@ -1,7 +1,7 @@
 # The build plugin
 
 `honeyPlugin()` from `@lovrozagar/honey/plugin` is a Vite plugin. On each build it writes the app's own
-artifacts: the typed route tree, the route manifest, the OpenAPI document as JSON and YAML, and the types the
+artifacts: the typed route tree, the route manifest, each OpenAPI document as JSON, YAML or both, and the types the
 generated clients read. The SDKs, the CLI and the MCP server come from `honey-clients generate`, which reads that
 document; see the code generation page. The config loads through jiti, so it may be TypeScript.
 
@@ -16,12 +16,58 @@ export default defineConfig({
 })
 ```
 
+## OpenAPI documents
+
+`codegen.securitySchemes` declares every scheme the routes name, once. `codegen.openApi` is one document or several
+from the same routes, each with its own `filterRoutes`. A document shows the schemes its `security` lists: a
+requirement naming another scheme is left out, and so is that scheme's definition. Without `security` it shows every
+scheme its own routes name and no other. `servers`, `externalDocs` and `tags` are the document's own, the tags listed
+in the order given, then any tag no entry names. `formats` picks the files: the path in its own format (JSON unless it
+ends `.yaml` or `.yml`), each other one beside it under the same stem. `name` keys the document for generated code that
+points at it.
+
+```ts
+import { honeyPlugin } from "@lovrozagar/honey/plugin"
+
+export default {
+	plugins: [
+		honeyPlugin({
+			app: "src/app.ts",
+			codegen: {
+				openApi: [
+					{ name: "internal", path: "src/_gen/openapi.internal.json", title: "Shop (internal)", version: "1.0.0" },
+					{
+						filterRoutes: (route) => route.meta.security !== undefined,
+						formats: ["json", "yaml"],
+						name: "public",
+						path: "assets/openapi.public.json",
+						sanitize: { stripXExtensions: true },
+						security: ["apiKey"],
+						servers: [{ url: "https://api.example.com" }],
+						tags: [
+							{ description: "Your products", name: "Products" },
+							{ description: "Orders and their state", name: "Orders" },
+						],
+						title: "Shop",
+						version: "1.0.0",
+					},
+				],
+				securitySchemes: {
+					apiKey: { in: "header", name: "Authorization", type: "apiKey" },
+					staffKey: { in: "header", name: "x-staff-key", type: "apiKey" },
+				},
+			},
+		}),
+	],
+}
+```
+
 ## Reference
 
 | Value                                       | Default       | What it does                                                                                                                                                                                                                                                                                                                                                                        | Watch for                                                                                                                                                                                                                                    |
 | ------------------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `honeyPlugin(pluginOptions)` (vite/bundler) | —             | wires type extraction + codegen into the build                                                                                                                                                                                                                                                                                                                                      | runs in Node at build time; `ts-morph` is an optional peer loaded only here                                                                                                                                                                  |
-| `generate` targets                          | all declared  | which of the app's own artifacts to write: the route tree, the manifest, the OpenAPI JSON and YAML, the types; SDKs, the CLI and MCP come from `honey-clients generate`                                                                                                                                                                                                             | the bundle targets are node, bun and cf                                                                                                                                                                                                      |
+| `generate` targets                          | all declared  | which of the app's own artifacts to write: the route tree, the manifest, each OpenAPI document as JSON, YAML or both, the types; SDKs, the CLI and MCP come from `honey-clients generate`                                                                                                                                                                                           | the bundle targets are node, bun and cf                                                                                                                                                                                                      |
 | type generation                             | on            | extract middleware ctx/chain types (calls `honey-clients` `extract/`)                                                                                                                                                                                                                                                                                                               | needs a TS honey app + `ts-morph`                                                                                                                                                                                                            |
 | route-tree emission                         | on            | emits the typed route tree (`honey-clients` `emit/ts/route-tree.ts`)                                                                                                                                                                                                                                                                                                                | consumed by the generated TS client                                                                                                                                                                                                          |
 | config loading                              | jiti          | loads `honey.config` via jiti                                                                                                                                                                                                                                                                                                                                                       | —                                                                                                                                                                                                                                            |

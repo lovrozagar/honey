@@ -32,7 +32,7 @@ function tagged() {
 	return app
 }
 
-describe("tags: the ones operations name, in the order they are first named", () => {
+describe("tags: the ones operations name, declared ones in their declared order, then first-seen", () => {
 	it("lists each tag an operation names once, first-seen, and none for an untagged document", () => {
 		const bare = honey<{}>()
 		bare.get("/a").handler((c) => c.res.text("ok", "ok"))
@@ -42,7 +42,7 @@ describe("tags: the ones operations name, in the order they are first named", ()
 		])
 	})
 
-	it("merges the declared metadata by name, never adds a tag no operation names, and warns of it", () => {
+	it("merges the declared metadata by name in declared order, never adds a tag no operation names, and warns of it", () => {
 		const { logger, warnings } = recording()
 		const doc = generateOpenApi(tagged(), {
 			info: INFO,
@@ -59,13 +59,13 @@ describe("tags: the ones operations name, in the order they are first named", ()
 		})
 		expect([doc.tags, warnings]).toEqual([
 			[
+				{ description: "Admin only", name: "Admin", "x-displayName": "Administration" },
 				{
 					description: "People",
 					externalDocs: { description: "Guide", url: "https://docs.example.com/users" },
 					name: "Users",
 				},
 				{ name: "Orders" },
-				{ description: "Admin only", name: "Admin", "x-displayName": "Administration" },
 			],
 			[expect.stringMatching(/\[honey:openapi\] UNUSED_TAG: tag "Billing" is declared but no operation names it/)],
 		])

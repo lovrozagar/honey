@@ -1,7 +1,7 @@
 /**
- * The document's tags: every tag an operation names, once, in the order operations first name
- * them, each merged with what the caller declares for it (description, externalDocs,
- * x-displayName). Tags are explicit: nothing is derived from paths. A declared tag no operation
+ * The document's tags: every tag an operation names, once, each merged with what the caller
+ * declares for it (description, externalDocs, x-displayName): the declared ones in the order
+ * declared, then the rest in the order operations first name them. Tags are explicit: nothing is derived from paths. A declared tag no operation
  * names is not listed, and said; a tag declared twice is refused.
  */
 import type { EmittedOperation } from "./paths.ts"
@@ -28,7 +28,7 @@ export type OpenApiTag = {
 
 export type TagReport = (code: "INVALID_TAG" | "UNUSED_TAG", level: "error" | "warn", message: string) => void
 
-/** The tags `operations` name, first-seen, with the declared metadata of each. */
+/** The tags `operations` name with the declared metadata of each: declared ones in declared order, then first-seen. */
 export function tagsOf(
 	operations: readonly EmittedOperation[],
 	declared: readonly OpenApiTag[] | undefined,
@@ -46,5 +46,6 @@ export function tagsOf(
 	for (const name of byName.keys()) {
 		if (!named.has(name)) report("UNUSED_TAG", "warn", `tag "${name}" is declared but no operation names it`)
 	}
-	return [...named].map((name) => structuredClone(byName.get(name) ?? { name }))
+	const declaredFirst = [...[...byName.keys()].filter((name) => named.has(name)), ...named]
+	return [...new Set(declaredFirst)].map((name) => structuredClone(byName.get(name) ?? { name }))
 }

@@ -469,7 +469,7 @@ export default {
 	plugins: [
 		honeyPlugin({
 			app: "src/app.ts",
-			codegen: { mcp: true, openApi: { securitySchemes: { apiKey }, title: "Anyrow", version: "1.0.0" } },
+			codegen: { mcp: true, openApi: { title: "Anyrow", version: "1.0.0" }, securitySchemes: { apiKey } },
 		}),
 	],
 }

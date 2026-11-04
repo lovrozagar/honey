@@ -1160,7 +1160,13 @@ export default {
 			codegen: {
 				manifest: true,
 				mcp: true,
-				openApi: { title: "Shop", version: "1.0.0", securitySchemes: {} },
+				openApi: {
+					security: ["apiKey"],
+					servers: [{ url: "https://api.example.com" }],
+					title: "Shop",
+					version: "1.0.0",
+				},
+				securitySchemes: { apiKey: { in: "header", name: "Authorization", type: "apiKey" } },
 				tree: true,
 				types: { baseCtxName: "AppCtx" },
 			},

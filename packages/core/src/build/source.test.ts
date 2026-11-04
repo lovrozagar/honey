@@ -66,12 +66,7 @@ function gatewayProject(): Project {
 
 const read = (dir: string, path: string) => readFileSync(join(dir, path), "utf8")
 const OUTPUTS = { manifest: true, openApi: { title: "Gateway", version: "1" } } as const
-const ALL_WRITTEN = [
-	"src/_gen/routes.gen.ts",
-	"src/_gen/manifest.gen.json",
-	"src/_gen/openapi.gen.json",
-	"src/_gen/openapi.gen.yaml",
-]
+const ALL_WRITTEN = ["src/_gen/routes.gen.ts", "src/_gen/manifest.gen.json", "src/_gen/openapi.gen.json"]
 const generate = (config: HoneyVitePluginConfig, dir: string) =>
 	generateAndWrite(resolveHoneyConfig(config), dir, { report: () => {} }).then(
 		(written) => written.map((file) => file.slice(dir.length + 1)),
@@ -170,12 +165,7 @@ describe("a gateway's app (bit 19 h2), continued (2)", () => {
 				{ app: "src/plain.app.ts", codegen: { ...OUTPUTS, mergeTree: "src/route-tree.ts" } },
 				made.dir,
 			)
-			expect(done).toEqual([
-				"src/_gen/routes.gen.ts",
-				"src/_gen/manifest.gen.json",
-				"src/_gen/openapi.gen.json",
-				"src/_gen/openapi.gen.yaml",
-			])
+			expect(done).toEqual(["src/_gen/routes.gen.ts", "src/_gen/manifest.gen.json", "src/_gen/openapi.gen.json"])
 			expect([routeIds(made.dir), /\biv:/.test(read(made.dir, "src/_gen/routes.gen.ts"))]).toEqual([
 				["GET /orders", "POST /items"],
 				false,
@@ -203,11 +193,7 @@ describe("a gateway over its own tree (bit 19 h2, Anyrow's shape)", () => {
 		"writes the merged tree plus its own routes, and documents both with its errors, through config.app",
 		async () => {
 			const made = await seeded()
-			expect(await generate(SERVED, made.dir)).toEqual([
-				"src/_gen/manifest.gen.json",
-				"src/_gen/openapi.gen.json",
-				"src/_gen/openapi.gen.yaml",
-			])
+			expect(await generate(SERVED, made.dir)).toEqual(["src/_gen/manifest.gen.json", "src/_gen/openapi.gen.json"])
 			expect(routeIds(made.dir)).toEqual(["GET /health", "GET /orders", "GET /robots.txt", "POST /items"])
 			const document = documentAt(made.dir)
 			expect(Object.keys(document.paths["/health"]?.get?.responses ?? {})).toEqual(["503"])
@@ -222,12 +208,7 @@ describe("a gateway over its own tree (bit 19 h2, Anyrow's shape)", () => {
 			const made = await seeded()
 			made.write("src/down.ts", downSource(['\t.get("/added").handler((c) => c.res.text("ok", "new"))']))
 			const done = await generate(SERVED, made.dir)
-			expect(done).toEqual([
-				"src/_gen/routes.gen.ts",
-				"src/_gen/manifest.gen.json",
-				"src/_gen/openapi.gen.json",
-				"src/_gen/openapi.gen.yaml",
-			])
+			expect(done).toEqual(["src/_gen/routes.gen.ts", "src/_gen/manifest.gen.json", "src/_gen/openapi.gen.json"])
 			expect(routeIds(made.dir)).toContain("GET /added")
 			expect(Object.keys(documentAt(made.dir).paths).sort()).toEqual([
 				"/added",
@@ -326,7 +307,7 @@ describe("a gateway with no app (bit 19 h2)", () => {
 		"writes the merged tree and documents it from an app booted on it; types need a gateway app",
 		async () => {
 			const made = gatewayProject()
-			expect(await generate({ codegen: { ...OUTPUTS, mergeTree: "src/route-tree.ts" } }, made.dir)).toHaveLength(4)
+			expect(await generate({ codegen: { ...OUTPUTS, mergeTree: "src/route-tree.ts" } }, made.dir)).toHaveLength(3)
 			expect([routeIds(made.dir), Object.keys(documentAt(made.dir).paths)]).toEqual([
 				["GET /orders", "POST /items"],
 				["/items", "/orders"],

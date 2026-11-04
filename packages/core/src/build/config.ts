@@ -1,33 +1,52 @@
 /**
  * `honeyPlugin()`'s config (bit 19 h2): what it takes, resolved with its defaults (the route tree on, every
  * other artifact off), and every path a generation writes, which a watcher must never take for an edit. An OpenAPI
- * output path ending `.yaml` or `.yml` is that YAML file alone; any other is JSON there plus its `.yaml` sibling
- * (Q7: core's openapi/yaml.ts writes it). The SDKs, the CLI and the MCP server package are honey-clients's (Q1), so
+ * output writes each of its formats under its path's stem, JSON unless the path is YAML (plan 39 7.4; core's
+ * openapi/yaml.ts writes the YAML), and shows the security schemes the codegen declares once that it lists, else
+ * the ones its routes name. The SDKs, the CLI and the MCP server package are honey-clients's (Q1), so
  * their keys are refused. Bit 21 e: `mcp` writes the handler an app mounts (`_gen/mcp.gen.ts`, its runtime and SDK in
  * the companion directory named by its stem, `_gen/mcp/`), H24.3.
  */
 import { dirname, join, resolve } from "node:path"
-import type { OpenApiRouteInfo } from "../openapi/generate.ts"
+import type { OpenApiExternalDocs, OpenApiRouteInfo, OpenApiServer, OpenApiTag } from "../openapi/generate.ts"
 import type { InvalidateCheckConfig } from "../routing/invalidate-check.ts"
 import type { OpenApiSanitizeOptions } from "../schema/sanitize-spec.ts"
+
+/** A file format an OpenAPI document is written in. */
+export type OpenApiFormat = "json" | "yaml"
 
 /** One OpenAPI document a generation writes. */
 export type HoneyOpenApiOutputConfig = {
 	/** The document's `info.description`; left out when unset. */
 	readonly description?: string
+	/** The document's own external docs. */
+	readonly externalDocs?: OpenApiExternalDocs
 	/** leave out every route this answers false for */
 	readonly filterRoutes?: (route: OpenApiRouteInfo) => boolean
+	/**
+	 * The files written, each under the path's stem: `["yaml"]` when the path ends `.yaml` or `.yml`, else `["json"]`.
+	 */
+	readonly formats?: readonly OpenApiFormat[]
+	/** The document's name, unique among the outputs; generated code that points at the document keys it by this. */
+	readonly name?: string
 	/** default `src/_gen/openapi.gen.json` */
 	readonly path?: string
 	/** the metaSpec profile this document carries */
 	readonly profile?: string
 	/** what the published document leaves out */
-	readonly sanitize?: OpenApiSanitizeOptions
+	readonly sanitize?: {
+		/** The `x-*` keys to drop: `true` for every one honey and its generators do not read, or a list of names. */
+		readonly stripXExtensions?: OpenApiSanitizeOptions["stripXExtensions"]
+	}
 	/**
-	 * The document's `components.securitySchemes`, keyed by scheme name. A route naming a scheme missing here is an
-	 * error, or a warning when none are declared.
+	 * The schemes of `codegen.securitySchemes` the document shows: a requirement naming another is left out, and so is
+	 * its definition. Unset: every scheme its routes name.
 	 */
-	readonly securitySchemes?: Readonly<Record<string, unknown>>
+	readonly security?: readonly string[]
+	/** The servers it lists, in place of the stripped prefix. */
+	readonly servers?: readonly OpenApiServer[]
+	/** Metadata for the tags its operations name, listed in this order; the tags no entry names follow. */
+	readonly tags?: readonly OpenApiTag[]
 	/** The document's `info.title`. */
 	readonly title: string
 	/** The document's `info.version`: the API's own version, not the OpenAPI version. */
@@ -42,8 +61,6 @@ export type HoneyMcpOutputConfig = {
 	readonly name?: string
 	/** default `src/_gen/mcp.gen.ts`; its runtime and SDK go in the directory its stem names beside it */
 	readonly path?: string
-	/** the schemes the routes' `security` names; by default the OpenAPI outputs' */
-	readonly securitySchemes?: Readonly<Record<string, unknown>>
 }
 
 /** Which artifacts a generation writes. The route tree is on by default; every other one is off until configured. */
@@ -58,6 +75,11 @@ export type HoneyCodegenConfig = {
 	readonly mergeTree?: string
 	/** one document, or several from the same routes */
 	readonly openApi?: HoneyOpenApiOutputConfig | readonly HoneyOpenApiOutputConfig[]
+	/**
+	 * Every security scheme the routes name, keyed by name: each document shows those it lists, or those its routes
+	 * name. A route naming a scheme missing here is an error, or a warning when none are declared.
+	 */
+	readonly securitySchemes?: Readonly<Record<string, unknown>>
 	/** the route tree module; on by default at `src/_gen/routes.gen.ts` */
 	readonly tree?: boolean | string
 	/** the app's types; `true` is `src/_gen/types.gen.d.ts` */
@@ -82,7 +104,10 @@ export type HoneyVitePluginConfig = {
 	readonly watch?: readonly string[]
 }
 
-export type ResolvedOpenApiOutput = Omit<HoneyOpenApiOutputConfig, "path"> & { readonly path: string }
+export type ResolvedOpenApiOutput = Omit<HoneyOpenApiOutputConfig, "formats" | "path"> & {
+	readonly formats: readonly OpenApiFormat[]
+	readonly path: string
+}
 
 export type ResolvedMcpOutput = Omit<HoneyMcpOutputConfig, "path"> & {
 	readonly path: string
@@ -98,6 +123,7 @@ export type ResolvedHoneyConfig = {
 		readonly mcp: false | ResolvedMcpOutput
 		readonly mergeTree: string | undefined
 		readonly openApi: readonly ResolvedOpenApiOutput[]
+		readonly securitySchemes: Readonly<Record<string, unknown>> | undefined
 		readonly tree: false | string
 		readonly types: false | { readonly baseCtxName: string | undefined; readonly path: string }
 	}
@@ -136,6 +162,30 @@ function pathOf(value: boolean | string | undefined, fallback: string, on: boole
 	return value === true || (value === undefined && on) ? fallback : false
 }
 
+const YAML_PATH = /\.ya?ml$/
+
+/** The OpenAPI outputs with their paths and formats; a repeated name, no format, or an undeclared scheme is an error. */
+function openApiOf(
+	outputs: readonly HoneyOpenApiOutputConfig[],
+	schemes: Readonly<Record<string, unknown>> | undefined,
+): ResolvedOpenApiOutput[] {
+	const names = new Set<string>()
+	return outputs.map((entry) => {
+		const path = entry.path ?? "src/_gen/openapi.gen.json"
+		const at = `codegen.openApi ${JSON.stringify(entry.name ?? path)}`
+		if (entry.name !== undefined) {
+			if (names.has(entry.name)) throw new Error(`codegen.openApi: two documents are named "${entry.name}"`)
+			names.add(entry.name)
+		}
+		const formats = entry.formats ?? (YAML_PATH.test(path) ? ["yaml"] : ["json"])
+		if (formats.length === 0) throw new Error(`${at}: formats is empty`)
+		for (const name of entry.security ?? [])
+			if (schemes === undefined || !Object.hasOwn(schemes, name))
+				throw new Error(`${at}: security names "${name}", which codegen.securitySchemes does not declare`)
+		return { ...entry, formats, path }
+	})
+}
+
 /** `raw` with its defaults; a key honey-clients owns is an error naming where it went. */
 export function resolveHoneyConfig(raw: HoneyVitePluginConfig): ResolvedHoneyConfig {
 	const c = raw.codegen ?? {}
@@ -151,10 +201,8 @@ export function resolveHoneyConfig(raw: HoneyVitePluginConfig): ResolvedHoneyCon
 			manifest: pathOf(c.manifest, "src/_gen/manifest.gen.json", false),
 			mcp: mcpOf(c.mcp),
 			mergeTree: c.mergeTree,
-			openApi: (outputs as readonly HoneyOpenApiOutputConfig[]).map((entry) => ({
-				...entry,
-				path: entry.path ?? "src/_gen/openapi.gen.json",
-			})),
+			openApi: openApiOf(outputs as readonly HoneyOpenApiOutputConfig[], c.securitySchemes),
+			securitySchemes: c.securitySchemes,
 			tree: pathOf(c.tree, "src/_gen/routes.gen.ts", true),
 			types:
 				c.types === undefined || c.types === false
@@ -165,10 +213,20 @@ export function resolveHoneyConfig(raw: HoneyVitePluginConfig): ResolvedHoneyCon
 	}
 }
 
-/** Where an OpenAPI output configured at `path` goes: a `.yaml`/`.yml` path is YAML alone, else JSON plus `.yaml`. */
-export function openApiOutputPaths(path: string): { json: string | null; yaml: string } {
-	if (/\.ya?ml$/.test(path)) return { json: null, yaml: path }
-	return { json: path, yaml: path.endsWith(".json") ? `${path.slice(0, -5)}.yaml` : `${path}.yaml` }
+/**
+ * Where an OpenAPI output configured at `path` writes each of `formats`: the path itself in its own format (JSON
+ * unless it ends `.yaml` or `.yml`), each other format beside it under the same stem; `null` for a format not asked.
+ */
+export function openApiOutputPaths(
+	path: string,
+	formats: readonly OpenApiFormat[],
+): { json: string | null; yaml: string | null } {
+	const yamlPath = YAML_PATH.test(path)
+	const stem = yamlPath ? path.replace(YAML_PATH, "") : path.replace(/\.json$/, "")
+	return {
+		json: formats.includes("json") ? (yamlPath ? `${stem}.json` : path) : null,
+		yaml: formats.includes("yaml") ? (yamlPath ? path : `${stem}.yaml`) : null,
+	}
 }
 
 /** The MCP output's files, from the project root: its entry, then each companion. */
@@ -182,8 +240,8 @@ export function generatedOutputs(config: ResolvedHoneyConfig, root: string): { d
 		.filter((path): path is string => path !== false)
 		.map((path) => resolve(root, path))
 	for (const entry of openApi) {
-		const { json, yaml } = openApiOutputPaths(resolve(root, entry.path))
-		files.push(...(json === null ? [] : [json]), yaml)
+		const { json, yaml } = openApiOutputPaths(resolve(root, entry.path), entry.formats)
+		for (const file of [json, yaml]) if (file !== null) files.push(file)
 	}
 	return { dirs: [...new Set(files.map((file) => dirname(file)))], files }
 }

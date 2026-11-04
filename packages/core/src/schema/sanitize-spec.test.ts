@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs"
 import { describe, expect, it } from "vitest"
-import { sanitizeOpenApiSpec } from "./sanitize-spec.ts"
+import { sanitizeOpenApiSpec, securityNamed } from "./sanitize-spec.ts"
 import type { SchemaSpec } from "./slots.ts"
 
 const SCHEMES = {
@@ -46,6 +46,15 @@ describe("sanitizeOpenApiSpec: security a published document leaves out", () => 
 			{ schemas: { A: { type: "string" } }, securitySchemes: { apiKey: SCHEMES.apiKey } },
 			{ schemas: { A: { type: "string" } } },
 		])
+	})
+})
+
+describe("securityNamed: the schemes a document's requirements name (plan 39 7.4)", () => {
+	it("reads every operation's requirements and the root's, and nothing else in a path item", () => {
+		const named = securityNamed(
+			spec({ security: [{ apiKey: [] }, { jwt: [], internalKey: [] }] }, { security: [{ jwt: [] }] }),
+		)
+		expect([[...named].sort(), [...securityNamed(spec({}))]]).toEqual([["apiKey", "internalKey", "jwt"], []])
 	})
 })
 

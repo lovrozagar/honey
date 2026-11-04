@@ -1282,3 +1282,49 @@ import { honey, type PayloadErrorFormatter } from "@lovrozagar/honey"
 const withTrace: PayloadErrorFormatter = (_error, data) => ({ ...data, trace: "t" })
 export const app = honey().payloadErrorFormatter(withTrace)
 ```
+
+## Codegen declares security schemes once; each document lists the ones it shows
+
+`codegen.securitySchemes` holds every scheme, and an OpenAPI output's `securitySchemes` and an MCP output's are gone.
+A document shows the schemes its `security` lists, else the ones its routes name, so `sanitize.stripSecurityRequirements`
+and `sanitize.stripSecuritySchemes` are gone too: `sanitize` keeps `stripXExtensions`. An output writes the formats
+its `formats` names, JSON alone by default, where it used to write a YAML twin beside every JSON file: add `"yaml"` to
+keep one. Declared tags are listed in the order given.
+
+```ts v0
+codegen: {
+	openApi: {
+		path: "assets/openapi.public.json",
+		sanitize: { stripSecurityRequirements: ["jwt"], stripSecuritySchemes: ["staffKey"] },
+		securitySchemes: { apiKey, jwt, staffKey },
+		title: "Shop",
+		version: "1.0.0",
+	},
+}
+```
+
+```ts
+import { honeyPlugin } from "@lovrozagar/honey/plugin"
+
+const apiKey = { in: "header", name: "Authorization", type: "apiKey" }
+const jwt = { scheme: "bearer", type: "http" }
+const staffKey = { in: "header", name: "x-staff-key", type: "apiKey" }
+
+export default {
+	plugins: [
+		honeyPlugin({
+			app: "src/app.ts",
+			codegen: {
+				openApi: {
+					formats: ["json", "yaml"],
+					path: "assets/openapi.public.json",
+					security: ["apiKey"],
+					title: "Shop",
+					version: "1.0.0",
+				},
+				securitySchemes: { apiKey, jwt, staffKey },
+			},
+		}),
+	],
+}
+```
