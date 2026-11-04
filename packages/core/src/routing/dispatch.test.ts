@@ -77,7 +77,7 @@ describe("dispatch: 404", () => {
 
 	// v0: 8cd23e0071
 	// v0: 02e1e88bda
-	it("a late onNotFound, a custom formatter or a factory still apply, with no middleware", async () => {
+	it("a late onNotFound, a payload formatter or a factory still apply, with no middleware", async () => {
 		const app = appWith()
 		await app.fetch(req("/nope"), {})
 		app.onNotFound(() => new Response("custom", { status: 404 }))
@@ -88,7 +88,7 @@ describe("dispatch: 404", () => {
 		const factory = honey<{}>().errorFactory(errors)
 		factory.get("/x").handler((ctx) => ctx.res.text("ok", "x"))
 		expect((await factory.fetch(req("/nope"), {})).status).toBe(410)
-		const custom = appWith((a) => a.customErrorFormatter((_e, data) => data))
+		const custom = appWith((a) => a.payloadErrorFormatter((_e, data) => data))
 		expect((await custom.fetch(req("/nope"), {})).status).toBe(404)
 	})
 })

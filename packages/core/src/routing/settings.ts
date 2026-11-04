@@ -8,7 +8,7 @@ import type { ErrorFormat } from "../errors/problem-json.ts"
 import type { MetaSpecSource } from "../meta/meta-spec-merge.ts"
 import type { OutputValidationMode } from "../validation/validate-output.ts"
 import type { HoneyError } from "../errors/error.ts"
-import type { CustomErrorFormatter, ErrorFormatter } from "../errors/projector.ts"
+import type { PayloadErrorFormatter, ErrorFormatter } from "../errors/projector.ts"
 import type { MaybePromise } from "../middleware/middleware.ts"
 import type { RequestLogEntry } from "../telemetry/fields.ts"
 import { createLogger, type Logger, SILENT } from "../telemetry/logger.ts"
@@ -80,9 +80,9 @@ export type RequestLogOptions = {
 /** The configuration one app holds, shared by every handle derived from it. */
 export type AppSettings<TEnv = unknown> = {
 	/** Shapes the body of an error `defineErrors` gave a payload schema; `null` sends the payload unchanged. */
-	customErrorFormatter: CustomErrorFormatter | null
+	payloadErrorFormatter: PayloadErrorFormatter | null
 	/** the body schema of schema errors, for the OpenAPI document */
-	customErrorSchema: StandardSchemaLike | null
+	payloadErrorSchema: StandardSchemaLike | null
 	/** The error key an undeclared or unknown throw becomes on routes without a boundary; `null` for a 500. */
 	defaultBoundaryKey: string | null
 	/** Error keys every route of the app declares. */
@@ -140,8 +140,8 @@ export function defaultErrorFormatter(
 export function createSettings<TEnv>(): AppSettings<TEnv> {
 	return {
 		outputValidation: "off",
-		customErrorFormatter: null,
-		customErrorSchema: null,
+		payloadErrorFormatter: null,
+		payloadErrorSchema: null,
 		defaultBoundaryKey: null,
 		defaultErrorKeys: new Set(),
 		encodedSlashes: "reject",

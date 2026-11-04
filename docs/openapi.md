@@ -113,7 +113,7 @@ serveStaticOpenApi(app, {
 `verify` gets the request's `env` and the decoded pair, and may return a promise. `credentialsMatch` compares both
 fields in constant time. A missing or malformed header, any scheme but `Basic`, and a pair `verify` refuses answer
 401 with `WWW-Authenticate: Basic realm="…", charset="UTF-8"` and `Cache-Control: no-store`. The body goes through
-your error boundary as `unauthorized`, so a custom formatter shapes it, and the challenge stays on the answer even
+your error boundary as `unauthorized`, so `defaultErrorFormatter` shapes it, and the challenge stays on the answer even
 when your `onError` builds it. A `verify` that throws is a 500, never a refusal. An accepted request is answered
 `private, no-store` with no ETag, so no shared cache keeps the document. `auth` beside `cacheControl` is a type error
 and throws. `auth` changes nothing in a generated document: the routes stay internal.

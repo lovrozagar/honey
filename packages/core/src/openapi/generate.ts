@@ -245,7 +245,7 @@ export function generateOpenApi(app: App, options: GenerateOpenApiOptions): Open
 	const settingsSchema = (schema: unknown, hint: string) =>
 		schema === null ? null : convertFor("the app's error schema")(schema, "output", hint)
 	const errors: ErrorSettings = {
-		customErrorSchema: settingsSchema(settings.customErrorSchema, "CustomError"),
+		payloadErrorSchema: settingsSchema(settings.payloadErrorSchema, "PayloadError"),
 		errorFormat: settings.errorFormat,
 		errorSchema: settingsSchema(settings.errorSchema, "Error"),
 	}

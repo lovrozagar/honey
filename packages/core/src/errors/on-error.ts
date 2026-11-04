@@ -42,7 +42,7 @@ export function errorCtx(s: AppSettings<unknown>, state: FetchState): ErrorCtx<u
 	return {
 		env: state.env,
 		jsonFromError: (err) =>
-			createErrorResponse(err, s.errorFormatter, s.customErrorFormatter, {
+			createErrorResponse(err, s.errorFormatter, s.payloadErrorFormatter, {
 				format: s.errorFormat,
 				nodeOut: isNodeOutbound(state.req),
 				report: formatterReport(s, state),
@@ -66,7 +66,7 @@ function answerFor(s: AppSettings<unknown>, ctx: object): ErrorAnswer {
 /** The response for `error`, recording it on `ctx.error`. */
 function respond(s: AppSettings<unknown>, ctx: object, error: HoneyError): Response {
 	setCtxError(ctx as HoneyContext, error)
-	return createErrorResponse(error, s.errorFormatter, s.customErrorFormatter, answerFor(s, ctx))
+	return createErrorResponse(error, s.errorFormatter, s.payloadErrorFormatter, answerFor(s, ctx))
 }
 
 /**
@@ -214,7 +214,7 @@ export function boundary(s: AppSettings<unknown>): (thrown: unknown, ctx: object
 	const reportAndAnswer = (thrown: unknown, ctx: object, failure: unknown): Response => {
 		s.logger.error({ ...bindings(ctx), err: HoneyError.serialize(failure) }, "error response failed")
 		setCtxError(ctx as HoneyContext, asHoneyError(thrown))
-		return safeErrorResponse(thrown, s.errorFormatter, s.customErrorFormatter, answerFor(s, ctx))
+		return safeErrorResponse(thrown, s.errorFormatter, s.payloadErrorFormatter, answerFor(s, ctx))
 	}
 	const answered = (thrown: unknown, ctx: object): MaybePromise<Response> => {
 		try {

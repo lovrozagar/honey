@@ -163,7 +163,7 @@ app.get("/").handler((ctx) => ctx.res.text("ok", "up"))
 | `logger(logger \| false)`, `requestLog(…)`       | where lines go, and the one-line-per-request log                       |
 | `telemetry(value)`                               | the tracing adapter (`otelAdapter`)                                    |
 | `errorFormat(format)`                            | `"honey"` (the default) or `"problem+json"` (RFC 9457)                 |
-| `defaultErrorFormatter`, `customErrorFormatter`  | your own error body, schema-checked                                    |
+| `defaultErrorFormatter`, `payloadErrorFormatter` | your own error body, schema-checked                                    |
 | `outputValidation(mode)`                         | what a response that does not match its `.output()` does               |
 | `trailingSlash`, `encodedSlashes`, `stripPrefix` | path normalization, and the prefix a gateway already consumed          |
 | `wsAdapter(adapter)`                             | the WebSocket adapter, when `serve()` does not pick one                |
@@ -397,34 +397,31 @@ app
 
 `errorFormat("problem+json")` answers RFC 9457 Problem Details instead of honey's own body. Anything thrown becomes a
 `HoneyError`; `onError` sees it first, and `ERROR_META` is the symbol a thrown value carries its status under, so a
-value from elsewhere can present itself as one. `createErrorResponse` builds the body outside a request, which is
-what a custom formatter or a test harness needs.
+value from elsewhere can present itself as one. Under either format, `defaultErrorFormatter` gets the default body (the
+Problem Details document under `problem+json`) and its answer keeps that content type, while `payloadErrorFormatter`
+shapes the body of an error `defineErrors` gave a payload schema, which always answers `application/json`.
 
 ```ts
-import {
-	createErrorResponse,
-	defineErrors,
-	ERROR_META,
-	type ErrorFormatter,
-	HoneyError,
-	honey,
-} from "@lovrozagar/honey"
+import { defineErrors, ERROR_META, type ErrorFormatter, HoneyError, honey } from "@lovrozagar/honey"
 
 const errors = defineErrors({ db_timeout: "service_unavailable" })
 
-const app = honey().onError((error, ctx) => {
-	if (error instanceof HoneyError && error.errorKey === "db_timeout") return ctx.jsonFromError(error)
-	return undefined
-})
+/* the body an error answers with: the default shape, plus whatever your API adds to it */
+const formatter: ErrorFormatter = (error, defaultShape) => ({ ...defaultShape, retriable: error.status >= 500 })
+
+const app = honey()
+	.errorFactory(errors)
+	.errorFormat("problem+json")
+	.defaultErrorFormatter(formatter)
+	.onError((error, ctx) => {
+		if (error instanceof HoneyError && error.errorKey === "db_timeout") return ctx.jsonFromError(error)
+		return undefined
+	})
 
 app.get("/").handler((ctx) => ctx.res.text("ok", "up"))
 
 /* a thrown value of your own, carrying the status honey should answer with */
 const refusal = Object.assign(new Error("nope"), { [ERROR_META]: { errorKey: "forbidden", status: 403 } })
-
-/* the body an error answers with: the default shape, plus whatever your API adds to it */
-const formatter: ErrorFormatter = (error, defaultShape) => ({ ...defaultShape, retriable: error.status >= 500 })
-const answer = createErrorResponse(errors.db_timeout(), formatter, null, { format: "problem+json" })
 ```
 
 Full reference: [problem+json](https://github.com/lovrozagar/honey/blob/main/docs/capabilities/problem-json.md) and
@@ -1306,7 +1303,7 @@ generator.
 | `@lovrozagar/honey/build`           | `createBuildPlugin`, a production bundle for a deploy target                                                             |
 
 The root export's values: `honey()` and the `Honey` class behind it, `HoneyContext` and `HoneyRes` (the handler's
-`ctx` and its `ctx.res`), `HoneyError`, `defineErrors` and `ERROR_META`, `createErrorResponse`, `createMiddleware`,
+`ctx` and its `ctx.res`), `HoneyError`, `defineErrors` and `ERROR_META`, `createMiddleware`,
 `mergeTree` and `toFetchRequest`.
 
 ## Type helpers

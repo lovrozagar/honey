@@ -335,7 +335,7 @@ describe("errors with a schema of their own", () => {
 	it("offers a standard key and a schema error at one status as oneOf, merging the custom schema into each schema error by allOf", () => {
 		const app = honey<{}>()
 			.errorFactory(schemaErrors())
-			.customErrorFormatter(z.object({ trace: z.string() }), (_e, data) => ({ ...data, trace: "t" }))
+			.payloadErrorFormatter(z.object({ trace: z.string() }), (_e, data) => ({ ...data, trace: "t" }))
 		app
 			.get("/a")
 			.errors("item_gone", "user_not_found")

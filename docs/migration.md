@@ -1263,3 +1263,22 @@ import { honeyPlugin, type HoneyVitePluginConfig } from "@lovrozagar/honey/plugi
 const config: HoneyVitePluginConfig = { app: "src/app.ts" }
 export default { plugins: [honeyPlugin(config)] }
 ```
+
+## `customErrorFormatter()` is `payloadErrorFormatter()`, and `createErrorResponse` is gone
+
+The formatter for errors `defineErrors` gave a payload schema is `payloadErrorFormatter()`, and its type is
+`PayloadErrorFormatter`: the name says what it formats. `createErrorResponse` was the router's own answer builder
+and leaves the root; an error answers through `throw`, `ctx.jsonFromError(error)` or a test request to the app.
+
+```ts v0
+import { createErrorResponse, type CustomErrorFormatter } from "@lovrozagar/honey"
+
+app.customErrorFormatter((error, data) => ({ ...data, trace: "t" }))
+```
+
+```ts
+import { honey, type PayloadErrorFormatter } from "@lovrozagar/honey"
+
+const withTrace: PayloadErrorFormatter = (_error, data) => ({ ...data, trace: "t" })
+export const app = honey().payloadErrorFormatter(withTrace)
+```

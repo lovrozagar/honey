@@ -69,7 +69,7 @@ describe("settings setters: handles and formatters", () => {
 	it("the error formatters take a function or a schema with a mapper", async () => {
 		const app = honey<{}>()
 			.defaultErrorFormatter((_e, shape) => ({ ...shape, plain: true }))
-			.customErrorFormatter((_e, data) => ({ ...data, custom: true }))
+			.payloadErrorFormatter((_e, data) => ({ ...data, custom: true }))
 		app.get("/std").handler(() => {
 			throw new HoneyError({ errorKey: "gone", status: "gone" })
 		})
@@ -80,7 +80,7 @@ describe("settings setters: handles and formatters", () => {
 		expect(JSON.parse((await get(app, "/data"))[1])).toEqual({ custom: true, d: 1 })
 		const mapped = honey<{}>()
 			.defaultErrorFormatter(schema, (e) => ({ code: e.errorKey }))
-			.customErrorFormatter(schema, (e, data) => ({ code: e.errorKey, ...data }))
+			.payloadErrorFormatter(schema, (e, data) => ({ code: e.errorKey, ...data }))
 		mapped.get("/std").handler(() => {
 			throw new HoneyError({ errorKey: "gone", status: "gone" })
 		})

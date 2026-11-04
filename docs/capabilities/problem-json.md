@@ -22,4 +22,26 @@ app
 	})
 ```
 
-Tested by: `errors/problem-json.test.ts`
+## With your own formatters
+
+`defaultErrorFormatter` gets the Problem Details document as its default body, so what it adds lands in the document
+and the answer stays `application/problem+json`. An error `defineErrors` gave a payload schema keeps its declared body
+under either format: `payloadErrorFormatter` shapes that body, and it answers `application/json`.
+
+```ts
+import { defineErrors, honey } from "@lovrozagar/honey"
+import * as z from "zod"
+
+const errors = defineErrors({
+	out_of_stock: { schema: z.object({ sku: z.string() }), status: "conflict" },
+	sold_out: "gone",
+})
+
+const app = honey()
+	.errorFactory(errors)
+	.errorFormat("problem+json")
+	.defaultErrorFormatter((error, problem) => ({ ...problem, retriable: error.status >= 500 }))
+	.payloadErrorFormatter((_error, data) => ({ ...data, docs: "https://example.com/errors" }))
+```
+
+Tested by: `errors/problem-json.test.ts`, `integration/error-envelope.test.ts`

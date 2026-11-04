@@ -90,7 +90,7 @@ function plainNotFound(s: AppSettings<unknown>): boolean {
 	return (
 		s.onNotFound === null &&
 		s.errorFormatter === defaultErrorFormatter &&
-		s.customErrorFormatter === null &&
+		s.payloadErrorFormatter === null &&
 		s.errorFactory === null
 	)
 }
@@ -117,7 +117,7 @@ export function finalTable(g: HoneyGraph): FinalTable {
 /** 400 for a request path the normalization policy rejects. No boundary, no onError. */
 export function badRequestTarget(s: AppSettings<unknown>, request: Request): Response {
 	const error = frameworkError(s, "bad_request", "bad_request")
-	return createErrorResponse(error, s.errorFormatter, s.customErrorFormatter, {
+	return createErrorResponse(error, s.errorFormatter, s.payloadErrorFormatter, {
 		format: s.errorFormat,
 		nodeOut: isNodeOutbound(request),
 		report: formatterReport(s, null),

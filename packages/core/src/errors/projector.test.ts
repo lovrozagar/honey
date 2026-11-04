@@ -34,7 +34,7 @@ const defaultFormatter = (_error: HoneyError, defaultShape: Record<string, unkno
 	...defaultShape,
 	timestamp: 1234567890,
 })
-const customFormatter = (_error: HoneyError, data: Record<string, unknown>) => ({ ...data, timestamp: 1234567890 })
+const payloadFormatter = (_error: HoneyError, data: Record<string, unknown>) => ({ ...data, timestamp: 1234567890 })
 const crashingFormatter = () => {
 	throw new Error("formatter crashed")
 }
@@ -55,7 +55,7 @@ describe("createErrorResponse with dual formatters", () => {
 	})
 
 	// v0: 17f03fe815
-	it("custom schema error uses data as-is when no customFormatter", async () => {
+	it("custom schema error uses data as-is when no payloadFormatter", async () => {
 		const err = new HoneyError({
 			data: { reason: "not found", suggestions: ["/a"] },
 			errorKey: "item_not_found",
@@ -67,19 +67,19 @@ describe("createErrorResponse with dual formatters", () => {
 	})
 
 	// v0: af9d5715eb
-	it("custom schema error uses customFormatter when provided", async () => {
+	it("custom schema error uses payloadFormatter when provided", async () => {
 		const err = new HoneyError({
 			data: { reason: "not found", suggestions: [] },
 			errorKey: "item_not_found",
 			status: "not_found",
 		})
-		const body = await bodyOf(createErrorResponse(err, defaultFormatter, customFormatter))
+		const body = await bodyOf(createErrorResponse(err, defaultFormatter, payloadFormatter))
 		expect(body.reason).toBe("not found")
 		expect(body.timestamp).toBe(1234567890)
 	})
 
 	// v0: 90cc980f6a
-	it("customFormatter crash falls back to raw data", async () => {
+	it("payloadFormatter crash falls back to raw data", async () => {
 		const err = new HoneyError({ data: { reason: "not found" }, errorKey: "item_not_found", status: "not_found" })
 		expect((await bodyOf(createErrorResponse(err, defaultFormatter, crashingFormatter))).reason).toBe("not found")
 	})
@@ -125,14 +125,14 @@ describe("createErrorResponse: deep coverage", () => {
 	})
 
 	// v0: 74f1a6b55c
-	it("customFormatter receives correct HoneyError and data", async () => {
+	it("payloadFormatter receives correct HoneyError and data", async () => {
 		const seen: unknown[] = []
-		const customFmt = (error: HoneyError, data: Record<string, unknown>) => {
+		const payloadFmt = (error: HoneyError, data: Record<string, unknown>) => {
 			seen.push(error, data)
 			return { ...data, injected: true }
 		}
 		const err = errors.item_not_found({ reason: "test", suggestions: ["a"] })
-		const body = await bodyOf(createErrorResponse(err, identity, customFmt))
+		const body = await bodyOf(createErrorResponse(err, identity, payloadFmt))
 		expect(seen).toEqual([err, { reason: "test", suggestions: ["a"] }])
 		expect(body).toEqual({ injected: true, reason: "test", suggestions: ["a"] })
 	})
@@ -140,7 +140,7 @@ describe("createErrorResponse: deep coverage", () => {
 
 describe("createErrorResponse: deep coverage, formatter routing", () => {
 	// v0: 030f58a717
-	it("customFormatter does NOT fire for standard errors", () => {
+	it("payloadFormatter does NOT fire for standard errors", () => {
 		let customCalled = false
 		createErrorResponse(errors.email_taken(), identity, (_e, data) => {
 			customCalled = true
@@ -175,7 +175,7 @@ describe("createErrorResponse: deep coverage, formatter routing", () => {
 
 const withRequestId = (_e: HoneyError, data: Record<string, unknown>) => ({ ...data, request_id: "req-abc" })
 
-describe("integration: customErrorFormatter via createErrorResponse", () => {
+describe("integration: payloadErrorFormatter via createErrorResponse", () => {
 	// v0: f33d557eb6
 	it("adds fields to custom error responses", async () => {
 		const appErrors = defineErrors({ item_gone: { schema: schemaOf<{ reason: string }>(), status: "gone" } })

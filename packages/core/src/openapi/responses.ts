@@ -29,7 +29,7 @@ export type Convert = (schema: unknown, io: "input" | "output", hint: string) =>
 
 /** The app's error settings, their schemas already converted. */
 export type ErrorSettings = {
-	readonly customErrorSchema: JsonSchema | null
+	readonly payloadErrorSchema: JsonSchema | null
 	readonly errorFormat: ErrorFormat
 	readonly errorSchema: JsonSchema | null
 }
@@ -183,7 +183,9 @@ export function addErrorResponses(
 		group.keys.push(key)
 		if (schema === undefined) group.standard.push(key)
 		else
-			group.custom.push(settings.customErrorSchema === null ? schema : { allOf: [schema, settings.customErrorSchema] })
+			group.custom.push(
+				settings.payloadErrorSchema === null ? schema : { allOf: [schema, settings.payloadErrorSchema] },
+			)
 	}
 	for (const [code, { custom, keys, standard }] of byStatus) {
 		const content: Record<string, MediaObject> = {}

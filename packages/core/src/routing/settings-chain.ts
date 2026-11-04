@@ -3,7 +3,7 @@
  */
 import type { HoneyError } from "../errors/error.ts"
 import type { ErrorFormat } from "../errors/problem-json.ts"
-import type { CustomErrorFormatter, ErrorFormatter } from "../errors/projector.ts"
+import type { PayloadErrorFormatter, ErrorFormatter } from "../errors/projector.ts"
 import type { HoneyMetaSpec, MetaSpecConfig } from "../meta/meta-spec-merge.ts"
 import { type Logger, SILENT } from "../telemetry/logger.ts"
 import type { Telemetry } from "../telemetry/request-trace.ts"
@@ -205,7 +205,7 @@ export abstract class SettingsChain<TEnv> {
 	 * Shape the body of every error `defineErrors` gave a payload schema: `fn` returns the schema's output type, and
 	 * `schema` describes the body in the OpenAPI document.
 	 */
-	customErrorFormatter<TSchema extends StandardSchemaLike>(
+	payloadErrorFormatter<TSchema extends StandardSchemaLike>(
 		schema: TSchema,
 		fn: (error: HoneyError, data: Record<string, unknown>) => InferOutput<TSchema>,
 	): this
@@ -213,18 +213,18 @@ export abstract class SettingsChain<TEnv> {
 	 * Shape the body of every error `defineErrors` gave a payload schema: `fn` gets the error and its payload and returns
 	 * the body to send. If it throws, the failure is logged and the payload goes out.
 	 */
-	customErrorFormatter(fn: CustomErrorFormatter): this
-	customErrorFormatter(
-		schemaOrFn: CustomErrorFormatter | StandardSchemaLike,
+	payloadErrorFormatter(fn: PayloadErrorFormatter): this
+	payloadErrorFormatter(
+		schemaOrFn: PayloadErrorFormatter | StandardSchemaLike,
 		fn?: (error: HoneyError, data: Record<string, unknown>) => unknown,
 	): this {
 		if (typeof schemaOrFn === "function") {
-			this.settings.customErrorSchema = null
-			this.settings.customErrorFormatter = schemaOrFn
+			this.settings.payloadErrorSchema = null
+			this.settings.payloadErrorFormatter = schemaOrFn
 		} else {
 			const mapper = fn as (error: HoneyError, data: Record<string, unknown>) => Record<string, unknown>
-			this.settings.customErrorSchema = schemaOrFn
-			this.settings.customErrorFormatter = (error, data) => mapper(error, data)
+			this.settings.payloadErrorSchema = schemaOrFn
+			this.settings.payloadErrorFormatter = (error, data) => mapper(error, data)
 		}
 		return this
 	}

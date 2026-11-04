@@ -12,7 +12,7 @@ import { type ErrorFormat, PROBLEM_JSON, problemDetails } from "./problem-json.t
 export type ErrorFormatter = (error: HoneyError, defaultShape: Record<string, unknown>) => Record<string, unknown>
 
 /** Shapes a schema error's `data` body. */
-export type CustomErrorFormatter = (error: HoneyError, data: Record<string, unknown>) => Record<string, unknown>
+export type PayloadErrorFormatter = (error: HoneyError, data: Record<string, unknown>) => Record<string, unknown>
 
 /** A `defineErrors` result, as the projector reads it. */
 export type ErrorFactoryRecord = {
@@ -110,17 +110,17 @@ function defaultShapeOf(error: HoneyError, answer: ErrorAnswer): Record<string, 
 function errorBody(
 	error: HoneyError,
 	defaultFormatter: ErrorFormatter,
-	customFormatter: CustomErrorFormatter | null | undefined,
+	payloadFormatter: PayloadErrorFormatter | null | undefined,
 	answer: ErrorAnswer,
 ) {
 	const report = answer.report
 	if (error.data !== undefined) {
 		const data = error.data as Record<string, unknown>
-		if (!customFormatter) return data
+		if (!payloadFormatter) return data
 		try {
-			return customFormatter(error, data)
+			return payloadFormatter(error, data)
 		} catch (failure) {
-			/* a crashed custom formatter: reported, and the client still gets the error's data */
+			/* a crashed payload formatter: reported, and the client still gets the error's data */
 			report?.(failure)
 			return data
 		}
@@ -140,10 +140,10 @@ function errorBody(
 export function createErrorResponse(
 	error: HoneyError,
 	defaultFormatter: ErrorFormatter,
-	customFormatter?: CustomErrorFormatter | null,
+	payloadFormatter?: PayloadErrorFormatter | null,
 	answer: ErrorAnswer = {},
 ): Response {
-	const payload = JSON.stringify(errorBody(error, defaultFormatter, customFormatter, answer))
+	const payload = JSON.stringify(errorBody(error, defaultFormatter, payloadFormatter, answer))
 	/* a schema error keeps its declared body, and so its type */
 	const type = answer.format === "problem+json" && error.data === undefined ? PROBLEM_JSON : "application/json"
 	const headers: Record<string, string> = { "content-type": type, ...error.headers }
@@ -157,14 +157,14 @@ export function createErrorResponse(
 export function safeErrorResponse(
 	thrown: unknown,
 	defaultFormatter: ErrorFormatter,
-	customFormatter: CustomErrorFormatter | null,
+	payloadFormatter: PayloadErrorFormatter | null,
 	answer: ErrorAnswer = {},
 ): Response {
 	try {
 		return createErrorResponse(
 			thrown instanceof HoneyError ? thrown : internalError(undefined),
 			defaultFormatter,
-			customFormatter,
+			payloadFormatter,
 			answer,
 		)
 	} catch {

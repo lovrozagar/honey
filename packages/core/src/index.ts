@@ -7,7 +7,7 @@ export { HoneyContext } from "./context/context.ts"
 export type { CookieOptions } from "./context/cookie.ts"
 export { HoneyError } from "./errors/error.ts"
 export { defineErrors, ERROR_META, type ErrorMetaEntry } from "./errors/errors.ts"
-export { createErrorResponse, type CustomErrorFormatter, type ErrorFormatter } from "./errors/projector.ts"
+export type { ErrorFormatter, PayloadErrorFormatter } from "./errors/projector.ts"
 export type { InferInputMap } from "./input/input.ts"
 export type {
 	HoneyMetaSpec,

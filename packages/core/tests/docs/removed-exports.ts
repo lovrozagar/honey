@@ -61,6 +61,7 @@ const SHAPE = "an internal shape of the route builder's types, never written in 
  */
 export const REMOVED_NAMES: Readonly<Record<string, Verdict>> = {
 	ClientInfo: { kind: "guide" },
+	CustomErrorFormatter: { kind: "guide" },
 	DefaultMeta: { kind: "guide" },
 	GenerateOptions: { kind: "internal", why: PLUGIN },
 	HoneyGoCliConfig: { kind: "internal", why: PLUGIN },
@@ -111,6 +112,7 @@ export const REMOVED_NAMES: Readonly<Record<string, Verdict>> = {
 	assertTreeFormat: { kind: "internal", why: TREE },
 	clientInfo: { kind: "guide" },
 	cloneTree: { kind: "internal", why: TREE },
+	createErrorResponse: { kind: "guide" },
 	createNode: { kind: "internal", why: TREE },
 	detectRuntime: { kind: "guide" },
 	createProxyHandler: { kind: "guide" },

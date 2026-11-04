@@ -221,7 +221,7 @@ describe("the npm READMEs cover their package's surface", () => {
 		expect([
 			subpaths.length > 40,
 			subpaths.filter((name) => !readme.includes(name)),
-			values.length > 10,
+			values.length > 5,
 			values.filter((name) => !new RegExp(`\\b${name}\\b`).test(readme)),
 		]).toEqual([true, [], true, []])
 	})

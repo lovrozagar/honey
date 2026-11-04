@@ -450,11 +450,11 @@ describe("a crashing error formatter is reported, and the client still gets a we
 	})
 
 	// v0: 7b3cb9fff2
-	it("the custom formatter of a data error: the error's data answers, one line", async () => {
+	it("the payload formatter of a data error: the error's data answers, one line", async () => {
 		const { app, lines } = throwing(
 			new HoneyError({ data: { reason: "kept" }, errorKey: "slug_taken", status: "conflict" }),
 		)
-		app.customErrorFormatter(broken)
+		app.payloadErrorFormatter(broken)
 		const res = await app.fetch(get("/boom/1"), {})
 		expect([res.status, await res.json(), failures(lines)]).toEqual([409, { reason: "kept" }, ["formatter broke"]])
 	})

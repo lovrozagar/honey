@@ -1,7 +1,7 @@
 /**
  * The error answer's envelope through the app: what the default shape carries (fields, status,
  * status_key, message) and keeps off (vars, cause); defaultErrorFormatter extending, replacing or
- * reading vars, framework 404 and 405 answers formatted too; the custom formatter only for errors
+ * reading vars, framework 404 and 405 answers formatted too; the payload formatter only for errors
  * with data, both formatters carried under a basePath; a thrown error's headers kept, through a
  * formatter as well, never leaked when a boundary wraps it; and which key answers under a factory.
  */
@@ -151,7 +151,7 @@ function bothFormatters(base = "") {
 		.errorFactory(appErrors)
 		.defaultBoundary("api_error")
 		.defaultErrorFormatter((_e, shape) => ({ ...shape, source: "default" }))
-		.customErrorFormatter((_e, data) => ({ ...(data as object), source: "custom" }))
+		.payloadErrorFormatter((_e, data) => ({ ...(data as object), source: "custom" }))
 	const scope = base === "" ? app : app.basePath(base)
 	scope
 		.get("/std")
@@ -168,7 +168,7 @@ function bothFormatters(base = "") {
 	return app
 }
 
-describe("the custom formatter beside the default one", () => {
+describe("the payload formatter beside the default one", () => {
 	// v0: ed46d78425
 	// v0: f785615d07
 	// v0: 519100299c
@@ -241,10 +241,12 @@ describe("an error typed by a zod schema", () => {
 	// v0: 1527976bfb
 	// v0: a62e463a99
 	// v0: 13fb6e63b4
-	it("the custom formatter post-processes its payload, schema overload too; the default formatter never touches it", async () => {
-		const custom = zodApp((a) => a.customErrorFormatter((_e, data) => ({ ...(data as object), request_id: "req-123" })))
+	it("the payload formatter post-processes its payload, schema overload too; the default formatter never touches it", async () => {
+		const custom = zodApp((a) =>
+			a.payloadErrorFormatter((_e, data) => ({ ...(data as object), request_id: "req-123" })),
+		)
 		const overload = zodApp((a) =>
-			a.customErrorFormatter(z.object({ trace_id: z.string() }), (_e, data) => ({
+			a.payloadErrorFormatter(z.object({ trace_id: z.string() }), (_e, data) => ({
 				...(data as object),
 				trace_id: "trace-abc",
 			})),
@@ -258,6 +260,44 @@ describe("an error typed by a zod schema", () => {
 			{ reason: "intact", request_id: "req-123" },
 			{ reason: "intact", trace_id: "trace-abc" },
 			{ reason: "intact" },
+		])
+	})
+})
+
+describe('both formatters under errorFormat("problem+json")', () => {
+	it("the default formatter extends the Problem Details document; a payload error keeps its JSON body through its own", async () => {
+		const app = honey<{}>()
+			.errorFactory(appErrors)
+			.errorFormat("problem+json")
+			.defaultErrorFormatter((_e, shape) => ({ ...shape, source: "default" }))
+			.payloadErrorFormatter((_e, data) => ({ ...data, source: "payload" }))
+		app
+			.get("/std")
+			.errors("email_taken")
+			.handler(() => {
+				throw appErrors.email_taken()
+			})
+		app
+			.get("/payload")
+			.errors("item_not_found")
+			.handler(() => {
+				throw appErrors.item_not_found({ reason: "gone" } as never)
+			})
+		const [standard, payload] = [await send(app, "/std"), await send(app, "/payload")]
+		expect([
+			standard.headers["content-type"],
+			standard.body.status,
+			standard.body.source,
+			"success" in standard.body,
+			payload.headers["content-type"],
+			payload.body,
+		]).toEqual([
+			"application/problem+json",
+			409,
+			"default",
+			false,
+			"application/json",
+			{ reason: "gone", source: "payload" },
 		])
 	})
 })
