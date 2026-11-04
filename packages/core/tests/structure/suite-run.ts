@@ -4,8 +4,9 @@
  * and each unhandled error. A gate that says only "171 of 172" sends its reader to rerun it; this one says what.
  *
  * A worker that dies (a crash, an out-of-memory kill) leaves its file "passed" in the JSON report and its running
- * test "pending", which is what names it. vitest may also print an unhandled pool error for the dead fork, but only
- * when that error beats the run's teardown: it is named when printed, and never relied on.
+ * test "pending", which is what names it; vitest also records a pool error for the dead fork. Errors caught outside
+ * a test come from suite-run-reporter.ts as data: the default reporter's text carries colors under CI, so it is
+ * never parsed, and the child's output is not kept.
  */
 import { spawnSync } from "node:child_process"
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs"
@@ -14,6 +15,7 @@ import { tmpdir } from "node:os"
 import { dirname, join, relative } from "node:path"
 
 const VITEST = join(dirname(createRequire(import.meta.url).resolve("vitest/package.json")), "vitest.mjs")
+const REPORTER = join(import.meta.dirname, "suite-run-reporter.ts")
 
 /** How a run went: vitest's exit status, and by name what went wrong in it. */
 export type SuiteRun = {
@@ -24,7 +26,7 @@ export type SuiteRun = {
 }
 
 /** The part of vitest's JSON report read here. */
-export type JsonReport = {
+type JsonReport = {
 	testResults: {
 		assertionResults: { failureMessages: string[]; fullName: string; status: string }[]
 		message: string
@@ -32,9 +34,6 @@ export type JsonReport = {
 		status: string
 	}[]
 }
-
-/* vitest's banner over each error the run caught outside a test: the error's type */
-const UNHANDLED = /⎯+ (?:Unhandled Error|Unhandled Rejection|Uncaught Exception) ⎯+\n+(.+)/g
 
 /** Why a test is named: its failure's first line, or that a dead worker never let it finish. */
 function verdict(status: string, messages: readonly string[]): string {
@@ -45,8 +44,8 @@ function firstLine(text: string): string {
 	return text.split("\n")[0] as string
 }
 
-/** What `report` and the run's `output` say went wrong, each by name, files relative to `cwd`. */
-export function failuresIn(report: JsonReport, output: string, cwd: string): string[] {
+/** What `report` and the run's `unhandled` errors say went wrong, each by name, files relative to `cwd`. */
+function failuresIn(report: JsonReport, unhandled: readonly string[], cwd: string): string[] {
 	const inFiles = report.testResults.flatMap((file) => {
 		const at = relative(cwd, file.name)
 		const tests = file.assertionResults
@@ -54,21 +53,26 @@ export function failuresIn(report: JsonReport, output: string, cwd: string): str
 			.map((test) => `${at} > ${test.fullName}: ${verdict(test.status, test.failureMessages)}`)
 		return tests.length === 0 && file.status === "failed" ? [`${at}: ${firstLine(file.message)}`] : tests
 	})
-	const unhandled = [...output.matchAll(UNHANDLED)].map(([, line]) => `unhandled: ${line}`)
-	return [...inFiles.sort(), ...unhandled]
+	return [...inFiles.sort(), ...unhandled.map((error) => `unhandled: ${error}`).sort()]
 }
 
 /** `vitest run ...args` in `cwd` under `env`, reported by name. A red run always names something. */
 export function runVitest(cwd: string, args: readonly string[], env: NodeJS.ProcessEnv): SuiteRun {
 	const dir = mkdtempSync(join(tmpdir(), "honey-suite-run-"))
 	const reportFile = join(dir, "report.json")
+	const errorsFile = join(dir, "errors.json")
 	try {
-		const reporters = ["--reporter=default", "--reporter=json", `--outputFile.json=${reportFile}`]
-		const run = spawnSync(process.execPath, [VITEST, "run", ...args, ...reporters], { cwd, encoding: "utf8", env })
+		const reporters = ["--reporter=json", `--outputFile.json=${reportFile}`, `--reporter=${REPORTER}`]
+		const run = spawnSync(process.execPath, [VITEST, "run", ...args, ...reporters], {
+			cwd,
+			env: { ...env, HONEY_SUITE_RUN_ERRORS: errorsFile },
+			stdio: "ignore",
+		})
 		const report = existsSync(reportFile)
 			? (JSON.parse(readFileSync(reportFile, "utf8")) as JsonReport)
 			: { testResults: [] }
-		const failures = failuresIn(report, `${run.stdout}${run.stderr}`, cwd)
+		const unhandled = existsSync(errorsFile) ? (JSON.parse(readFileSync(errorsFile, "utf8")) as string[]) : []
+		const failures = failuresIn(report, unhandled, cwd)
 		const status = run.status ?? 1
 		if (status !== 0 && failures.length === 0) {
 			failures.push(
