@@ -9,7 +9,18 @@
  * declarations). The MCP server's `dist/` goes through the same pass, and its package.json takes the same metadata.
  */
 import { transformSync } from "oxc-transform"
-import { checked, issuesUrl, LICENSE, type Metadata, NPM_NAME, README, SEMVER, shippedOf } from "../shared/metadata.ts"
+import {
+	checked,
+	issuesUrl,
+	LICENSE,
+	type Metadata,
+	NPM_NAME,
+	type PackageIdentity,
+	packageOn,
+	README,
+	SEMVER,
+	shippedOf,
+} from "../shared/metadata.ts"
 import { type GeneratedSdk, generateSdk, type SdkOptions } from "./sdk.ts"
 
 /** The SDK's options and the package's own. */
@@ -115,12 +126,15 @@ const shippedNames = (metadata: Metadata): string[] => {
 	return [...(shipped.readme ? [README] : []), ...(shipped.licenseFile ? [LICENSE] : [])]
 }
 
+/** The SDK with its package files, and the package as npm lists it, and JSR too when its name is scoped. */
+export type GeneratedSdkPackage = GeneratedSdk & { readonly packages: readonly PackageIdentity[] }
+
 /** The SDK for `document` with its package files: the sources, `dist/`, package.json, and jsr.json when scoped. */
 export function generateSdkPackage(
 	document: Record<string, unknown>,
 	options: SdkPackageOptions,
 	metadata: Metadata,
-): GeneratedSdk {
+): GeneratedSdkPackage {
 	checked("version", options.version, SEMVER)
 	const sdk = generateSdk(document, options)
 	const name = checked("packageName", options.packageName ?? sdk.stem.toLowerCase(), NPM_NAME) as string
@@ -139,6 +153,8 @@ export function generateSdkPackage(
 		...Object.fromEntries(dist),
 		"package.json": packageJson(sdk, name, version, metadata),
 	}
-	if (name.startsWith("@")) files["jsr.json"] = jsrJson(sdk, name, version, metadata)
-	return { ...sdk, files }
+	const scoped = name.startsWith("@")
+	if (scoped) files["jsr.json"] = jsrJson(sdk, name, version, metadata)
+	const packages = [packageOn("npm", name, version), ...(scoped ? [packageOn("jsr", name, version)] : [])]
+	return { ...sdk, files, packages }
 }

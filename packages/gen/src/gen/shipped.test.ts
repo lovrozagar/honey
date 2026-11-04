@@ -10,7 +10,7 @@ import { execFileSync } from "node:child_process"
 import { describe, expect, it } from "vitest"
 import { hasNpm } from "../emit/mcp/__fixtures__/clients.ts"
 import { written } from "../emit/mcp/__fixtures__/written.ts"
-import type { GeneratedFiles } from "../cli.ts"
+import type { Generated } from "../cli.ts"
 import { generated, type GenerateRun } from "../index.ts"
 import { SPAWN_TIMEOUT } from "./__fixtures__/spawn-timeout.ts"
 import { TARGETS } from "./targets.ts"
@@ -42,7 +42,7 @@ const read = (path: string): Uint8Array => {
 }
 
 /** The C# package's `.csproj` in `files`. */
-const csprojOf = (files: GeneratedFiles) => String(files.csharp?.["HoneySdk.csproj"])
+const csprojOf = (files: Generated) => String(files.csharp?.files["HoneySdk.csproj"])
 
 /** Every target's files for `run`, the files read through `reader`. */
 const run = (metadata: GenerateRun["metadata"], reader = read) =>
@@ -57,11 +57,11 @@ const SHIPPED = { licenseFile: "legal/LICENSE.txt", readme: "docs/README.md" }
 describe("the README and license file every target ships (plan 39 8.7)", () => {
 	it("writes both into every target's root as given, and neither when the block names none", async () => {
 		const [shipped, bare] = [await run(SHIPPED), await run({})]
-		expect(TARGETS.map((target) => [target, shipped[target]?.["README.md"], shipped[target]?.LICENSE])).toEqual(
-			TARGETS.map((target) => [target, README, LICENSE]),
-		)
 		expect(
-			TARGETS.flatMap((target) => ["README.md", "LICENSE"].filter((name) => name in (bare[target] ?? {}))),
+			TARGETS.map((target) => [target, shipped[target]?.files["README.md"], shipped[target]?.files.LICENSE]),
+		).toEqual(TARGETS.map((target) => [target, README, LICENSE]))
+		expect(
+			TARGETS.flatMap((target) => ["README.md", "LICENSE"].filter((name) => name in (bare[target]?.files ?? {}))),
 		).toEqual([])
 	})
 
@@ -69,16 +69,16 @@ describe("the README and license file every target ships (plan 39 8.7)", () => {
 		const files = await run(SHIPPED)
 		const line = (text: string | undefined, key: string) => new RegExp(`^${key} = .*$`, "m").exec(text ?? "")?.[0]
 		expect({
-			cargo: [line(files.rust?.["Cargo.toml"], "readme"), line(files.rust?.["Cargo.toml"], "include")],
+			cargo: [line(files.rust?.files["Cargo.toml"], "readme"), line(files.rust?.files["Cargo.toml"], "include")],
 			csproj: [
 				"<PackageReadmeFile>README.md</PackageReadmeFile>",
 				'<None Include="README.md" Pack="true" PackagePath="\\" />',
 				'<None Include="LICENSE" Pack="true" PackagePath="\\" />',
 			].filter((element) => !csprojOf(files).includes(element)),
-			jsr: (JSON.parse(files.ts?.["jsr.json"] ?? "{}") as { publish: unknown }).publish,
+			jsr: (JSON.parse(files.ts?.files["jsr.json"] ?? "{}") as { publish: unknown }).publish,
 			pyproject: [
-				line(files.python?.["pyproject.toml"], "readme"),
-				line(files.python?.["pyproject.toml"], "license-files"),
+				line(files.python?.files["pyproject.toml"], "readme"),
+				line(files.python?.files["pyproject.toml"], "license-files"),
 			],
 		}).toEqual({
 			cargo: ['readme = "README.md"', 'include = ["/src", "/README.md", "/LICENSE"]'],
@@ -91,9 +91,9 @@ describe("the README and license file every target ships (plan 39 8.7)", () => {
 	it("points at the README alone when only the README is named", async () => {
 		const files = await run({ readme: SHIPPED.readme })
 		expect([
-			/^include = .*$/m.exec(files.rust?.["Cargo.toml"] ?? "")?.[0],
+			/^include = .*$/m.exec(files.rust?.files["Cargo.toml"] ?? "")?.[0],
 			csprojOf(files).includes('Include="LICENSE"'),
-			files.python?.["pyproject.toml"]?.includes("license-files"),
+			files.python?.files["pyproject.toml"]?.includes("license-files"),
 		]).toEqual(['include = ["/src", "/README.md"]', false, false])
 	})
 })
@@ -107,10 +107,10 @@ describe("the icon the C# package ships (plan 39 8.7)", () => {
 				'<None Include="icon.png" Pack="true" PackagePath="\\" />',
 			].filter((element) => !csprojOf(png).includes(element)),
 			elsewhere: TARGETS.filter((target) => target !== "csharp").flatMap((target) =>
-				Object.keys(png[target] ?? {}).filter((path) => path.startsWith("icon.")),
+				Object.keys(png[target]?.files ?? {}).filter((path) => path.startsWith("icon.")),
 			),
-			jpeg: [jpeg.csharp?.["icon.jpeg"], /<PackageIcon>(.*)<\/PackageIcon>/.exec(csprojOf(jpeg))?.[1]],
-			png: png.csharp?.["icon.png"],
+			jpeg: [jpeg.csharp?.files["icon.jpeg"], /<PackageIcon>(.*)<\/PackageIcon>/.exec(csprojOf(jpeg))?.[1]],
+			png: png.csharp?.files["icon.png"],
 		}).toEqual({ csproj: [], elsewhere: [], jpeg: [JPEG, "icon.jpeg"], png: PNG })
 	})
 
@@ -156,7 +156,7 @@ describe.skipIf(!hasNpm())("the README and license file npm packs (plan 39 8.7)"
 		const files = await run(SHIPPED)
 		const packed = (target: "mcp" | "ts") => {
 			const args = ["pack", "--dry-run", "--json", "--ignore-scripts"]
-			const out = execFileSync("npm", args, { cwd: written(files[target] ?? {}), encoding: "utf8" })
+			const out = execFileSync("npm", args, { cwd: written(files[target]?.files ?? {}), encoding: "utf8" })
 			/* npm 11 answers a list of packs, npm 12 an object of them by name */
 			const [listing] = Object.values(JSON.parse(out) as Record<string, { files: { path: string }[] }>)
 			return (listing?.files ?? []).map((file) => file.path).filter((path) => !path.includes("/"))

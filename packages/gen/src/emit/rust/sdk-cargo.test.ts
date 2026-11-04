@@ -87,7 +87,7 @@ describe("the crate's metadata as crates.io takes it (plan 39 8.6)", () => {
 			minimal,
 			{ env: {}, report: () => undefined },
 		)
-		const text = run.rust?.["Cargo.toml"] ?? ""
+		const text = run.rust?.files["Cargo.toml"] ?? ""
 		expect([/^documentation = .*$/m.exec(text)?.[0], /^categories = .*$/m.exec(text)?.[0]]).toEqual([
 			'documentation = "https://docs.acme.example"',
 			'categories = ["api-bindings", "web-programming::http-client"]',

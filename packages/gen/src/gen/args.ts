@@ -49,8 +49,9 @@ ${Object.entries(TARGET_OPTIONS)
 	.map(([target, options]) => `  ${target}: ${options.map((key) => `--${target}-${kebab(key)}`).join(" ")}`)
 	.join("\n")}
 
-Each <out>/<target> keeps .honey-generated.json, every file it wrote with its sha256. A regeneration deletes a
-file the last run wrote and this one does not, unless it was edited since: that one is kept and named on stderr.
+Each <out>/<target> keeps .honey-generated.json: the package it makes on each registry (registry, name, version),
+and every file it wrote with its sha256. A regeneration deletes a file the last run wrote and this one does not,
+unless it was edited since: that one is kept and named on stderr.
 Nothing outside <out>/<target> is written or deleted, and no symlink is followed.
 `
 }

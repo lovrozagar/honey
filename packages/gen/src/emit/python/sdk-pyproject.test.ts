@@ -42,7 +42,7 @@ const read = (path: string) => new TextEncoder().encode(SHIPPED[path] ?? "")
 
 /** The python target's files for `run`. */
 async function pythonFiles(run: GenerateRun = RUN): Promise<Readonly<Record<string, string>>> {
-	return (await generated(run, minimal, { env: {}, read, report: () => undefined })).python ?? {}
+	return (await generated(run, minimal, { env: {}, read, report: () => undefined })).python?.files ?? {}
 }
 
 /** `text` parsed by the pinned interpreter's tomllib. */

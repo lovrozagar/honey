@@ -151,6 +151,29 @@ export const shippedOf = (metadata: Metadata): Shipped => ({
 	readme: metadata.readme !== undefined,
 })
 
+/**
+ * A registry a generated package publishes to, by the id honey's manifest records it under: `go` is the module proxy
+ * (`go install <module>@<version>`), `mcp-registry` the MCP registry.
+ */
+export type Registry = "crates.io" | "go" | "jsr" | "maven-central" | "mcp-registry" | "npm" | "nuget" | "pypi"
+
+/**
+ * A package as one registry lists it (plan 39 8.7): its name there and the version it publishes at, none for a Go
+ * module given no version, whose git tag is its version.
+ */
+export type PackageIdentity = {
+	/** the registry that lists it */
+	readonly registry: Registry
+	/** its name there: npm's, `<groupId>:<artifactId>` on Maven Central, the module path (with its `/vN`) for Go */
+	readonly name: string
+	/** the version it publishes at; none for a Go module given no version */
+	readonly version?: string
+}
+
+/** The package `name` at `version` on `registry`. */
+export const packageOn = (registry: Registry, name: string, version: string | undefined): PackageIdentity =>
+	version === undefined ? { name, registry } : { name, registry, version }
+
 /** The issue tracker of a repository URL: `<repository>/issues`, as GitHub, GitLab and Codeberg serve it. */
 export const issuesUrl = (repository: string): string => `${repository.replace(/\.git$/, "")}/issues`
 

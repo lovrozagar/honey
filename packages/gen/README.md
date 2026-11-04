@@ -570,10 +570,15 @@ for all eight targets, and each decoded answer and each request on the wire must
 that works in one SDK and breaks in another fails the grid.
 
 To lay the files out yourself, `generated(run, document, ctx)` from `@lovrozagar/honey-clients` returns each
-target's files unwritten, each as its text but for the C# package's icon, which is its bytes, and
-`writeTarget(dir, files)` writes one target's into a directory you pick under the same rules, keeping `MANIFEST` (`.honey-generated.json`) there. A file the last call wrote that you leave out of `files` is
-stale: deleted if unedited, kept and named in the result's `kept` if you changed it, and dropped from the manifest
-either way, so a file you take over by editing is never touched again.
+target's `files` unwritten, each as its text but for the C# package's icon, which is its bytes, and its `packages`:
+the package on each registry it publishes to, as `{ registry, name, version }` (`npm` and `jsr` for a scoped TS SDK,
+`npm` and `mcp-registry` for an MCP server with an `mcpName`, `pypi`, `crates.io`, `nuget`, `maven-central` as
+`group:artifact`, and `go` by the module path, its `/vN` included and no version when none is given).
+`writeTarget(dir, files, packages)` writes one target's into a directory you pick under the same rules, keeping
+`MANIFEST` (`.honey-generated.json`) there with the packages recorded beside the files, so a release reads each name
+and version from it. A file the last call wrote that you leave out of `files` is stale: deleted if unedited, kept and
+named in the result's `kept` if you changed it, and dropped from the manifest either way, so a file you take over by
+editing is never touched again.
 
 A run kept as data (a release manifest, say) is checked with the same tables the command parses. `TARGETS` lists
 every target, and `targetOptionSchemas[target]` is a Standard Schema for that target's options: its option names only,

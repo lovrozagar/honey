@@ -16,7 +16,7 @@ import { pythonErrorKeys } from "./errors.ts"
 import { type ClientEnv, clientDecls, clientTitle } from "./sdk-client.ts"
 import { allOrder, importBlock, importLine } from "./sdk-imports.ts"
 import type { PythonCallPlan } from "./sdk-plan.ts"
-import type { Metadata } from "../shared/metadata.ts"
+import { type Metadata, type PackageIdentity, packageOn } from "../shared/metadata.ts"
 import { pyproject, validatePackageName, validateVersion } from "./sdk-pyproject.ts"
 import { needsWebSocket, runtimeExports, runtimeFiles } from "./transport.ts"
 import { type PyTypeContext, pyTopLevel, pyTypeContext } from "./types.ts"
@@ -32,6 +32,8 @@ export type PythonSdkOptions = {
 export type GeneratedPythonSdk = {
 	readonly files: Readonly<Record<string, string>>
 	readonly notices: readonly string[]
+	/** the distribution as PyPI lists it */
+	readonly packages: readonly PackageIdentity[]
 }
 
 /* the marker ruff, mypy and linguist read */
@@ -188,7 +190,7 @@ function emitPython(document: Record<string, unknown>, options: PythonSdkOptions
 		...Object.fromEntries(Object.entries(runtime).map(([name, source]) => [`${root}/_honey/${name}`, source])),
 	}
 	const sorted = Object.fromEntries(Object.entries(files).sort(([a], [b]) => compareCodeUnits(a, b)))
-	return { files: sorted, notices: env.notices, plans: client.plans }
+	return { files: sorted, notices: env.notices, pkg, plans: client.plans }
 }
 
 /** The package's files for `document`, by path, and its notices; `metadata` fills pyproject.toml's description fields. */
@@ -197,8 +199,8 @@ export function generatePythonSdk(
 	options: PythonSdkOptions = {},
 	metadata: Metadata = {},
 ): GeneratedPythonSdk {
-	const { files, notices } = emitPython(document, options, metadata)
-	return { files, notices }
+	const { files, notices, pkg } = emitPython(document, options, metadata)
+	return { files, notices, packages: [packageOn("pypi", pkg.name.replaceAll("_", "-"), pkg.version)] }
 }
 
 /**

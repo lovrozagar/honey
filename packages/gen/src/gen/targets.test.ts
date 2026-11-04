@@ -96,7 +96,7 @@ describe("generated (plan 39 8.1)", () => {
 		const document = { info: { title: "Shop", version: "1" }, openapi: "3.1.0", paths: {} }
 		const run: GenerateRun = { options: { java: { packageName: "com.acme.shop" } }, targets: ["java"] }
 		const files = await generated(run, document, { env: {}, report: () => undefined })
-		expect(Object.keys(files.java ?? {}).filter((path) => path.includes("com/acme/shop/")).length > 0).toBe(true)
+		expect(Object.keys(files.java?.files ?? {}).filter((path) => path.includes("com/acme/shop/")).length > 0).toBe(true)
 	})
 })
 
@@ -120,13 +120,13 @@ describe("the run's metadata block (plan 39 8.2)", () => {
 			targets: ["csharp", "java"],
 		}
 		const files = await generated(run, document, { env: {}, report: () => undefined })
-		const csproj = fileEnding(files.csharp, ".csproj")
+		const csproj = fileEnding(files.csharp?.files, ".csproj")
 		expect(
 			["Description", "Authors", "PackageLicenseExpression", "PackageProjectUrl", "RepositoryUrl"].map(
 				(element) => new RegExp(`<${element}>(.*)</${element}>`).exec(csproj)?.[1],
 			),
 		).toEqual(["The Shop API%27s client", "Acme Inc, Bo", "MIT", "https://acme.dev", "https://github.com/acme/shop"])
-		const gradle = fileEnding(files.java, "build.gradle")
+		const gradle = fileEnding(files.java?.files, "build.gradle")
 		expect(
 			[
 				"description = 'The Shop API for the JVM'",
@@ -154,6 +154,8 @@ describe("the run's metadata block (plan 39 8.2)", () => {
 	it("treats an option given as undefined as not given, so the metadata still fills it", async () => {
 		const run: GenerateRun = { metadata, options: { csharp: { license: undefined } }, targets: ["csharp"] }
 		const files = await generated(run, document, { env: {}, report: () => undefined })
-		expect(fileEnding(files.csharp, ".csproj")).toContain("<PackageLicenseExpression>MIT</PackageLicenseExpression>")
+		expect(fileEnding(files.csharp?.files, ".csproj")).toContain(
+			"<PackageLicenseExpression>MIT</PackageLicenseExpression>",
+		)
 	})
 })

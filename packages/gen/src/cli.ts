@@ -24,12 +24,12 @@ import { type Generate, parseGenerate, usage, UsageError } from "./gen/args.ts"
 import { FORMATTERS, formatterFor, missingFormatter } from "./gen/formatters.ts"
 import { runCli } from "./gen/process.ts"
 import { appRef, loadAppDocument } from "./ir/load.ts"
-import { checkedMetadata, type Metadata, shippedOf } from "./emit/shared/metadata.ts"
+import { checkedMetadata, type Metadata, type PackageIdentity, shippedOf } from "./emit/shared/metadata.ts"
 import { type Options, optionsFor, type Target, type TargetOptions } from "./gen/targets.ts"
 import { type ReadFile, shippedFiles } from "./gen/shipped.ts"
 import { writeTarget } from "./gen/write.ts"
 
-/** One SDK target's generation: its files and what it reports (a name it renamed). */
+/** One SDK target's generation: its files, its package's identity on each registry, and what it reports (a name it renamed). */
 function sdkOf(
 	target: Exclude<Target, "cli" | "mcp">,
 	document: Record<string, unknown>,
@@ -65,24 +65,25 @@ function sdkOf(
 }
 
 /**
- * One target's files for `document`, by their path under the target's directory; what it leaves out to `report`. The
- * metadata reaches the targets whose package files read it whole, the others through their options.
+ * One target's files for `document`, by their path under the target's directory, and its package's identity on each
+ * registry; what it leaves out to `report`. The metadata reaches the targets whose package files read it whole, the
+ * others through their options.
  */
-function filesOf(
+function packageOf(
 	target: Target,
 	document: Record<string, unknown>,
 	{ metadata, options }: { readonly metadata: Metadata; readonly options: Options },
 	report: (line: string) => void,
-): Readonly<Record<string, string>> {
-	if (target === "cli") return generateGoCli(document, options).files
+): GeneratedTarget<"cli"> {
+	if (target === "cli") return generateGoCli(document, options)
 	if (target === "mcp") {
 		const server = generateMcpServer(document, options, metadata)
 		for (const op of server.skipped) report(`honey-clients: mcp: no tool serves ${op} yet: skipped\n`)
-		return server.files
+		return server
 	}
 	const sdk = sdkOf(target, document, options, metadata)
 	for (const notice of sdk.notices) report(`honey-clients: ${notice}\n`)
-	return sdk.files
+	return sdk
 }
 
 /**
@@ -130,12 +131,18 @@ export type GenerateContext = {
 }
 
 /**
- * A run's files: each generated target's files by path under that target's directory, each one's text, but for the
- * C# package's icon, which is its bytes.
+ * One target's generation (plan 39 8.7): its files by path under the target's directory, each one's text but for the
+ * C# package's icon, which is its bytes, and the package they make as each registry it publishes to lists it.
  */
-export type GeneratedFiles = {
-	readonly [T in Target]?: Readonly<Record<string, T extends "csharp" ? string | Uint8Array : string>>
+export type GeneratedTarget<T extends Target> = {
+	/** each file by its path under the target's directory: its text, or its bytes (the C# package's icon) */
+	readonly files: Readonly<Record<string, T extends "csharp" ? string | Uint8Array : string>>
+	/** the package on each registry it publishes to, which `writeTarget` records in the manifest */
+	readonly packages: readonly PackageIdentity[]
 }
+
+/** A run's generation: each generated target's. */
+export type Generated = { readonly [T in Target]?: GeneratedTarget<T> }
 
 /**
  * Every file a run writes, by target and its path under the target's directory. Go goes through gofmt, Python through
@@ -147,23 +154,25 @@ export async function generated(
 	run: GenerateRun,
 	document: Record<string, unknown>,
 	{ env, oxfmt, read = readFileSync, report }: GenerateContext,
-): Promise<GeneratedFiles> {
+): Promise<Generated> {
 	const metadata = checkedMetadata(run.metadata ?? {})
 	const shipped = shippedFiles(metadata, read)
 	const options = new Map(
 		run.targets.map((target) => [target, optionsFor(target, metadata, run.options?.[target] ?? {})]),
 	)
-	const out: { -readonly [T in keyof GeneratedFiles]: GeneratedFiles[T] } = {}
+	const out: { -readonly [T in keyof Generated]: Generated[T] } = {}
 	for (const [target, checked] of options) {
-		let files = filesOf(target, document, { metadata, options: checked }, report)
+		const { packages, ...made } = packageOf(target, document, { metadata, options: checked }, report)
+		let { files } = made
 		const pass = FORMATTERS[target]
 		if (pass !== undefined) {
 			const formatter = await formatterFor(target, { env, oxfmt })
 			if (formatter === undefined) missingFormatter(target, pass, env, report)
 			else files = await formatFiles(files, { [pass.extension]: formatter })
 		}
-		out[target] = { ...files, ...shipped.files }
-		if (target === "csharp") out.csharp = { ...out.csharp, ...shipped.icon }
+		const merged = { ...files, ...shipped.files }
+		if (target === "csharp") out.csharp = { files: { ...merged, ...shipped.icon }, packages }
+		else out[target] = { files: merged, packages }
 	}
 	return out
 }
@@ -207,8 +216,8 @@ export async function writeGenerated(
 	env: NodeJS.ProcessEnv,
 ): Promise<number> {
 	let count = 0
-	for (const [target, files] of Object.entries(await generated(run, document, { env, report: io.err }))) {
-		for (const rel of writeTarget(join(run.out, target), files).kept)
+	for (const [target, { files, packages }] of Object.entries(await generated(run, document, { env, report: io.err }))) {
+		for (const rel of writeTarget(join(run.out, target), files, packages).kept)
 			io.err(
 				`honey-clients: ${join(target, rel)} is stale but edited since it was generated, or not its to delete: kept\n`,
 			)

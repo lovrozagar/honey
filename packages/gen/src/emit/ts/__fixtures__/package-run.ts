@@ -63,7 +63,7 @@ export const RUN: GenerateRun = {
 
 /** The TS target's files for `run` over `document`. */
 export async function tsFiles(run: GenerateRun = RUN, document = DOCUMENT): Promise<Readonly<Record<string, string>>> {
-	return (await generated(run, document, { env: {}, report: () => undefined })).ts ?? {}
+	return (await generated(run, document, { env: {}, report: () => undefined })).ts?.files ?? {}
 }
 
 /** `dir` with the optional peer a TanStack consumer or a release brings installed: the workspace's own copy. */

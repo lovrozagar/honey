@@ -9,7 +9,7 @@
 import { type OpenApiDocument, toIR } from "../../ir/build.ts"
 import type { IR } from "../../ir/model.ts"
 import { binaryNameOf } from "../cli/module.ts"
-import { checked, type Metadata, NPM_NAME, SEMVER } from "../shared/metadata.ts"
+import { checked, type Metadata, NPM_NAME, type PackageIdentity, packageOn, SEMVER } from "../shared/metadata.ts"
 import { tsString } from "../shared/escape.ts"
 import { compiled, npmFields } from "../ts/package.ts"
 import { generateSdk } from "../ts/sdk.ts"
@@ -33,6 +33,8 @@ export type McpServerOptions = {
 
 export type GeneratedMcpServer = {
 	readonly files: Readonly<Record<string, string>>
+	/** the package as npm lists it, and as the MCP registry does when it has an `mcpName` */
+	readonly packages: readonly PackageIdentity[]
 	/** each operation marked x-mcp that no tool serves: its id and what it is */
 	readonly skipped: readonly string[]
 }
@@ -275,6 +277,10 @@ export function generateMcpServer(
 			...source,
 			...compiled,
 		},
+		packages: [
+			packageOn("npm", published.packageName, version),
+			...(published.mcpName === undefined ? [] : [packageOn("mcp-registry", published.mcpName, version)]),
+		],
 		skipped: ir.operations.flatMap((op) => {
 			const what = op.extensions.mcp === true ? untoolable(op) : undefined
 			return what === undefined ? [] : [`${op.id} (${what})`]

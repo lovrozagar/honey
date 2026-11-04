@@ -84,7 +84,7 @@ describe("generated: a run with no options bag (bit 22 a)", () => {
 				paths: { "/ping": { get: { responses: { "200": { description: "ok" } } } } },
 			}
 			const files = await generated({ targets: ["ts"] }, document, { env: {}, report: () => undefined })
-			expect(Object.keys(files.ts ?? {}).sort()).toEqual([
+			expect(Object.keys(files.ts?.files ?? {}).sort()).toEqual([
 				...PARTS.flatMap((part) => [`dist/sdk.${part}.gen.d.ts`, `dist/sdk.${part}.gen.js`]),
 				"package.json",
 				...PARTS.map((part) => `sdk.${part}.gen.ts`),
@@ -103,13 +103,13 @@ describe("generated: a run with no options bag (bit 22 a)", () => {
 			}
 			const run: GenerateRun = { options: { ts: { tanstackQuery: "true" } }, targets: ["ts"] }
 			const files = await generated(run, document, { env: {}, report: () => undefined })
-			expect(Object.keys(files.ts ?? {})).toContain("sdk.tanstack-query.gen.ts")
+			expect(Object.keys(files.ts?.files ?? {})).toContain("sdk.tanstack-query.gen.ts")
 			/* the string the parser stores must not be what decides it: "false" is off, not truthy */
 			const off = await generated({ options: { ts: { tanstackQuery: "false" } }, targets: ["ts"] as const }, document, {
 				env: {},
 				report: () => undefined,
 			})
-			expect(Object.keys(off.ts ?? {})).not.toContain("sdk.tanstack-query.gen.ts")
+			expect(Object.keys(off.ts?.files ?? {})).not.toContain("sdk.tanstack-query.gen.ts")
 		},
 		SPAWN_TIMEOUT,
 	)
@@ -127,8 +127,9 @@ describe("generate's usage (phase h)", () => {
 				1,
 				'honey-clients: unknown command "serve"',
 			])
-			expect(usage()).toContain(
-				"A regeneration deletes a\nfile the last run wrote and this one does not, unless it was edited since",
+			/* the words, not where the paragraph wraps */
+			expect(usage().replaceAll("\n", " ")).toContain(
+				"the package it makes on each registry (registry, name, version), and every file it wrote with its sha256. A regeneration deletes a file the last run wrote and this one does not, unless it was edited since",
 			)
 		},
 	)
@@ -254,7 +255,7 @@ describe("the ts tree through oxfmt (bit 19 i, Q12)", () => {
 			const context: GenerateContext = { env: {}, oxfmt: "@honey/no-such-oxfmt", report: (line) => reported.push(line) }
 			const options = { ts: { name: "Shop" } } as unknown as Generate["options"]
 			const files = await generated({ options, targets: ["ts"] }, shop(), context).then(
-				(out) => out.ts,
+				(out) => out.ts?.files,
 				(error: Error) => error.message,
 			)
 			/* Q12: oxfmt is an optional peer, so its absence is the documented normal, not news */

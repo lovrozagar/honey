@@ -3,7 +3,9 @@
  * through a temp file renamed over it, and listed with its sha256 in the directory's manifest. A regeneration deletes
  * a file only when the previous manifest lists it, this run does not emit it, and its bytes still hash as listed: a
  * hand-edited one is kept and named. Every path stays under the directory and no symlink is followed; without a
- * manifest nothing is deleted. The hash lives in the manifest, so the emitted bytes carry no header (Q6).
+ * manifest nothing is deleted. The hash lives in the manifest, so the emitted bytes carry no header (Q6). The manifest
+ * also records the package the files make, as each registry it publishes to lists it (plan 39 8.7), so a release
+ * reads its name and version there instead of parsing each registry's manifest.
  */
 import { createHash } from "node:crypto"
 import {
@@ -18,8 +20,12 @@ import {
 	writeFileSync,
 } from "node:fs"
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path"
+import type { PackageIdentity } from "../emit/shared/metadata.ts"
 
-/** The manifest a target's directory keeps: each file it wrote, by its path, with its sha256. */
+/**
+ * The manifest a target's directory keeps: `files`, each file it wrote by its path with its sha256, and `packages`,
+ * the package as each registry lists it (`registry`, `name`, `version`), when the writer names it.
+ */
 export const MANIFEST = ".honey-generated.json"
 
 /** What a write did: the files rewritten, the stale ones deleted, and the edited stale ones kept. */
@@ -97,9 +103,14 @@ function prune(dir: string, path: string): void {
  * `files` written under `dir`, the manifest updated, and the previous run's stale, unedited files deleted. A file the
  * previous manifest lists that `files` leaves out is stale: deleted when its bytes still hash as listed, kept and named
  * when edited since, and dropped from the manifest either way, so a file the caller takes over is kept once and never
- * touched again. A file the manifest never listed is never touched.
+ * touched again. A file the manifest never listed is never touched. `packages`, `generated`'s for the target, is
+ * recorded beside the files.
  */
-export function writeTarget(dir: string, files: Readonly<Record<string, string | Uint8Array>>): Written {
+export function writeTarget(
+	dir: string,
+	files: Readonly<Record<string, string | Uint8Array>>,
+	packages?: readonly PackageIdentity[],
+): Written {
 	const root = resolve(dir)
 	const paths = Object.keys(files).map((rel) => [rel, confined(root, rel)] as const)
 	const previous = listed(root)
@@ -131,6 +142,7 @@ export function writeTarget(dir: string, files: Readonly<Record<string, string |
 			.sort()
 			.map((rel) => [rel, sha256(files[rel] as string | Uint8Array)]),
 	)
-	writeFileIfChanged(join(root, MANIFEST), `${JSON.stringify({ files: manifest }, null, "\t")}\n`)
+	const record = packages === undefined ? { files: manifest } : { packages, files: manifest }
+	writeFileIfChanged(join(root, MANIFEST), `${JSON.stringify(record, null, "\t")}\n`)
 	return { deleted, kept, written }
 }

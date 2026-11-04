@@ -1,4 +1,11 @@
 {
+	"packages": [
+		{
+			"name": "kitchen",
+			"registry": "npm",
+			"version": "0.0.1"
+		}
+	],
 	"files": {
 		"dist/kitchen.client.gen.d.ts": "a1e7621dbb14f74bf1360f2f1f67c1a82f083cbdec8aba6368f11cc99c4dfdf6",
 		"dist/kitchen.client.gen.js": "2fd99feb8bab494506b5502a5d973e8565e9f0315b85773ce83ed3217da136e5",

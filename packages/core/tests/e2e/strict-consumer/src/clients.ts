@@ -26,7 +26,7 @@ const run: GenerateRun = { options: { ts: options }, targets: [target] }
 
 export async function emit(): Promise<readonly string[]> {
 	const files = await generated(run, document, { env: {}, report: () => undefined })
-	return Object.keys(files.ts ?? {})
+	return Object.keys(files.ts?.files ?? {})
 }
 
 export async function write(out: string): Promise<number> {
@@ -34,6 +34,6 @@ export async function write(out: string): Promise<number> {
 }
 
 export async function place(dir: string): Promise<{ readonly manifest: string; readonly written: Written }> {
-	const { ts = {} } = await generated(run, document, { env: {}, report: () => undefined })
-	return { manifest: MANIFEST, written: writeTarget(dir, ts) }
+	const { ts } = await generated(run, document, { env: {}, report: () => undefined })
+	return { manifest: MANIFEST, written: writeTarget(dir, ts?.files ?? {}, ts?.packages) }
 }

@@ -45,7 +45,7 @@ async function generatedInto(
 	const files = await generated({ targets: [target] }, document, { env, report: () => undefined })
 	const dir = mkdtempSync(join(tmpdir(), `honey-formatted-${target}-`))
 	const written: string[] = []
-	for (const [name, text] of Object.entries(files[target] ?? {})) {
+	for (const [name, text] of Object.entries(files[target]?.files ?? {})) {
 		if (!name.endsWith(extension)) continue
 		/* at their real relative paths: rustfmt follows `mod` declarations, so a flattened tree cannot parse */
 		const at = join(dir, name)
@@ -93,7 +93,7 @@ describe("a formatter that is not there", () => {
 			env: { PATH: "" },
 			report: (line) => reported.push(line),
 		})
-		expect(Object.keys(files.python ?? {}).length).toBeGreaterThan(0)
+		expect(Object.keys(files.python?.files ?? {}).length).toBeGreaterThan(0)
 		expect(reported).toEqual([
 			"honey-clients: ruff was not found, so the python output is not formatted (install ruff, or set RUFF)\n",
 		])
@@ -118,7 +118,7 @@ describe("a formatter that is not there", () => {
 			report: (line) => reported.push(line),
 		})
 		/* before bit 22 this threw: "gofmt is required for the go and cli targets" */
-		expect(Object.keys(files.go ?? {}).length).toBeGreaterThan(0)
+		expect(Object.keys(files.go?.files ?? {}).length).toBeGreaterThan(0)
 		expect(reported).toEqual([
 			"honey-clients: gofmt was not found, so the go output is not formatted (install Go, or set GOFMT)\n",
 		])
@@ -141,6 +141,6 @@ describe("a target with no formatter", () => {
 			env: process.env,
 			report: () => undefined,
 		})
-		expect(Object.keys(files.csharp ?? {}).length).toBeGreaterThan(0)
+		expect(Object.keys(files.csharp?.files ?? {}).length).toBeGreaterThan(0)
 	})
 })

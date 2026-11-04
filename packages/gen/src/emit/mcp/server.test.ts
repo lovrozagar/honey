@@ -73,7 +73,7 @@ describe("the package as it publishes (plan 39 8.6)", () => {
 			document(),
 			{ env: {}, report: () => undefined },
 		)
-		expect(JSON.parse(run.mcp?.["package.json"] ?? "null")).toEqual({
+		expect(JSON.parse(run.mcp?.files["package.json"] ?? "null")).toEqual({
 			author: "Acme Inc <oss@acme.dev>",
 			bin: { "shop-mcp": "dist/server.js" },
 			bugs: "https://github.com/acme/shop-mcp/issues",
