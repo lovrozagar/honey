@@ -54,11 +54,11 @@ import {
 	trustingEveryHop,
 	type Compress,
 	type CreateWsSession,
-	type ErrorI18nFactory,
+	type ErrorTranslatorFactory,
 	type InboundTraceFn,
 	type IpRestrict,
 	type LoggerFactory,
-	type MemoryStoreFactory,
+	type MemoryRateLimitStoreFactory,
 	type NormalizePath,
 	type ProxyFactory,
 	type RateLimit,
@@ -214,7 +214,9 @@ export const GUARDS: readonly Guard[] = [
 	},
 	{
 		catches: "v1: a rate-limit memory store a key spray grows without bound",
-		disable: (original) => ({ memoryStore: uncappedStore(original.memoryStore as MemoryStoreFactory) }),
+		disable: (original) => ({
+			memoryRateLimitStore: uncappedStore(original.memoryRateLimitStore as MemoryRateLimitStoreFactory),
+		}),
 		id: "v1-rate-limit-bounded",
 		module: "packages/core/src/middleware/rate-limit.ts",
 	},
@@ -340,7 +342,9 @@ export const GUARDS: readonly Guard[] = [
 	},
 	{
 		catches: "v1: error i18n changing the thrown error, so one request's locale leaks into the next request's answer",
-		disable: (original) => ({ errorI18n: translatingInPlace(original.errorI18n as ErrorI18nFactory) }),
+		disable: (original) => ({
+			createErrorTranslator: translatingInPlace(original.createErrorTranslator as ErrorTranslatorFactory),
+		}),
 		id: "v1-error-i18n-copy",
 		module: "packages/core/src/i18n/error-i18n.ts",
 	},

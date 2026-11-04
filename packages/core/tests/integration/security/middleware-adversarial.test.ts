@@ -38,7 +38,7 @@ const { timeout } = (await import(
 const { serverTiming } = (await import(
 	resolvePath(REPO, "packages/core/src/middleware/server-timing.ts")
 )) as typeof import("../../../src/middleware/server-timing.ts")
-const { memoryStore, rateLimit } = (await import(
+const { memoryRateLimitStore, rateLimit } = (await import(
 	resolvePath(REPO, "packages/core/src/middleware/rate-limit.ts")
 )) as typeof import("../../../src/middleware/rate-limit.ts")
 const { PEER_ADDRESS } = (await import(
@@ -62,7 +62,7 @@ const { timingSafeEqual } = (await import(
 const { curlLogger } = (await import(
 	resolvePath(REPO, "packages/core/src/observability/curl-logger.ts")
 )) as typeof import("../../../src/observability/curl-logger.ts")
-const { errorI18n } = (await import(
+const { createErrorTranslator } = (await import(
 	resolvePath(REPO, "packages/core/src/i18n/error-i18n.ts")
 )) as typeof import("../../../src/i18n/error-i18n.ts")
 const { HoneyError } = (await import(
@@ -212,7 +212,7 @@ describe("v1 adversarial: a client cannot rotate its rate-limit key", () => {
 
 describe("v1 adversarial: a key spray cannot grow the rate-limit store", () => {
 	it("20 000 distinct peers (an IPv6 /64 walk) leave the store at its cap", async () => {
-		const store = memoryStore({ maxKeys: 1000, windowMs: 60_000 })
+		const store = memoryRateLimitStore({ maxKeys: 1000, windowMs: 60_000 })
 		const app = honey<{}>()
 		app
 			.use(rateLimit({ limit: 1, store }))
@@ -430,7 +430,7 @@ describe("v1 adversarial: one request's locale never leaks into another's answer
 		const shared = new HoneyError({ errorKey: "item_gone", status: "gone", vars: { name: "Order 7" } })
 		const app = honey<{}>()
 		app.errorI18n(
-			errorI18n({
+			createErrorTranslator({
 				errors: { de: { item_gone: "{name} ist weg" } },
 				resolveLocale: ({ search }) => search.lang ?? "en",
 			}),

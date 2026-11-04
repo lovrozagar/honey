@@ -6,7 +6,7 @@
 import { describe, expect, it } from "vitest"
 import type { HoneyContext } from "../../src/context/context.ts"
 import { HoneyError } from "../../src/errors/error.ts"
-import { errorI18n } from "../../src/i18n/error-i18n.ts"
+import { createErrorTranslator } from "../../src/i18n/error-i18n.ts"
 import { cors } from "../../src/middleware/cors.ts"
 import { createMiddleware } from "../../src/middleware/middleware.ts"
 import { type Honey, honey } from "../../src/routing/app.ts"
@@ -167,7 +167,7 @@ describe("handles share one app: its error settings", () => {
 	// v0: 7f7e45f108
 	it("errorI18n and onError set on the app answer for routes registered through a use() handle", async () => {
 		const app = honey<{}>()
-			.errorI18n(errorI18n({ errors: { en: { test: "Translated" } }, resolveLocale: () => "en" }))
+			.errorI18n(createErrorTranslator({ errors: { en: { test: "Translated" } }, resolveLocale: () => "en" }))
 			.onError((error) => (error instanceof HoneyError ? undefined : new Response("custom", { status: 503 })))
 		const authed = app.use(createMiddleware((_ctx, next) => next()))
 		authed.get("/known").handler(() => {

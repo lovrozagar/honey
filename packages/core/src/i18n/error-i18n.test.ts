@@ -4,7 +4,7 @@ import { defineErrors } from "../errors/errors.ts"
 import { createMiddleware } from "../middleware/middleware.ts"
 import { honey } from "../routing/app.ts"
 import { createLogger } from "../telemetry/logger.ts"
-import { errorI18n, type ErrorTranslations, translateError } from "./error-i18n.ts"
+import { createErrorTranslator, type ErrorTranslations, translateError } from "./error-i18n.ts"
 
 const fieldError = (path: string) => ({ error_key: "invalid", message: "invalid", path })
 
@@ -131,9 +131,9 @@ describe("translateError(): prototype names", () => {
 	})
 })
 
-describe("errorI18n(): the value app.errorI18n carries", () => {
+describe("createErrorTranslator(): the value app.errorI18n carries", () => {
 	it("is frozen, and translates through its own formatter", () => {
-		const value = errorI18n({ errors: { en: { item_gone: "{name} is gone" } }, resolveLocale: () => "en" })
+		const value = createErrorTranslator({ errors: { en: { item_gone: "{name} is gone" } }, resolveLocale: () => "en" })
 		const error = new HoneyError({ errorKey: "item_gone", status: "gone", vars: { name: "A" } })
 		expect([
 			Object.isFrozen(value),
@@ -142,16 +142,16 @@ describe("errorI18n(): the value app.errorI18n carries", () => {
 		]).toEqual([true, "A is gone", true])
 	})
 
-	it("a raw config handed to app.errorI18n is refused at startup, pointing at errorI18n()", () => {
+	it("a raw config handed to app.errorI18n is refused at startup, pointing at createErrorTranslator()", () => {
 		const raw = { errors: {}, resolveLocale: () => "en" } as never
 		expect(() => honey<{}>().errorI18n(raw)).toThrow(
-			"app.errorI18n(): pass errorI18n({ ... }) from @lovrozagar/honey/i18n",
+			"app.errorI18n(): pass createErrorTranslator() from @lovrozagar/honey/i18n",
 		)
 	})
 })
 
 /** An app that throws `error` from GET /x and /x/:id, with errorI18n set when `locale` resolves one. */
-function app(error: () => HoneyError, resolveLocale?: Parameters<typeof errorI18n>[0]["resolveLocale"]) {
+function app(error: () => HoneyError, resolveLocale?: Parameters<typeof createErrorTranslator>[0]["resolveLocale"]) {
 	const lines: Record<string, unknown>[] = []
 	const a = honey<{ TENANT: string }>()
 	a.logger(
@@ -163,7 +163,7 @@ function app(error: () => HoneyError, resolveLocale?: Parameters<typeof errorI18
 	)
 	if (resolveLocale) {
 		a.errorI18n(
-			errorI18n({
+			createErrorTranslator({
 				errors: {
 					de: { item_gone: "{name} ist weg", validation_failed: "Ungültige Eingabe" },
 					en: { item_gone: "{name} is gone" },
@@ -384,7 +384,7 @@ const businessErrors = defineErrors({
 	profile_error: "bad_gateway",
 })
 const businessI18n = () =>
-	errorI18n({
+	createErrorTranslator({
 		errors: {
 			de: { org_slug_taken: "Organisationsname {slug} ist bereits vergeben" },
 			en: {

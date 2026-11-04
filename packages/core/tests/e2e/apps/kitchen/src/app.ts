@@ -2,7 +2,7 @@ import type { InferCtx, MiddlewareFn, WSAdapter } from "@lovrozagar/honey"
 import type { RouteTree } from "@lovrozagar/honey/tree"
 import { defineErrors, HoneyError, honey } from "@lovrozagar/honey"
 import { cors } from "@lovrozagar/honey/cors"
-import { errorI18n } from "@lovrozagar/honey/i18n"
+import { createErrorTranslator } from "@lovrozagar/honey/i18n"
 import { createLogger } from "@lovrozagar/honey/logger"
 import { serveManifest, serveOpenApi } from "@lovrozagar/honey/openapi"
 import { serveStaticOpenApi } from "@lovrozagar/honey/openapi/static"
@@ -85,7 +85,7 @@ export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
 			request_id: "e2e-req-001",
 		}))
 		.errorI18n(
-			errorI18n({
+			createErrorTranslator({
 				errors: { de: deErrors, en: enErrors },
 				resolveLocale: (ctx) => {
 					const accept = ctx.req.headers.get("accept-language")

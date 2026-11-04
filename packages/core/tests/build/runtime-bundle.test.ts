@@ -138,12 +138,12 @@ describe("the runtime bundle of an installed core (bit 19 i)", () => {
 		() => {
 			const entry = [
 				'import { honey } from "@lovrozagar/honey"',
-				'import { errorI18n } from "@lovrozagar/honey/i18n"',
+				'import { createErrorTranslator } from "@lovrozagar/honey/i18n"',
 				'import { swagger } from "@lovrozagar/honey/openapi"',
 				'import { proxy } from "@lovrozagar/honey/proxy"',
 				'import { realtime } from "@lovrozagar/honey/realtime"',
 				"const app = honey()",
-				'\t.errorI18n(errorI18n({ errors: {}, resolveLocale: () => "en" }))',
+				'\t.errorI18n(createErrorTranslator({ errors: {}, resolveLocale: () => "en" }))',
 				'\t.get("/docs").handler(swagger({ url: "/openapi.json" }))',
 				'\t.all("/up/*rest").handler(proxy({ destination: (_c, url, init) => fetch(`http://upstream${url}`, init) }))',
 				'realtime(app, "/rt", { handler: () => {} })',

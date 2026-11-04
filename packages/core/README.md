@@ -508,7 +508,7 @@ app.get("/report").handler((ctx) => ctx.res.text("ok", "row\n".repeat(5000)))
 | `cors(options)`                 | `@lovrozagar/honey/cors`            | the CORS headers and the preflight answer                                                 |
 | `secureHeaders(options?)`       | `@lovrozagar/honey/secure-headers`  | CSP, HSTS and the rest of the hardening headers                                           |
 | `csrf(options?)`                | `@lovrozagar/honey/csrf`            | refuses a cross-origin unsafe method                                                      |
-| `rateLimit(options)`            | `@lovrozagar/honey/rate-limit`      | a window per key, with `memoryStore()` or one of your own                                 |
+| `rateLimit(options)`            | `@lovrozagar/honey/rate-limit`      | a window per key, with `memoryRateLimitStore()` or one of your own                        |
 | `compress(options?)`            | `@lovrozagar/honey/compress`        | gzip or brotli over a threshold                                                           |
 | `cacheControl(options)`         | `@lovrozagar/honey/cache-control`   | the `Cache-Control` header, and `httpDate`                                                |
 | `etag(options?)`                | `@lovrozagar/honey/etag`            | an entity tag, 304 on a conditional GET, and `notModified`                                |
@@ -1056,7 +1056,7 @@ console.log(interpolate(message, { count: 3, name: "Ada" }, "en"))
 
 ```ts
 import { defineErrors, honey } from "@lovrozagar/honey"
-import { errorI18n, translateError } from "@lovrozagar/honey/i18n"
+import { createErrorTranslator, translateError } from "@lovrozagar/honey/i18n"
 
 const errors = defineErrors({ not_found: "not_found" })
 
@@ -1064,7 +1064,10 @@ const errors = defineErrors({ not_found: "not_found" })
 const translations = { errors: { de: { not_found: "Nicht gefunden" }, en: { not_found: "Not found" } } }
 
 const app = honey().errorI18n(
-	errorI18n({ ...translations, resolveLocale: (ctx) => ctx.headers["accept-language"]?.slice(0, 2) ?? "en" }),
+	createErrorTranslator({
+		...translations,
+		resolveLocale: (ctx) => ctx.headers["accept-language"]?.slice(0, 2) ?? "en",
+	}),
 )
 
 app.get("/books/:id").handler((ctx) => ctx.res.json("ok", { id: ctx.params.id }))
@@ -1271,13 +1274,13 @@ generator.
 | `@lovrozagar/honey/openapi/static`  | `serveStaticOpenApi`, a document built ahead of time or living elsewhere, served without the generator                   |
 | `@lovrozagar/honey/openapi/swagger` | `swagger`, the Swagger UI page                                                                                           |
 | `@lovrozagar/honey/errors`          | `defineErrors` (also on the root)                                                                                        |
-| `@lovrozagar/honey/i18n`            | `errorI18n`, `translateError`, `interpolate`, `createInterpolator`                                                       |
+| `@lovrozagar/honey/i18n`            | `createErrorTranslator`, `translateError`, `interpolate`, `createInterpolator`                                           |
 | `@lovrozagar/honey/input`           | `readableStream()`, a streamed request body as input                                                                     |
 | `@lovrozagar/honey/range`           | `rangeResponse`, a `Range` request answered from bytes                                                                   |
 | `@lovrozagar/honey/cache-control`   | `cacheControl`, `httpDate`                                                                                               |
 | `@lovrozagar/honey/compress`        | `compress`                                                                                                               |
 | `@lovrozagar/honey/etag`            | `etag`, `notModified`                                                                                                    |
-| `@lovrozagar/honey/rate-limit`      | `rateLimit`, `memoryStore`                                                                                               |
+| `@lovrozagar/honey/rate-limit`      | `rateLimit`, `memoryRateLimitStore`                                                                                      |
 | `@lovrozagar/honey/cors`            | `cors`                                                                                                                   |
 | `@lovrozagar/honey/csrf`            | `csrf`                                                                                                                   |
 | `@lovrozagar/honey/body-limit`      | `bodyLimit`                                                                                                              |

@@ -19,7 +19,7 @@ import { serverTiming } from "../../src/middleware/server-timing.ts"
 import * as z from "zod"
 import { HoneyError } from "../../src/errors/error.ts"
 import { defineErrors } from "../../src/errors/errors.ts"
-import { errorI18n } from "../../src/i18n/error-i18n.ts"
+import { createErrorTranslator } from "../../src/i18n/error-i18n.ts"
 import { bodyLimit } from "../../src/input/body-limit.ts"
 import { createMiddleware } from "../../src/middleware/middleware.ts"
 import { etag } from "../../src/response/etag.ts"
@@ -395,7 +395,9 @@ function productionApp() {
 		.defaultErrors("rate_limited")
 		.outputValidation("always")
 		.telemetry(telemetry)
-		.errorI18n(errorI18n({ errors: { en: { item_not_found: "Item not found" } }, resolveLocale: () => "en" }))
+		.errorI18n(
+			createErrorTranslator({ errors: { en: { item_not_found: "Item not found" } }, resolveLocale: () => "en" }),
+		)
 		/* the auth middleware's refusal is no route's declared error: the app answers it as it is */
 		.onError((error, ctx) =>
 			error instanceof HoneyError && error.errorKey === "unauthorized" ? ctx.jsonFromError(error) : undefined,

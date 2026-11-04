@@ -35,13 +35,13 @@ generator.
 | `@lovrozagar/honey/openapi/static`  | `serveStaticOpenApi`: a document built ahead of time or living elsewhere, served without the generator                                              |
 | `@lovrozagar/honey/openapi/swagger` | `swagger`, the Swagger UI page                                                                                                                      |
 | `@lovrozagar/honey/errors`          | `defineErrors` (also on the root)                                                                                                                   |
-| `@lovrozagar/honey/i18n`            | `errorI18n`, `translateError`                                                                                                                       |
+| `@lovrozagar/honey/i18n`            | `createErrorTranslator`, `translateError`                                                                                                           |
 | `@lovrozagar/honey/input`           | `readableStream()`, a streamed request body as input                                                                                                |
 | `@lovrozagar/honey/range`           | `rangeResponse`, a `Range` request answered from bytes                                                                                              |
 | `@lovrozagar/honey/cache-control`   | `cacheControl`, `httpDate`                                                                                                                          |
 | `@lovrozagar/honey/compress`        | `compress`                                                                                                                                          |
 | `@lovrozagar/honey/etag`            | `etag`, `notModified`                                                                                                                               |
-| `@lovrozagar/honey/rate-limit`      | `rateLimit`, `memoryStore`                                                                                                                          |
+| `@lovrozagar/honey/rate-limit`      | `rateLimit`, `memoryRateLimitStore`                                                                                                                 |
 | `@lovrozagar/honey/cors`            | `cors`                                                                                                                                              |
 | `@lovrozagar/honey/csrf`            | `csrf`                                                                                                                                              |
 | `@lovrozagar/honey/body-limit`      | `bodyLimit`                                                                                                                                         |

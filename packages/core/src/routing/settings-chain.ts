@@ -122,13 +122,13 @@ export abstract class SettingsChain<TEnv> {
 
 	/**
 	 * Translate error answers per request: the message from the locale's template, field paths to
-	 * display names. Pass `errorI18n({ errors, fieldNames, resolveLocale })` from
+	 * display names. Pass `createErrorTranslator({ errors, fieldNames, resolveLocale })` from
 	 * `@lovrozagar/honey/i18n`; a raw config object is refused here, at startup.
 	 */
 	errorI18n(value: ErrorI18n<TEnv>): this {
 		const candidate = value as Partial<ErrorI18n<TEnv>> | null
 		if (typeof candidate?.translate !== "function" || typeof candidate.resolveLocale !== "function") {
-			throw new TypeError("app.errorI18n(): pass errorI18n({ ... }) from @lovrozagar/honey/i18n, not its config")
+			throw new TypeError("app.errorI18n(): pass createErrorTranslator() from @lovrozagar/honey/i18n")
 		}
 		this.settings.errorI18n = value
 		return this

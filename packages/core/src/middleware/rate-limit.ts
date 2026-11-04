@@ -26,16 +26,16 @@ export type RateLimitStore = {
 	hit(key: string): Promise<RateLimitHit> | RateLimitHit
 }
 
-/** An in-process `RateLimitStore` made by `memoryStore`. */
-export type MemoryStore = {
+/** An in-process `RateLimitStore` made by `memoryRateLimitStore`. */
+export type MemoryRateLimitStore = {
 	/** Counts one request against `key` and returns its window. */
 	hit(key: string): RateLimitHit
 	/** Windows kept, counting an ended one until its key is hit again or evicted. */
 	readonly size: number
 }
 
-/** The window length and the size bound of a `memoryStore`. */
-export type MemoryStoreOptions = {
+/** The window length and the size bound of a `memoryRateLimitStore`. */
+export type MemoryRateLimitStoreOptions = {
 	/** Windows kept at most; past it the least recently used is evicted. Default 10 000. */
 	maxKeys?: number | undefined
 	/** Length of each window in milliseconds; a positive finite number. */
@@ -75,7 +75,7 @@ export type RateLimitOptions = {
 	  }
 )
 
-class WindowStore implements MemoryStore {
+class WindowStore implements MemoryRateLimitStore {
 	readonly #maxKeys: number
 	readonly #windowMs: number
 	/* insertion order is recency: a hit re-inserts its key last, so the first key is the LRU */
@@ -110,7 +110,7 @@ class WindowStore implements MemoryStore {
  * first. An evicted key starts over at its next request. Throws `TypeError` unless `windowMs` is a
  * positive finite number and `maxKeys` a positive integer.
  */
-export function memoryStore(options: MemoryStoreOptions): MemoryStore {
+export function memoryRateLimitStore(options: MemoryRateLimitStoreOptions): MemoryRateLimitStore {
 	const { maxKeys = 10_000, windowMs } = options
 	if (!(Number.isFinite(windowMs) && windowMs > 0)) {
 		throw new TypeError("rateLimit: windowMs must be a positive finite number")
@@ -130,12 +130,12 @@ function peerKey(ctx: KeyContext): string {
  * key is `ctx.ip`, so behind a self-hosted reverse proxy every client shares one window. The
  * built-in store counts per process and per middleware; behind several instances, pass a shared
  * `store`. Throws `TypeError` unless `limit` is a positive integer, and for a `windowMs` or `maxKeys`
- * that `memoryStore` refuses.
+ * that `memoryRateLimitStore` refuses.
  */
 export function rateLimit(options: RateLimitOptions): MiddlewareFn<KeyContext, {}, "too_many_requests"> {
 	const { limit } = options
 	if (!(Number.isInteger(limit) && limit > 0)) throw new TypeError("rateLimit: limit must be a positive integer")
-	const store = options.store ?? memoryStore(options)
+	const store = options.store ?? memoryRateLimitStore(options)
 	const keyOf = options.key ?? peerKey
 	const limitText = String(limit)
 	/** The answer for a counted request: 429 past the limit, else the chain's with the headers. */

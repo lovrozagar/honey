@@ -13,7 +13,7 @@ import type { StaticConfig } from "../../src/response/static.ts"
 import type { QueueConsumer } from "../../src/queue/define.ts"
 import type { QueueHandle, ServeQueueOptions } from "../../src/queue/serve.ts"
 import type { IpLists, IpRestrictOptions } from "../../src/middleware/ip-restrict.ts"
-import type { MemoryStoreOptions, RateLimitOptions } from "../../src/middleware/rate-limit.ts"
+import type { MemoryRateLimitStoreOptions, RateLimitOptions } from "../../src/middleware/rate-limit.ts"
 import type { JwtVerifyResult, VerifyJwtOptions } from "../../src/security/jwt.ts"
 import type { SignWebhookOptions, WebhookHeaders } from "../../src/security/webhook.ts"
 import type { SSEEvent, SSEOptions, SSEStream } from "../../src/response/sse.ts"
@@ -255,7 +255,7 @@ export function credentialedCompress(real: Compress): Compress {
 }
 
 export type RateLimit = (options: RateLimitOptions) => unknown
-export type MemoryStoreFactory = (options: MemoryStoreOptions) => unknown
+export type MemoryRateLimitStoreFactory = (options: MemoryRateLimitStoreOptions) => unknown
 
 /** rateLimit keyed on the client's own X-Forwarded-For. */
 export function forwardedKey(real: RateLimit): RateLimit {
@@ -263,8 +263,8 @@ export function forwardedKey(real: RateLimit): RateLimit {
 		real({ ...options, key: (ctx) => ctx.req.headers.get("x-forwarded-for") ?? ctx.ip ?? "" } as RateLimitOptions)
 }
 
-/** memoryStore with no cap on its windows. */
-export function uncappedStore(real: MemoryStoreFactory): MemoryStoreFactory {
+/** memoryRateLimitStore with no cap on its windows. */
+export function uncappedStore(real: MemoryRateLimitStoreFactory): MemoryRateLimitStoreFactory {
 	return (options) => real({ ...options, maxKeys: Number.MAX_SAFE_INTEGER })
 }
 
@@ -412,13 +412,13 @@ export function unredacted(real: LoggerFactory): LoggerFactory {
 	return (options) => real({ ...options, redactHeader: (_name, value) => value })
 }
 
-export type ErrorI18nFactory = (config: never) => {
+export type ErrorTranslatorFactory = (config: never) => {
 	resolveLocale: unknown
 	translate(error: unknown, locale: string): unknown
 }
 
-/** errorI18n whose translate writes the message into the thrown error itself, and returns it. */
-export function translatingInPlace(real: ErrorI18nFactory): ErrorI18nFactory {
+/** createErrorTranslator whose translate writes the message into the thrown error itself, and returns it. */
+export function translatingInPlace(real: ErrorTranslatorFactory): ErrorTranslatorFactory {
 	return (config) => {
 		const value = real(config)
 		return {

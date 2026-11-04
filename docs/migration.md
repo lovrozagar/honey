@@ -679,11 +679,11 @@ const app = honey()
 app.use(curlLogger({ body: { maxBytes: 16_384 } }))
 ```
 
-## `.errorI18n(config)` takes `errorI18n(config)`
+## `.errorI18n(config)` takes `createErrorTranslator(config)`
 
-The setting carries the value `errorI18n()` answers, not a raw config, and v0's `enableI18n()` — the import that
-turned the feature on — goes with every other enabler (`enableServe`, `enableOpenApi`): a feature is the plain
-import that uses it. The setter rejects a raw config at startup, naming the fix.
+The setting carries the translator `createErrorTranslator()` builds, not a raw config, and v0's `enableI18n()` — the
+import that turned the feature on — goes with every other enabler (`enableServe`, `enableOpenApi`): a feature is the
+plain import that uses it. The setter rejects a raw config at startup, naming the fix.
 
 ```ts v0
 import { enableI18n } from "@lovrozagar/honey/i18n"
@@ -692,11 +692,14 @@ app.errorI18n({ errors: { en: errorsEn }, resolveLocale: (c) => c.search["locale
 
 ```ts
 import { honey } from "@lovrozagar/honey"
-import { errorI18n } from "@lovrozagar/honey/i18n"
+import { createErrorTranslator } from "@lovrozagar/honey/i18n"
 
 const app = honey()
 app.errorI18n(
-	errorI18n({ errors: { en: { not_found: "Nothing here" } }, resolveLocale: (ctx) => ctx.search["locale"] ?? "en" }),
+	createErrorTranslator({
+		errors: { en: { not_found: "Nothing here" } },
+		resolveLocale: (ctx) => ctx.search["locale"] ?? "en",
+	}),
 )
 ```
 

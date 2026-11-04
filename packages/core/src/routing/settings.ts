@@ -45,7 +45,7 @@ export type ResolveLocaleCtx<TEnv> = {
 	readonly search: Readonly<Record<string, string>>
 }
 
-/** `app.errorI18n`, built by `errorI18n()` from `@lovrozagar/honey/i18n`; `translate` answers a copy. */
+/** `app.errorI18n`, built by `createErrorTranslator()` from `@lovrozagar/honey/i18n`; `translate` answers a copy. */
 export type ErrorI18n<TEnv = unknown> = {
 	/** Picks the locale for an error answer. If it throws, the failure is logged and the error goes out untranslated. */
 	readonly resolveLocale: (ctx: ResolveLocaleCtx<TEnv>) => MaybePromise<string>

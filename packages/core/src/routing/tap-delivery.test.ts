@@ -253,13 +253,13 @@ describe("mounted apps", () => {
 describe("taps beside errorI18n", () => {
 	// v0: a40d4a499b
 	it("composed with errorI18n: a handler's answer fires its taps, a translated error answer fires none", async () => {
-		const { errorI18n } = await import("../i18n/error-i18n.ts")
+		const { createErrorTranslator } = await import("../i18n/error-i18n.ts")
 		const received: unknown[] = []
 		const errors = defineErrors({ gone: "not_found" })
 		const app = honey<{}>()
 			.errorFactory(errors)
 			.metaType<{ audit?: { action: string } }>()
-			.errorI18n(errorI18n({ errors: { en: { gone: "missing {id}" } }, resolveLocale: () => "en" }))
+			.errorI18n(createErrorTranslator({ errors: { en: { gone: "missing {id}" } }, resolveLocale: () => "en" }))
 			.tap("audit", (_ctx, payload) => void received.push(payload))
 		app
 			.get("/item/:id")

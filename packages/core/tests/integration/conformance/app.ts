@@ -12,7 +12,7 @@ import { createHash } from "node:crypto"
 import * as z from "zod"
 import { serve } from "../../../src/adapters/bun/serve.ts"
 import { defineErrors } from "../../../src/errors/errors.ts"
-import { errorI18n } from "../../../src/i18n/error-i18n.ts"
+import { createErrorTranslator } from "../../../src/i18n/error-i18n.ts"
 import type { NextFn } from "../../../src/middleware/middleware.ts"
 import { requestId } from "../../../src/middleware/request-id.ts"
 import { type McpHandler, mcp } from "../../../src/mcp/mount.ts"
@@ -160,7 +160,7 @@ function configured(wire: ReturnType<typeof createWire>) {
 		.defaultBoundary("api_error")
 		.defaultErrorFormatter((_error, shape) => ({ ...shape, request_id: "conformance" }))
 		.errorI18n(
-			errorI18n({
+			createErrorTranslator({
 				errors: { de, en },
 				resolveLocale: (ctx) => (ctx.req.headers.get("accept-language")?.startsWith("de") ? "de" : "en"),
 			}),

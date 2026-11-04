@@ -1,5 +1,5 @@
 /**
- * Error-message i18n: `errorI18n({ errors, fieldNames, resolveLocale })` builds the value
+ * Error-message i18n: `createErrorTranslator({ errors, fieldNames, resolveLocale })` builds the value
  * `app.errorI18n(value)` carries (H23: a value, never a module slot). For an error answer, core
  * resolves the request's locale and asks it to `translate`: the message from the locale's template
  * for the error key, its vars filled in, and each field path's display name, tried as written and
@@ -20,8 +20,8 @@ export type ErrorTranslations = {
 	fieldNames?: Record<string, Record<string, string>>
 }
 
-/** What `errorI18n` takes: the message templates and field names per locale, and how to pick the request's locale. */
-export type ErrorI18nConfig<TEnv> = ErrorTranslations & {
+/** What `createErrorTranslator` takes: the message templates and field names per locale, and how to pick the request's locale. */
+export type ErrorTranslatorConfig<TEnv> = ErrorTranslations & {
 	/** The request's locale: a header, a cookie, the tenant in env, a path param. */
 	resolveLocale: (ctx: ResolveLocaleCtx<TEnv>) => MaybePromise<string>
 }
@@ -94,7 +94,7 @@ export function translateError(error: HoneyError, translations: ErrorTranslation
 }
 
 /** The value `app.errorI18n(value)` carries; it keeps one Formatter, so plural rules are built once. */
-export function errorI18n<TEnv = unknown>(config: ErrorI18nConfig<TEnv>): ErrorI18n<TEnv> {
+export function createErrorTranslator<TEnv = unknown>(config: ErrorTranslatorConfig<TEnv>): ErrorI18n<TEnv> {
 	const formatter = new Formatter()
 	const translations: ErrorTranslations = { errors: config.errors, fieldNames: config.fieldNames }
 	return Object.freeze({

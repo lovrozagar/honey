@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { PEER_ADDRESS } from "../context/peer.ts"
 import { isHoneyResponse, NODE_OUTBOUND } from "../response/builder.ts"
 import { honey } from "../routing/app.ts"
-import { memoryStore, rateLimit, type RateLimitOptions } from "./rate-limit.ts"
+import { memoryRateLimitStore, rateLimit, type RateLimitOptions } from "./rate-limit.ts"
 
 const T0 = Date.UTC(2026, 9, 14, 12, 0, 0)
 
@@ -137,7 +137,7 @@ describe("rateLimit(): the key", () => {
 
 describe("rateLimit(): the memory store is bounded", () => {
 	it("cap+1 distinct keys evict the least recently used; the store never grows past the cap", () => {
-		const store = memoryStore({ maxKeys: 2, windowMs: 60_000 })
+		const store = memoryRateLimitStore({ maxKeys: 2, windowMs: 60_000 })
 		store.hit("a")
 		store.hit("b")
 		store.hit("a")
@@ -147,13 +147,13 @@ describe("rateLimit(): the memory store is bounded", () => {
 	})
 
 	it("a spray of distinct keys keeps the store at its cap", () => {
-		const store = memoryStore({ maxKeys: 1000, windowMs: 60_000 })
+		const store = memoryRateLimitStore({ maxKeys: 1000, windowMs: 60_000 })
 		for (let i = 0; i < 50_000; i += 1) store.hit(`2001:db8::${i.toString(16)}`)
 		expect(store.size).toBe(1000)
 	})
 
 	it("an expired window is replaced, not counted on", () => {
-		const store = memoryStore({ maxKeys: 10, windowMs: 1000 })
+		const store = memoryRateLimitStore({ maxKeys: 10, windowMs: 1000 })
 		store.hit("a")
 		vi.setSystemTime(T0 + 1000)
 		expect(store.hit("a")).toEqual({ count: 1, resetAt: T0 + 2000 })
