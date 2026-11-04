@@ -110,8 +110,8 @@ describe("the run's metadata block (plan 39 8.2)", () => {
 		repository: "https://github.com/acme/shop",
 	}
 	/** The one file of `files` whose path ends with `suffix`. */
-	const fileEnding = (files: Readonly<Record<string, string>> | undefined, suffix: string) =>
-		Object.entries(files ?? {}).find(([path]) => path.endsWith(suffix))?.[1] ?? ""
+	const fileEnding = (files: Readonly<Record<string, string | Uint8Array>> | undefined, suffix: string) =>
+		String(Object.entries(files ?? {}).find(([path]) => path.endsWith(suffix))?.[1] ?? "")
 
 	it("fills each target's options of the same meaning, the target's own option winning", async () => {
 		const run: GenerateRun = {

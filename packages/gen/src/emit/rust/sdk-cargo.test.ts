@@ -129,7 +129,7 @@ describe.skipIf(!withRust())("the crate cargo packs (plan 39 8.6, 8.7)", () => {
 			const crate = generateRustSdk(
 				minimal,
 				{ description: "The Acme API.", license: "MIT" },
-				{ licenseFile: true, readme: true },
+				{ icon: undefined, licenseFile: true, readme: true },
 			)
 			const dir = written({ ...crate.files, LICENSE: "MIT License\n", "README.md": "# Acme\n" })
 			const listed = runCargo(["package", "--list", "--allow-dirty", "--offline"], { cwd: dir })

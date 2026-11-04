@@ -42,7 +42,7 @@ export type CrateOptions = {
 }
 
 /* a crate that ships nothing beside its code */
-const NONE_SHIPPED: Shipped = { licenseFile: false, readme: false }
+const NONE_SHIPPED: Shipped = { icon: undefined, licenseFile: false, readme: false }
 
 /* the dependency the WebSocket and realtime runtime files need, and only they */
 const WEBSOCKET = "tokio-tungstenite"

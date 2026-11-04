@@ -10,6 +10,7 @@ import { execFileSync } from "node:child_process"
 import { describe, expect, it } from "vitest"
 import { hasNpm } from "../emit/mcp/__fixtures__/clients.ts"
 import { written } from "../emit/mcp/__fixtures__/written.ts"
+import type { GeneratedFiles } from "../cli.ts"
 import { generated, type GenerateRun } from "../index.ts"
 import { SPAWN_TIMEOUT } from "./__fixtures__/spawn-timeout.ts"
 import { TARGETS } from "./targets.ts"
@@ -24,12 +25,24 @@ const DOCUMENT = {
 	servers: [{ url: "https://shop.example.test" }],
 }
 
-/** A reader of the two files by their paths, as a run's `read` takes them. */
+/* a 1x1 PNG, and the opening bytes of a JPEG */
+const PNG = Buffer.from(
+	"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4v5nhPwAHGQKyb+i68wAAAABJRU5ErkJggg==",
+	"base64",
+)
+const JPEG = Uint8Array.of(0xff, 0xd8, 0xff, 0xe0, 0x00)
+
+/** A reader of the files by their paths, as a run's `read` takes them. */
 const read = (path: string): Uint8Array => {
 	const text = { "docs/README.md": README, "legal/LICENSE.txt": LICENSE }[path]
+	const image = { "art/ICON.PNG": PNG, "art/logo.jpeg": JPEG, "art/swapped.png": JPEG }[path]
+	if (image !== undefined) return image
 	if (text === undefined) throw Object.assign(new Error(`ENOENT: ${path}`), { code: "ENOENT" })
 	return new TextEncoder().encode(text)
 }
+
+/** The C# package's `.csproj` in `files`. */
+const csprojOf = (files: GeneratedFiles) => String(files.csharp?.["HoneySdk.csproj"])
 
 /** Every target's files for `run`, the files read through `reader`. */
 const run = (metadata: GenerateRun["metadata"], reader = read) =>
@@ -61,7 +74,7 @@ describe("the README and license file every target ships (plan 39 8.7)", () => {
 				"<PackageReadmeFile>README.md</PackageReadmeFile>",
 				'<None Include="README.md" Pack="true" PackagePath="\\" />',
 				'<None Include="LICENSE" Pack="true" PackagePath="\\" />',
-			].filter((element) => !files.csharp?.["HoneySdk.csproj"]?.includes(element)),
+			].filter((element) => !csprojOf(files).includes(element)),
 			jsr: (JSON.parse(files.ts?.["jsr.json"] ?? "{}") as { publish: unknown }).publish,
 			pyproject: [
 				line(files.python?.["pyproject.toml"], "readme"),
@@ -79,9 +92,38 @@ describe("the README and license file every target ships (plan 39 8.7)", () => {
 		const files = await run({ readme: SHIPPED.readme })
 		expect([
 			/^include = .*$/m.exec(files.rust?.["Cargo.toml"] ?? "")?.[0],
-			files.csharp?.["HoneySdk.csproj"]?.includes('Include="LICENSE"'),
+			csprojOf(files).includes('Include="LICENSE"'),
 			files.python?.["pyproject.toml"]?.includes("license-files"),
 		]).toEqual(['include = ["/src", "/README.md"]', false, false])
+	})
+})
+
+describe("the icon the C# package ships (plan 39 8.7)", () => {
+	it("ships it into the C# package alone, byte for byte, under icon and its extension in lower case", async () => {
+		const [png, jpeg] = [await run({ icon: "art/ICON.PNG" }), await run({ icon: "art/logo.jpeg" })]
+		expect({
+			csproj: [
+				"<PackageIcon>icon.png</PackageIcon>",
+				'<None Include="icon.png" Pack="true" PackagePath="\\" />',
+			].filter((element) => !csprojOf(png).includes(element)),
+			elsewhere: TARGETS.filter((target) => target !== "csharp").flatMap((target) =>
+				Object.keys(png[target] ?? {}).filter((path) => path.startsWith("icon.")),
+			),
+			jpeg: [jpeg.csharp?.["icon.jpeg"], /<PackageIcon>(.*)<\/PackageIcon>/.exec(csprojOf(jpeg))?.[1]],
+			png: png.csharp?.["icon.png"],
+		}).toEqual({ csproj: [], elsewhere: [], jpeg: [JPEG, "icon.jpeg"], png: PNG })
+	})
+
+	it.each<[string, string, string]>([
+		["a format NuGet does not show", "art/logo.gif", 'Invalid metadata.icon: "art/logo.gif"'],
+		["bytes that are not the image its extension names", "art/swapped.png", "is not the image its extension names"],
+		["an image over NuGet's 1 MB", "art/huge.jpg", 'Invalid metadata.icon: "art/huge.jpg" is over NuGet\'s 1 MB'],
+		["a missing file", "art/none.png", 'Invalid metadata.icon: "art/none.png" cannot be read (ENOENT)'],
+	])("refuses %s, naming the field", async (_, icon, message) => {
+		const big = new Uint8Array(1024 * 1024 + 1)
+		big.set(JPEG)
+		const huge = (path: string) => (path === "art/huge.jpg" ? big : read(path))
+		await expect(run({ icon }, huge)).rejects.toThrow(message)
 	})
 })
 

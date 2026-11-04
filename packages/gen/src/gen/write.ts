@@ -32,7 +32,7 @@ export type Written = {
 	readonly written: string[]
 }
 
-const sha256 = (bytes: string | Buffer) => createHash("sha256").update(bytes).digest("hex")
+const sha256 = (bytes: string | Uint8Array) => createHash("sha256").update(bytes).digest("hex")
 
 /** Whether `path` is a symlink, a dangling one included. */
 function isLink(path: string): boolean {
@@ -63,12 +63,16 @@ function confined(dir: string, rel: string): string {
  */
 export const isWriteTemp = (name: string): boolean => /^\.\d+\.[0-9a-z]*\.tmp$/.test(name)
 
-/** Write `text` to `path` only when its bytes differ, through a temp file renamed over it; whether it was written. */
-export function writeFileIfChanged(path: string, text: string): boolean {
-	if (existsSync(path) && readFileSync(path, "utf8") === text) return false
+/**
+ * Write `content` (text, as UTF-8, or bytes) to `path` only when its bytes differ, through a temp file renamed over it;
+ * whether it was written.
+ */
+export function writeFileIfChanged(path: string, content: string | Uint8Array): boolean {
+	if (existsSync(path) && readFileSync(path).equals(typeof content === "string" ? Buffer.from(content) : content))
+		return false
 	mkdirSync(dirname(path), { recursive: true })
 	const temp = join(dirname(path), `.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`)
-	writeFileSync(temp, text)
+	writeFileSync(temp, content)
 	renameSync(temp, path)
 	return true
 }
@@ -95,11 +99,13 @@ function prune(dir: string, path: string): void {
  * when edited since, and dropped from the manifest either way, so a file the caller takes over is kept once and never
  * touched again. A file the manifest never listed is never touched.
  */
-export function writeTarget(dir: string, files: Readonly<Record<string, string>>): Written {
+export function writeTarget(dir: string, files: Readonly<Record<string, string | Uint8Array>>): Written {
 	const root = resolve(dir)
 	const paths = Object.keys(files).map((rel) => [rel, confined(root, rel)] as const)
 	const previous = listed(root)
-	const written = paths.filter(([rel, path]) => writeFileIfChanged(path, files[rel] as string)).map(([rel]) => rel)
+	const written = paths
+		.filter(([rel, path]) => writeFileIfChanged(path, files[rel] as string | Uint8Array))
+		.map(([rel]) => rel)
 	const [deleted, kept]: [string[], string[]] = [[], []]
 	for (const [rel, hash] of Object.entries(previous)) {
 		if (Object.hasOwn(files, rel)) continue
@@ -123,7 +129,7 @@ export function writeTarget(dir: string, files: Readonly<Record<string, string>>
 	const manifest = Object.fromEntries(
 		Object.keys(files)
 			.sort()
-			.map((rel) => [rel, sha256(files[rel] as string)]),
+			.map((rel) => [rel, sha256(files[rel] as string | Uint8Array)]),
 	)
 	writeFileIfChanged(join(root, MANIFEST), `${JSON.stringify({ files: manifest }, null, "\t")}\n`)
 	return { deleted, kept, written }

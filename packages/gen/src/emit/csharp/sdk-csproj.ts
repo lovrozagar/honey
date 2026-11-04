@@ -122,15 +122,24 @@ export function validateVersion(value: string): string {
 	return parts?.every((part) => Number(part) <= ASSEMBLY_PART_MAX) === true ? value : refuse("version", value)
 }
 
-/** The README nuget.org shows, then the items that pack each shipped file at the package's root. */
+/** The README and the icon nuget.org shows, then the items that pack each shipped file at the package's root. */
 function shippedLines(shipped: Shipped | undefined): { readonly property: string; readonly items: string } {
-	const packed = [...(shipped?.readme ? [README] : []), ...(shipped?.licenseFile ? [LICENSE] : [])]
+	const icon = shipped?.icon
+	const packed = [
+		...(shipped?.readme ? [README] : []),
+		...(shipped?.licenseFile ? [LICENSE] : []),
+		...(icon === undefined ? [] : [icon]),
+	]
+	const properties = [
+		...(shipped?.readme ? [`    <PackageReadmeFile>${README}</PackageReadmeFile>\n`] : []),
+		...(icon === undefined ? [] : [`    <PackageIcon>${icon}</PackageIcon>\n`]),
+	]
 	return {
 		items:
 			packed.length === 0
 				? ""
 				: `  <ItemGroup>\n${packed.map((file) => `    <None Include="${file}" Pack="true" PackagePath="\\" />\n`).join("")}  </ItemGroup>\n`,
-		property: shipped?.readme ? `    <PackageReadmeFile>${README}</PackageReadmeFile>\n` : "",
+		property: properties.join(""),
 	}
 }
 

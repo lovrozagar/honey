@@ -40,6 +40,8 @@ export function personOf(value: string): { readonly name: string; readonly email
 export const AUTHOR = /^(?=[^\p{Cc}\p{Cs}]{1,4000}$)[^<>,]*[^<>,\s][^<>,]*?(?: <[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+>)?$/u
 /** A path to a Markdown file: the README every registry renders, NuGet only in Markdown. */
 export const MARKDOWN_PATH = /^(?=[^\p{Cc}\p{Cs}]{1,4000}$).*\.md$/iu
+/** A path to a PNG or JPEG image: the package icon, in the formats NuGet takes. */
+export const IMAGE_PATH = /^(?=[^\p{Cc}\p{Cs}]{1,4000}$).*\.(?:png|jpe?g)$/iu
 /** One keyword: no space, comma or control character, at most 50 characters; a registry may hold it to less. */
 export const KEYWORD = /^[^\s,\p{Cc}\p{Cs}]{1,50}$/u
 
@@ -85,7 +87,7 @@ const GRAMMARS: { readonly [K in MetadataField]: RegExp } = {
 	description: TEXT,
 	documentation: HTTPS_URL,
 	homepage: HTTPS_URL,
-	icon: TEXT,
+	icon: IMAGE_PATH,
 	keywords: KEYWORD,
 	license: SPDX_EXPRESSION,
 	licenseFile: TEXT,
@@ -132,11 +134,19 @@ export function checkedMetadata(metadata: unknown): Metadata {
 export const README = "README.md"
 export const LICENSE = "LICENSE"
 
-/** Which of them a package ships, as the block names them: its manifest points at each one it has. */
-export type Shipped = { readonly readme: boolean; readonly licenseFile: boolean }
+/**
+ * Which of them a package ships, as the block names them: its manifest points at each one it has. The icon ships only
+ * where the registry shows one (NuGet), by the name `iconName` gives it.
+ */
+export type Shipped = { readonly readme: boolean; readonly licenseFile: boolean; readonly icon: string | undefined }
+
+/** The name the icon at `path` ships under: `icon`, then its own extension in lower case. */
+/* IMAGE_PATH holds every icon path to an extension, so the last dot starts it */
+export const iconName = (path: string): string => `icon${path.slice(path.lastIndexOf(".")).toLowerCase()}`
 
 /** What `metadata` ships beside the code. */
 export const shippedOf = (metadata: Metadata): Shipped => ({
+	icon: metadata.icon === undefined ? undefined : iconName(metadata.icon),
 	licenseFile: metadata.licenseFile !== undefined,
 	readme: metadata.readme !== undefined,
 })

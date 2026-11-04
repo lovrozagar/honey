@@ -123,20 +123,25 @@ export type GenerateContext = {
 	 */
 	readonly oxfmt?: string
 	/**
-	 * Reads the files the metadata block names (`readme`, `licenseFile`): `readFileSync` by default, so a path is the
+	 * Reads the files the metadata block names (`readme`, `licenseFile`, `icon`): `readFileSync` by default, so a path is the
 	 * working directory's.
 	 */
 	readonly read?: ReadFile
 }
 
-/** A run's files: each generated target's files by path under that target's directory. */
-export type GeneratedFiles = Partial<Record<Target, Readonly<Record<string, string>>>>
+/**
+ * A run's files: each generated target's files by path under that target's directory, each one's text, but for the
+ * C# package's icon, which is its bytes.
+ */
+export type GeneratedFiles = {
+	readonly [T in Target]?: Readonly<Record<string, T extends "csharp" ? string | Uint8Array : string>>
+}
 
 /**
  * Every file a run writes, by target and its path under the target's directory. Go goes through gofmt, Python through
  * ruff, Rust through rustfmt and TS through oxfmt; C# and Java go out as emitted, as does a target whose formatter is
  * missing, unless `HONEY_REQUIRE_FORMATTERS=1` makes that throw. The README and license file the metadata block names
- * go into every target's root as they are.
+ * go into every target's root as they are, its icon into the C# package's alone.
  */
 export async function generated(
 	run: GenerateRun,
@@ -148,7 +153,7 @@ export async function generated(
 	const options = new Map(
 		run.targets.map((target) => [target, optionsFor(target, metadata, run.options?.[target] ?? {})]),
 	)
-	const out: GeneratedFiles = {}
+	const out: { -readonly [T in keyof GeneratedFiles]: GeneratedFiles[T] } = {}
 	for (const [target, checked] of options) {
 		let files = filesOf(target, document, { metadata, options: checked }, report)
 		const pass = FORMATTERS[target]
@@ -157,7 +162,8 @@ export async function generated(
 			if (formatter === undefined) missingFormatter(target, pass, env, report)
 			else files = await formatFiles(files, { [pass.extension]: formatter })
 		}
-		out[target] = { ...files, ...shipped }
+		out[target] = { ...files, ...shipped.files }
+		if (target === "csharp") out.csharp = { ...out.csharp, ...shipped.icon }
 	}
 	return out
 }

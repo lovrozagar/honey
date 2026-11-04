@@ -65,7 +65,7 @@ export type CSharpSdk = {
 /** A project built once per dir: its outcome, its dll, and whether this call spawned the build. */
 export type Built = Pick<CSharpSdk, "assembly" | "built" | "diagnostics" | "dll" | "fresh">
 
-type Files = Readonly<Record<string, string>>
+type Files = Readonly<Record<string, string | Uint8Array>>
 
 /** A build's outcome, as a dir's marker keeps it. */
 type Outcome = { readonly diagnostics: readonly string[]; readonly status: number }
@@ -89,7 +89,7 @@ const STALE_MS = 10 * 60_000
 const globalJson = () => resolve(import.meta.dirname, "../../../../../../global.json")
 
 /** Write `text` beside `path`, then rename: a parallel worker never reads half a file. */
-function writeAtomic(path: string, text: string): void {
+function writeAtomic(path: string, text: string | Uint8Array): void {
 	mkdirSync(dirname(path), { recursive: true })
 	const partial = `${path}.${process.pid}.partial`
 	writeFileSync(partial, text)
@@ -266,14 +266,23 @@ async function executed(dir: string, dll: string, run: { args: readonly string[]
 function sdkFiles(fixture: CSharpFixture): Files {
 	if ("files" in fixture) return fixture.files
 	const shipped = fixture.shipped ?? {}
-	const flags = { licenseFile: Object.hasOwn(shipped, LICENSE), readme: Object.hasOwn(shipped, README) }
+	const flags = {
+		icon: Object.keys(shipped).find((name) => name.startsWith("icon.")),
+		licenseFile: Object.hasOwn(shipped, LICENSE),
+		readme: Object.hasOwn(shipped, README),
+	}
 	return { ...generateCSharpSdk(fixture.document(), fixture.options, flags).files, ...shipped }
 }
 
 /** `fixture`'s SDK written and built under the pinned SDK, once per content hash. */
 export function compiledFixture(fixture: CSharpFixture): CSharpSdk {
 	const files = sdkFiles(fixture)
-	const entries = Object.entries(files).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+	const entries = Object.entries(files)
+		.map(
+			([name, content]) =>
+				[name, typeof content === "string" ? content : { base64: Buffer.from(content).toString("base64") }] as const,
+		)
+		.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
 	const hash = sha(JSON.stringify({ files: entries, layout: LAYOUT, sdk: pinnedDotnet() })).slice(0, 20)
 	const dir = join(csharpCacheDir("sdk"), hash)
 	const src = join(dir, "src")

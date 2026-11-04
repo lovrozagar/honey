@@ -31,7 +31,7 @@ export type CSharpFixture =
 			readonly document: () => Readonly<Record<string, unknown>>
 			readonly options?: CSharpSdkOptions
 			/** the files a run ships beside the SDK (plan 39 8.7), by their names in its root */
-			readonly shipped?: Readonly<Record<string, string>>
+			readonly shipped?: Readonly<Record<string, string | Uint8Array>>
 	  }
 	| { readonly files: Readonly<Record<string, string>> }
 
@@ -116,6 +116,11 @@ export const PACKAGE_METADATA = {
 export const PACKAGE_SHIPPED = {
 	LICENSE: "MIT License\n\nCopyright (c) 2026 Acme Co\n",
 	"README.md": "# HoneySdk\n\nThe Shop API's client for .NET.\n",
+	/* a 1x1 PNG, the icon nuget.org shows */
+	"icon.png": /* @__PURE__ */ Buffer.from(
+		"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4v5nhPwAHGQKyb+i68wAAAABJRU5ErkJggg==",
+		"base64",
+	),
 } as const
 
 /** Every SDK a default run gates: at most 16 (G17; tests/structure/csharp-toolchain.test.ts). */

@@ -87,6 +87,25 @@ describe("a generated file written only when its bytes differ (bit 19 h1)", () =
 	})
 })
 
+describe("a generated file given as bytes (plan 39 8.7: the C# package's icon)", () => {
+	const ICON = Uint8Array.of(0x89, 0x50, 0x4e, 0x47, 0xff, 0x00, 0xfe)
+
+	it("writes the bytes as given, hashes them in the manifest, leaves them untouched when equal, deletes them stale", () => {
+		const dir = scratch()
+		writeTarget(dir, { "icon.png": ICON })
+		const written = [readFileSync(join(dir, "icon.png")).equals(ICON), manifestOf(dir)]
+		const again = writeTarget(dir, { "icon.png": ICON }).written
+		const changed = writeTarget(dir, { "icon.png": ICON.subarray(1) }).written
+		const stale = writeTarget(dir, {}).deleted
+		expect({ again, changed, stale, written }).toEqual({
+			again: [],
+			changed: ["icon.png"],
+			stale: ["icon.png"],
+			written: [true, { "icon.png": createHash("sha256").update(ICON).digest("hex") }],
+		})
+	})
+})
+
 describe("a regeneration deletes only the stale files the last one wrote (bit 19 h1)", () => {
 	// v0: 4837c0d5c0
 	it("deletes what the previous run wrote and this one did not; never a file it never listed", () => {

@@ -199,7 +199,9 @@ generates: URLs must be https, the license an SPDX expression, text one line.
 target writes them into its package root as `README.md` and `LICENSE`, and each manifest points at the ones it has:
 pyproject's `readme` and `license-files`, Cargo's `readme` and `include`, the `.csproj`'s `PackageReadmeFile` and packed
 items, and jsr.json's publish list; npm packs both on its own. The README must be a `.md` file, and both must be UTF-8
-text.
+text. `--metadata-icon` ships only into the C# package, as `icon` with its own extension in lower case (`icon.png`,
+`icon.jpeg`) under `PackageIcon`, since nuget.org is the one registry that shows an icon: a PNG or JPEG whose bytes are
+that image, at most 1 MB.
 
 ## The six SDKs
 
@@ -568,8 +570,8 @@ for all eight targets, and each decoded answer and each request on the wire must
 that works in one SDK and breaks in another fails the grid.
 
 To lay the files out yourself, `generated(run, document, ctx)` from `@lovrozagar/honey-clients` returns each
-target's files unwritten, and `writeTarget(dir, files)` writes one target's into a directory you pick under the same
-rules, keeping `MANIFEST` (`.honey-generated.json`) there. A file the last call wrote that you leave out of `files` is
+target's files unwritten, each as its text but for the C# package's icon, which is its bytes, and
+`writeTarget(dir, files)` writes one target's into a directory you pick under the same rules, keeping `MANIFEST` (`.honey-generated.json`) there. A file the last call wrote that you leave out of `files` is
 stale: deleted if unedited, kept and named in the result's `kept` if you changed it, and dropped from the manifest
 either way, so a file you take over by editing is never touched again.
 
