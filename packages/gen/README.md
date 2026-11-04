@@ -122,6 +122,7 @@ One table, since a flag that is not written down is a flag nobody finds:
 | `--ts-version`             | ts     | the version both registries carry; the document's by default                      |
 | `--ts-tanstack-query`      | ts     | also write the TanStack Query adapter; takes no value                             |
 | `--go-module-path`         | go     | the Go module path the SDK is imported by                                         |
+| `--go-version`             | go     | its semver; from v2 on, the major suffix (`/v2`) it puts on the module path       |
 | `--rust-crate-name`        | rust   | the crate's name                                                                  |
 | `--rust-version`           | rust   | the crate's version                                                               |
 | `--rust-description`       | rust   | what crates.io shows; `cargo publish` needs one                                   |
@@ -153,6 +154,7 @@ One table, since a flag that is not written down is a flag nobody finds:
 | `--cli-binary-name`        | cli    | the command's own name (`shop`)                                                   |
 | `--cli-base-url`           | cli    | the base URL it calls by default; the document's server by default                |
 | `--cli-module-path`        | cli    | the Go module path the CLI is built from                                          |
+| `--cli-version`            | cli    | its semver; from v2 on, the major suffix (`/v2`) it puts on the module path       |
 | `--cli-repo`               | cli    | the GitHub repository its release workflow and install scripts use                |
 | `--cli-env-prefix`         | cli    | the prefix of the environment variables it reads                                  |
 | `--cli-install-url`        | cli    | the https directory its install scripts are served from; the release's by default |
@@ -292,6 +294,11 @@ Idiomatic Go: a `Config`, `context.Context` on every call, errors read with `err
 ```sh
 honey-clients generate --spec openapi.json --target go --out generated --go-module-path github.com/acme/shop/sdk
 ```
+
+Go wants a v2-or-later module's major version at the end of its path, so pass the base path and the version:
+`--go-version 2.1.0` makes go.mod declare `github.com/acme/shop/sdk/v2`, and the CLI target's `--cli-version` does the
+same for its module and the version it links in. A path Go would not publish (no domain first, or a suffix such as
+`/v1`) is refused, as is a suffix next to a version, since the version gives it.
 
 ```go
 func listing(ctx context.Context, client *sdk.Client) string {

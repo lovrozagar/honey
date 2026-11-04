@@ -36,6 +36,7 @@ export const TARGET_OPTIONS = {
 		"packages",
 		"repo",
 		"scoopBucket",
+		"version",
 		"wingetFork",
 		"wingetPublisher",
 	],
@@ -50,7 +51,7 @@ export const TARGET_OPTIONS = {
 		"rootNamespace",
 		"version",
 	],
-	go: ["modulePath"],
+	go: ["modulePath", "version"],
 	java: [
 		"artifactId",
 		"clientName",

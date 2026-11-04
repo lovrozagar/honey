@@ -17,10 +17,11 @@ import { goCacheDir, goEnv, runGo, withGo } from "../../src/emit/go/__fixtures__
 /* the tag the snapshot stamps: distinctive, so its bytes in a binary are the -X value and nothing else */
 const STAMP = "v9.8.7-honey-stamp"
 
-/** The shop CLI's module (released to acme/shop) in a fresh git repo with one commit, tagged STAMP. */
+/** The shop CLI's v9 module (released to acme/shop) in a fresh git repo with one commit, tagged STAMP. */
 function repo(): string {
 	const dir = mkdtempSync(join(goCacheDir("tmp"), "release-build-"))
-	const { files } = generateGoCli(shop(), { modulePath: "github.com/acme/shop", repo: "acme/shop" })
+	/* a v9 module (plan 39 8.5): its path ends /v9, so the tag is stamped only if -X names the suffixed package */
+	const { files } = generateGoCli(shop(), { modulePath: "github.com/acme/shop", repo: "acme/shop", version: "9.8.7" })
 	for (const [name, text] of Object.entries(files)) {
 		mkdirSync(dirname(join(dir, name)), { recursive: true })
 		writeFileSync(join(dir, name), text)

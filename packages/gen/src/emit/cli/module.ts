@@ -12,6 +12,7 @@ import { readFileSync } from "node:fs"
 import { toIR, type OpenApiDocument } from "../../ir/build.ts"
 import { sdkModel } from "../../ir/sdk-model.ts"
 import { compareCodeUnits } from "../shared/lang.ts"
+import { goModulePath } from "../go/module-path.ts"
 import { generateGoSdk, goCallPlans, WEBSOCKET, WEBSOCKET_SUM } from "../go/sdk.ts"
 import { commandTree } from "./commands.ts"
 import { discoveryEntries } from "./discovery.ts"
@@ -25,6 +26,8 @@ export type GoCliOptions = ReleaseOptions & {
 	readonly binaryName?: string
 	/** the module path go.mod declares, a domain first; `example.com/<binaryName>` by default */
 	readonly modulePath?: string
+	/** the module's version, semver: from v2 on, its major suffix (`/v2`) ends the module path */
+	readonly version?: string
 	/** the environment variables' prefix: uppercase words joined by `_`; the binary name's by default */
 	readonly envPrefix?: string
 	/** the GitHub repository the release is published to, `owner/name`; none by default (then no install scripts) */
@@ -82,12 +85,9 @@ const SUM = [
 	"gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=",
 ]
 
-/* a binary: lowercase words joined by `-`, at most 64 characters (its agent skill's name is the binary's); a module
- * path: a dotted domain, then path elements (Go's module.CheckPath, less its rarely used characters); an environment
- * prefix: uppercase words joined by `_` */
+/* a binary: lowercase words joined by `-`, at most 64 characters (its agent skill's name is the binary's); an
+ * environment prefix: uppercase words joined by `_` */
 const BINARY_NAME = /^(?=.{1,64}$)[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
-const MODULE_PATH =
-	/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+(?:\/[A-Za-z0-9_~-](?:[A-Za-z0-9._~-]*[A-Za-z0-9_~-])?)*$/
 const ENV_PREFIX = /^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*$/
 /* a base URL a CLI can call: a scheme and a host, never a path alone */
 const ABSOLUTE_URL = /^https?:\/\/[^\s/]+/
@@ -122,8 +122,7 @@ function resolved(
 ): Required<Pick<GoCliOptions, "binaryName" | "envPrefix" | "modulePath">> & Pick<GoCliOptions, "repo" | "baseUrl"> {
 	const binaryName = options.binaryName ?? binaryNameOf(title)
 	if (!BINARY_NAME.test(binaryName)) refuse("binaryName", binaryName)
-	const modulePath = options.modulePath ?? `example.com/${binaryName}`
-	if (!MODULE_PATH.test(modulePath)) refuse("modulePath", modulePath)
+	const modulePath = goModulePath(options.modulePath ?? `example.com/${binaryName}`, options.version)
 	const envPrefix = options.envPrefix ?? binaryName.toUpperCase().replaceAll("-", "_")
 	if (!ENV_PREFIX.test(envPrefix)) refuse("envPrefix", envPrefix)
 	if (options.repo !== undefined && !REPO.test(options.repo)) refuse("repo", options.repo)

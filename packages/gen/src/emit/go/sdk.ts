@@ -13,12 +13,15 @@ import { lineComment } from "../shared/escape.ts"
 import { compareCodeUnits } from "../shared/lang.ts"
 import { goErrorKeys } from "./errors.ts"
 import { needsWebSocket, runtimeFiles } from "./http.ts"
+import { goModulePath } from "./module-path.ts"
 import { clientDecls, type GoCallPlan } from "./sdk-client.ts"
 import { type GoTypeContext, goTopLevel, goTypeContext } from "./types.ts"
 
 export type GoSdkOptions = {
 	/** the module path go.mod declares; `example.com/sdk` by default */
 	readonly modulePath?: string
+	/** the module's version, semver: from v2 on, its major suffix (`/v2`) ends the module path */
+	readonly version?: string
 }
 
 /** The module's files by name, and what the generation reports: a root member renamed for the safe mirror. */
@@ -103,7 +106,7 @@ function emitGo(document: Record<string, unknown>, options: GoSdkOptions): Gener
 		plans: client.plans,
 		files: {
 			...runtimeFiles(features),
-			...moduleFiles(options.modulePath ?? "example.com/sdk", needsWebSocket(features)),
+			...moduleFiles(goModulePath(options.modulePath ?? "example.com/sdk", options.version), needsWebSocket(features)),
 			"client.go": goFile(client.decls, CLIENT_IMPORTS),
 			"doc.go": docFile(ir.info),
 			"types.go": goFile([...components, ...hoisted, errorKeys].filter((decl) => decl !== "").join("\n\n"), [

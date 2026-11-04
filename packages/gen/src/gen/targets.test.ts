@@ -47,7 +47,7 @@ describe("targetOptionSchemas (plan 39 8.1)", () => {
 
 	it("refuses an unknown option, an empty or non-string value, a switch that is not true or false, a non-object", () => {
 		expect(validated("go", { modulePth: "github.com/a/b" })).toEqual({
-			issues: [{ message: 'unknown go option "modulePth": want one of modulePath', path: ["modulePth"] }],
+			issues: [{ message: 'unknown go option "modulePth": want one of modulePath, version', path: ["modulePth"] }],
 		})
 		expect(validated("python", { packageName: "", version: 2 })).toEqual({
 			issues: [
@@ -65,7 +65,7 @@ describe("targetOptionSchemas (plan 39 8.1)", () => {
 	})
 
 	it("types each target's options by its own names, a switch as true or false", () => {
-		expectTypeOf<TargetOptions<"go">>().toEqualTypeOf<{ readonly modulePath?: string }>()
+		expectTypeOf<TargetOptions<"go">>().toEqualTypeOf<{ readonly modulePath?: string; readonly version?: string }>()
 		expectTypeOf<TargetOptions<"ts">>().toEqualTypeOf<{
 			readonly name?: string
 			readonly packageName?: string
@@ -87,7 +87,7 @@ describe("generated (plan 39 8.1)", () => {
 		const reported: string[] = []
 		const run = { options: { go: { modulePth: "github.com/a/b" } }, targets: ["go"] } as unknown as GenerateRun
 		await expect(generated(run, {}, { env: {}, report: (line) => reported.push(line) })).rejects.toThrow(
-			'unknown go option "modulePth": want one of modulePath',
+			'unknown go option "modulePth": want one of modulePath, version',
 		)
 		expect(reported).toEqual([])
 	})
