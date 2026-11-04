@@ -143,6 +143,8 @@ One table, since a flag that is not written down is a flag nobody finds:
 | `--csharp-license`         | csharp | its SPDX license expression                                                       |
 | `--csharp-homepage`        | csharp | the https home page nuget.org links                                               |
 | `--csharp-repository`      | csharp | the https URL of its git repository                                               |
+| `--csharp-copyright`       | csharp | the copyright notice nuget.org shows                                              |
+| `--csharp-tags`            | csharp | its NuGet tags, comma separated                                                   |
 | `--java-artifact-id`       | java   | the Maven artifact id                                                             |
 | `--java-group-id`          | java   | the Maven group id                                                                |
 | `--java-package-name`      | java   | the Java package name                                                             |

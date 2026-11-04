@@ -4,6 +4,8 @@
  * `<PackageLicenseExpression>`, `<PackageProjectUrl>` and `<RepositoryUrl>` with `<RepositoryType>git`, each left out
  * when not given; a value is escaped for MSBuild (a `$(…)` stays text) and for XML; an invalid value is refused at
  * generate, naming its option. Offline, `dotnet pack` on the pinned SDK writes a nuspec holding every value as given.
+ * Plan 39 8.6: `--csharp-copyright` and `--csharp-tags` reach `<Copyright>` and `<PackageTags>` (each tag escaped on
+ * its own, a `;` between them), and every pack writes the symbols beside the package as a `.snupkg`.
  */
 import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
@@ -21,9 +23,16 @@ const csproj = (options: CSharpSdkOptions = {}) => generateCSharpSdk(DOCUMENT, o
 
 /** The metadata elements `text` holds, in the manifest's order. */
 const elements = (text: string) =>
-	["Description", "Authors", "PackageLicenseExpression", "PackageProjectUrl", "RepositoryUrl", "RepositoryType"].filter(
-		(element) => text.includes(`<${element}>`),
-	)
+	[
+		"Description",
+		"Authors",
+		"Copyright",
+		"PackageLicenseExpression",
+		"PackageProjectUrl",
+		"RepositoryUrl",
+		"RepositoryType",
+		"PackageTags",
+	].filter((element) => text.includes(`<${element}>`))
 
 /** A nuspec element's text with XML's entities read back. */
 const unescaped = (text: string | undefined) =>
@@ -34,10 +43,12 @@ describe("the .csproj's package metadata", () => {
 		expect(csproj(METADATA)).toContain(`    <Version>0.1.0</Version>
     <Description>Shop%27s &lt;API&gt; client: %24%28NoWarn%29 %40%28Compile%29 100%25 done%3B a%2Ab%3F</Description>
     <Authors>Acme Co, O%27Brien &amp; Partners</Authors>
+    <Copyright>© 2026 Acme Co &amp; %24%28Partners%29%3B all rights reserved</Copyright>
     <PackageLicenseExpression>Apache-2.0 OR MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://shop.example.com/docs</PackageProjectUrl>
     <RepositoryUrl>https://github.com/acme/shop-dotnet</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
+    <PackageTags>shop;api;c#;%24%28NoWarn%29</PackageTags>
     <Nullable>enable</Nullable>`)
 	})
 
@@ -46,7 +57,8 @@ describe("the .csproj's package metadata", () => {
 			elements(csproj()),
 			elements(csproj({ license: "MIT" })),
 			elements(csproj({ repository: METADATA.repository })),
-		]).toEqual([[], ["PackageLicenseExpression"], ["RepositoryUrl", "RepositoryType"]])
+			elements(csproj({ tags: "shop" })),
+		]).toEqual([[], ["PackageLicenseExpression"], ["RepositoryUrl", "RepositoryType"], ["PackageTags"]])
 	})
 
 	it.each<[keyof typeof METADATA, string]>([
@@ -65,6 +77,12 @@ describe("the .csproj's package metadata", () => {
 		["homepage", "https://shop.example.com/a b"],
 		["repository", "git@github.com:acme/shop.git"],
 		["repository", "https://github.com/acme/<shop>"],
+		["copyright", "two\nlines"],
+		["tags", ""],
+		["tags", "shop api"],
+		["tags", "shop;api"],
+		["tags", "shop,,api"],
+		["tags", "x".repeat(51)],
 	])("refuses %s %j at generate", (option, value) => {
 		expect(() => csproj({ [option]: value })).toThrow(`Invalid ${option}: ${JSON.stringify(value)}`)
 	})
@@ -87,32 +105,38 @@ describe.skipIf(!DOTNET)("dotnet pack on the pinned SDK, offline", () => {
 			],
 			{ cwd: sdk.dir },
 		)
-		const nuspecs = readdirSync(join(sdk.dir, "art"), { recursive: true })
-			.map(String)
-			.filter((name) => name.endsWith(".nuspec"))
+		const art = readdirSync(join(sdk.dir, "art"), { recursive: true }).map(String)
+		/* the package's own nuspec: the symbols package has one of its own beside it */
+		const nuspecs = art.filter((name) => name.endsWith(".nuspec") && !name.endsWith(".symbols.nuspec"))
 		const nuspec = nuspecs.length === 1 ? readFileSync(join(sdk.dir, "art", nuspecs[0] as string), "utf8") : ""
 		const tag = (name: string) => new RegExp(`<${name}[^>]*>([^<]*)</${name}>`).exec(nuspec)?.[1]
 		expect(
 			{
 				authors: unescaped(tag("authors")),
 				built: [sdk.built, sdk.diagnostics],
+				copyright: unescaped(tag("copyright")),
 				description: unescaped(tag("description")),
 				license: tag("license"),
 				nuspecs: nuspecs.length,
 				projectUrl: tag("projectUrl"),
 				repository: /<repository type="git" url="([^"]+)"/.exec(nuspec)?.[1],
 				status: packed.status,
+				symbols: art.filter((name) => name.endsWith(".snupkg")).map((name) => name.split("/").at(-1)),
+				tags: unescaped(tag("tags")),
 			},
 			`${packed.stdout}${packed.stderr}`,
 		).toEqual({
 			authors: METADATA.authors,
 			built: [true, []],
+			copyright: METADATA.copyright,
 			description: METADATA.description,
 			license: METADATA.license,
 			nuspecs: 1,
 			projectUrl: METADATA.homepage,
 			repository: METADATA.repository,
 			status: 0,
+			symbols: ["HoneySdk.0.1.0.snupkg"],
+			tags: "shop api c# $(NoWarn)",
 		})
 	})
 })

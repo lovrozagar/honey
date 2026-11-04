@@ -43,12 +43,14 @@ export const TARGET_OPTIONS = {
 	csharp: [
 		"authors",
 		"clientName",
+		"copyright",
 		"description",
 		"homepage",
 		"license",
 		"packageId",
 		"repository",
 		"rootNamespace",
+		"tags",
 		"version",
 	],
 	go: ["modulePath", "version"],
@@ -210,7 +212,7 @@ const firstAuthor: FromMetadata = (metadata) => metadata.authors?.[0]
 /**
  * The options each target fills from the run's metadata block (plan 39 8.2), each read from the field of the same
  * meaning: NuGet's authors are names, a POM's developer and the Linux packages' maintainer the first author whole,
- * crates.io's keywords the CLI's comma-separated list. A target's own option wins over its metadata.
+ * crates.io's keywords and NuGet's tags the CLI's comma-separated list. A target's own option wins over its metadata.
  */
 const FROM_METADATA: {
 	readonly [T in Target]?: { readonly [K in (typeof TARGET_OPTIONS)[T][number]]?: FromMetadata }
@@ -218,10 +220,12 @@ const FROM_METADATA: {
 	cli: { description, homepage, license, maintainer: firstAuthor },
 	csharp: {
 		authors: (metadata) => metadata.authors?.map(authorName).join(", "),
+		copyright: (metadata) => metadata.copyright,
 		description,
 		homepage,
 		license,
 		repository,
+		tags: (metadata) => metadata.keywords?.join(","),
 	},
 	java: { description, developer: firstAuthor, homepage, license, repository },
 	rust: {

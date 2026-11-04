@@ -103,6 +103,8 @@ export const PACKAGE_METADATA = {
 	homepage: "https://shop.example.com/docs",
 	license: "Apache-2.0 OR MIT",
 	repository: "https://github.com/acme/shop-dotnet",
+	copyright: "© 2026 Acme Co & $(Partners); all rights reserved",
+	tags: "shop,api,c#,$(NoWarn)",
 } as const satisfies CSharpSdkOptions
 
 /** Every SDK a default run gates: at most 16 (G17; tests/structure/csharp-toolchain.test.ts). */

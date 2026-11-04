@@ -22,7 +22,7 @@ const filesOf = (document: Json, options?: CSharpSdkOptions): Files => generateC
 const surface = (): Json => FIXTURES.surface.document()
 const SURFACE: CSharpSdkOptions = FIXTURES.surface.options
 
-/** §4.3's manifest for package `id` in namespace `namespace` at `version`. */
+/** §4.3's manifest for package `id` in namespace `namespace` at `version`, symbols packed as a `.snupkg` (plan 39 8.6). */
 const csproj = (id: string, namespace: string, version: string) => `${MARK_CSPROJ}
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
@@ -37,6 +37,8 @@ const csproj = (id: string, namespace: string, version: string) => `${MARK_CSPRO
     <IsAotCompatible>true</IsAotCompatible>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
 </Project>
 `

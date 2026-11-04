@@ -51,6 +51,10 @@ export type CSharpSdkOptions = {
 	readonly homepage?: string
 	/** the https URL of its git repository; none by default */
 	readonly repository?: string
+	/** the copyright notice nuget.org shows: one line of text; none by default */
+	readonly copyright?: string
+	/** its NuGet tags, comma separated, none holding a space or a `;`; none by default */
+	readonly tags?: string
 }
 
 /** The package's files by path, and what the generation reports: a component or a root group renamed (never silently). */

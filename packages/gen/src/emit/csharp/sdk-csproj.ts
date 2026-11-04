@@ -3,8 +3,10 @@
  * errors, the AOT and trim analyzers, and the XML doc file with only CS1591 off (Fb4); a root `.editorconfig`, so
  * no parent file reaches the emitted sources (R6). Every name the manifest and the sources spell comes from a
  * validated option, never from spec text (Fb3). The metadata nuget.org shows (the description, the authors, the SPDX
- * license expression, the project and repository URLs) is written when its option is given, each value validated and
- * then escaped twice: for MSBuild, which would expand a `$(…)` or `@(…)` in it, and for XML.
+ * license expression, the project and repository URLs, the copyright and the tags) is written when its option is
+ * given, each value validated and then escaped twice: for MSBuild, which would expand a `$(…)` or `@(…)` in it, and
+ * for XML. `dotnet pack` writes the symbols beside the package as a `.snupkg`, which nuget.org serves to debuggers
+ * (plan 39 8.6).
  */
 import { isCsReserved } from "../shared/lang.ts"
 import { checked, HTTPS_URL, SPDX_EXPRESSION, TEXT } from "../shared/metadata.ts"
@@ -20,6 +22,9 @@ export type CSharpMetadata = {
 	readonly license?: string
 	readonly homepage?: string
 	readonly repository?: string
+	readonly copyright?: string
+	/** comma separated, as the CLI gives it */
+	readonly tags?: string
 }
 
 /** The package's identity, each part validated, and its metadata. */
@@ -32,15 +37,19 @@ export type CSharpPackage = {
 
 /* authors: names joined by commas, each with a character other than a space, none with a control character */
 const AUTHORS = /^(?=[^\p{Cc}]{1,4000}$)[^,]*[^,\s][^,]*(?:,[^,]*[^,\s][^,]*)*$/u
+/* tags: words joined by commas, none holding a space or a `;`, which NuGet splits PackageTags on */
+const TAGS = /^(?=.{1,4000}$)[^\s,;\p{Cc}\p{Cs}]{1,50}(?:,[^\s,;\p{Cc}\p{Cs}]{1,50})*$/u
 
 /** The metadata options, each validated: the description and authors as text, the license as SPDX, the URLs https. */
 export function packageMetadata(options: CSharpMetadata): CSharpMetadata {
 	return {
 		authors: checked("authors", options.authors, AUTHORS),
+		copyright: checked("copyright", options.copyright, TEXT),
 		description: checked("description", options.description, TEXT),
 		homepage: checked("homepage", options.homepage, HTTPS_URL),
 		license: checked("license", options.license, SPDX_EXPRESSION),
 		repository: checked("repository", options.repository, HTTPS_URL),
+		tags: checked("tags", options.tags, TAGS),
 	}
 }
 
@@ -60,6 +69,7 @@ function metadataLines(metadata: CSharpMetadata | undefined): string {
 	const entries: readonly (readonly [element: string, value: string | undefined])[] = [
 		["Description", metadata?.description],
 		["Authors", metadata?.authors],
+		["Copyright", metadata?.copyright],
 		["PackageLicenseExpression", metadata?.license],
 		["PackageProjectUrl", metadata?.homepage],
 		["RepositoryUrl", metadata?.repository],
@@ -68,6 +78,9 @@ function metadataLines(metadata: CSharpMetadata | undefined): string {
 		value === undefined ? [] : [`    <${element}>${propertyText(value)}</${element}>\n`],
 	)
 	if (metadata?.repository !== undefined) lines.push("    <RepositoryType>git</RepositoryType>\n")
+	/* each tag escaped on its own: the `;` between them is the list's, which MSBuild hands to NuGet as written */
+	const tags = metadata?.tags?.split(",").map(propertyText).join(";")
+	if (tags !== undefined) lines.push(`    <PackageTags>${tags}</PackageTags>\n`)
 	return lines.join("")
 }
 
@@ -128,6 +141,8 @@ ${metadataLines(metadata)}    <Nullable>enable</Nullable>
     <IsAotCompatible>true</IsAotCompatible>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
 </Project>
 `
