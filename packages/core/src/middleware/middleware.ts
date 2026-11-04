@@ -41,6 +41,12 @@ export type MiddlewareFn<TCtx = {}, TAdds = {}, TErrors extends string = string,
 	meta?: Readonly<TMeta>
 }
 
+/**
+ * The error keys a mounted middleware adds to its routes' declared keys: its literal keys, none for one typed with
+ * `string` (as `MiddlewareFn<TCtx, TAdds>` is), whose keys still count at runtime.
+ */
+export type MiddlewareErrorKeys<TErrors extends string> = string extends TErrors ? never : TErrors
+
 /** A stored middleware, generics erased. */
 export type RuntimeMiddleware = (
 	ctx: Record<string, unknown>,

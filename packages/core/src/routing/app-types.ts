@@ -3,7 +3,9 @@ import type { HoneyContext, REQUEST } from "../context/context.ts"
 import type { Honey } from "./app.ts"
 import type { RouteSelectorOf } from "./codegen-types.ts"
 import type { ApplyOutput } from "./output-types.ts"
-import type { DeclaredMeta, InitAccMeta, RouteMeta, WithChainMeta } from "./meta-types.ts"
+import type { DeclaredMeta, InitAccMeta, RouteMeta, WithChainMeta, WithMiddlewareMeta } from "./meta-types.ts"
+import type { MiddlewareErrorKeys } from "../middleware/middleware.ts"
+import type { BuilderTypes } from "./route-builder.ts"
 import type { TapMethod } from "./tap.ts"
 import type { StatusKey } from "../response/status.ts"
 import type { InferOutput, StandardSchemaLike } from "../validation/standard-schema.ts"
@@ -138,10 +140,10 @@ export type HandlerCtx<
 			? {}
 			: [TErrorKeys] extends [never]
 				? {
-						/** The app's whole error factory, for a route that declares no error keys. At runtime, middleware that declares keys narrows it to those keys. */ readonly errors: TErrorFactory
+						/** The app's whole error factory, for a route that declares no error keys, its middleware none either. */ readonly errors: TErrorFactory
 					}
 				: {
-						/** The error factory narrowed to the keys this route declares, the app's default keys included. */ readonly errors: Pick<
+						/** The error factory narrowed to the keys this route declares, its middleware's and the app's default keys included. */ readonly errors: Pick<
 							TErrorFactory,
 							TErrorKeys & keyof TErrorFactory
 						>
@@ -224,6 +226,20 @@ export type {
 	WithChainMeta,
 	WithMiddlewareMeta,
 } from "./meta-types.ts"
+
+/** A route builder's types after its own `.use(mw)`: what the middleware adds, answers with and gives as meta. */
+export type WithRouteMiddleware<
+	B extends Pick<BuilderTypes, "ctx" | "errorKeys" | "meta">,
+	TAdds,
+	TMwErrors extends string,
+	TMwMeta,
+> = {
+	/** The ctx plus what the middleware adds. */ ctx: B["ctx"] & TAdds
+	/** The route's declared keys plus the ones the middleware answers with. */
+	errorKeys: B["errorKeys"] | MiddlewareErrorKeys<TMwErrors>
+	/** The handle's meta, with what the middleware gives counted as supplied. */
+	meta: WithMiddlewareMeta<B["meta"], TMwMeta>
+}
 
 /** The status codes `errorsByStatus` is keyed by; another status key falls back to `number`. */
 type CodeOf = {

@@ -9,6 +9,7 @@ import * as z from "zod"
 import { defineErrors } from "../../src/errors/errors.ts"
 import { createMiddleware, type MiddlewareFn } from "../../src/middleware/middleware.ts"
 import { honey } from "../../src/routing/app.ts"
+import { definePreset } from "../../src/routing/preset.ts"
 import type { MetaSpecContext, HoneyMetaSpec } from "../../src/meta/meta-spec-merge.ts"
 import type { HoneyCtx, HoneyMeta, InferBasePath, InferCtx, InferEnv } from "../../src/routing/app-types.ts"
 
@@ -286,6 +287,51 @@ describe("the route builder's one-shot methods", () => {
 })
 
 const ONE_SHOTS = ["boundary", "errors", "input", "meta", "output"] as const
+
+describe("a middleware's error keys on the routes below it", () => {
+	const factory = defineErrors({ auth_failed: "unauthorized", item_gone: "gone", rate_limited: "too_many_requests" })
+	const auth = createMiddleware((_ctx, next) => next(), { errors: [factory, "auth_failed"] })
+
+	it("joins ctx.errors beside the app's defaults, mounted on the chain, a preset or the route", () => {
+		const app = honey<{}>().errorFactory(factory).defaultErrors("item_gone")
+		app
+			.use(auth)
+			.get("/chain")
+			.handler((c) => {
+				expectTypeOf(c.errors.auth_failed).toBeFunction()
+				expectTypeOf(c.errors.item_gone).toBeFunction()
+				return c.res.text("ok", "x")
+			})
+		honey(definePreset<{}>().errorFactory(factory).defaultErrors("item_gone").use(auth))
+			.get("/preset")
+			.handler((c) => {
+				expectTypeOf(c.errors.auth_failed).toBeFunction()
+				expectTypeOf(c.errors.item_gone).toBeFunction()
+				return c.res.text("ok", "x")
+			})
+		app
+			.get("/route")
+			.use(auth)
+			.handler((c) => {
+				expectTypeOf(c.errors.auth_failed).toBeFunction()
+				expectTypeOf(c.errors.item_gone).toBeFunction()
+				return c.res.text("ok", "x")
+			})
+	})
+
+	it("narrows ctx.errors to its keys on an app without defaults, as at runtime", () => {
+		honey<{}>()
+			.errorFactory(factory)
+			.use(auth)
+			.get("/narrowed")
+			.handler((c) => {
+				expectTypeOf(c.errors.auth_failed).toBeFunction()
+				// @ts-expect-error narrowed to the middleware's key, as at runtime
+				expectTypeOf(c.errors.rate_limited).toBeFunction()
+				return c.res.text("ok", "x")
+			})
+	})
+})
 
 describe("the route builder's one-shots: what stays and what goes", () => {
 	// v0: 3cdd42041d

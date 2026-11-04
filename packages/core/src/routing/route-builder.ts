@@ -21,7 +21,7 @@ import type {
 	RouteMeta,
 	ScopedMwEntry,
 	SkipRouteRecord,
-	WithMiddlewareMeta,
+	WithRouteMiddleware,
 } from "./app-types.ts"
 import { errorsOf } from "./middleware-chain.ts"
 import { joinPatterns, parsePattern } from "./pattern.ts"
@@ -359,18 +359,9 @@ export class RouteBuilder<B extends BuilderTypes> {
 	}
 
 	/** Route-level middleware, after the chain and the scopes; the meta it gives counts as supplied for `.meta()`. */
-	use<TAdds, TMwMeta = {}>(
-		mw: MiddlewareFn<B["ctx"], TAdds, string, TMwMeta>,
-	): BuilderChain<
-		Next<
-			B,
-			{
-				/** The ctx plus what the middleware adds. */ ctx: B["ctx"] & TAdds
-				/** The handle's meta, with what the middleware gives counted as supplied. */
-				meta: WithMiddlewareMeta<B["meta"], TMwMeta>
-			}
-		>
-	> {
+	use<TAdds, TMwMeta = {}, TMwErrors extends string = never>(
+		mw: MiddlewareFn<B["ctx"], TAdds, TMwErrors, TMwMeta>,
+	): BuilderChain<Next<B, WithRouteMiddleware<B, TAdds, TMwErrors, TMwMeta>>> {
 		return this.#next({ middlewares: [...this.#s.middlewares, mw as unknown as RuntimeMiddleware] })
 	}
 

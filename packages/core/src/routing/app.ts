@@ -4,7 +4,7 @@
  * handle on the same graph, and the settings setters apply to the whole app.
  */
 import { type ExecutionCtx, type HoneyContext, isReservedCtxKey } from "../context/context.ts"
-import type { MaybePromise, MiddlewareFn, RuntimeMiddleware } from "../middleware/middleware.ts"
+import type { MaybePromise, MiddlewareErrorKeys, MiddlewareFn, RuntimeMiddleware } from "../middleware/middleware.ts"
 import type { DeclaredMeta, HoneyMeta, ScopedMwEntry, WithChainMeta, WithMiddlewareMeta } from "./app-types.ts"
 import { dispatch } from "./dispatch.ts"
 import { joinPatterns } from "./pattern.ts"
@@ -137,15 +137,15 @@ export class Honey<
 	 * Chain middleware: a new handle whose routes run `mw`; this handle is unchanged. It also runs on a 404 or 405 when
 	 * every route starts with it. If nothing registers, mounts or serves through the new handle, the first request throws.
 	 */
-	use<TAdds, TMwMeta = {}>(
-		mw: MiddlewareFn<TCtx, TAdds, string, TMwMeta>,
+	use<TAdds, TMwMeta = {}, TMwErrors extends string = never>(
+		mw: MiddlewareFn<TCtx, TAdds, TMwErrors, TMwMeta>,
 	): Honey<
 		TEnv,
 		TCtx & TAdds,
 		TRoutes,
 		WithMiddlewareMeta<TMeta, TMwMeta>,
 		TErrorFactory,
-		TDefaultErrors,
+		TDefaultErrors | MiddlewareErrorKeys<TMwErrors>,
 		TBasePath,
 		TTaps,
 		TScopedMw

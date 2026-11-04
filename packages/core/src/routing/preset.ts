@@ -4,7 +4,7 @@
  * on the preset later, changes nothing else.
  */
 import type { HoneyContext } from "../context/context.ts"
-import type { MiddlewareFn, RuntimeMiddleware } from "../middleware/middleware.ts"
+import type { MiddlewareErrorKeys, MiddlewareFn, RuntimeMiddleware } from "../middleware/middleware.ts"
 import { Honey } from "./app.ts"
 import type { WithMiddlewareMeta } from "./app-types.ts"
 import { createGraph, SEED } from "./register.ts"
@@ -48,9 +48,16 @@ export class Preset<
 	protected override invalidate(): void {}
 
 	/** Chain middleware every app started from this preset runs first: a new preset on the same settings. */
-	use<TAdds, TMwMeta = {}>(
-		mw: MiddlewareFn<TCtx, TAdds, string, TMwMeta>,
-	): Preset<TEnv, TCtx & TAdds, WithMiddlewareMeta<TMeta, TMwMeta>, TErrorFactory, TDefaultErrors, TTaps> {
+	use<TAdds, TMwMeta = {}, TMwErrors extends string = never>(
+		mw: MiddlewareFn<TCtx, TAdds, TMwErrors, TMwMeta>,
+	): Preset<
+		TEnv,
+		TCtx & TAdds,
+		WithMiddlewareMeta<TMeta, TMwMeta>,
+		TErrorFactory,
+		TDefaultErrors | MiddlewareErrorKeys<TMwErrors>,
+		TTaps
+	> {
 		return new Preset<TEnv>(this.settings, [...this.#chain, mw as unknown as RuntimeMiddleware]) as never
 	}
 
