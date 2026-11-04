@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest"
+import { describe, expect, expectTypeOf, it, vi } from "vitest"
 import { timingSafeEqual } from "./crypto.ts"
 
 const LONG = "x".repeat(10_000)
@@ -92,5 +92,15 @@ describe("timingSafeEqual(): no key outlives a call", () => {
 		const keys = draw.mock.calls.map(([bytes]) => Array.from(bytes as Uint8Array).join(","))
 		draw.mockRestore()
 		expect([keys.length, new Set(keys).size]).toEqual([2, 2])
+	})
+})
+
+describe("timingSafeEqual(): the answer is a promise", () => {
+	it("is a Promise<boolean>: un-awaited in a condition it fails to compile, and would pass every secret", async () => {
+		const pending = timingSafeEqual("guess", "s3cret-token")
+		expectTypeOf(pending).toEqualTypeOf<Promise<boolean>>()
+		// @ts-expect-error TS2801: a Promise in a condition is always truthy, so await it
+		const unawaited = pending ? "let in" : "kept out"
+		expect([unawaited, (await pending) ? "let in" : "kept out"]).toEqual(["let in", "kept out"])
 	})
 })

@@ -1079,14 +1079,16 @@ app.get("/books/:id").handler((ctx) => ctx.res.json("ok", { id: ctx.params.id })
 const german = translateError(errors.not_found(), translations, "de")
 ```
 
-Crypto is WebCrypto, with the comparison that does not leak by timing:
+Crypto is WebCrypto, with the comparison that does not leak by timing. It resolves a boolean, so await it:
 
 ```ts run
 import { timingSafeEqual } from "@lovrozagar/honey/crypto"
 
 const expected = "s3cret-token"
-console.log(await timingSafeEqual("s3cret-token", expected), await timingSafeEqual("guess", expected))
-// prints: true false
+if (await timingSafeEqual("s3cret-token", expected)) console.log("token accepted")
+if (!(await timingSafeEqual("guess", expected))) console.log("guess refused")
+// prints: token accepted
+// prints: guess refused
 ```
 
 Full reference: [internationalization](https://github.com/lovrozagar/honey/blob/main/docs/i18n.md),

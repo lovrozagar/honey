@@ -25,6 +25,9 @@ function toBytes(value: string | Uint8Array): Uint8Array<ArrayBuffer> {
  * Whether `a` and `b` are equal, in a time that does not depend on their content or where they
  * differ. It grows with their lengths, so it does not hide a secret's length. Strings compare by
  * UTF-16 code unit; a string never equals bytes, and that mismatch returns `false` at once.
+ *
+ * It resolves the boolean, so await it: an un-awaited Promise is always truthy, and `if (timingSafeEqual(a, b))` would
+ * let every secret through. TypeScript rejects that condition (TS2801); plain JavaScript does not.
  */
 export async function timingSafeEqual(a: string | Uint8Array, b: string | Uint8Array): Promise<boolean> {
 	/* a string never equals bytes: "ab" and its code units differ */

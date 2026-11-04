@@ -2,7 +2,9 @@
 
 `timingSafeEqual(a, b)` from `@lovrozagar/honey/crypto` compares two secrets without leaking where they
 differ: it HMACs both sides under a fresh random key and compares the digests. It runs on WebCrypto, so the same
-code works on Node, Bun and Workers without `node:crypto`.
+code works on Node, Bun and Workers without `node:crypto`. It resolves a `Promise<boolean>`, so await it: an un-awaited
+Promise is always truthy, and `if (timingSafeEqual(a, b))` would let every secret through. TypeScript rejects that
+condition (TS2801); plain JavaScript does not.
 
 ## Example
 
@@ -10,8 +12,10 @@ code works on Node, Bun and Workers without `node:crypto`.
 import { timingSafeEqual } from "@lovrozagar/honey/crypto"
 
 const expected = "s3cret-token"
-console.log(await timingSafeEqual("s3cret-token", expected), await timingSafeEqual("guess", expected))
-// prints: true false
+if (await timingSafeEqual("s3cret-token", expected)) console.log("token accepted")
+if (!(await timingSafeEqual("guess", expected))) console.log("guess refused")
+// prints: token accepted
+// prints: guess refused
 ```
 
 ## Signing a webhook
@@ -40,9 +44,9 @@ each signs, and either verifies alone. A secret is base64 with an optional `whse
 
 ## Reference
 
-| Value                     | Default   | What it does                                                                                                                                                                                                                                                                                       | Watch for                                                                                                                                                                       |
-| ------------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `timingSafeEqual(a, b)`   | —         | the one exported helper (v0 had only this): HMACs both sides under a **fresh random key per call** (no module state, H23) and compares via `subtle.verify`, so neither content nor length leaks; strings compare by UTF-16 code unit (lone surrogates don't collapse), a string never equals bytes | never `===` on a digest; timing itself isn't deterministically testable, so the guard pins the surrogate property (a UTF-8-bytes compare equates two different lone surrogates) |
-| `webhookContract(events)` | —         | the events an API sends; `sign(type, data, { id, occurredAt, secrets })` answers one attempt's JSON body and headers, and `generateOpenApi` documents each event from it                                                                                                                           | `data` is the schema's output and no schema runs; keep `id` and `occurredAt` across retries                                                                                     |
+| Value                     | Default   | What it does                                                                                                                                                                                                                                                                                       | Watch for                                                                                                                                                                                                                         |
+| ------------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `timingSafeEqual(a, b)`   | —         | the one exported helper (v0 had only this): HMACs both sides under a **fresh random key per call** (no module state, H23) and compares via `subtle.verify`, so neither content nor length leaks; strings compare by UTF-16 code unit (lone surrogates don't collapse), a string never equals bytes | await it: an un-awaited Promise is always truthy; never `===` on a digest; timing itself isn't deterministically testable, so the guard pins the surrogate property (a UTF-8-bytes compare equates two different lone surrogates) |
+| `webhookContract(events)` | —         | the events an API sends; `sign(type, data, { id, occurredAt, secrets })` answers one attempt's JSON body and headers, and `generateOpenApi` documents each event from it                                                                                                                           | `data` is the schema's output and no schema runs; keep `id` and `occurredAt` across retries                                                                                                                                       |
 | `signWebhook(options)`    | —         | the headers of a signed delivery; bad input is a `TypeError`, never a header that cannot verify                                                                                                                                                                                                    |
-| runtime                   | WebCrypto | works on node/bun/cf without `node:crypto`                                                                                                                                                                                                                                                         | —                                                                                                                                                                               |
+| runtime                   | WebCrypto | works on node/bun/cf without `node:crypto`                                                                                                                                                                                                                                                         | —                                                                                                                                                                                                                                 |
