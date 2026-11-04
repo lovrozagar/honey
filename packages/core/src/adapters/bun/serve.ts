@@ -34,10 +34,14 @@ export type { ServeHandle } from "../serve-handle.ts"
  * without `bun-types`. Upgrades go through `ws(app, path)`, so `upgrade` is not offered here.
  */
 export type BunServer = {
+	/** Close every connection not sending a request or awaiting an answer, keeping the server up; answers how many. */
+	closeIdleConnections(): number
 	/** Requests being handled right now. */
 	readonly pendingRequests: number
 	/** WebSockets open right now. */
 	readonly pendingWebSockets: number
+	/** The port the server listens on; `undefined` only on a unix socket, which `serve` never binds. */
+	readonly port: number | undefined
 	/** The peer of `request`, as Bun reports it; `null` when it reports none. */
 	requestIP(request: Request): {
 		/** The peer's IP address. */
@@ -53,12 +57,6 @@ export type BunServer = {
 	readonly url: URL
 }
 
-/** What honey itself calls on that server: Bun has `closeIdleConnections`, and a TCP bind always has a port. */
-type Listening = BunServer & {
-	closeIdleConnections(): void
-	readonly port: number
-}
-
 type BunGlobal = {
 	serve(options: {
 		error?: (error: unknown) => Response
@@ -67,7 +65,7 @@ type BunGlobal = {
 		maxRequestBodySize: number
 		port: number
 		websocket?: BunWebSocketHandlers
-	}): Listening
+	}): BunServer
 }
 
 /** Options for `serve` from `@lovrozagar/honey/bun`: where to listen, and what Bun's server is given. */
@@ -160,6 +158,8 @@ export async function serve<TEnv>(
 		port: options.port ?? DEFAULT_PORT,
 		...(adapter === null ? {} : { websocket: adapter.websocket }),
 	})
+	/* a TCP bind always has a port: Bun leaves it undefined only on a unix socket, which this never asks for */
+	const port = server.port as number
 	return {
 		async close(timeout = DEFAULT_CLOSE_TIMEOUT) {
 			/* graceful first; idle keep-alive connections would otherwise keep serving, so close them
@@ -169,8 +169,8 @@ export async function serve<TEnv>(
 			if ((await within(graceful, timeout)) === "timeout") await server.stop(true)
 			server.closeIdleConnections()
 		},
-		port: server.port,
+		port,
 		server,
-		url: urlOf(hostname, server.port),
+		url: urlOf(hostname, port),
 	}
 }
