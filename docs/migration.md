@@ -1225,3 +1225,23 @@ export const app = honey()
 app.all("/*").handler(proxy({ destination: (_ctx, url, init) => fetch(`https://upstream.test${url}`, init) }))
 export const served = app.routeTree(routeTree)
 ```
+
+## One import path per name
+
+`@lovrozagar/honey/errors` is gone: `defineErrors`, `ERROR_META` and `ErrorMetaEntry` come from the root. `./openapi`
+no longer re-exports the docs pages or the static document server: `scalar` comes from `./openapi/scalar`, `swagger`
+from `./openapi/swagger`, and `serveStaticOpenApi` and its types from `./openapi/static`. `./tree` exports the route
+tree's types only. When two paths reach one name, a codebase ends up importing both.
+
+```ts v0
+import { defineErrors } from "@lovrozagar/honey/errors"
+import { scalar, serveOpenApi } from "@lovrozagar/honey/openapi"
+```
+
+```ts
+import { defineErrors } from "@lovrozagar/honey"
+import { scalar } from "@lovrozagar/honey/openapi/scalar"
+
+export const errors = defineErrors({ not_found: "not_found" })
+export const docs = { "/docs": scalar }
+```

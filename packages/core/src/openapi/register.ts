@@ -1,7 +1,7 @@
 /**
  * `@lovrozagar/honey/openapi`: the app's OpenAPI 3.1 document and route manifest, generated or
- * served, and the docs pages. A plain subpath: nothing registers itself, and an app that never
- * imports it carries none of it.
+ * served. Each docs page and the static document server is a subpath of its own. A plain subpath:
+ * nothing registers itself, and an app that never imports it carries none of it.
  */
 export type { OpenApiDocument, OpenApiInfo } from "./document.ts"
 export {
@@ -21,16 +21,6 @@ export {
 	type RouteManifest,
 } from "./manifest.ts"
 export type { DocsConfig } from "./docs-page.ts"
-export { scalar } from "./scalar.ts"
 export type { DocsPage } from "./served.ts"
 export { type ServeManifestOptions, type ServeOpenApiOptions, serveManifest, serveOpenApi } from "./serve.ts"
-export {
-	type DocumentLoader,
-	type FetchedSource,
-	type JsonSource,
-	type ServeStaticOpenApiOptions,
-	serveStaticOpenApi,
-	type YamlSource,
-} from "./static.ts"
-export { swagger } from "./swagger.ts"
 export { toYaml } from "./yaml.ts"

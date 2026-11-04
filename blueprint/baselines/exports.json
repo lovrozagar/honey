@@ -158,13 +158,6 @@
 		"defaultRedactHeader",
 		"defaultRedactQueryParam"
 	],
-	"./errors": [
-		"ERROR_META",
-		"ErrorFactories",
-		"ErrorMetaEntry",
-		"WithFrameworkErrors",
-		"defineErrors"
-	],
 	"./etag": [
 		"ETagOptions",
 		"etag",
@@ -262,11 +255,8 @@
 	"./openapi": [
 		"DocsConfig",
 		"DocsPage",
-		"DocumentLoader",
-		"FetchedSource",
 		"GenerateManifestOptions",
 		"GenerateOpenApiOptions",
-		"JsonSource",
 		"ManifestError",
 		"ManifestRoute",
 		"OpenApiDocument",
@@ -279,15 +269,10 @@
 		"RouteManifest",
 		"ServeManifestOptions",
 		"ServeOpenApiOptions",
-		"ServeStaticOpenApiOptions",
-		"YamlSource",
 		"generateManifest",
 		"generateOpenApi",
-		"scalar",
 		"serveManifest",
 		"serveOpenApi",
-		"serveStaticOpenApi",
-		"swagger",
 		"toYaml"
 	],
 	"./openapi/auth": [

@@ -37,6 +37,7 @@ export const REMOVED_SUBPATHS: readonly RemovedSubpath[] = [
 	{ covers: "@lovrozagar/honey-clients", subpath: "./codegen" },
 	{ covers: "@lovrozagar/honey-clients", subpath: "./codegen-go-cli" },
 	{ covers: "@lovrozagar/honey-clients", subpath: "./codegen/extract" },
+	{ covers: "@lovrozagar/honey/errors", subpath: "./errors" },
 	{ covers: "serveOpenApi", subpath: "./openapi/spec" },
 	{ covers: "@lovrozagar/honey/node", subpath: "./serve" },
 	{ covers: "trustProxy", subpath: "./trust" },

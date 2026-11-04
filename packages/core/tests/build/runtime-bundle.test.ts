@@ -148,7 +148,7 @@ describe("the runtime bundle of an installed core (bit 19 i)", () => {
 			const entry = [
 				'import { honey } from "@lovrozagar/honey"',
 				'import { createErrorTranslator } from "@lovrozagar/honey/i18n"',
-				'import { swagger } from "@lovrozagar/honey/openapi"',
+				'import { swagger } from "@lovrozagar/honey/openapi/swagger"',
 				'import { proxy } from "@lovrozagar/honey/proxy"',
 				'import { realtime } from "@lovrozagar/honey/realtime"',
 				"const app = honey()",

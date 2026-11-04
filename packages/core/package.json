@@ -84,11 +84,6 @@
 			"types": "./dist/observability/curl-logger.d.ts",
 			"default": "./dist/observability/curl-logger.js"
 		},
-		"./errors": {
-			"honey-source": "./src/errors/errors.ts",
-			"types": "./dist/errors/errors.d.ts",
-			"default": "./dist/errors/errors.js"
-		},
 		"./etag": {
 			"honey-source": "./src/response/etag.ts",
 			"types": "./dist/response/etag.d.ts",

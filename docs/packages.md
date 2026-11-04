@@ -34,7 +34,6 @@ generator.
 | `@lovrozagar/honey/openapi/scalar`  | `scalar`, the Scalar API reference page                                                                                                             |
 | `@lovrozagar/honey/openapi/static`  | `serveStaticOpenApi`: a document built ahead of time or living elsewhere, served without the generator                                              |
 | `@lovrozagar/honey/openapi/swagger` | `swagger`, the Swagger UI page                                                                                                                      |
-| `@lovrozagar/honey/errors`          | `defineErrors` (also on the root)                                                                                                                   |
 | `@lovrozagar/honey/i18n`            | `createErrorTranslator`, `translateError`                                                                                                           |
 | `@lovrozagar/honey/input`           | `streamed()`, a request body left unread for the handler                                                                                            |
 | `@lovrozagar/honey/range`           | `rangeResponse`, a `Range` request answered from bytes                                                                                              |
