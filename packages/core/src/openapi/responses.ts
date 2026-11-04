@@ -36,6 +36,8 @@ export type ErrorSettings = {
 
 const NOT_MEDIA: readonly string[] = ["headers", "redirect"]
 const LOCATION: HeaderObject = { description: "Redirect target URL", schema: { format: "uri", type: "string" } }
+/* the statuses `redirect()` answers carry a target; a 304 is bodiless without one */
+const carriesTarget = (code: number) => code >= 300 && code < 400 && code !== 304
 const STRING = { type: "string" }
 
 const describe = (statusKey: string) => statusKey.replaceAll("_", " ")
@@ -77,7 +79,9 @@ export function successResponses(
 		}
 	}
 	for (const statusKey of Object.keys(output.redirect ?? {})) {
-		at(out, statusKeyToCode[statusKey as StatusKey], describe(statusKey)).headers = { Location: LOCATION }
+		const code = statusKeyToCode[statusKey as StatusKey]
+		const response = at(out, code, describe(statusKey))
+		if (carriesTarget(code)) response.headers = { Location: LOCATION }
 	}
 	for (const [statusKey, schema] of Object.entries(output.headers ?? {})) {
 		const code = statusKeyToCode[statusKey as StatusKey]

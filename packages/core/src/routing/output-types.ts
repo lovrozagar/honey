@@ -24,21 +24,21 @@ export type HeaderSchemas = { readonly [K in StatusKey]?: StandardSchemaLike }
 export type RedirectStatuses = { readonly [K in StatusKey]?: true }
 
 /**
- * What `.output()` takes: each media type it answers with (`type/subtype`), the redirects it may
- * answer (`redirect`), and the headers each status carries (`headers`).
+ * What `.output()` takes: each media type it answers with (`type/subtype`), the bodiless statuses
+ * (`redirect`: its redirects and a 304), and the headers each status carries (`headers`).
  */
 export type OutputSchemas = {
 	/** The status keys this media type answers with, each with a body schema or `true`. */
 	readonly [mediaType: `${string}/${string}`]: StatusSchemas
 } & {
 	/** The schema of the headers each status carries, by status key; that status's helper then requires them. */ readonly headers?: HeaderSchemas
-	/** Redirect statuses the route may answer with: `ctx.res.redirect` takes only these, and the generators record them. */ readonly redirect?: RedirectStatuses
+	/** Bodiless statuses: the redirects `ctx.res.redirect` takes, each documented with a `Location`, and a 304 a forwarded answer may be. */ readonly redirect?: RedirectStatuses
 }
 
 /** `.output()`'s shorthand: JSON bodies by status key, beside the headers and redirects of the explicit form. */
 export type JsonShorthand = StatusSchemas & {
 	/** The schema of the headers each status carries, by status key; that status's helper then requires them. */ readonly headers?: HeaderSchemas
-	/** Redirect statuses the route may answer with: `ctx.res.redirect` takes only these, and the generators record them. */ readonly redirect?: RedirectStatuses
+	/** Bodiless statuses: the redirects `ctx.res.redirect` takes, each documented with a `Location`, and a 304 a forwarded answer may be. */ readonly redirect?: RedirectStatuses
 }
 
 /** The media types a declaration names. */

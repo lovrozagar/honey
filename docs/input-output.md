@@ -20,7 +20,8 @@ without one), so `raw` is gone there; `text`, `html`, `csv`, `xml`, `binary`, `j
 `ReadableStream` body, sent as it comes and never validated. Where the status is decided elsewhere (a stored file's 206
 or 304), `ctx.res.forward(response)` answers that `Response` as it is: its status must be a declared key and its media
 type, without parameters, declared at that key unless it has no body, or it is refused as an undeclared answer is, a
-500 `output_validation_failed` or `output_content_type_mismatch`, whatever the validation mode. Its body is never read. Status keys alone declare JSON: `.output({ ok: schema })` is
+500 `output_validation_failed` or `output_content_type_mismatch`, whatever the validation mode. Its body is never read. A bodiless status such as that 304 is declared under
+`redirect`, which documents it with no body, and with a `Location` only at the 3xx keys `redirect()` answers. Status keys alone declare JSON: `.output({ ok: schema })` is
 `.output({ "application/json": { ok: schema } })`, `headers` and `redirect` beside them as in the full form; the two
 forms do not mix. When a route declares one 2xx status under one media type, other than an event stream, and that
 status declares no headers, the handler may return the body itself, and honey answers it at that status through the

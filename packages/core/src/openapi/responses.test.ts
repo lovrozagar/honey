@@ -146,6 +146,21 @@ describe("redirects and declared headers", () => {
 	})
 })
 
+describe("a bodiless answer that is no redirect", () => {
+	it("documents a declared 304 by its code with no Location and no body, beside the 200 and 206 it revalidates", () => {
+		const app = honey<{}>()
+		app
+			.get("/export.csv")
+			.output({ "text/csv": { ok: z.string(), partial_content: true }, redirect: { not_modified: true } })
+			.handler((c) => c.res.csv("ok", "id\n1\n"))
+		const doc = generateOpenApi(app, { info: INFO })
+		expect([Object.keys(responses(doc, "/export.csv")), responses(doc, "/export.csv")["304"]]).toEqual([
+			["200", "206", "304"],
+			{ description: "not modified" },
+		])
+	})
+})
+
 describe("errors in honey's envelope (the default format)", () => {
 	// v0: 57edf5ff79
 	// v0: 2b63ae7db8
