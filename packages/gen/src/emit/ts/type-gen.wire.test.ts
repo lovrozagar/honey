@@ -110,4 +110,19 @@ describe("generateTypes: the wire output", () => {
 expectType<Equal<RouteOutput<"/go", "get">, { redirect: { found: true } }>>()`
 		expect(check(document, consumer)).toEqual([])
 	})
+
+	it("keeps a bodiless 304 under redirect, as .output() declares it, though it carries no Location", () => {
+		const document = documentOf({
+			"/file": {
+				get: {
+					responses: {
+						200: { content: { "text/csv": { schema: STRING } }, description: "" },
+						304: { description: "not modified" },
+					},
+				},
+			},
+		})
+		const consumer = `expectType<Equal<RouteOutput<"/file", "get">, { redirect: { not_modified: true }; "text/csv": { ok: string } }>>()`
+		expect(check(document, consumer)).toEqual([])
+	})
 })

@@ -126,8 +126,10 @@ function outputOf(op: IROperation, ctx: Ctx): string {
 	for (const response of Object.values(op.responses).sort((a, b) => compareCodeUnits(a.status, b.status))) {
 		const key = /^[0-9]{3}$/.test(response.status) ? statusKeyOf(Number(response.status)) : undefined
 		if (response.error === true || key === undefined) continue
+		/* a redirect carries its target; a 304, the other bodiless 3xx `.output()` declares under `redirect`, has none */
 		const located = response.headers?.some((h) => h.name.toLowerCase() === "location") === true
-		if (response.status.startsWith("3") && located && response.contents === undefined) add("redirect", [key, "true"])
+		const bodiless = response.status.startsWith("3") && (located || response.status === "304")
+		if (bodiless && response.contents === undefined) add("redirect", [key, "true"])
 		for (const { contentType, schema } of response.contents ?? [])
 			add(contentType, [key, schema === undefined ? "unknown" : ctx.resolve(schema)])
 	}
