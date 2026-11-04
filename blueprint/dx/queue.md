@@ -12,7 +12,7 @@ One typed contract and consumer for Workers and for a Node or Bun process. Deliv
 | `onDeadLetter` | — | logs | receives a letter with its body | a throwing report is logged and the message still settles, except in a dead-letter queue | `queue/deliver.test.ts` |
 | `throw deadLetter(reason)` | — | — | gives up on a message with no more tries | — | `queue/deliver.test.ts` |
 | a body past its contract | — | — | retries and reaches the dead-letter path with its body; never acked | — | `tests/integration/security/queue-adversarial.test.ts` |
-| `workersQueue(consumer, { deadLetterQueues })` | — | — | the `queue` handler; a named queue's messages are reported and acked | Workers deletes a message past `max_retries` with no dead-letter queue | `queue/workers.test.ts` |
+| `workersQueue(consumer, { deadLetterQueues, maxRetries })` | — | — | the `queue` handler; with `maxRetries` (the consumer's `max_retries`) the last failed delivery is reported `kept: true` before the platform moves it; a named dead-letter queue's messages are reported `kept: false` and acked | Workers deletes a message past `max_retries` with no dead-letter queue; Workers does not hand `max_retries` to the consumer | `queue/workers.test.ts` |
 | `serveQueue(consumer, options)` | `env`, `store` | — | one claim loop on Node and Bun, with leases extended while a message runs | delivery is at-least-once | `queue/serve.test.ts`, `tests/integration/queue-runtimes.test.ts` |
 | `concurrency` | — | 10 | the most messages running at once | — | `queue/serve.test.ts` |
 | `leaseSeconds` | — | 30 | how long a lease holds | — | `queue/serve.test.ts` |

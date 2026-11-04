@@ -73,7 +73,8 @@ A body with no type, a type the contract lacks, or data its schema refuses is a 
 retries, after 60 s by default, because it fails the same way until something deploys, and it reaches the dead-letter
 path with its body. `retryDelay` receives a `QueueBodyError` for these.
 
-A letter holds `id`, `attempts`, `queue`, `reason`, `type` and `body`.
+A letter holds `id`, `attempts`, `queue`, `reason`, `type`, `body` and `kept`: whether the message still exists on the
+platform after the report.
 
 ## On Workers
 
@@ -84,7 +85,7 @@ import { workersQueue } from "@lovrozagar/honey/queue/workers"
 const jobs = queueContract({ ping: queueMessage<number>() })
 const consumer = defineConsumer<{}>()(jobs, { handlers: { ping: async () => {} } })
 
-export const queue = workersQueue(consumer, { deadLetterQueues: ["jobs-dead"] })
+export const queue = workersQueue(consumer, { maxRetries: 5 })
 ```
 
 Export `queue` from the entry your build points at, and honey's build moves it onto the Worker's default export.
@@ -96,14 +97,22 @@ retrying is gone.
 {
 	"queues": {
 		"producers": [{ "binding": "JOBS", "queue": "jobs" }],
-		"consumers": [{ "queue": "jobs", "max_retries": 5, "dead_letter_queue": "jobs-dead" }, { "queue": "jobs-dead" }]
+		"consumers": [{ "queue": "jobs", "max_retries": 5, "dead_letter_queue": "jobs-dead" }]
 	}
 }
 ```
 
-Honey never holds `max_retries`: the platform counts attempts. `workersQueue(consumer, { deadLetterQueues })` reports
-what lands in a named queue to `onDeadLetter` and acks it. If the report throws, that message retries after 60 s, bounded
-by the dead-letter consumer's own `max_retries`, past which Workers drops it.
+`workersQueue(consumer, { deadLetterQueues, maxRetries })` takes either option, or both.
+
+Name the consumer's `max_retries` as `maxRetries`. Workers counts attempts but does not hand that number to the
+consumer, so keep the two equal: a test that reads your Workers config and the option holds them. A failed delivery on
+the attempt past it, the last, is reported to `onDeadLetter` with `kept: true`, then retried, so the platform moves it
+to `dead_letter_queue`, where it stays for a redrive. A failed report still retries.
+
+To consume the dead-letter queue instead, add it as a second consumer and name it in `deadLetterQueues`:
+`workersQueue(consumer, { deadLetterQueues: ["jobs-dead"] })` reports what lands there to `onDeadLetter` with
+`kept: false` and acks it. If the report throws, that message retries after 60 s, bounded by the dead-letter consumer's
+own `max_retries`, past which Workers drops it.
 
 `throw deadLetter` reports, then acks, even when the report fails: the handler already gave up, and the letter is logged.
 

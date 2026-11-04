@@ -130,6 +130,7 @@ describe("workersQueue: a dead-letter queue", () => {
 					attempts: 1,
 					body: { data: 9, type: "gone" },
 					id: "m1",
+					kept: false,
 					queue: "jobs-dlq",
 					reason: "moved to a dead-letter queue",
 					type: "gone",
@@ -159,5 +160,85 @@ describe("workersQueue: a dead-letter queue", () => {
 		const job = vi.fn(async () => {})
 		await workersQueue(consumerOf(job), options)({ messages: [message(JOB)], queue: "jobs" }, {}, ctx())
 		expect(job).toHaveBeenCalledOnce()
+	})
+})
+
+/** A message on its `attempts`th delivery. */
+const at = (attempts: number, body: unknown = JOB) => ({ ...message(body), attempts })
+
+const failing = async () => {
+	throw new Error("upstream down")
+}
+
+/** A reporter that records each letter, in order with anything else pushed to `order`. */
+const recording = () => {
+	const order: unknown[] = []
+	return { order, report: async (letter: unknown) => void order.push(["report", letter]) }
+}
+
+describe("workersQueue: maxRetries, the last delivery", () => {
+	it("reports a failure on the attempt past it as kept, then retries so the platform moves it to its DLQ", async () => {
+		const { order, report } = recording()
+		const m = at(4)
+		m.retry = (...args: unknown[]) => void order.push(["retry", ...args])
+		await workersQueue(consumerOf(failing, report), { maxRetries: 3 })({ messages: [m], queue: "jobs" }, {}, ctx())
+		expect(order).toEqual([
+			["report", { attempts: 4, body: JOB, id: "m1", kept: true, queue: "jobs", reason: "upstream down", type: "job" }],
+			["retry"],
+		])
+	})
+
+	it("only retries a failure before that attempt", async () => {
+		const { order, report } = recording()
+		const m = at(3)
+		await workersQueue(consumerOf(failing, report), { maxRetries: 3 })({ messages: [m], queue: "jobs" }, {}, ctx())
+		expect([order, m.calls]).toEqual([[], [["retry"]]])
+	})
+
+	it("reports the handler's own retry and a bad body on that attempt too", async () => {
+		const { order, report } = recording()
+		const own = at(2)
+		const bad = at(2, { data: 1, type: "nope" })
+		const job: Job = ({ message: handle }) => handle.retry({ delaySeconds: 5 })
+		await workersQueue(consumerOf(job, report), { maxRetries: 1 })({ messages: [own, bad], queue: "jobs" }, {}, ctx())
+		expect([
+			order.map((entry) => (entry as [string, { reason: string }])[1].reason).sort(),
+			own.calls,
+			bad.calls,
+		]).toEqual([
+			["retried by the handler", "unknown type nope"],
+			[["retry", { delaySeconds: 5 }]],
+			[["retry", { delaySeconds: 60 }]],
+		])
+	})
+
+	it("still retries when the report fails, so the message reaches its DLQ", async () => {
+		const m = at(2)
+		const report = async () => {
+			throw new Error("reporter down")
+		}
+		await workersQueue(consumerOf(failing, report), { maxRetries: 1 })({ messages: [m], queue: "jobs" }, {}, ctx())
+		expect(m.calls).toEqual([["retry"]])
+	})
+})
+
+describe("workersQueue: maxRetries, what is kept and what it refuses", () => {
+	it("reports throw deadLetter as not kept: the ack removes it", async () => {
+		const { order, report } = recording()
+		const job = async () => {
+			throw deadLetter("no account")
+		}
+		await workersQueue(consumerOf(job, report), { maxRetries: 1 })({ messages: [at(2)], queue: "jobs" }, {}, ctx())
+		expect(order).toEqual([
+			["report", { attempts: 2, body: JOB, id: "m1", kept: false, queue: "jobs", reason: "no account", type: "job" }],
+		])
+	})
+
+	it.each([-1, 1.5, Number.NaN])("refuses maxRetries %s when built", (maxRetries) => {
+		expect(() => workersQueue(consumerOf(failing), { maxRetries })).toThrow(
+			new TypeError(
+				`workersQueue: maxRetries must be the consumer's max_retries, a whole number from 0; got ${maxRetries}`,
+			),
+		)
 	})
 })

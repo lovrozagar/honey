@@ -30,7 +30,7 @@ const held = () => {
 }
 
 const reporting = () => {
-	const letters: { reason: string; attempts: number; queue: string; body: unknown }[] = []
+	const letters: { reason: string; attempts: number; kept: boolean; queue: string; body: unknown }[] = []
 	return { letters, onDeadLetter: async (letter: never) => void letters.push(letter) }
 }
 
@@ -112,7 +112,10 @@ describe("serveQueue: dead letters", () => {
 		}
 		served(consumerOf(job, { onDeadLetter }), { env: {}, maxAttempts: 3, pollMs: 10, queue: "jobs", store })
 		await vi.advanceTimersByTimeAsync(100)
-		expect(letters.map(({ attempts, queue, reason }) => [reason, attempts, queue])).toEqual([["down", 3, "jobs"]])
+		/* not kept: the store's deadLetter takes it off the queue */
+		expect(letters.map(({ attempts, kept, queue, reason }) => [reason, attempts, queue, kept])).toEqual([
+			["down", 3, "jobs", false],
+		])
 		expect(store.deadLetters().map(({ reason }) => reason)).toEqual(["down"])
 	})
 

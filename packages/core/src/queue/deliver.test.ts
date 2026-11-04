@@ -255,11 +255,15 @@ describe("letters", () => {
 			attempts: 2,
 			body: { data: 1, type: "job" },
 			id: "m1",
+			kept: false,
 			queue: "q",
 			reason: "why",
 			type: "job",
 		})
-		expect(letterOf(recording("text").delivery, "why").type).toBe("unknown")
+		expect([letterOf(recording("text").delivery, "why").type, letterOf(delivery, "why", true).kept]).toEqual([
+			"unknown",
+			true,
+		])
 	})
 
 	it("answers whether the report landed, and logs one that did not", async () => {

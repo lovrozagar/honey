@@ -99,6 +99,12 @@ export type QueueLetter = {
 	body: unknown
 	/** The message's id. */
 	id: string
+	/**
+	 * Whether the message still exists on the platform after the report: true only for a Workers message on its way to
+	 * its dead-letter queue (`workersQueue`'s `maxRetries`). A `deadLetter` throw, a `serveQueue` give-up and a message
+	 * read from a dead-letter queue are acked, so they are gone.
+	 */
+	kept: boolean
 	/** The queue it left, or the Workers dead-letter queue it was read from. */
 	queue: string
 	/** Why it left. A message read from a Workers dead-letter queue says only that it moved there. */
@@ -114,9 +120,9 @@ export type QueueConsumerConfig<Env, Schemas extends QueueSchemas> = {
 	/** Where the consumer logs; default honey's logger. */
 	logger?: Logger
 	/**
-	 * Reports a letter: a `deadLetter` throw, the last of `serveQueue`'s `maxAttempts`, or a message
-	 * read from one of `workersQueue`'s `deadLetterQueues`. A Workers message past `max_retries` reaches
-	 * it only through that last route. A throw is logged, and only that route reports again.
+	 * Reports a letter: a `deadLetter` throw, the last of `serveQueue`'s `maxAttempts`, a Workers failure on
+	 * the attempt past `workersQueue`'s `maxRetries`, or a message read from one of its `deadLetterQueues`.
+	 * A throw is logged, and only a dead-letter-queue read reports again.
 	 */
 	onDeadLetter?(letter: QueueLetter, env: Env): Promise<void>
 	/**

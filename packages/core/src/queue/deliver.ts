@@ -87,10 +87,10 @@ const dataOf = async <Env>(consumer: QueueConsumer<Env>, body: unknown): Promise
 	}
 }
 
-/** The letter for `delivery`, which keeps the body even when it has no readable type. */
-export function letterOf(delivery: Delivery, reason: string): QueueLetter {
+/** The letter for `delivery`, which keeps the body even when it has no readable type; `kept` when it stays on the platform. */
+export function letterOf(delivery: Delivery, reason: string, kept = false): QueueLetter {
 	const { attempts, body, id, queue } = delivery
-	return { attempts, body, id, queue, reason, type: envelopeType(body) ?? "unknown" }
+	return { attempts, body, id, kept, queue, reason, type: envelopeType(body) ?? "unknown" }
 }
 
 /** Logs a letter and reports it. Answers whether the report landed; one that throws is logged, never rethrown. */
