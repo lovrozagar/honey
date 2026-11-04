@@ -7,6 +7,7 @@
  */
 import { resolve as resolvePath } from "node:path"
 import { describe, expect, it, vi } from "vitest"
+import { cheapestCallCpuMs } from "../../fixture/cpu-time.ts"
 import { SPAWN_TIMEOUT } from "../../fixture/spawn-timeout.ts"
 import { guardNamed } from "../../structure/mutation-harness.ts"
 
@@ -34,23 +35,6 @@ const { parseUserAgent } = (await import(
 )) as typeof import("../../../src/context/user-agent.ts")
 
 const get = (target: string) => new Request(`http://app.test${target}`)
-
-/* the best of a few timed windows, so one slow round cannot pass for growth */
-const fastestCallMs = (run: () => void) => {
-	let fastest = Number.POSITIVE_INFINITY
-	for (let round = 0; round < 5; round++) {
-		const start = performance.now()
-		let calls = 0
-		let elapsed = 0
-		do {
-			run()
-			calls++
-			elapsed = performance.now() - start
-		} while (elapsed < 30)
-		fastest = Math.min(fastest, elapsed / calls)
-	}
-	return fastest
-}
 
 const ANY_VALUE = { "~standard": { validate: (value: unknown) => ({ value }), vendor: "test", version: 1 } } as const
 
@@ -92,11 +76,12 @@ describe("v1 adversarial: a client's user agent stays cheap to read", () => {
 			 * 4x the length: linear grows about 4x, quadratic 16x, cubic 64x, so 10 sits between linear and even a
 			 * quadratic pattern on any runner. Plan 37 measured 1.5-2.5 for this code and 45-88 for the cubic mutant on
 			 * Bun and Node; at 2x (256/512) the mutant's 6-10 sat close enough to the old 5 for a runner to pass it.
+			 * CPU time, not wall time: under load a wall clock once read 12 for this code (plan 39).
 			 */
 			const header = (length: number) => `Version/${"1".repeat(length - "Version/".length)}`
-			fastestCallMs(() => parseUserAgent(header(512)))
-			const short = fastestCallMs(() => parseUserAgent(header(128)))
-			const long = fastestCallMs(() => parseUserAgent(header(512)))
+			cheapestCallCpuMs(() => parseUserAgent(header(512)))
+			const short = cheapestCallCpuMs(() => parseUserAgent(header(128)))
+			const long = cheapestCallCpuMs(() => parseUserAgent(header(512)))
 			expect(long / short).toBeLessThan(10)
 		},
 		SPAWN_TIMEOUT,
