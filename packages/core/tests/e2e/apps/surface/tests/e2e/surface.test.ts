@@ -1,3 +1,5 @@
+import { request as httpRequest, Agent as HttpAgent } from "node:http"
+import { request as httpsRequest, Agent as HttpsAgent } from "node:https"
 import { expect, test } from "@playwright/test"
 import { e2eWsBase } from "../../../../playwright-app.ts"
 
@@ -212,6 +214,52 @@ test.describe("streams and uploads", () => {
 		})
 		expect(res.status()).toBe(202)
 		expect(await res.json()).toEqual({ uploadId: "up-1" })
+	})
+})
+
+/** The status of `method path` sent over `agent`, or `null` when no answer comes within 5 s. */
+function statusOver(
+	agent: HttpAgent,
+	base: string,
+	method: string,
+	path: string,
+	body?: string,
+): Promise<number | null> {
+	const url = new URL(path, base)
+	const send = url.protocol === "https:" ? httpsRequest : httpRequest
+	const headers = body === undefined ? {} : { "content-type": "application/json" }
+	return new Promise((resolve, reject) => {
+		const req = send(url, { agent, headers, method, timeout: 5_000 }, (res) => {
+			res.resume()
+			res.on("end", () => resolve(res.statusCode ?? null))
+		})
+		req.on("timeout", () => {
+			req.destroy()
+			resolve(null)
+		})
+		req.on("error", reject)
+		req.end(body)
+	})
+}
+
+/*
+ * wrangler dev 4.110.0 to 4.129.0 held a keep-alive connection whose request body the worker left unread: the next
+ * request on it hung (4.110.0) or answered 500 (4.120.0 to 4.129.0), so this cell's 426 after the streamed upload timed
+ * out (CI 41834474412). A plain worker answering 202 unread repeats it; bare workerd and Miniflare do not; 4.129.1 fixed
+ * it. One socket (maxSockets 1) makes the reuse deterministic.
+ */
+test.describe("keep-alive", () => {
+	test("a body its handler leaves unread leaves the connection serving the next request", async ({ baseURL }) => {
+		const base = baseURL ?? ""
+		const agent = new (base.startsWith("https:") ? HttpsAgent : HttpAgent)({ keepAlive: true, maxSockets: 1 })
+		try {
+			expect(
+				await statusOver(agent, base, "POST", "/rs/upload", JSON.stringify({ chunks: 3, fileName: "a.bin" })),
+			).toBe(202)
+			expect(await statusOver(agent, base, "GET", "/ws/echo")).toBe(426)
+		} finally {
+			agent.destroy()
+		}
 	})
 })
 
