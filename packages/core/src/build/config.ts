@@ -65,6 +65,11 @@ export type HoneyMcpOutputConfig = {
 
 /** Which artifacts a generation writes. The route tree is on by default; every other one is off until configured. */
 export type HoneyCodegenConfig = {
+	/**
+	 * The directory a Worker serves as assets, from the project root; default wrangler's `assets.directory`. A named
+	 * OpenAPI document's files are listed under it in `src/_gen/openapi-sources.gen.ts`.
+	 */
+	readonly assetsDir?: string
 	/** mutations that declare no `invalidate`, reported once per generation; default `"warn"` */
 	readonly invalidate?: InvalidateCheckConfig
 	/** the route manifest; `true` is `src/_gen/manifest.gen.json` */
@@ -118,6 +123,7 @@ export type ResolvedMcpOutput = Omit<HoneyMcpOutputConfig, "path"> & {
 export type ResolvedHoneyConfig = {
 	readonly app: string | undefined
 	readonly codegen: {
+		readonly assetsDir: string | undefined
 		readonly invalidate: InvalidateCheckConfig | undefined
 		readonly manifest: false | string
 		readonly mcp: false | ResolvedMcpOutput
@@ -129,6 +135,9 @@ export type ResolvedHoneyConfig = {
 	}
 	readonly watch: readonly string[]
 }
+
+/** Where the named documents' sources module is written (openapi-sources.ts writes it), from the project root. */
+export const OPENAPI_SOURCES = "src/_gen/openapi-sources.gen.ts"
 
 const TYPES = "src/_gen/types.gen.d.ts"
 const MCP = "src/_gen/mcp.gen.ts"
@@ -197,6 +206,7 @@ export function resolveHoneyConfig(raw: HoneyVitePluginConfig): ResolvedHoneyCon
 	return {
 		app: raw.app,
 		codegen: {
+			assetsDir: c.assetsDir,
 			invalidate: c.invalidate,
 			manifest: pathOf(c.manifest, "src/_gen/manifest.gen.json", false),
 			mcp: mcpOf(c.mcp),
@@ -243,6 +253,7 @@ export function generatedOutputs(config: ResolvedHoneyConfig, root: string): { d
 		const { json, yaml } = openApiOutputPaths(resolve(root, entry.path), entry.formats)
 		for (const file of [json, yaml]) if (file !== null) files.push(file)
 	}
+	if (openApi.some((entry) => entry.name !== undefined)) files.push(resolve(root, OPENAPI_SOURCES))
 	return { dirs: [...new Set(files.map((file) => dirname(file)))], files }
 }
 

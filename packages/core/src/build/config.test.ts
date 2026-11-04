@@ -143,7 +143,7 @@ describe("generatedOutputs (bit 19 h2)", () => {
 				openApi: [
 					{ formats: ["json", "yaml"], title: "A", version: "1" },
 					{ path: "docs/b.yml", title: "B", version: "1" },
-					{ path: "docs/c.json", title: "C", version: "1" },
+					{ name: "c", path: "docs/c.json", title: "C", version: "1" },
 				],
 				types: true,
 			},
@@ -161,6 +161,7 @@ describe("generatedOutputs (bit 19 h2)", () => {
 				"/p/src/_gen/openapi.gen.yaml",
 				"/p/docs/b.yml",
 				"/p/docs/c.json",
+				"/p/src/_gen/openapi-sources.gen.ts",
 			],
 		})
 		expect(

@@ -75,6 +75,28 @@ Nothing parses what is served: honey's own `content-type` is sent whatever the u
 binding that is missing or cannot fetch, and a failing loader are `internal_server_error`; a URL that fails or
 answers non-2xx is `bad_gateway`.
 
+When the build plugin writes the document into the Worker's assets, name it in `codegen.openApi` and the generation
+also writes `src/_gen/openapi-sources.gen.ts`: each named document's files as the `{ asset }` sources above, their
+paths relative to the assets directory (`codegen.assetsDir`, else `assets.directory` in wrangler.jsonc, its binding
+carried when it is not `ASSETS`). Spread one into the call and the asset paths are written in one place. The module
+reads only the config, so a generation writes it before it loads the app: an app that imports it generates from a
+fresh checkout. A named document outside the assets directory, or no directory to resolve against, fails the
+generation.
+
+```ts
+import { honey } from "@lovrozagar/honey"
+import { serveStaticOpenApi } from "@lovrozagar/honey/openapi/static"
+
+/* src/_gen/openapi-sources.gen.ts, as honey generate writes it for a document named "public" in JSON and YAML */
+const openApiSources = {
+	public: { json: { asset: "/openapi.public.json" }, yaml: { asset: "/openapi.public.yaml" } },
+} as const
+
+const app = honey()
+
+serveStaticOpenApi(app, { ...openApiSources.public, jsonPath: "/v1/openapi/spec" })
+```
+
 ## Guarding a document
 
 `auth: basic({ realm, verify })` from `@lovrozagar/honey/openapi/auth` puts HTTP Basic in front of every route the

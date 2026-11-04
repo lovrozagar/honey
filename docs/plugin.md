@@ -23,8 +23,9 @@ from the same routes, each with its own `filterRoutes`. A document shows the sch
 requirement naming another scheme is left out, and so is that scheme's definition. Without `security` it shows every
 scheme its own routes name and no other. `servers`, `externalDocs` and `tags` are the document's own, the tags listed
 in the order given, then any tag no entry names. `formats` picks the files: the path in its own format (JSON unless it
-ends `.yaml` or `.yml`), each other one beside it under the same stem. `name` keys the document for generated code that
-points at it.
+ends `.yaml` or `.yml`), each other one beside it under the same stem. Naming a document also writes
+`src/_gen/openapi-sources.gen.ts`, its files as `serveStaticOpenApi` sources under the assets directory
+(`codegen.assetsDir`, else wrangler's `assets.directory`); see the OpenAPI page.
 
 ```ts
 import { honeyPlugin } from "@lovrozagar/honey/plugin"

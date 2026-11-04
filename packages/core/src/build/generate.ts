@@ -3,14 +3,16 @@
  * loader that imports the app, from the app's own @lovrozagar/honey) and each written only when it changed, through
  * honey-clients's write.ts (Q1).
  * honey-clients is an optional peer, imported on demand (Q2), so a missing one is a named error only when a
- * generation runs.
+ * generation runs. The OpenAPI sources module (plan 39 7.5) reads the config alone, so it is written first, before
+ * the app that may import it loads.
  */
 import { existsSync, readFileSync } from "node:fs"
 import { dirname, join, relative, resolve } from "node:path"
 import type * as Artifacts from "./artifacts.ts"
 import { ARTIFACTS, type Clients, type Report } from "./artifacts.ts"
-import type { ResolvedHoneyConfig } from "./config.ts"
+import { OPENAPI_SOURCES, type ResolvedHoneyConfig } from "./config.ts"
 import { createModuleLoader, type ModuleLoader } from "./loaders.ts"
+import { openApiSourcesOf } from "./openapi-sources.ts"
 
 export type { Report } from "./artifacts.ts"
 
@@ -70,9 +72,13 @@ export async function generateAndWrite(
 	const codegen = await loadClients()
 	const report = options.report ?? ((message) => void process.stderr.write(`honey: ${message}\n`))
 	const run = { codegen, report, root }
+	const written: string[] = []
+	/* the sources module reads the config alone: written before the app loads, since the app may import it */
+	const sources = openApiSourcesOf(config, root)
+	if (sources !== null && codegen.writeFileIfChanged(resolve(root, OPENAPI_SOURCES), sources))
+		written.push(resolve(root, OPENAPI_SOURCES))
 	let graph = await inAppGraph(root, options.load)
 	let { rewrite, source } = await graph.prepare(config, { ...run, first: true })
-	const written: string[] = []
 	if (rewrite !== undefined) {
 		/* a gateway app imports the tree this writes: written first, then the pass redone over it on a fresh graph */
 		codegen.writeFileIfChanged(resolve(root, rewrite[0]), rewrite[1])
