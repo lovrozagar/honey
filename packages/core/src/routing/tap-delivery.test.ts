@@ -127,15 +127,22 @@ describe("what a tap sees", () => {
 describe("when taps run", () => {
 	// v0: 269fbb17ea
 	it("a slow tap does not delay the answer", async () => {
+		/* no clock: the tap waits until the test releases it, so an answer that waited for it never comes */
+		let release = () => {}
+		let tapped = false
 		const app = honey<{}>()
-		app.tap("slow", () => new Promise((resolve) => setTimeout(resolve, 500)))
+		app.tap("slow", async () => {
+			await new Promise<void>((resolve) => (release = resolve))
+			tapped = true
+		})
 		app.get("/t").handler((ctx) => {
 			ctx.tap("slow", {})
 			return ctx.res.json("ok", {})
 		})
-		const started = performance.now()
 		const res = await app.fetch(get("/t"), {})
-		expect([res.status, performance.now() - started < 100]).toEqual([200, true])
+		const pending = !tapped
+		release()
+		expect([res.status, pending]).toEqual([200, true])
 	})
 
 	// v0: d61bb1924d

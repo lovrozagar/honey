@@ -12,7 +12,8 @@ const WINDOW_MS = 30
 /** The wall time a window may take, so a call that mostly waits still ends its window. */
 const WINDOW_WALL_MS = 1000
 
-function threadCpuMs(): number {
+/** This thread's CPU time so far, in ms: what a one-shot cost reads before and after the work. */
+export function threadCpuMs(): number {
 	const { system, user } = process.threadCpuUsage()
 	return (user + system) / 1000
 }

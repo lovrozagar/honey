@@ -5,6 +5,7 @@
  * registration mistakes fail loudly.
  */
 import { describe, expect, it } from "vitest"
+import { threadCpuMs } from "../fixture/cpu-time.ts"
 import { HoneyError } from "../../src/errors/error.ts"
 import { defineErrors } from "../../src/errors/errors.ts"
 import { createMiddleware } from "../../src/middleware/middleware.ts"
@@ -274,7 +275,8 @@ describe("registration fails loudly, and stays fast", () => {
 	it("M-mount-perf: mounting 200 sub-apps under scoped middleware with meta stays fast", async () => {
 		const errors = defineErrors({ blocked: "forbidden" })
 		const scoped = createMiddleware((_ctx, next) => next(), { errors: [errors, "blocked"], meta: { area: "admin" } })
-		const started = performance.now()
+		/* this thread's CPU time, not the wall: a loaded runner's time off the CPU is not the mount's cost */
+		const started = threadCpuMs()
 		const parent = honey<{}>().errorFactory(errors)
 		for (let i = 0; i < 200; i++) {
 			const sub = honey<{}>().errorFactory(errors)
@@ -283,7 +285,7 @@ describe("registration fails loudly, and stays fast", () => {
 			parent.route(sub)
 		}
 		expect(await send(parent, "/s/199/r4")).toEqual({ body: { r: 4 }, status: 200 })
-		expect(performance.now() - started).toBeLessThan(3_000)
+		expect(threadCpuMs() - started).toBeLessThan(3_000)
 	}, 30_000)
 })
 

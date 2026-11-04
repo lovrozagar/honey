@@ -8,6 +8,7 @@ import type { AddressInfo } from "node:net"
 import { connect } from "node:net"
 import { resolve } from "node:path"
 import { describe, expect, it, vi } from "vitest"
+import { threadCpuMs } from "../../fixture/cpu-time.ts"
 import { guardNamed } from "../../structure/mutation-harness.ts"
 
 const REPO = resolve(import.meta.dirname, "../../../../..")
@@ -466,8 +467,10 @@ describe("v1 adversarial: absurd ranges", () => {
 		["100 000 ranges", `bytes=${"0-0,".repeat(100_000)}0-0`],
 		["a 10 000-digit suffix", `bytes=-${"1".repeat(10_000)}`],
 	])("%s: the whole body, 200, answered at once", async (_case, range) => {
-		const started = performance.now()
+		/* this thread's CPU time, not the wall: a loaded runner's time off the CPU is not the parse's cost */
+		const started = threadCpuMs()
 		const res = rangeResponse(new Request("http://app.test/f", { headers: { range } }), TEN)
-		expect([res.status, await res.text(), performance.now() - started < 50]).toEqual([200, "0123456789", true])
+		const spent = threadCpuMs() - started
+		expect([res.status, await res.text(), spent < 50]).toEqual([200, "0123456789", true])
 	})
 })
