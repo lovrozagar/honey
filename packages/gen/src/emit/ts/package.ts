@@ -9,7 +9,7 @@
  * declarations). The MCP server's `dist/` goes through the same pass.
  */
 import { transformSync } from "oxc-transform"
-import { checked, type Metadata, NPM_NAME, SEMVER } from "../shared/metadata.ts"
+import { checked, issuesUrl, type Metadata, NPM_NAME, SEMVER } from "../shared/metadata.ts"
 import { type GeneratedSdk, generateSdk, type SdkOptions } from "./sdk.ts"
 
 /** The SDK's options and the package's own. */
@@ -58,7 +58,7 @@ function described(metadata: Metadata) {
 		...(description === undefined ? {} : { description }),
 		...(keywords === undefined ? {} : { keywords }),
 		...(homepage === undefined ? {} : { homepage }),
-		...(repository === undefined ? {} : { bugs: `${repository.replace(/\.git$/, "")}/issues` }),
+		...(repository === undefined ? {} : { bugs: issuesUrl(repository) }),
 		...(license === undefined ? {} : { license }),
 		...(authors === undefined ? {} : { author: authors[0] }),
 		...(repository === undefined

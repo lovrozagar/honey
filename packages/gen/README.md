@@ -347,6 +347,11 @@ dataclasses to narrow with `match`.
 honey-clients generate --spec openapi.json --target python --out generated --python-package-name shop_sdk
 ```
 
+`pyproject.toml` builds with hatchling and carries what PyPI shows: `--metadata-*` gives the description, the SPDX
+`license` (PEP 639, so no `License ::` classifier), authors, keywords, and `[project.urls]` (Homepage, Source,
+Issues, Documentation, Changelog). The classifiers name the Python versions honey tests and `Typing :: Typed`, and
+honey's own manifest stays out of the sdist.
+
 ```python
 async def health(client: AsyncSDK) -> str:
     match await client.safe.get_api_health():

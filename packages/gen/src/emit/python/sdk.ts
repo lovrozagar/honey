@@ -16,6 +16,7 @@ import { pythonErrorKeys } from "./errors.ts"
 import { type ClientEnv, clientDecls, clientTitle } from "./sdk-client.ts"
 import { allOrder, importBlock, importLine } from "./sdk-imports.ts"
 import type { PythonCallPlan } from "./sdk-plan.ts"
+import type { Metadata } from "../shared/metadata.ts"
 import { pyproject, validatePackageName, validateVersion } from "./sdk-pyproject.ts"
 import { needsWebSocket, runtimeExports, runtimeFiles } from "./transport.ts"
 import { type PyTypeContext, pyTopLevel, pyTypeContext } from "./types.ts"
@@ -136,7 +137,7 @@ function initFile(ir: IR, runtime: Readonly<Record<string, string>>, types: read
 }
 
 /** The package's files for `document`, and the call plan of every method in them. */
-function emitPython(document: Record<string, unknown>, options: PythonSdkOptions) {
+function emitPython(document: Record<string, unknown>, options: PythonSdkOptions, metadata: Metadata = {}) {
 	const pkg = {
 		name: validatePackageName(options.packageName ?? "honey_sdk"),
 		version: validateVersion(options.version ?? "0.1.0"),
@@ -171,7 +172,7 @@ function emitPython(document: Record<string, unknown>, options: PythonSdkOptions
 	const typesDoc = pyDocLines(ir.info.title === undefined ? "The API's types." : `The ${ir.info.title} API's types.`)
 	const root = `src/${pkg.name}`
 	const files: Record<string, string> = {
-		"pyproject.toml": pyproject(pkg, needsWebSocket(features)),
+		"pyproject.toml": pyproject(pkg, needsWebSocket(features), metadata),
 		[`${root}/__init__.py`]: initFile(ir, runtime, types),
 		[`${root}/client.py`]: clientFile(ir, env, { lines: client.lines, types }),
 		[`${root}/py.typed`]: "",
@@ -190,12 +191,13 @@ function emitPython(document: Record<string, unknown>, options: PythonSdkOptions
 	return { files: sorted, notices: env.notices, plans: client.plans }
 }
 
-/** The package's files for `document`, by path, and its notices. */
+/** The package's files for `document`, by path, and its notices; `metadata` fills pyproject.toml's description fields. */
 export function generatePythonSdk(
 	document: Record<string, unknown>,
 	options: PythonSdkOptions = {},
+	metadata: Metadata = {},
 ): GeneratedPythonSdk {
-	const { files, notices } = emitPython(document, options)
+	const { files, notices } = emitPython(document, options, metadata)
 	return { files, notices }
 }
 

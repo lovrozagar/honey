@@ -84,6 +84,10 @@ describe("the package metadata block (plan 39 8.2)", () => {
 
 	it.each<[string, unknown, string]>([
 		["description", "two\nlines", 'Invalid metadata.description: "two\\nlines"'],
+		/* a lone surrogate has no UTF-8 form, so no TOML, XML or JSON file can carry it (plan 39 8.4) */
+		["description", "half \ud800", 'Invalid metadata.description: "half \\ud800"'],
+		["authors", ["Bo \udc00"], 'Invalid metadata.authors: "Bo \\udc00"'],
+		["keywords", ["\ud83d"], 'Invalid metadata.keywords: "\\ud83d"'],
 		["homepage", "http://acme.dev", 'Invalid metadata.homepage: "http://acme.dev"'],
 		["repository", "github.com/acme/shop", 'Invalid metadata.repository: "github.com/acme/shop"'],
 		["documentation", "https://", 'Invalid metadata.documentation: "https://"'],

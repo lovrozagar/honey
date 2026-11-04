@@ -4,8 +4,8 @@
  * `Invalid <option>: "<value>"`. Each value is the caller's, never spec text, and is still escaped where it lands.
  */
 
-/** One line of printable text, at most 4000 characters (nuget.org's description and authors limit). */
-export const TEXT = /^\P{Cc}{1,4000}$/u
+/** One line of printable text, at most 4000 characters (nuget.org's description and authors limit); no lone surrogate. */
+export const TEXT = /^[^\p{Cc}\p{Cs}]{1,4000}$/u
 /** An https URL with a host. */
 export const HTTPS_URL = /^https:\/\/[A-Za-z0-9.-]+(?::\d+)?(?:\/[A-Za-z0-9._~%!$&'()*+,;=:@/-]*)?$/
 /** An SPDX license expression: ids joined by AND, OR or WITH. */
@@ -37,9 +37,9 @@ export function personOf(value: string): { readonly name: string; readonly email
 }
 
 /** One author: a name with no comma, angle bracket or control character, or that name then ` <email>`. */
-export const AUTHOR = /^(?=\P{Cc}{1,4000}$)[^<>,]*[^<>,\s][^<>,]*?(?: <[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+>)?$/u
+export const AUTHOR = /^(?=[^\p{Cc}\p{Cs}]{1,4000}$)[^<>,]*[^<>,\s][^<>,]*?(?: <[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+>)?$/u
 /** One keyword: no space, comma or control character, at most 50 characters; a registry may hold it to less. */
-export const KEYWORD = /^[^\s,\p{Cc}]{1,50}$/u
+export const KEYWORD = /^[^\s,\p{Cc}\p{Cs}]{1,50}$/u
 
 /**
  * The fields of the package metadata block a run gives once (plan 39 8.2), which every target that publishes reads
@@ -124,6 +124,9 @@ export function checkedMetadata(metadata: unknown): Metadata {
 	}
 	return Object.fromEntries(entries) as Metadata
 }
+
+/** The issue tracker of a repository URL: `<repository>/issues`, as GitHub, GitLab and Codeberg serve it. */
+export const issuesUrl = (repository: string): string => `${repository.replace(/\.git$/, "")}/issues`
 
 /** An author's name: what is left of it without ` <email>`. */
 export const authorName = (author: string): string => author.replace(/ <[^<>]*>$/, "")

@@ -55,7 +55,7 @@ function sdkOf(
 		case "rust":
 			return generateRustSdk(document, options)
 		case "python":
-			return generatePythonSdk(document, options)
+			return generatePythonSdk(document, options, metadata)
 		case "csharp":
 			return generateCSharpSdk(document, options)
 		case "java":

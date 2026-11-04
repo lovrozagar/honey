@@ -19,6 +19,7 @@ import realtimeApi from "../../ir/__fixtures__/specs/rust/realtime.json" with { 
 import { FIXTURES } from "./__fixtures__/documents.ts"
 import { pinnedPython, runPython, venv, withPython } from "./__fixtures__/python-env.ts"
 import { generatePythonSdk, type PythonSdkOptions, pythonCallPlans } from "./sdk.ts"
+import { PYTHON_CLASSIFIERS } from "./sdk-pyproject.ts"
 import { SPAWN_TIMEOUT } from "../../gen/__fixtures__/spawn-timeout.ts"
 
 type Json = Record<string, unknown>
@@ -215,12 +216,19 @@ describe.skipIf(!PY)("generatePythonSdk: pyproject.toml, read by tomllib", () =>
 			expect(toml).toEqual({
 				"build-system": { "build-backend": "hatchling.build", requires: ["hatchling>=1.27"] },
 				project: {
+					classifiers: [...PYTHON_CLASSIFIERS],
 					dependencies: ["httpx2>=2.12.0,<3"],
 					name: "honey-sdk",
 					"requires-python": ">=3.11",
 					version: "0.1.0",
 				},
-				tool: { hatch: { build: { targets: { wheel: { packages: ["src/honey_sdk"] } } } } },
+				tool: {
+					hatch: {
+						build: {
+							targets: { sdist: { exclude: [".honey-generated.json"] }, wheel: { packages: ["src/honey_sdk"] } },
+						},
+					},
+				},
 			})
 		},
 	)
