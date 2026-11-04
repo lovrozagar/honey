@@ -145,7 +145,7 @@
 				"surface.test.ts > output types > GET /out/xml",
 				"surface.test.ts > output types > POST /out/multi-status created",
 				"surface.test.ts > streams and uploads > GET /stream/filtered SSE uses search",
-				"surface.test.ts > streams and uploads > POST /rs/upload readableStream json",
+				"surface.test.ts > streams and uploads > POST /rs/upload streamed json",
 				"surface.test.ts > websocket > GET without Upgrade to /ws/echo → 426",
 				"surface.test.ts > websocket > echo: greeting then echo",
 				"surface.test.ts > websocket > room search input"
@@ -298,7 +298,7 @@
 				"surface.test.ts > output types > GET /out/xml",
 				"surface.test.ts > output types > POST /out/multi-status created",
 				"surface.test.ts > streams and uploads > GET /stream/filtered SSE uses search",
-				"surface.test.ts > streams and uploads > POST /rs/upload readableStream json",
+				"surface.test.ts > streams and uploads > POST /rs/upload streamed json",
 				"surface.test.ts > websocket > GET without Upgrade to /ws/echo → 426",
 				"surface.test.ts > websocket > echo: greeting then echo",
 				"surface.test.ts > websocket > room search input"
@@ -450,7 +450,7 @@
 				"surface.test.ts > output types > GET /out/xml",
 				"surface.test.ts > output types > POST /out/multi-status created",
 				"surface.test.ts > streams and uploads > GET /stream/filtered SSE uses search",
-				"surface.test.ts > streams and uploads > POST /rs/upload readableStream json",
+				"surface.test.ts > streams and uploads > POST /rs/upload streamed json",
 				"surface.test.ts > websocket > GET without Upgrade to /ws/echo → 426",
 				"surface.test.ts > websocket > echo: greeting then echo",
 				"surface.test.ts > websocket > room search input"
@@ -603,7 +603,7 @@
 				"surface.test.ts > output types > GET /out/xml",
 				"surface.test.ts > output types > POST /out/multi-status created",
 				"surface.test.ts > streams and uploads > GET /stream/filtered SSE uses search",
-				"surface.test.ts > streams and uploads > POST /rs/upload readableStream json",
+				"surface.test.ts > streams and uploads > POST /rs/upload streamed json",
 				"surface.test.ts > websocket > GET without Upgrade to /ws/echo → 426",
 				"surface.test.ts > websocket > echo: greeting then echo",
 				"surface.test.ts > websocket > room search input"
@@ -755,7 +755,7 @@
 				"surface.test.ts > output types > GET /out/xml",
 				"surface.test.ts > output types > POST /out/multi-status created",
 				"surface.test.ts > streams and uploads > GET /stream/filtered SSE uses search",
-				"surface.test.ts > streams and uploads > POST /rs/upload readableStream json",
+				"surface.test.ts > streams and uploads > POST /rs/upload streamed json",
 				"surface.test.ts > websocket > GET without Upgrade to /ws/echo → 426",
 				"surface.test.ts > websocket > echo: greeting then echo",
 				"surface.test.ts > websocket > room search input"
@@ -908,7 +908,7 @@
 				"surface.test.ts > output types > GET /out/xml",
 				"surface.test.ts > output types > POST /out/multi-status created",
 				"surface.test.ts > streams and uploads > GET /stream/filtered SSE uses search",
-				"surface.test.ts > streams and uploads > POST /rs/upload readableStream json",
+				"surface.test.ts > streams and uploads > POST /rs/upload streamed json",
 				"surface.test.ts > websocket > GET without Upgrade to /ws/echo → 426",
 				"surface.test.ts > websocket > echo: greeting then echo",
 				"surface.test.ts > websocket > room search input"
