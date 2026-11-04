@@ -1,8 +1,8 @@
 /**
  * honey()'s config (bit 19 h2): the route tree on by default and every other artifact off, `true` as each default
  * path, the OpenAPI outputs as a list with the security schemes declared once (plan 39 7.4), each output's formats
- * (JSON unless its path is YAML), the SDK and CLI keys refused as honey-clients's (Q1), and the outputs a watcher
- * ignores.
+ * (JSON unless its path is YAML), the SDK and CLI keys refused as honey-clients's (Q1), any key no option names
+ * refused, and the outputs a watcher ignores.
  */
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
@@ -109,8 +109,43 @@ describe("resolveHoneyConfig (bit 19 h2), continued (2)", () => {
 	it("refuses the SDK and CLI keys, which are honey-clients's (Q1)", () => {
 		for (const key of ["sdk", "cli"])
 			expect(() => resolveHoneyConfig({ codegen: { [key]: true } } as HoneyVitePluginConfig)).toThrow(
-				`codegen.${key}: the SDKs, the CLI and MCP are honey-clients's: honey-clients generate --app`,
+				`codegen.${key} moved: the SDKs, the CLI and MCP are honey-clients's: honey-clients generate --app`,
 			)
+	})
+})
+
+describe("resolveHoneyConfig: a key no option names (plan 39 7.4)", () => {
+	it("refuses a key no option names, at any depth, and names where a moved one went", () => {
+		const doc = { name: "public", title: "A", version: "1" }
+		const refused = (config: unknown) => {
+			try {
+				resolveHoneyConfig(config as HoneyVitePluginConfig)
+			} catch (error) {
+				return (error as Error).message
+			}
+			return null
+		}
+		expect([
+			refused({ apps: "src/index.ts" }),
+			refused({ codegen: { tre: true } }),
+			refused({ codegen: { openApi: { ...doc, securitySchemes: {} } } }),
+			refused({ codegen: { openApi: [doc, { ...doc, name: "b", sanitize: { stripSecuritySchemes: ["k"] } }] } }),
+			refused({ codegen: { openApi: { ...doc, sanitize: { stripSecurityRequirements: ["jwt"] } } } }),
+			refused({ codegen: { openApi: { ...doc, sanitize: { stripXExtension: true } } } }),
+			refused({ codegen: { mcp: { paths: "a.ts" } } }),
+			refused({ codegen: { mcp: { securitySchemes: {} } } }),
+			refused({ codegen: { types: { name: "Ctx" } } }),
+		]).toEqual([
+			"apps is no option",
+			"codegen.tre is no option",
+			'codegen.openApi "public".securitySchemes moved: declare each scheme once in codegen.securitySchemes',
+			'codegen.openApi "b".sanitize.stripSecuritySchemes moved: security lists the schemes the document shows',
+			'codegen.openApi "public".sanitize.stripSecurityRequirements moved: security lists the schemes the document shows',
+			'codegen.openApi "public".sanitize.stripXExtension is no option',
+			"codegen.mcp.paths is no option",
+			"codegen.mcp.securitySchemes moved: declare each scheme once in codegen.securitySchemes",
+			"codegen.types.name is no option",
+		])
 	})
 })
 
@@ -173,17 +208,13 @@ describe("generatedOutputs (bit 19 h2)", () => {
 describe("resolveHoneyConfig's MCP handler (bit 21 e)", () => {
 	it("reads true as src/_gen/mcp.gen.ts, a string as the path, an object with its options; its stem the directory", () => {
 		const filterRoutes = () => true
-		const outputs = [
-			true,
-			"gen/tools.ts",
-			{ filterRoutes, name: "shop", path: "gen/x.gen.ts", securitySchemes: { k: {} } },
-			{},
-			false,
-		].map((mcp) => resolveHoneyConfig({ codegen: { mcp } }).codegen.mcp)
+		const outputs = [true, "gen/tools.ts", { filterRoutes, name: "shop", path: "gen/x.gen.ts" }, {}, false].map(
+			(mcp) => resolveHoneyConfig({ codegen: { mcp } }).codegen.mcp,
+		)
 		expect(outputs).toEqual([
 			{ dir: "mcp", path: "src/_gen/mcp.gen.ts" },
 			{ dir: "tools", path: "gen/tools.ts" },
-			{ dir: "x", filterRoutes, name: "shop", path: "gen/x.gen.ts", securitySchemes: { k: {} } },
+			{ dir: "x", filterRoutes, name: "shop", path: "gen/x.gen.ts" },
 			{ dir: "mcp", path: "src/_gen/mcp.gen.ts" },
 			false,
 		])

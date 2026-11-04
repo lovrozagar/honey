@@ -156,8 +156,68 @@ export const MCP_COMPANIONS = [
 ] as const
 
 /** `value` as the MCP output: off, or its path (a `.ts` module) and companion directory with its options. */
+type TypesOptions = Extract<HoneyCodegenConfig["types"], object>
+
+/* every key each config object takes, exhaustive by its type: a JS config is not type-checked, and none passes unread */
+const PLUGIN_KEYS = { app: true, codegen: true, watch: true } satisfies Record<keyof HoneyVitePluginConfig, true>
+const CODEGEN_KEYS = {
+	assetsDir: true,
+	invalidate: true,
+	manifest: true,
+	mcp: true,
+	mergeTree: true,
+	openApi: true,
+	securitySchemes: true,
+	tree: true,
+	types: true,
+} satisfies Record<keyof HoneyCodegenConfig, true>
+const OPENAPI_KEYS = {
+	description: true,
+	externalDocs: true,
+	filterRoutes: true,
+	formats: true,
+	name: true,
+	path: true,
+	profile: true,
+	sanitize: true,
+	security: true,
+	servers: true,
+	tags: true,
+	title: true,
+	version: true,
+} satisfies Record<keyof HoneyOpenApiOutputConfig, true>
+const SANITIZE_KEYS = { stripXExtensions: true } satisfies Record<
+	keyof NonNullable<HoneyOpenApiOutputConfig["sanitize"]>,
+	true
+>
+const MCP_KEYS = { filterRoutes: true, name: true, path: true } satisfies Record<keyof HoneyMcpOutputConfig, true>
+const TYPES_KEYS = { baseCtxName: true, path: true } satisfies Record<keyof TypesOptions, true>
+
+const CLIENTS = "the SDKs, the CLI and MCP are honey-clients's: honey-clients generate --app"
+const ONCE = "declare each scheme once in codegen.securitySchemes"
+const SHOWN = "security lists the schemes the document shows"
+/** The keys a release moved, by the object they were in, with where they went. */
+const MOVED: Readonly<Record<string, string>> = {
+	"codegen.cli": CLIENTS,
+	"codegen.sdk": CLIENTS,
+	"mcp.securitySchemes": ONCE,
+	"openApi.securitySchemes": ONCE,
+	"sanitize.stripSecurityRequirements": SHOWN,
+	"sanitize.stripSecuritySchemes": SHOWN,
+}
+
+/** Refuse the first key of `value` that `known` lacks, named from `at`; a moved one says where it went. */
+function onlyKnown(value: object, known: object, at: string, kind: string): void {
+	const key = Object.keys(value).find((name) => !Object.hasOwn(known, name))
+	if (key === undefined) return
+	const path = at === "" ? key : `${at}.${key}`
+	const moved = MOVED[`${kind}.${key}`]
+	throw new Error(moved === undefined ? `${path} is no option` : `${path} moved: ${moved}`)
+}
+
 function mcpOf(value: HoneyCodegenConfig["mcp"]): false | ResolvedMcpOutput {
 	if (value === undefined || value === false) return false
+	if (typeof value === "object") onlyKnown(value, MCP_KEYS, "codegen.mcp", "mcp")
 	const options = typeof value === "object" ? value : { path: typeof value === "string" ? value : undefined }
 	const path = options.path ?? MCP
 	const dir = /([^/\\]+?)(?:\.gen)?\.ts$/.exec(path)?.[1]
@@ -182,6 +242,8 @@ function openApiOf(
 	return outputs.map((entry) => {
 		const path = entry.path ?? "src/_gen/openapi.gen.json"
 		const at = `codegen.openApi ${JSON.stringify(entry.name ?? path)}`
+		onlyKnown(entry, OPENAPI_KEYS, at, "openApi")
+		if (entry.sanitize !== undefined) onlyKnown(entry.sanitize, SANITIZE_KEYS, `${at}.sanitize`, "sanitize")
 		if (entry.name !== undefined) {
 			if (names.has(entry.name)) throw new Error(`codegen.openApi: two documents are named "${entry.name}"`)
 			names.add(entry.name)
@@ -195,12 +257,12 @@ function openApiOf(
 	})
 }
 
-/** `raw` with its defaults; a key honey-clients owns is an error naming where it went. */
+/** `raw` with its defaults; a key no option names is an error, and one a release moved names where it went. */
 export function resolveHoneyConfig(raw: HoneyVitePluginConfig): ResolvedHoneyConfig {
+	onlyKnown(raw, PLUGIN_KEYS, "", "plugin")
 	const c = raw.codegen ?? {}
-	for (const key of ["sdk", "cli"])
-		if (Object.hasOwn(c, key))
-			throw new Error(`codegen.${key}: the SDKs, the CLI and MCP are honey-clients's: honey-clients generate --app`)
+	onlyKnown(c, CODEGEN_KEYS, "codegen", "codegen")
+	if (typeof c.types === "object") onlyKnown(c.types, TYPES_KEYS, "codegen.types", "types")
 	const types = typeof c.types === "object" ? c.types : { path: pathOf(c.types, TYPES, false) || undefined }
 	const outputs = c.openApi === undefined ? [] : Array.isArray(c.openApi) ? c.openApi : [c.openApi]
 	return {

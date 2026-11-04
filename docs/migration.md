@@ -1408,7 +1408,8 @@ export const app = honey().payloadErrorFormatter(withTrace)
 A document shows the schemes its `security` lists, else the ones its routes name, so `sanitize.stripSecurityRequirements`
 and `sanitize.stripSecuritySchemes` are gone too: `sanitize` keeps `stripXExtensions`. An output writes the formats
 its `formats` names, JSON alone by default, where it used to write a YAML twin beside every JSON file: add `"yaml"` to
-keep one. Declared tags are listed in the order given.
+keep one. Declared tags are listed in the order given. A config that still passes a moved key fails and names where
+it went, as does any key no option names.
 
 ```ts v0
 codegen: {

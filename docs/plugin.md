@@ -3,7 +3,9 @@
 `honeyPlugin()` from `@lovrozagar/honey/plugin` is a Vite plugin. On each build it writes the app's own
 artifacts: the typed route tree, the route manifest, each OpenAPI document as JSON, YAML or both, and the types the
 generated clients read. The SDKs, the CLI and the MCP server come from `honey-clients generate`, which reads that
-document; see the code generation page. The config loads through jiti, so it may be TypeScript.
+document; see the code generation page. The config loads through jiti, so it may be TypeScript. A key no option
+names, at any depth, fails the build, and one a release moved names where it went: a JS config is not type-checked,
+and a key read by no one would leave its document unfiltered without a word.
 
 ## Example
 
