@@ -105,10 +105,18 @@ export type AllowedResMethods<TOutput> =
 /** The helpers a route that declares an output keeps; `raw` is gone, since a raw Response declares nothing. */
 type UniversalRes = Pick<HoneyRes, "noContent" | "stream">
 
-/** The redirect keys the output's `redirect` entry declares, or `never`. */
-type RedirectsOf<TOutput> = TOutput extends { readonly redirect?: infer R }
-	? Extract<keyof NonNullable<R>, RedirectKey>
+/** The status keys the output's `redirect` entry declares (its redirects and a 304), or `never`. */
+type BodilessOf<TOutput> = TOutput extends { readonly redirect?: infer R }
+	? Extract<keyof NonNullable<R>, StatusKey>
 	: never
+
+/** The redirect keys the output's `redirect` entry declares, or `never`. */
+type RedirectsOf<TOutput> = Extract<BodilessOf<TOutput>, RedirectKey>
+
+/** The answers `.output()` declares as a `Response`: each media type at its status keys, and `bodiless` with none. */
+type DeclaredResponse<TOutput, TBodiless extends StatusKey> =
+	| { [CT in MediaTypes<TOutput>]: TypedResponse<CT, Extract<keyof TOutput[CT], StatusKey>> }[MediaTypes<TOutput>]
+	| TypedResponse<"none", "no_content" | TBodiless>
 
 /**
  * What a handler may return: any typed answer without `.output()`; with one, a declared media type at one of its
@@ -116,10 +124,7 @@ type RedirectsOf<TOutput> = TOutput extends { readonly redirect?: infer R }
  */
 export type DeclaredAnswer<TOutput> = [TOutput] extends [never]
 	? TypedResponse
-	:
-			| { [CT in MediaTypes<TOutput>]: TypedResponse<CT, Extract<keyof TOutput[CT], StatusKey>> }[MediaTypes<TOutput>]
-			| TypedResponse<"none", "no_content" | RedirectsOf<TOutput>>
-			| SoleBody<TOutput>
+	: DeclaredResponse<TOutput, RedirectsOf<TOutput>> | SoleBody<TOutput>
 
 /** A declared body's type: its schema's input, what output validation accepts; `unknown` without a schema. */
 type BodyOf<S> = S extends StandardSchemaLike ? InferInput<S> : unknown
@@ -229,7 +234,7 @@ type OutputRes<TOutput> = UniversalRes & {
 	 * Answers `response` as it is, its status decided elsewhere (a stored file's 206 or 304); a status or media type
 	 * the route does not declare is refused as an undeclared answer is. Its body is not validated.
 	 */
-	forward: (response: Response) => Exclude<DeclaredAnswer<TOutput>, SoleBody<TOutput>>
+	forward: (response: Response) => DeclaredResponse<TOutput, BodilessOf<TOutput>>
 } & Narrowed<TOutput, "application/json", false> &
 	Narrowed<TOutput, "text/plain", true> &
 	Narrowed<TOutput, "text/html", true> &

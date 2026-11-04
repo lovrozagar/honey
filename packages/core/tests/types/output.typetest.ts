@@ -571,6 +571,20 @@ describe("ctx.res.forward(): only under .output(), typed as the declared answers
 				return ctx.res.raw(new Response())
 			})
 	})
+
+	it("keeps them on a ctx typed from plain body types, as a generated per-route ctx is", () => {
+		type Generated = ApplyOutput<{}, { "application/json": { ok: { results: string[] } } }>
+		expectTypeOf<ReturnType<Generated["res"]["forward"]>>().toEqualTypeOf<
+			TypedResponse<"application/json", "ok"> | TypedResponse<"none", "no_content">
+		>()
+	})
+
+	it("counts a 304 its redirect entry declares among the bodiless answers", () => {
+		type Revalidated = ApplyOutput<{}, { "text/csv": { ok: string }; redirect: { not_modified: true } }>
+		expectTypeOf<ReturnType<Revalidated["res"]["forward"]>>().toEqualTypeOf<
+			TypedResponse<"text/csv", "ok"> | TypedResponse<"none", "no_content" | "not_modified">
+		>()
+	})
 })
 
 describe("an encoded stream body: sse() and json() take a ReadableStream", () => {
