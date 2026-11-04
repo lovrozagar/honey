@@ -65,11 +65,11 @@ type BuiltinMeta = {
 }
 
 /**
- * Route meta: the built-in keys every route accepts, and the app's own `T`; an `extensions` that `T` declares replaces
- * the built-in one, so a misspelled `x-` key fails to compile. Name it wherever you declare route meta, as in
- * `app.metaType<HoneyMeta<RouteMeta>>()`.
+ * Route meta: the built-in keys every route accepts, and the app's own `T`; a key `T` declares replaces the built-in
+ * one, so an `extensions` with its own `x-` keys refuses a misspelled one and a `security` typed the app's way holds
+ * that type. Name it wherever you declare route meta, as in `app.metaType<HoneyMeta<RouteMeta>>()`.
  */
-export type HoneyMeta<T = {}> = Omit<BuiltinMeta, Extract<keyof T, "extensions">> & T
+export type HoneyMeta<T = {}> = Omit<BuiltinMeta, keyof T> & T
 
 /** A middleware scoped by path at the type level: what it adds to routes under `path`. */
 export type ScopedMwEntry = {

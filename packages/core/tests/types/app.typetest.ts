@@ -10,7 +10,7 @@ import type { HoneyContext } from "../../src/context/context.ts"
 import { defineErrors } from "../../src/errors/errors.ts"
 import { createMiddleware, type MiddlewareFn } from "../../src/middleware/middleware.ts"
 import { honey } from "../../src/routing/app.ts"
-import type { HoneyMeta } from "../../src/routing/app-types.ts"
+import type { HoneyCtx, HoneyMeta } from "../../src/routing/app-types.ts"
 import type {
 	InferBasePath,
 	InferCtx,
@@ -36,7 +36,7 @@ type AppMeta = { auth?: "public" | "required"; tags?: string }
 
 describe("HoneyMeta", () => {
 	/* 0.7.3's public alias for "the OpenAPI keys and mine" (bit 22 a): a consumer declares its route meta with it */
-	it("is the built-in meta keys intersected with the consumer's own", () => {
+	it("is the built-in meta keys beside the consumer's own", () => {
 		expectTypeOf<HoneyMeta<{ worker: "extract" }>>().toExtend<{ summary?: string; worker: "extract" }>()
 		expectTypeOf<HoneyMeta["summary"]>().toEqualTypeOf<string | undefined>()
 		const app = honey<{}>().metaType<HoneyMeta<{ worker: "extract" }>>().meta({ worker: "extract" })
@@ -47,6 +47,21 @@ describe("HoneyMeta", () => {
 				expectTypeOf(ctx.meta.worker).toEqualTypeOf<"extract">()
 				return ctx.res.text("ok", "ok")
 			})
+	})
+})
+
+describe("a built-in meta key the app's meta type declares its own way", () => {
+	type Scheme = "jwt" | "key"
+	type RouteMeta = { security?: Scheme | Scheme[][] }
+
+	it("takes the app's type, so a route's ctx passes to a function typed HoneyCtx<Env, RouteMeta>", () => {
+		expectTypeOf<HoneyMeta<RouteMeta>["security"]>().toEqualTypeOf<Scheme | Scheme[][] | undefined>()
+		const audited = (ctx: HoneyCtx<{}, RouteMeta>) => String(ctx.meta.security)
+		honey<{}>()
+			.metaType<RouteMeta>()
+			.get("/a")
+			.meta({ security: [["jwt", "key"]] })
+			.handler((ctx) => ctx.res.text("ok", audited(ctx)))
 	})
 })
 
