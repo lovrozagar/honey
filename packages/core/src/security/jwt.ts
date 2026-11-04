@@ -4,6 +4,7 @@
  * max age counts from `iat`. An HMAC `secret` and a public key are separate options, so a token cannot choose which
  * one verifies it.
  */
+import type { InferOutput, StandardSchemaLike } from "../validation/standard-schema.ts"
 import type { JwkSource } from "./jwks.ts"
 import {
 	ALGORITHMS,
@@ -35,8 +36,11 @@ export type JwtPayload = Record<string, unknown>
  */
 export type JwtVerifyError = "expired" | "invalid_claims" | "invalid_signature" | "malformed" | "unknown_key"
 
-/** A verified token's claims, or why it was refused. */
-export type JwtVerifyResult =
+/** The payload `verifyJwt` answers for `Schema`: the schema's output, or the raw claims when no schema is given. */
+export type JwtClaimsOf<Schema> = Schema extends StandardSchemaLike ? InferOutput<Schema> : JwtPayload
+
+/** A verified token's claims (the schema's output, when `verifyJwt` was given one), or why it was refused. */
+export type JwtVerifyResult<Payload = JwtPayload> =
 	| {
 			/** Why the token was refused. */
 			error: JwtVerifyError
@@ -45,7 +49,7 @@ export type JwtVerifyResult =
 	  }
 	| {
 			/** The verified claims. */
-			payload: JwtPayload
+			payload: Payload
 			/** The token verified. */
 			success: true
 	  }
@@ -210,6 +214,16 @@ function claimError(payload: JwtPayload, options: JwtClaimOptions): JwtVerifyErr
 	return hasRequiredClaims(payload, options) ? timeError(payload, options) : "invalid_claims"
 }
 
+/** The claims `schema` makes of a verified `payload`, or `invalid_claims` when it finds a problem with them. */
+async function parsedClaims<Payload>(
+	schema: StandardSchemaLike,
+	payload: JwtPayload,
+): Promise<JwtVerifyResult<Payload>> {
+	const result = await schema["~standard"].validate(payload)
+	if (result.issues !== undefined) return { error: "invalid_claims", success: false }
+	return { payload: result.value as Payload, success: true }
+}
+
 /** The key that verifies a token of `alg`, or why there is none. An HMAC `alg` only ever meets a `secret`. */
 async function verifyingKey(
 	options: VerifyJwtOptions,
@@ -234,18 +248,30 @@ async function verifyingKey(
 }
 
 /**
- * Verifies the signature, then the claims. Every refusal of the token is a result; it throws only for what the token
+ * Verifies the signature, then the claims, then reads them through `schema` when given one. Every refusal of the token is a result; it throws only for what the token
  * did not cause: a missing secret, or a `jwks` lookup that could not reach the issuer.
  *
  * @param token A compact JWS.
  * @param options The accepted algorithms, the key, and the claim rules.
- * @returns The verified claims, or why the token was refused.
+ * @returns The verified claims, as the schema's output when one is given, or why the token was refused.
  *
  * @example
  * const result = await verifyJwt(token, { algorithms: ["HS256"], audience: "api", issuer: "auth", secret })
  * if (!result.success) throw new HoneyError({ errorKey: "unauthorized", status: "unauthorized" })
+ *
+ * const typed = await verifyJwt(token, { algorithms: ["HS256"], secret, schema: z.object({ sub: z.string() }) })
+ * if (typed.success) typed.payload.sub // string
  */
-export async function verifyJwt(token: string, options: VerifyJwtOptions): Promise<JwtVerifyResult> {
+export async function verifyJwt<Schema extends StandardSchemaLike | undefined = undefined>(
+	token: string,
+	options: VerifyJwtOptions & {
+		/**
+		 * A Standard Schema (zod, valibot, arktype) the claims must match once the signature and every claim rule
+		 * passed: its output is the payload, and a mismatch is `invalid_claims`.
+		 */
+		schema?: Schema
+	},
+): Promise<JwtVerifyResult<JwtClaimsOf<Schema>>> {
 	const parts = token.split(".")
 	if (parts.length !== SEGMENTS) return { error: "malformed", success: false }
 	const [headerPart = "", payloadPart = "", signaturePart = ""] = parts
@@ -266,5 +292,7 @@ export async function verifyJwt(token: string, options: VerifyJwtOptions): Promi
 		return { error: "invalid_signature", success: false }
 	}
 	const error = claimError(payload, options)
-	return error === null ? { payload, success: true } : { error, success: false }
+	if (error !== null) return { error, success: false }
+	if (options.schema === undefined) return { payload: payload as JwtClaimsOf<Schema>, success: true }
+	return parsedClaims(options.schema, payload)
 }

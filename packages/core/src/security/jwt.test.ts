@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import * as z from "zod"
 import { KNOWN_ANSWER } from "../../tests/fixture/jwt-known-answer.ts"
+import type { StandardSchemaLike } from "../validation/standard-schema.ts"
 import {
 	type AsymmetricAlgorithm,
 	decodeJwtPayload,
@@ -26,7 +28,7 @@ const encodeJson = (value: unknown): string =>
 
 const hs256 = (payload: Record<string, unknown>) => signJwt(payload, { alg: "HS256", key: SECRET })
 
-const verifyHs256 = (token: string, options: JwtClaimOptions = {}) =>
+const verifyHs256 = (token: string, options: JwtClaimOptions & { schema?: StandardSchemaLike } = {}) =>
 	verifyJwt(token, { algorithms: ["HS256"], secret: SECRET, ...options })
 
 const failure = (error: string) => ({ error, success: false })
@@ -299,5 +301,60 @@ describe("decode and helpers", () => {
 			const token = await signJwt({ exp: FUTURE }, { alg: "ES256", key: await importPkcs8(pem, "ES256") })
 			expect((await verifyJwt(token, { algorithms: ["ES256"], jwk })).success).toBe(true)
 		}
+	})
+})
+
+describe("verifyJwt with a schema (plan 39 7.3)", () => {
+	const claims = z.object({ role: z.enum(["admin", "member"]), sub: z.string() })
+	/* a Standard Schema that counts its calls and answers asynchronously, as the spec allows */
+	const counted = () => {
+		const seen: unknown[] = []
+		const schema = {
+			"~standard": {
+				validate: async (value: unknown) => (seen.push(value), { value: { seen: seen.length } }),
+				vendor: "test",
+				version: 1,
+			},
+		} as const
+		return { schema, seen }
+	}
+
+	it("answers the schema's output as the payload", async () => {
+		const token = await hs256({ exp: FUTURE, role: "admin", sub: "u-1" })
+		expect(await verifyHs256(token, { schema: claims })).toEqual({
+			payload: { role: "admin", sub: "u-1" },
+			success: true,
+		})
+	})
+
+	it("answers invalid_claims when the claims do not match it", async () => {
+		const [wrong, missing] = await Promise.all([
+			hs256({ exp: FUTURE, role: "owner", sub: "u-1" }),
+			hs256({ exp: FUTURE, role: "member" }),
+		])
+		expect([await verifyHs256(wrong, { schema: claims }), await verifyHs256(missing, { schema: claims })]).toEqual([
+			failure("invalid_claims"),
+			failure("invalid_claims"),
+		])
+	})
+
+	it("reads only a token whose signature and claim rules passed, awaiting an asynchronous schema", async () => {
+		const { schema, seen } = counted()
+		const [forged, expired, valid] = await Promise.all([
+			signJwt({ exp: FUTURE, sub: "u-1" }, { alg: "HS256", key: "another-secret-of-at-least-32-bytes" }),
+			hs256({ exp: NOW - 1, sub: "u-1" }),
+			hs256({ exp: FUTURE, sub: "u-1" }),
+		])
+		expect([
+			await verifyHs256(forged, { schema }),
+			await verifyHs256(expired, { schema }),
+			await verifyHs256(valid, { schema }),
+			seen,
+		]).toEqual([
+			failure("invalid_signature"),
+			failure("expired"),
+			{ payload: { seen: 1 }, success: true },
+			[{ exp: FUTURE, sub: "u-1" }],
+		])
 	})
 })

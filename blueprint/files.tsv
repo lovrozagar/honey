@@ -267,6 +267,7 @@ tests/integration/telemetry/observability-matrix.test.ts	core	test	07	the full 9
 tests/integration/telemetry/correlation.test.ts	core	test	07	with telemetry on, requestId sets honey.request_id on the root span and the per-request logger child binds trace_id+span_id; with telemetry off, requestId + logger behave as today (ids stay DISTINCT, never collapsed — F5)	—
 tests/types/app.typetest.ts	core	test	02	the Infer* ladder (InferCtx/Env/BasePath/Meta/ErrorFactory/Methods/RoutePaths/RouteMethods/RouteCtx), context() typing, meta<T>(), public surface (internals hidden), base/routes/services split, ComputeErrorsByStatus	typetest/*
 tests/types/chain-meta.typetest.ts	core	test	22	the chain-meta contract: a key chain .meta(values) set is optional on its routes, a key nothing set stays as declared, an unknown key and a wrong value are refused, and the one-call meta<T>(values) form records every declared key as set (0.7.3's route semantics) while the two-call form proves which; checked by typecheck	—
+tests/types/jwt.typetest.ts	core	test	22	plan 39 7.3: verifyJwt's payload type: a schema's output with `schema`, the raw JwtPayload without one, the success and refusal branches narrowed, a non-Standard-Schema `schema` refused; checked by typecheck	—
 tests/types/app-routes.typetest.ts	core	test	02	$routes/MergeRoute depth + same-path methods, basePath + MergePath registration, route(sub) merging, meta carried in $routes; bit 18 a: the mcp meta flag's type (v0 T2.4)	typetest/*
 tests/types/handler-ctx.typetest.ts	core	test	02	ctx.params, routePattern literal, errors (declared + defaults, factory form, boundary), meta narrowing + readonly, req/env, no input without .input(), per-route use() accumulation	typetest/*
 tests/types/response.typetest.ts	core	test	02	ctx.res helper return types: TypedResponse<CT, SK> per helper (json/text/html/xml/csv by status key, noContent, redirect at any status, raw's open brand), brand isolation by content type and by status key, TypedResponse extends Response, and a handler returning a plain Response refused	typetest/*
@@ -1112,7 +1113,7 @@ tests/fixture/spawn-timeout.ts	core	test	21	bit 21 ci-f: core's SPAWN_TIMEOUT = 
 tests/structure/workers-naming.test.ts	core	test	21	the workers runtime is named for the product in subpaths, detection and the adapter; platform spellings stay	—
 src/security/jws.ts	core	src	21	the JWS layer under ./jwt: algorithms, base64url, keys per call	jwt.ts
 src/security/jwks.ts	core	src	21	remoteJwks: an issuer's keys, single flight, cooldown, bounded stale	jwt.ts
-src/security/jwt.ts	core	src	21	signJwt, verifyJwt and the claim rules on WebCrypto alone	jwt.ts
+src/security/jwt.ts	core	src	21	signJwt, verifyJwt and the claim rules on WebCrypto alone; plan 39 7.3: verifyJwt's `schema` (a Standard Schema) reads claims that passed the signature and the rules, its output the payload, a mismatch invalid_claims	jwt.ts
 tests/fixture/jwt-known-answer.ts	core	test	21	tokens jose signed, public keys only	jwt.ts
 tests/integration/security/jwt-adversarial.test.ts	core	test	21	algorithm confusion and a token with no exp, rerun by the mutation harness	jwt.ts
 src/security/webhook.ts	core	src	21	./webhook entry: re-exports webhookContract and signWebhook (roadmap 3 slice 2 split them out)	crypto.ts
