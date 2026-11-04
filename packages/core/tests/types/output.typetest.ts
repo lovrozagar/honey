@@ -579,7 +579,11 @@ describe("ctx.res.forward(): only under .output(), typed as the declared answers
 		>()
 	})
 
-	it("counts a 304 its redirect entry declares among the bodiless answers", () => {
+	it("counts a 304 its redirect entry declares among the bodiless answers, which a handler may return", () => {
+		honey<{}>()
+			.get("/export.csv")
+			.output({ "text/csv": { ok: z.string() }, redirect: { not_modified: true } })
+			.handler((ctx) => ctx.res.forward(new Response(null, { status: 304 })))
 		type Revalidated = ApplyOutput<{}, { "text/csv": { ok: string }; redirect: { not_modified: true } }>
 		expectTypeOf<ReturnType<Revalidated["res"]["forward"]>>().toEqualTypeOf<
 			TypedResponse<"text/csv", "ok"> | TypedResponse<"none", "no_content" | "not_modified">

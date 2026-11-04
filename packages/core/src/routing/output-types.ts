@@ -120,11 +120,11 @@ type DeclaredResponse<TOutput, TBodiless extends StatusKey> =
 
 /**
  * What a handler may return: any typed answer without `.output()`; with one, a declared media type at one of its
- * status keys, a bodiless answer (no content, a redirect), or the sole body.
+ * status keys, a bodiless answer (no content, a redirect, a forwarded 304), or the sole body.
  */
 export type DeclaredAnswer<TOutput> = [TOutput] extends [never]
 	? TypedResponse
-	: DeclaredResponse<TOutput, RedirectsOf<TOutput>> | SoleBody<TOutput>
+	: DeclaredResponse<TOutput, BodilessOf<TOutput>> | SoleBody<TOutput>
 
 /** A declared body's type: its schema's input, what output validation accepts; `unknown` without a schema. */
 type BodyOf<S> = S extends StandardSchemaLike ? InferInput<S> : unknown
