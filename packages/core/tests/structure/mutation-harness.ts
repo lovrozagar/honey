@@ -6,10 +6,8 @@
  *
  *     bun packages/core/tests/structure/mutation-harness.ts
  */
-import { spawnSync } from "node:child_process"
 import type { IncomingMessage } from "node:http"
-import { createRequire } from "node:module"
-import { dirname, join, resolve } from "node:path"
+import { resolve } from "node:path"
 import type { producerStream } from "../../src/streaming/producer-stream.ts"
 import { parseMediaType } from "../../src/response/media-type.ts"
 import {
@@ -70,6 +68,7 @@ import {
 	unvalidatedSse,
 	withoutBackpressure,
 } from "./mutants.ts"
+import { type SuiteRun, runVitest } from "./suite-run.ts"
 
 export type Guard = {
 	/** what the suite must catch once this guard is gone */
@@ -483,7 +482,6 @@ export const GUARDS: readonly Guard[] = [
 
 const CORE = resolve(import.meta.dirname, "../..")
 const SUITE = "tests/integration/security"
-const VITEST = join(dirname(createRequire(import.meta.url).resolve("vitest/package.json")), "vitest.mjs")
 
 export function guardNamed(id: string | undefined): Guard | undefined {
 	if (id === undefined || id === "") return undefined
@@ -492,13 +490,9 @@ export function guardNamed(id: string | undefined): Guard | undefined {
 	return guard
 }
 
-/** The adversarial suite's exit status, with `mutant` disabled when given. */
-export function runSuite(mutant: string | undefined): number {
-	const env = { ...process.env, HONEY_MUTANT: mutant ?? "" }
-	const run = spawnSync(process.execPath, [VITEST, "run", SUITE], { cwd: CORE, encoding: "utf8", env })
-	/* a red plain run is the one nobody expects: show what failed, or the gate says only "1" */
-	if (mutant === undefined && run.status !== 0) process.stderr.write(`${run.stdout}${run.stderr}`)
-	return run.status ?? 1
+/** The adversarial suite's run, with `mutant` disabled when given: its exit status and what failed, by name. */
+export function runSuite(mutant: string | undefined): SuiteRun {
+	return runVitest(CORE, [SUITE], { ...process.env, HONEY_MUTANT: mutant ?? "" })
 }
 
 export function survivors(results: ReadonlyArray<{ id: string; status: number }>): string[] {
@@ -506,11 +500,14 @@ export function survivors(results: ReadonlyArray<{ id: string; status: number }>
 }
 
 function main(): number {
-	if (runSuite(undefined) !== 0) {
-		process.stderr.write("mutation: the adversarial suite fails with every guard in place\n")
+	const plain = runSuite(undefined)
+	if (plain.status !== 0) {
+		process.stderr.write(
+			`mutation: with every guard in place the adversarial suite fails:\n${plain.failures.join("\n")}\n`,
+		)
 		return 1
 	}
-	const results = GUARDS.map((g) => ({ id: g.id, status: runSuite(g.id) }))
+	const results = GUARDS.map((g) => ({ id: g.id, status: runSuite(g.id).status }))
 	for (const r of results) process.stdout.write(`${r.status === 0 ? "SURVIVED" : "killed  "} ${r.id}\n`)
 	const left = survivors(results)
 	if (left.length > 0) process.stderr.write(`mutation: no case catches ${left.join(", ")}\n`)

@@ -32,13 +32,13 @@ describe("survivors", () => {
 
 describe("the adversarial suite against each guard", () => {
 	it("passes with every guard in place", () => {
-		expect(runSuite(undefined)).toBe(0)
+		expect(runSuite(undefined)).toEqual({ failures: [], status: 0 })
 	}, 60_000)
 
 	it.each(GUARDS.map((g) => g.id))(
 		"goes red with the %s guard disabled",
 		(id) => {
-			expect(runSuite(id)).not.toBe(0)
+			expect(runSuite(id).status).not.toBe(0)
 		},
 		60_000,
 	)

@@ -25,6 +25,7 @@ export const SPAWNING_HELPERS = new Map([
 	["packages/core/src/build/cli.ts", ["main"]],
 	["packages/core/tests/build/fixture/packed.ts", ["consumer", "pack", "run"]],
 	["packages/core/tests/structure/mutation-harness.ts", ["runSuite"]],
+	["packages/core/tests/structure/suite-run.ts", ["runVitest"]],
 	["packages/gen/scripts/sdk-budget.ts", ["listedEntries", "runtimeBytes"]],
 	["packages/gen/src/cli.ts", ["generated", "main"]],
 	["packages/gen/src/emit/cli/__fixtures__/built.ts", ["builtCli"]],
