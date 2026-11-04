@@ -3,8 +3,9 @@
  * output, each test that failed, each test a dead worker never finished, each file that failed outside its tests
  * and each unhandled error. A gate that says only "171 of 172" sends its reader to rerun it; this one says what.
  *
- * A worker that dies (a crash, an out-of-memory kill) leaves its file "passed" in the JSON report, its running
- * test "pending" and the error only in the output, so both are read.
+ * A worker that dies (a crash, an out-of-memory kill) leaves its file "passed" in the JSON report and its running
+ * test "pending", which is what names it. vitest may also print an unhandled pool error for the dead fork, but only
+ * when that error beats the run's teardown: it is named when printed, and never relied on.
  */
 import { spawnSync } from "node:child_process"
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs"
@@ -23,7 +24,7 @@ export type SuiteRun = {
 }
 
 /** The part of vitest's JSON report read here. */
-type JsonReport = {
+export type JsonReport = {
 	testResults: {
 		assertionResults: { failureMessages: string[]; fullName: string; status: string }[]
 		message: string
@@ -32,7 +33,8 @@ type JsonReport = {
 	}[]
 }
 
-const UNHANDLED = /⎯+ Unhandled (?:Error|Rejection) ⎯+\n+(.+)/g
+/* vitest's banner over each error the run caught outside a test: the error's type */
+const UNHANDLED = /⎯+ (?:Unhandled Error|Unhandled Rejection|Uncaught Exception) ⎯+\n+(.+)/g
 
 /** Why a test is named: its failure's first line, or that a dead worker never let it finish. */
 function verdict(status: string, messages: readonly string[]): string {
@@ -44,7 +46,7 @@ function firstLine(text: string): string {
 }
 
 /** What `report` and the run's `output` say went wrong, each by name, files relative to `cwd`. */
-function failuresIn(report: JsonReport, output: string, cwd: string): string[] {
+export function failuresIn(report: JsonReport, output: string, cwd: string): string[] {
 	const inFiles = report.testResults.flatMap((file) => {
 		const at = relative(cwd, file.name)
 		const tests = file.assertionResults
