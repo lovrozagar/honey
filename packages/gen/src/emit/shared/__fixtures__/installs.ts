@@ -144,6 +144,19 @@ export function toolsInstall(): string {
 	].join(" && ")
 }
 
+/**
+ * The command that installs the CLI JSR's publish check runs in, from anywhere in the repo: its zip checked against
+ * `jsr-pins.json`'s sha256 before it is kept, then extracted whole or not at all.
+ */
+export function jsrCliInstall(): string {
+	return [
+		`P="$(git rev-parse --show-toplevel)/packages/gen/src/emit/ts/__fixtures__/jsr-pins.json" && D="$HOME/.cache/honey-tmp/tools" && R="$(jq -r .dir "$P")" && mkdir -p "$D/dl"`,
+		`curl -fsSL -o "$D/dl/$R.zip" "$(jq -r .url "$P")" && echo "$(jq -r .sha256 "$P")  $D/dl/$R.zip" | sha256sum -c -`,
+		`rm -rf "$D/$R" "$D/$R.partial" && mkdir -p "$D/$R.partial" && unzip -q "$D/dl/$R.zip" -d "$D/$R.partial"`,
+		`chmod +x "$D/$R.partial/$(jq -r .bin "$P")" && mv "$D/$R.partial" "$D/$R" && rm "$D/dl/$R.zip"`,
+	].join(" && ")
+}
+
 /** The command that installs the pinned MCP clients, from anywhere in the repo: verified by npm ci, kept whole or not at all. */
 export function clientsInstall(): string {
 	return [
@@ -180,5 +193,6 @@ export function ciInstalls(): Readonly<Record<string, readonly string[]>> {
 		],
 		"src/emit/cli/__fixtures__/tools.ts": [toolsInstall()],
 		"src/emit/mcp/__fixtures__/clients.ts": [clientsInstall()],
+		"src/emit/ts/__fixtures__/jsr-cli.ts": [jsrCliInstall()],
 	}
 }

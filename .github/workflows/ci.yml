@@ -151,6 +151,10 @@ jobs:
       # npm ci checks every package's integrity
       - name: MCP clients (client-lock.json's @modelcontextprotocol/sdk and @modelcontextprotocol/client)
         run: P="$(git rev-parse --show-toplevel)/packages/gen/src/emit/mcp/__fixtures__" && D="$HOME/.cache/honey-tmp/mcp-clients" && rm -rf "$D.partial" && mkdir -p "$D.partial" && cp "$P/client-pins.json" "$D.partial/package.json" && cp "$P/client-lock.json" "$D.partial/package-lock.json" && (cd "$D.partial" && npm ci --ignore-scripts --no-audit --no-fund) && sha256sum "$P/client-lock.json" | cut -d" " -f1 > "$D.partial/lock.sha256" && rm -rf "$D" && mv "$D.partial" "$D"
+      # the TS SDK's JSR leg runs JSR's publish check in the CLI the release jsr-pins.json pins by sha256
+      # (ts/__fixtures__/jsr-cli.ts), under ~/.cache/honey-tmp/tools: the command a missing CLI names
+      - name: JSR CLI (jsr-pins.json's publish checker)
+        run: P="$(git rev-parse --show-toplevel)/packages/gen/src/emit/ts/__fixtures__/jsr-pins.json" && D="$HOME/.cache/honey-tmp/tools" && R="$(jq -r .dir "$P")" && mkdir -p "$D/dl" && curl -fsSL -o "$D/dl/$R.zip" "$(jq -r .url "$P")" && echo "$(jq -r .sha256 "$P")  $D/dl/$R.zip" | sha256sum -c - && rm -rf "$D/$R" "$D/$R.partial" && mkdir -p "$D/$R.partial" && unzip -q "$D/dl/$R.zip" -d "$D/$R.partial" && chmod +x "$D/$R.partial/$(jq -r .bin "$P")" && mv "$D/$R.partial" "$D/$R" && rm "$D/dl/$R.zip"
       - run: bun run generate
       - if: ${{ !cancelled() }}
         run: bun run test:v1
