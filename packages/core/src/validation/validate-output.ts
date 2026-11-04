@@ -10,7 +10,7 @@
 import { EK, HoneyError } from "../errors/error.ts"
 import { isAnswer, type MaybePromise } from "../middleware/middleware.ts"
 import { bodyKind } from "../input/body-kind.ts"
-import { isProducedStream, rawBodyOf } from "../response/builder.ts"
+import { isForwarded, isProducedStream, rawBodyOf } from "../response/builder.ts"
 import { parseMediaType } from "../response/media-type.ts"
 import type { HoneyRes } from "../response/response.ts"
 import { codeToStatusKey, type StatusKey, statusKeyToCode } from "../response/status.ts"
@@ -92,7 +92,8 @@ export function compileOutput(schemas: OutputSchemas, headers: HeadersCheck | nu
 		if (essence === undefined || !declared.has(essence)) {
 			throw new HoneyError({ errorKey: EK.output_content_type_mismatch, status: "internal_server_error" })
 		}
-		if (essence !== "application/json" || json === undefined || isProducedStream(response)) return response
+		if (essence !== "application/json" || json === undefined || isProducedStream(response) || isForwarded(response))
+			return response
 		const statusKey = codeToStatusKey[response.status]
 		const schema = statusKey === undefined ? undefined : json[statusKey]
 		if (schema === undefined || schema === true) return response
@@ -112,6 +113,37 @@ export function compileOutput(schemas: OutputSchemas, headers: HeadersCheck | nu
 	return (response) => {
 		const pending = headers(response)
 		return pending === undefined ? body(response) : pending.then(() => body(response))
+	}
+}
+
+/**
+ * The check every route declaring `schemas` runs on what `forward()` answered, whatever the validation mode: its
+ * status must be a declared key, and its media type declared at that key unless it has no body. Its body is never
+ * read. A refusal is the 500 an undeclared answer is: `output_validation_failed` naming the status, or
+ * `output_content_type_mismatch`. Any other answer passes as it is.
+ */
+export function forwardCheck(schemas: OutputSchemas): OutputCheck {
+	const types = new Map<string, Set<string>>()
+	for (const [key, statuses] of Object.entries(schemas)) {
+		if (key === "headers" || statuses === undefined) continue
+		/* `redirect` names statuses with no body type */
+		const essence = parseMediaType(key)?.essence
+		for (const status of Object.keys(statuses as object)) {
+			const declared = types.get(status) ?? new Set<string>()
+			if (essence !== undefined) declared.add(essence)
+			types.set(status, declared)
+		}
+	}
+	return (response) => {
+		if (!isForwarded(response)) return response
+		const statusKey = codeToStatusKey[response.status] ?? String(response.status)
+		const declared = types.get(statusKey)
+		if (declared === undefined) throw failed(statusKey)
+		if (response.body === null) return response
+		const essence = parseMediaType(response.headers.get("content-type"))?.essence
+		if (essence === undefined || !declared.has(essence))
+			throw new HoneyError({ errorKey: EK.output_content_type_mismatch, status: "internal_server_error" })
+		return response
 	}
 }
 

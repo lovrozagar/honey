@@ -125,7 +125,10 @@ describe("the runtime bundle of an installed core (bit 19 i)", () => {
 			 * added 69 (26,497) so routeTree() returns a new app: the settings copy and the replay of every registered
 			 * route onto the tree's graph. 7.1 added 27 (26,496 to 26,523) so honey(preset) starts an app from a preset:
 			 * the call through the SEED slot and its symbol; the app's build from the preset lives in preset.ts, out of an
-			 * app that defines none. Locked at 26,600.
+			 * app that defines none. Locked at 26,600. 5.7 added 180 (26,516 to 26,696) so ctx.res.forward() answers a
+			 * Response whose status is decided elsewhere: the method and its forwarded marker, the check every .output()
+			 * route runs on a forwarded answer (its status a declared key, its media type declared there), and json and
+			 * sse taking an encoded stream. Locked at 26,800.
 			 */
 			const gzipped = gzipSync(js, { level: 9 }).length
 			const builtBy = run(BUN as string, ["--version"], full).out.trim()
@@ -134,7 +137,7 @@ describe("the runtime bundle of an installed core (bit 19 i)", () => {
 					leaked,
 					features,
 					routeModules("minimal", entry, [...WS_ROUTE, ...MCP_ROUTE, ...GENERATION_ONLY]),
-					gzipped < 26_600,
+					gzipped < 26_800,
 					builtBy,
 				],
 				`${gzipped} bytes gzipped`,
@@ -259,7 +262,9 @@ describe("the runtime bundle of an installed core (bit 19 i)", () => {
 			 * runtime, 103 for the docs map's two refusals and the guarded branch in answering and mountAll. The
 			 * guard itself is basic()'s, so none of it is here. Locked at 27,800. Plan 39 5.6 added 74 (27,752 to
 			 * 27,826): routeTree()'s settings copy and route replay, as in the minimal bundle. Locked at 27,900. 7.1
-			 * added 18 (27,823 to 27,841): honey(preset)'s call through the SEED slot.
+			 * added 18 (27,823 to 27,841): honey(preset)'s call through the SEED slot. 5.7 added 199 (27,836 to
+			 * 28,035): ctx.res.forward() and its check, and json and sse taking a stream, as in the minimal bundle.
+			 * Locked at 28,100.
 			 */
 			const gzipped = gzipSync(bunBundle("static-doc", served), { level: 9 }).length
 			expect(
@@ -267,7 +272,7 @@ describe("the runtime bundle of an installed core (bit 19 i)", () => {
 					routeModules("static-doc", served, [...GENERATOR, ...PAGES]),
 					routeModules("static-page", withPage, [...GENERATOR, ...PAGES]),
 					routeModules("generated-doc", generated, PAGES),
-					gzipped < 27_900,
+					gzipped < 28_100,
 				],
 				`${gzipped} bytes gzipped`,
 			).toEqual([[], ["openapi/scalar"], [], true])

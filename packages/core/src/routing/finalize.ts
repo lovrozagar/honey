@@ -7,7 +7,7 @@
 import { type HoneyContext, REQUEST, type RouteInfo } from "../context/context.ts"
 import { withInput } from "../input/input.ts"
 import { compileResponseHeaders } from "../response/response-headers.ts"
-import { compileOutput, outputValidationOn, withOutput } from "../validation/validate-output.ts"
+import { compileOutput, forwardCheck, outputValidationOn, withOutput } from "../validation/validate-output.ts"
 import type { OutputSchemas } from "./output-types.ts"
 import type { ErrorPolicy } from "../errors/projector.ts"
 import {
@@ -192,9 +192,14 @@ function planRoute(
 	const input = r.in === null ? r.fn : withInput(r.in, r.fn)
 	/* only a route with .output() in an app checking answers pays for the check */
 	const checked = r.out !== null && outputValidationOn(g.settings.outputValidation, globalProcess())
+	/* a route with .output() checks what forward() answered, in every mode */
+	const forwarded = r.out === null ? input : withOutput(forwardCheck(r.out as OutputSchemas), input)
 	const fn = checked
-		? withOutput(compileOutput(r.out as OutputSchemas, compileResponseHeaders((r.out as OutputSchemas).headers)), input)
-		: input
+		? withOutput(
+				compileOutput(r.out as OutputSchemas, compileResponseHeaders((r.out as OutputSchemas).headers)),
+				forwarded,
+			)
+		: forwarded
 	const handler = traced ? tracedHandler(taps === null ? fn : answering(fn)) : taps === null ? fn : answering(fn)
 	const compiled = compileChain(run, handler, hooks.convert)
 	return {

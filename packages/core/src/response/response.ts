@@ -12,6 +12,7 @@ import {
 	isProducedStream,
 	rawBodyOf,
 	type RawBody,
+	withForwarded,
 	withProducedBody,
 	withRawBody,
 } from "./builder.ts"
@@ -238,7 +239,8 @@ export class HoneyRes {
 
 	/**
 	 * An `application/json` answer; `data` is serialized with `JSON.stringify`. Data that serializes to nothing
-	 * (`undefined`, a function, a symbol) gives an empty body; data it refuses, such as a cycle, throws.
+	 * (`undefined`, a function, a symbol) gives an empty body; data it refuses, such as a cycle, throws. A stream is a
+	 * JSON document already encoded, sent as it comes and never validated.
 	 */
 	json<SK extends StatusKey>(
 		statusKey: SK,
@@ -246,13 +248,23 @@ export class HoneyRes {
 		opts?: ResponseOptions,
 	): TypedResponse<"application/json", SK> {
 		/* JSON.stringify answers undefined for undefined, a function or a symbol: an empty body, kept as one */
-		const body = JSON.stringify(data) as string | undefined
-		return this.#known(statusKeyToCode[statusKey], JSON_HEADERS, body ?? "", opts)
+		const body = data instanceof ReadableStream ? data : ((JSON.stringify(data) as string | undefined) ?? "")
+		return this.#known(statusKeyToCode[statusKey], JSON_HEADERS, body, opts)
 	}
 
 	/** A 204 answer with no body; headers and cookies apply. */
 	noContent(opts?: ResponseOptions): TypedResponse<"none", "no_content"> {
 		return typed(this.#empty(204, {}, opts))
+	}
+
+	/**
+	 * Answer a Response whose status was decided elsewhere (a store's range or conditional answer, an upstream's), on a
+	 * route with `.output()`: its status must be one the route declares, and its media type one declared at that status
+	 * (a bodiless 204 or 304 needs none), or the route answers as for an undeclared answer. The body is opaque: never
+	 * read, never validated. Headers are copied, so a guarded `fetch()` answer stays writable.
+	 */
+	forward(response: Response): TypedResponse {
+		return typed(withForwarded(new Response(response.body, response)))
 	}
 
 	/**
@@ -279,11 +291,15 @@ export class HoneyRes {
 		return typed(this.#streamed(generatorStream(generator, this.#producer()), base, opts))
 	}
 
-	/** An event stream; the client resumes from its `Last-Event-ID` unless `lastEventId` is given. */
+	/**
+	 * An event stream; the client resumes from its `Last-Event-ID` unless `lastEventId` is given. A ReadableStream is
+	 * an event stream already encoded, such as an upstream's, sent as it comes.
+	 */
 	sse(
-		callback: (stream: SSEStream) => Promise<void>,
+		callback: StreamBody | ((stream: SSEStream) => Promise<void>),
 		opts?: ResponseOptions & SSEOptions,
 	): TypedResponse<"text/event-stream", "ok"> {
+		if (callback instanceof ReadableStream) return typed(this.#streamed(callback, SSE_HEADERS, opts))
 		const lastEventId = opts?.lastEventId ?? this.#link?.req.headers.get("last-event-id") ?? undefined
 		const body = sseBody(callback, { ...opts, lastEventId }, this.#producer())
 		return typed(this.#streamed(body, SSE_HEADERS, opts))

@@ -199,8 +199,8 @@ export class HoneyContext<TEnv = Record<string, unknown>> {
 	 * `toFetchRequest()` gives the real `Request`.
 	 */
 	readonly req: Request
-	/** Builders for the response: `json`, `text`, `redirect` and the rest. */
-	readonly res: HoneyRes
+	/** Builders for the response: `json`, `text`, `redirect` and the rest; `forward` needs the route's `.output()`. */
+	readonly res: Omit<HoneyRes, "forward">
 	/** The route's path pattern, for example `/users/:id`; empty when no route serves the request. */
 	readonly routePattern: string
 	readonly [REQUEST]: RequestState<TEnv>

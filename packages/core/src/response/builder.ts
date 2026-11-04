@@ -17,12 +17,16 @@ const encoder = /* @__PURE__ */ new TextEncoder()
 const decoder = /* @__PURE__ */ new TextDecoder()
 
 /* weak keys: a response's entry goes with the response; no property is defined on the host object.
- * A stream honey produced (sse, stream, generate) is recorded under PRODUCED instead of a body. */
+ * A stream honey produced (sse, stream, generate) is recorded under PRODUCED instead of a body, a forwarded
+ * answer under FORWARDED. */
 // per-process-constant: raw-body
-const rawBodies = /* @__PURE__ */ new WeakMap<Response, string | Uint8Array | typeof PRODUCED>()
+const rawBodies = /* @__PURE__ */ new WeakMap<Response, string | Uint8Array | typeof PRODUCED | typeof FORWARDED>()
 
 /** The entry of a response whose body is a stream honey produced: possibly endless, never buffered. */
 const PRODUCED: unique symbol = /* @__PURE__ */ Symbol("honey.produced")
+
+/** The entry of a response `forward()` answered: checked against the route's declaration, its body opaque. */
+const FORWARDED: unique symbol = /* @__PURE__ */ Symbol("honey.forwarded")
 
 export type RawBody = string | Uint8Array
 
@@ -47,7 +51,7 @@ export function withRawBody(response: Response, body: RawBody): Response {
 export function rawBodyOf(response: Response): RawBody | null {
 	if (isHoneyResponse(response)) return response.rawBody
 	const raw = rawBodies.get(response)
-	return raw === undefined || raw === PRODUCED ? null : raw
+	return raw === undefined || typeof raw === "symbol" ? null : raw
 }
 
 /** Record that `response` streams a body honey produced (sse, stream, generate). */
@@ -59,6 +63,17 @@ export function withProducedBody(response: Response): Response {
 /** Whether `response` streams a body honey produced: one never to be buffered, as it may not end. */
 export function isProducedStream(response: Response): boolean {
 	return rawBodies.get(response) === PRODUCED
+}
+
+/** Record that `response` is what `forward()` answered. */
+export function withForwarded(response: Response): Response {
+	rawBodies.set(response, FORWARDED)
+	return response
+}
+
+/** Whether `response` is what `forward()` answered: its status and media type checked, its body never read. */
+export function isForwarded(response: Response): boolean {
+	return rawBodies.get(response) === FORWARDED
 }
 
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {

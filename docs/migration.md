@@ -1186,7 +1186,9 @@ app
 On a route with `.output()` the handler's return is narrowed to a declared media type at one of its status keys, or a
 bodiless answer (`noContent`, `redirect`). `ctx.res.raw` is gone there, since a raw `Response` declares nothing; it
 stays on a route without `.output()`. To stream a declared type, pass a `ReadableStream` to its helper (`text`,
-`html`, `csv`, `xml`, `binary`). To refuse a request, throw a `HoneyError`, `headers` included.
+`html`, `csv`, `xml`, `binary`, `json`, `sse`). To pass on a `Response` whose status is decided elsewhere, such as a
+stored file's 206 or 304, use `ctx.res.forward(response)`: its status and media type must be declared. To refuse a
+request, throw a `HoneyError`, `headers` included.
 
 ```ts v0
 app

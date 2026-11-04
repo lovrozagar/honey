@@ -194,7 +194,7 @@ type Narrowed<TOutput, CT extends keyof HelperOf, TText extends boolean> = CT ex
 	? {
 			[M in HelperOf[CT]]: <K extends keyof TOutput[CT] & StatusKey>(
 				statusKey: K,
-				body: TText extends true ? string | StreamBody : BodyOf<TOutput[CT][K]>,
+				body: TText extends true ? string | StreamBody : BodyOf<TOutput[CT][K]> | StreamBody,
 				...opts: OptsFor<TOutput, K>
 			) => TypedResponse<CT, K>
 		}
@@ -224,8 +224,13 @@ type BinaryCall<TOutput> = (<CT extends BinaryTypes<TOutput>, K extends keyof TO
 		: unknown)
 
 /** ctx.res for a route declaring `TOutput`. */
-type OutputRes<TOutput> = UniversalRes &
-	Narrowed<TOutput, "application/json", false> &
+type OutputRes<TOutput> = UniversalRes & {
+	/**
+	 * Answers `response` as it is, its status decided elsewhere (a stored file's 206 or 304); a status or media type
+	 * the route does not declare is refused as an undeclared answer is. Its body is not validated.
+	 */
+	forward: (response: Response) => Exclude<DeclaredAnswer<TOutput>, SoleBody<TOutput>>
+} & Narrowed<TOutput, "application/json", false> &
 	Narrowed<TOutput, "text/plain", true> &
 	Narrowed<TOutput, "text/html", true> &
 	Narrowed<TOutput, "application/xml", true> &

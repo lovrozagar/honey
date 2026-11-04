@@ -8,7 +8,7 @@
 import { describe, expectTypeOf, it } from "vitest"
 import * as z from "zod"
 import { createMiddleware } from "../../src/middleware/middleware.ts"
-import type { HoneyRes, TypedResponse } from "../../src/response/response.ts"
+import type { HoneyRes, StreamBody, TypedResponse } from "../../src/response/response.ts"
 import { honey } from "../../src/routing/app.ts"
 import { defineErrors } from "../../src/errors/errors.ts"
 import type { HoneyMeta, InferRouteInput, InferRouteOutput, InferRoutes } from "../../src/routing/app-types.ts"
@@ -25,7 +25,7 @@ describe("ctx.res under .output(): a body's type", () => {
 			.handler((ctx) => {
 				// @ts-expect-error the schema's output (a number) is not what it accepts
 				ctx.res.json("ok", { size: 3 })
-				expectTypeOf(ctx.res.json).parameter(1).toEqualTypeOf<{ size: string }>()
+				expectTypeOf(ctx.res.json).parameter(1).toEqualTypeOf<{ size: string } | StreamBody>()
 				return ctx.res.json("ok", { size: "abc" })
 			})
 	})
@@ -547,5 +547,45 @@ describe("the codegen surface (O6): WithOutput, HoneyCodegen and route selectors
 		const id = z.object({ id: z.string() })
 		type Out = { "application/json": { ok: typeof id } }
 		expectTypeOf<WithOutput<{ a: 1 }, Out>>().toEqualTypeOf<ApplyOutput<{ a: 1 }, Out>>()
+	})
+})
+
+describe("ctx.res.forward(): only under .output(), typed as the declared answers", () => {
+	it("answers the route's declared media types at their status keys, and is gone without .output()", () => {
+		honey<{}>()
+			.get("/file")
+			.output({ "application/octet-stream": { ok: true, partial_content: true }, "text/csv": { ok: z.string() } })
+			.handler((ctx) => {
+				expectTypeOf(ctx.res.forward(new Response())).toEqualTypeOf<
+					| TypedResponse<"application/octet-stream", "ok" | "partial_content">
+					| TypedResponse<"text/csv", "ok">
+					| TypedResponse<"none", "no_content">
+				>()
+				return ctx.res.forward(new Response())
+			})
+		honey<{}>()
+			.get("/open")
+			.handler((ctx) => {
+				// @ts-expect-error forward is for a route that declares what it answers; raw is the open form
+				ctx.res.forward(new Response())
+				return ctx.res.raw(new Response())
+			})
+	})
+})
+
+describe("an encoded stream body: sse() and json() take a ReadableStream", () => {
+	it("passes it through under the declared event stream or JSON type", () => {
+		const body = new ReadableStream<Uint8Array>()
+		honey<{}>()
+			.get("/events")
+			.output({ "text/event-stream": { ok: z.string() } })
+			.handler((ctx) => ctx.res.sse(body))
+		honey<{}>()
+			.get("/export")
+			.output({ ok: z.object({ id: z.string() }) })
+			.handler((ctx) => {
+				expectTypeOf(ctx.res.json).parameter(1).toEqualTypeOf<{ id: string } | StreamBody>()
+				return ctx.res.json("ok", body)
+			})
 	})
 })
