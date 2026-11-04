@@ -31,7 +31,7 @@ function serialized(source: string): Record<string, string> {
 }
 
 describe("types: keywords, literals, arrays and tuples", () => {
-	it("keywords, literals and template literals", () => {
+	it("keywords, literals and template literals, a template's own text escaped", () => {
 		expect(
 			serialized(
 				[
@@ -40,12 +40,14 @@ describe("types: keywords, literals, arrays and tuples", () => {
 					"declare const unique: typeof u",
 					"declare const literals: [-1n, 10n, 1.5, 'q\"', true, false]",
 					"declare const template: `a${string}`",
+					"declare const cache: `max-age=${number}, s-maxage=${number}` | `a\\`b${string}` | `a$b${string}`",
 				].join("\n"),
 			),
 		).toMatchObject({
 			keywords: "[string, number, boolean, bigint, symbol, void, undefined, null, never, unknown, unknown, object]",
 			literals: '[-1n, 10n, 1.5, "q\\"", true, false]',
-			template: "string",
+			cache: "`max-age=${number}, s-maxage=${number}` | `a\\`b${string}` | `a$b${string}`",
+			template: "`a${string}`",
 			unique: "symbol",
 		})
 	})

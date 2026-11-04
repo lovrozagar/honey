@@ -47,7 +47,6 @@ const KEYWORDS: readonly (readonly [keyof typeof ts.TypeFlags, string])[] = [
 	["Unknown", "unknown"],
 	["Any", "unknown"],
 	["NonPrimitive", "object"],
-	["TemplateLiteral", "string"],
 	/* deferred generic forms (`T extends U ? X : Y`, `T[K]`, `keyof T`) are written as their bound */
 	["StringMapping", "string"],
 	["Conditional", "unknown"],
@@ -167,11 +166,19 @@ export class Serializer {
 		const F = this.compiler.TypeFlags
 		if (type.isStringLiteral()) return JSON.stringify(type.value)
 		if (type.isNumberLiteral()) return `${type.value}`
+		if (type.flags & F.TemplateLiteral) return this.#template(type as ts.TemplateLiteralType)
 		if (type.flags & F.BigIntLiteral) {
 			const { base10Value, negative } = (type as ts.BigIntLiteralType).value
 			return `${negative ? "-" : ""}${base10Value}n`
 		}
 		return type.flags & F.BooleanLiteral ? this.checker.typeToString(type) : null
+	}
+
+	/** A template literal type as written: its text escaped where a template would read it, each hole serialized. */
+	#template(type: ts.TemplateLiteralType): string {
+		const holes = type.types.map((hole) => `\${${this.serialize(hole)}}`)
+		const texts = type.texts.map((text) => text.replace(/[`\\]|\$(?=\{)/g, (c) => `\\${c}`))
+		return `\`${texts.map((text, i) => text + (holes[i] ?? "")).join("")}\``
 	}
 
 	/** By name inside the signature that declares it, else its constraint, else unknown. */
