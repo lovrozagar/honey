@@ -4,7 +4,8 @@
  * publishes nowhere — the emitter takes them as options and writes nothing it was not given. Plan 39 8.6: each value
  * is checked against the grammar every target shares and crates.io's own limits (five keywords of at most 20 ASCII
  * characters, five category slugs), `documentation` and `categories` join them, and an `include` allow-list keeps
- * what is written beside the crate out of what cargo packs, as the pinned cargo lists it.
+ * what is written beside the crate out of what cargo packs, as the pinned cargo lists it. Plan 39 8.7: the README and
+ * the license file a run ships are in it, the README the one `readme` names.
  */
 import { writeFileSync } from "node:fs"
 import { join } from "node:path"
@@ -120,7 +121,27 @@ describe("the crate's metadata as crates.io takes it (plan 39 8.6)", () => {
 	})
 })
 
-describe.skipIf(!withRust())("the crate cargo packs (plan 39 8.6)", () => {
+describe.skipIf(!withRust())("the crate cargo packs (plan 39 8.6, 8.7)", () => {
+	it(
+		"holds the README and the license file it ships, the README the one crates.io shows",
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			const crate = generateRustSdk(
+				minimal,
+				{ description: "The Acme API.", license: "MIT" },
+				{ licenseFile: true, readme: true },
+			)
+			const dir = written({ ...crate.files, LICENSE: "MIT License\n", "README.md": "# Acme\n" })
+			const listed = runCargo(["package", "--list", "--allow-dirty", "--offline"], { cwd: dir })
+			const metadata = runCargo(["metadata", "--no-deps", "--format-version", "1", "--offline"], { cwd: dir })
+			const readme = (JSON.parse(metadata.stdout || "{}") as { packages?: { readme?: string }[] }).packages?.[0]?.readme
+			expect(
+				[listed.status, listed.stdout.split("\n").filter((file) => file !== "" && !file.startsWith("src/")), readme],
+				listed.stderr,
+			).toEqual([0, ["Cargo.lock", "Cargo.toml", "Cargo.toml.orig", "LICENSE", "README.md"], "README.md"])
+		},
+	)
+
 	it(
 		"holds the sources, the manifest and the lock, and nothing written beside them",
 		{ timeout: SPAWN_TIMEOUT },

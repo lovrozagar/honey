@@ -24,8 +24,9 @@ import { type Generate, parseGenerate, usage, UsageError } from "./gen/args.ts"
 import { FORMATTERS, formatterFor, missingFormatter } from "./gen/formatters.ts"
 import { runCli } from "./gen/process.ts"
 import { appRef, loadAppDocument } from "./ir/load.ts"
-import { checkedMetadata, type Metadata } from "./emit/shared/metadata.ts"
+import { checkedMetadata, type Metadata, shippedOf } from "./emit/shared/metadata.ts"
 import { type Options, optionsFor, type Target, type TargetOptions } from "./gen/targets.ts"
+import { type ReadFile, shippedFiles } from "./gen/shipped.ts"
 import { writeTarget } from "./gen/write.ts"
 
 /** One SDK target's generation: its files and what it reports (a name it renamed). */
@@ -53,11 +54,11 @@ function sdkOf(
 		case "go":
 			return generateGoSdk(document, options)
 		case "rust":
-			return generateRustSdk(document, options)
+			return generateRustSdk(document, options, shippedOf(metadata))
 		case "python":
 			return generatePythonSdk(document, options, metadata)
 		case "csharp":
-			return generateCSharpSdk(document, options)
+			return generateCSharpSdk(document, options, shippedOf(metadata))
 		case "java":
 			return generateJavaSdk(document, options)
 	}
@@ -121,6 +122,11 @@ export type GenerateContext = {
 	 * emitted, unreported.
 	 */
 	readonly oxfmt?: string
+	/**
+	 * Reads the files the metadata block names (`readme`, `licenseFile`): `readFileSync` by default, so a path is the
+	 * working directory's.
+	 */
+	readonly read?: ReadFile
 }
 
 /** A run's files: each generated target's files by path under that target's directory. */
@@ -129,14 +135,16 @@ export type GeneratedFiles = Partial<Record<Target, Readonly<Record<string, stri
 /**
  * Every file a run writes, by target and its path under the target's directory. Go goes through gofmt, Python through
  * ruff, Rust through rustfmt and TS through oxfmt; C# and Java go out as emitted, as does a target whose formatter is
- * missing, unless `HONEY_REQUIRE_FORMATTERS=1` makes that throw.
+ * missing, unless `HONEY_REQUIRE_FORMATTERS=1` makes that throw. The README and license file the metadata block names
+ * go into every target's root as they are.
  */
 export async function generated(
 	run: GenerateRun,
 	document: Record<string, unknown>,
-	{ env, oxfmt, report }: GenerateContext,
+	{ env, oxfmt, read = readFileSync, report }: GenerateContext,
 ): Promise<GeneratedFiles> {
 	const metadata = checkedMetadata(run.metadata ?? {})
+	const shipped = shippedFiles(metadata, read)
 	const options = new Map(
 		run.targets.map((target) => [target, optionsFor(target, metadata, run.options?.[target] ?? {})]),
 	)
@@ -149,7 +157,7 @@ export async function generated(
 			if (formatter === undefined) missingFormatter(target, pass, env, report)
 			else files = await formatFiles(files, { [pass.extension]: formatter })
 		}
-		out[target] = files
+		out[target] = { ...files, ...shipped }
 	}
 	return out
 }

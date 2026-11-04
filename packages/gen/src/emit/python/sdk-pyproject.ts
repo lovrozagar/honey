@@ -4,7 +4,7 @@
  * (plan 39 8.4), each value already held to its grammar (no control character), and lands as a TOML basic string,
  * whose escapes JSON's are. The package name and version are validated before anything is emitted.
  */
-import { issuesUrl, type Metadata, authorOf } from "../shared/metadata.ts"
+import { authorOf, issuesUrl, LICENSE, type Metadata, README, shippedOf } from "../shared/metadata.ts"
 
 /** The `requires-python` every emitted package declares: the floor CI installs (PY_FLOOR). */
 export const PYTHON_REQUIRES = ">=3.11"
@@ -61,13 +61,17 @@ function authorTable(author: string): string {
 	return email === undefined ? `{ name = ${toml(name)} }` : `{ name = ${toml(name)}, email = ${toml(email)} }`
 }
 
-/** The `[project]` lines the metadata block fills, each only when given, in PEP 621's order. */
+/** The `[project]` lines the metadata block fills, each only when given, in PEP 621's order: the README and the
+ * license file (PEP 639) by the names they ship under. */
 function described(metadata: Metadata): string[] {
 	const { authors, description, keywords, license } = metadata
+	const shipped = shippedOf(metadata)
 	return [
 		...(description === undefined ? [] : [`description = ${toml(description)}`]),
+		...(shipped.readme ? [`readme = ${toml(README)}`] : []),
 		`requires-python = "${PYTHON_REQUIRES}"`,
 		...(license === undefined ? [] : [`license = ${toml(license)}`]),
+		...(shipped.licenseFile ? [`license-files = [${toml(LICENSE)}]`] : []),
 		...(authors === undefined ? [] : [`authors = [${authors.map(authorTable).join(", ")}]`]),
 		...(keywords === undefined ? [] : [`keywords = [${keywords.map(toml).join(", ")}]`]),
 	]

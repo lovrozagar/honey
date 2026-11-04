@@ -33,9 +33,16 @@ const RUN: GenerateRun = {
 	targets: ["python"],
 }
 
+/* the README and license file a run ships (plan 39 8.7), by the paths its metadata block names them by */
+const SHIPPED: Readonly<Record<string, string>> = {
+	"docs/README.md": "# acme-shop\n\nThe Shop API's «client».\n",
+	"LICENSE.txt": "MIT License\n",
+}
+const read = (path: string) => new TextEncoder().encode(SHIPPED[path] ?? "")
+
 /** The python target's files for `run`. */
 async function pythonFiles(run: GenerateRun = RUN): Promise<Readonly<Record<string, string>>> {
-	return (await generated(run, minimal, { env: {}, report: () => undefined })).python ?? {}
+	return (await generated(run, minimal, { env: {}, read, report: () => undefined })).python ?? {}
 }
 
 /** `text` parsed by the pinned interpreter's tomllib. */
@@ -131,7 +138,29 @@ with tarfile.open(os.path.join(sys.argv[1], name)) as sdist:
     info = sdist.extractfile(name[: -len(".tar.gz")] + "/PKG-INFO").read().decode()
 print(json.dumps({"members": members, "info": info}))`
 
-describe.skipIf(!PY)("the package hatchling builds (plan 39 8.4)", () => {
+describe.skipIf(!PY)("the package hatchling builds (plan 39 8.4, 8.7)", () => {
+	it(
+		"carries the README and the license file a run ships, the README as PyPI's Markdown description",
+		{ timeout: 2 * SPAWN_TIMEOUT },
+		async () => {
+			const files = await pythonFiles({ ...RUN, metadata: { licenseFile: "LICENSE.txt", readme: "docs/README.md" } })
+			const dir = written(files)
+			const run = runPython(HATCHLING, ["-c", BUILD, join(dir, "dist")], { cwd: dir })
+			if (run.status !== 0) throw new Error(`hatchling refused the package:\n${run.stderr}`)
+			const { info, members } = JSON.parse(run.stdout) as { info: string; members: string[] }
+			const built = fields(info)
+			expect({
+				body: info.slice(info.indexOf("\n\n") + 2),
+				members: members.filter((member) => !member.startsWith("src/")),
+				shipped: [built["Description-Content-Type"], built["License-File"]],
+			}).toEqual({
+				body: SHIPPED["docs/README.md"],
+				members: ["LICENSE", "PKG-INFO", "README.md", "pyproject.toml"],
+				shipped: [["text/markdown"], ["LICENSE"]],
+			})
+		},
+	)
+
 	it(
 		"is an sdist whose PKG-INFO PyPI reads the metadata from, honey's manifest left out",
 		{ timeout: 2 * SPAWN_TIMEOUT },

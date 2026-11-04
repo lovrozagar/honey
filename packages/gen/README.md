@@ -195,6 +195,12 @@ a place for the field, so a description or license is given once, not once per t
 same meaning wins: `--java-description` over `--metadata-description`. Each field is checked before anything
 generates: URLs must be https, the license an SPDX expression, text one line.
 
+`--metadata-readme` and `--metadata-license-file` name files on disk, read once relative to where honey runs. Every
+target writes them into its package root as `README.md` and `LICENSE`, and each manifest points at the ones it has:
+pyproject's `readme` and `license-files`, Cargo's `readme` and `include`, the `.csproj`'s `PackageReadmeFile` and packed
+items, and jsr.json's publish list; npm packs both on its own. The README must be a `.md` file, and both must be UTF-8
+text.
+
 ## The six SDKs
 
 Every SDK takes the same configuration — a base URL, the auth the spec's security scheme names, a timeout, retries,

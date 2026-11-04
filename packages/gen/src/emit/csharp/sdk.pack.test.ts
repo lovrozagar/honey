@@ -5,14 +5,15 @@
  * when not given; a value is escaped for MSBuild (a `$(…)` stays text) and for XML; an invalid value is refused at
  * generate, naming its option. Offline, `dotnet pack` on the pinned SDK writes a nuspec holding every value as given.
  * Plan 39 8.6: `--csharp-copyright` and `--csharp-tags` reach `<Copyright>` and `<PackageTags>` (each tag escaped on
- * its own, a `;` between them), and every pack writes the symbols beside the package as a `.snupkg`.
+ * its own, a `;` between them), and every pack writes the symbols beside the package as a `.snupkg`. Plan 39 8.7: the
+ * README and the license file a run ships are packed at the package's root, the README the one nuget.org shows.
  */
 import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import { compiledCSharp } from "./__fixtures__/compiled.ts"
 import { LEAN_BUILD, runDotnet, withDotnet } from "./__fixtures__/csharp-env.ts"
-import { PACKAGE_METADATA as METADATA } from "./__fixtures__/documents.ts"
+import { PACKAGE_METADATA as METADATA, PACKAGE_SHIPPED } from "./__fixtures__/documents.ts"
 import { type CSharpSdkOptions, generateCSharpSdk } from "./sdk.ts"
 
 const DOTNET = withDotnet()
@@ -33,6 +34,19 @@ const elements = (text: string) =>
 		"RepositoryType",
 		"PackageTags",
 	].filter((element) => text.includes(`<${element}>`))
+
+/** The entry names of the zip at `path`, read from its central directory: a `.nupkg` is a zip. */
+function zipEntries(path: string): string[] {
+	const zip = readFileSync(path)
+	const end = zip.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]))
+	const names: string[] = []
+	for (let at = zip.readUInt32LE(end + 16), left = zip.readUInt16LE(end + 10); left > 0; left--) {
+		const length = zip.readUInt16LE(at + 28)
+		names.push(zip.toString("utf8", at + 46, at + 46 + length))
+		at += 46 + length + zip.readUInt16LE(at + 30) + zip.readUInt16LE(at + 32)
+	}
+	return names
+}
 
 /** A nuspec element's text with XML's entities read back. */
 const unescaped = (text: string | undefined) =>
@@ -88,6 +102,16 @@ describe("the .csproj's package metadata", () => {
 	})
 })
 
+/** The files the run ships that each package (not symbols) nupkg under `dir` holds, by name. */
+const shippedIn = (dir: string, art: readonly string[]) =>
+	art
+		.filter((name) => name.endsWith(".0.1.0.nupkg"))
+		.map((name) =>
+			zipEntries(join(dir, name))
+				.filter((entry) => entry in PACKAGE_SHIPPED)
+				.sort(),
+		)
+
 describe.skipIf(!DOTNET)("dotnet pack on the pinned SDK, offline", () => {
 	it("builds with every option given, and packs a nuspec holding each value as given", { timeout: 600_000 }, () => {
 		/* the registry's `pack`: the errors document with every metadata option */
@@ -121,6 +145,8 @@ describe.skipIf(!DOTNET)("dotnet pack on the pinned SDK, offline", () => {
 				projectUrl: tag("projectUrl"),
 				repository: /<repository type="git" url="([^"]+)"/.exec(nuspec)?.[1],
 				status: packed.status,
+				readme: tag("readme"),
+				shipped: shippedIn(join(sdk.dir, "art"), art),
 				symbols: art.filter((name) => name.endsWith(".snupkg")).map((name) => name.split("/").at(-1)),
 				tags: unescaped(tag("tags")),
 			},
@@ -133,7 +159,9 @@ describe.skipIf(!DOTNET)("dotnet pack on the pinned SDK, offline", () => {
 			license: METADATA.license,
 			nuspecs: 1,
 			projectUrl: METADATA.homepage,
+			readme: "README.md",
 			repository: METADATA.repository,
+			shipped: [["LICENSE", "README.md"]],
 			status: 0,
 			symbols: ["HoneySdk.0.1.0.snupkg"],
 			tags: "shop api c# $(NoWarn)",

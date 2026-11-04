@@ -27,7 +27,12 @@ import { relative, surface, types } from "./documents-specs.ts"
  * it loads), or a dependency-free project's files.
  */
 export type CSharpFixture =
-	| { readonly document: () => Readonly<Record<string, unknown>>; readonly options?: CSharpSdkOptions }
+	| {
+			readonly document: () => Readonly<Record<string, unknown>>
+			readonly options?: CSharpSdkOptions
+			/** the files a run ships beside the SDK (plan 39 8.7), by their names in its root */
+			readonly shipped?: Readonly<Record<string, string>>
+	  }
 	| { readonly files: Readonly<Record<string, string>> }
 
 /** §4.3's `.editorconfig`: the format gate's rules for a hand-written project as for an emitted one. */
@@ -107,6 +112,12 @@ export const PACKAGE_METADATA = {
 	tags: "shop,api,c#,$(NoWarn)",
 } as const satisfies CSharpSdkOptions
 
+/** The README and license file the pack fixture ships, as a run's metadata block would name them (plan 39 8.7). */
+export const PACKAGE_SHIPPED = {
+	LICENSE: "MIT License\n\nCopyright (c) 2026 Acme Co\n",
+	"README.md": "# HoneySdk\n\nThe Shop API's client for .NET.\n",
+} as const
+
 /** Every SDK a default run gates: at most 16 (G17; tests/structure/csharp-toolchain.test.ts). */
 export const FIXTURES = {
 	/** the gate cache's self-test and the lean-build leg: a dependency-free project */
@@ -138,7 +149,7 @@ export const FIXTURES = {
 	/** every name spelled at lengths 20..110, no formatter after the emitter (bit 21 i7a) */
 	long: { document: longNames },
 	/** the package metadata, packed by `dotnet pack` and read back from the nuspec (sdk.pack.test.ts) */
-	pack: { document: errors, options: PACKAGE_METADATA },
+	pack: { document: errors, options: PACKAGE_METADATA, shipped: PACKAGE_SHIPPED },
 	/** the resumable connections (contract 50 §4.1): bit 13's `realtime` document, shared, and the C#-only `clash.feed` */
 	realtime: { document: csharpRealtime },
 	/** a relative first server: a client needs an absolute `BaseUrl` (R7) */

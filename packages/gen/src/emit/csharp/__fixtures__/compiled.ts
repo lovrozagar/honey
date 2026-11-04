@@ -35,6 +35,7 @@ import {
 	runtimeConfig,
 } from "./csharp-env.ts"
 import { type CSharpFixture, FIXTURES, type FixtureKey } from "./documents.ts"
+import { LICENSE, README } from "../../shared/metadata.ts"
 
 export type { Ran } from "./csharp-env.ts"
 
@@ -261,9 +262,13 @@ async function executed(dir: string, dll: string, run: { args: readonly string[]
 	return execDotnet(["p.dll", ...run.args], { cwd: home, input: run.input })
 }
 
-/** `fixture`'s SDK files: a dependency-free project's own, or the emitter's for a document. */
-const sdkFiles = (fixture: CSharpFixture): Files =>
-	"files" in fixture ? fixture.files : generateCSharpSdk(fixture.document(), fixture.options).files
+/** `fixture`'s SDK files: a dependency-free project's own, or the emitter's for a document with what it ships. */
+function sdkFiles(fixture: CSharpFixture): Files {
+	if ("files" in fixture) return fixture.files
+	const shipped = fixture.shipped ?? {}
+	const flags = { licenseFile: Object.hasOwn(shipped, LICENSE), readme: Object.hasOwn(shipped, README) }
+	return { ...generateCSharpSdk(fixture.document(), fixture.options, flags).files, ...shipped }
+}
 
 /** `fixture`'s SDK written and built under the pinned SDK, once per content hash. */
 export function compiledFixture(fixture: CSharpFixture): CSharpSdk {

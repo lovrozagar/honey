@@ -15,6 +15,7 @@ import { renameNotice } from "../shared/mirror.ts"
 import { rustErrorKeys } from "./errors.ts"
 import { needsWebSocket, publicItems, runtimeFiles } from "./http.ts"
 import { cargoLock, cargoToml, crateIdentity, type CrateOptions } from "./sdk-cargo.ts"
+import type { Shipped } from "../shared/metadata.ts"
 import { clientDecls } from "./sdk-client.ts"
 import type { RustCallPlan } from "./sdk-plan.ts"
 import { type RustTypeContext, rustTopLevel, rustTypeContext } from "./types.ts"
@@ -78,7 +79,7 @@ function libFile(info: IRInfo, runtime: readonly (readonly [module: string, sour
 }
 
 /** The crate's files for `document`, and the call plan of every method in them. */
-function emitRust(document: Record<string, unknown>, options: RustSdkOptions) {
+function emitRust(document: Record<string, unknown>, options: RustSdkOptions, shipped?: Shipped) {
 	const crate = crateIdentity(options)
 	const ir = toIR(document as OpenApiDocument, { deriveOperationIds: true })
 	const model = sdkModel(ir)
@@ -109,7 +110,7 @@ function emitRust(document: Record<string, unknown>, options: RustSdkOptions) {
 	const own = { client: model.ops.length > 0, types: types.length > 0 }
 	const files: Record<string, string> = {
 		"Cargo.lock": cargoLock(template as string, crate, ws),
-		"Cargo.toml": cargoToml(crate, ws),
+		"Cargo.toml": cargoToml(crate, ws, shipped),
 		"src/client.rs": rustFile("The client, its resources and their operations.", ["use crate::*;", client.decls]),
 		"src/lib.rs": libFile(ir.info, runtime, own),
 		"src/types.rs": rustFile("The API's types.", types),
@@ -119,9 +120,13 @@ function emitRust(document: Record<string, unknown>, options: RustSdkOptions) {
 	return { files: sorted, notices, plans: client.plans }
 }
 
-/** The crate's files for `document`, by path, and its notices. */
-export function generateRustSdk(document: Record<string, unknown>, options: RustSdkOptions = {}): GeneratedRustSdk {
-	const { files, notices } = emitRust(document, options)
+/** The crate's files for `document`, by path, and its notices; its manifest points at the files it `shipped` beside. */
+export function generateRustSdk(
+	document: Record<string, unknown>,
+	options: RustSdkOptions = {},
+	shipped?: Shipped,
+): GeneratedRustSdk {
+	const { files, notices } = emitRust(document, options, shipped)
 	return { files, notices }
 }
 

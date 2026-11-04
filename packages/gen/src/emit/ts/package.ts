@@ -9,7 +9,7 @@
  * declarations). The MCP server's `dist/` goes through the same pass, and its package.json takes the same metadata.
  */
 import { transformSync } from "oxc-transform"
-import { checked, issuesUrl, type Metadata, NPM_NAME, SEMVER } from "../shared/metadata.ts"
+import { checked, issuesUrl, LICENSE, type Metadata, NPM_NAME, README, SEMVER, shippedOf } from "../shared/metadata.ts"
 import { type GeneratedSdk, generateSdk, type SdkOptions } from "./sdk.ts"
 
 /** The SDK's options and the package's own. */
@@ -102,9 +102,17 @@ function jsrJson(sdk: GeneratedSdk, name: string, version: string, metadata: Met
 		compilerOptions: { lib: ["esnext", "dom", "dom.iterable"] },
 		/* the sources' `.js` imports name their `.ts` files */
 		unstable: ["sloppy-imports"],
-		publish: { include: ["*.gen.ts"] },
+		/* the README JSR shows and the license file beside the sources, each when the run ships it; npm packs both
+		 * whatever `files` says */
+		publish: { include: ["*.gen.ts", ...shippedNames(metadata)] },
 	}
 	return `${JSON.stringify(config, null, "\t")}\n`
+}
+
+/** The names of the files `metadata` ships beside the code. */
+const shippedNames = (metadata: Metadata): string[] => {
+	const shipped = shippedOf(metadata)
+	return [...(shipped.readme ? [README] : []), ...(shipped.licenseFile ? [LICENSE] : [])]
 }
 
 /** The SDK for `document` with its package files: the sources, `dist/`, package.json, and jsr.json when scoped. */

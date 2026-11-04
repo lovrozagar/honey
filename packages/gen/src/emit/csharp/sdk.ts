@@ -26,6 +26,7 @@ import {
 	validateRootNamespace,
 	validateVersion,
 } from "./sdk-csproj.ts"
+import type { Shipped } from "../shared/metadata.ts"
 import { docLines } from "./sdk-doc.ts"
 import type { CSharpCallPlan } from "./sdk-plan.ts"
 import { runtimeFiles } from "./transport.ts"
@@ -101,8 +102,8 @@ function componentDecls(ir: IR, at: CsTypeContext): [string, string][] {
 }
 
 /** The package's files for `document`, and the call plan of every method in them. */
-function emitCSharp(document: Record<string, unknown>, options: CSharpSdkOptions) {
-	const id = identity(options)
+function emitCSharp(document: Record<string, unknown>, options: CSharpSdkOptions, shipped?: Shipped) {
+	const id = { ...identity(options), shipped }
 	const ir = toIR(document as OpenApiDocument, { deriveOperationIds: true })
 	const model = sdkModel(ir)
 	const at = csTypeContext(ir, [id.client, id.context])
@@ -146,12 +147,13 @@ function emitCSharp(document: Record<string, unknown>, options: CSharpSdkOptions
 	return { files: sorted, notices, plans: client.plans }
 }
 
-/** The package's files for `document`, by path. */
+/** The package's files for `document`, by path; its `.csproj` packs the files it `shipped` beside. */
 export function generateCSharpSdk(
 	document: Record<string, unknown>,
 	options: CSharpSdkOptions = {},
+	shipped?: Shipped,
 ): GeneratedCSharpSdk {
-	const { files, notices } = emitCSharp(document, options)
+	const { files, notices } = emitCSharp(document, options, shipped)
 	return { files, notices }
 }
 

@@ -6,7 +6,7 @@
  * as cargo writes it, so `--locked` accepts the lock as it is.
  */
 import { compareCodeUnits } from "../shared/lang.ts"
-import { checked, HTTPS_URL, SPDX_EXPRESSION, TEXT } from "../shared/metadata.ts"
+import { checked, HTTPS_URL, LICENSE, README, type Shipped, SPDX_EXPRESSION, TEXT } from "../shared/metadata.ts"
 
 /** The emitted `rust-version`: the toolchain floor every SDK builds with (Fb2). */
 export const RUST_VERSION = "1.85"
@@ -40,6 +40,9 @@ export type CrateOptions = {
 	readonly license?: string
 	readonly repository?: string
 }
+
+/* a crate that ships nothing beside its code */
+const NONE_SHIPPED: Shipped = { licenseFile: false, readme: false }
 
 /* the dependency the WebSocket and realtime runtime files need, and only they */
 const WEBSOCKET = "tokio-tungstenite"
@@ -129,7 +132,7 @@ const toml = (value: string | readonly string[]): string =>
 	typeof value === "string" ? JSON.stringify(value) : `[${value.map((word) => JSON.stringify(word)).join(", ")}]`
 
 /** Cargo.toml: the package at the floor, the library `sdk`, the dependencies (`tokio-tungstenite` only when `ws`). */
-export function cargoToml(crate: CrateIdentity, ws: boolean): string {
+export function cargoToml(crate: CrateIdentity, ws: boolean, shipped: Shipped = NONE_SHIPPED): string {
 	const dependencies = DEPENDENCIES.filter(([name]) => ws || name !== WEBSOCKET)
 	return [
 		MARKER,
@@ -140,9 +143,10 @@ export function cargoToml(crate: CrateIdentity, ws: boolean): string {
 		`rust-version = "${RUST_VERSION}"`,
 		/* the metadata crates.io reads: each line only when the caller gave it */
 		...metadata(crate),
-		/* what the published crate holds beside Cargo.toml and its lock, which cargo always packs: honey's manifest
-		 * and anything else written beside the crate stay out */
-		'include = ["/src"]',
+		...(shipped.readme ? [`readme = "${README}"`] : []),
+		/* what the published crate holds beside Cargo.toml and its lock, which cargo always packs: its README and
+		 * license file when it ships them; honey's manifest and anything else written beside the crate stay out */
+		`include = ${toml(["/src", ...(shipped.readme ? [`/${README}`] : []), ...(shipped.licenseFile ? [`/${LICENSE}`] : [])])}`,
 		"",
 		"[lib]",
 		'name = "sdk"',

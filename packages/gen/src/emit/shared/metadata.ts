@@ -38,6 +38,8 @@ export function personOf(value: string): { readonly name: string; readonly email
 
 /** One author: a name with no comma, angle bracket or control character, or that name then ` <email>`. */
 export const AUTHOR = /^(?=[^\p{Cc}\p{Cs}]{1,4000}$)[^<>,]*[^<>,\s][^<>,]*?(?: <[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+>)?$/u
+/** A path to a Markdown file: the README every registry renders, NuGet only in Markdown. */
+export const MARKDOWN_PATH = /^(?=[^\p{Cc}\p{Cs}]{1,4000}$).*\.md$/iu
 /** One keyword: no space, comma or control character, at most 50 characters; a registry may hold it to less. */
 export const KEYWORD = /^[^\s,\p{Cc}\p{Cs}]{1,50}$/u
 
@@ -87,7 +89,7 @@ const GRAMMARS: { readonly [K in MetadataField]: RegExp } = {
 	keywords: KEYWORD,
 	license: SPDX_EXPRESSION,
 	licenseFile: TEXT,
-	readme: TEXT,
+	readme: MARKDOWN_PATH,
 	repository: HTTPS_URL,
 }
 
@@ -124,6 +126,20 @@ export function checkedMetadata(metadata: unknown): Metadata {
 	}
 	return Object.fromEntries(entries) as Metadata
 }
+
+/* the names the README and the license file the block names take in every package's root: those each registry and
+ * forge reads (plan 39 8.7) */
+export const README = "README.md"
+export const LICENSE = "LICENSE"
+
+/** Which of them a package ships, as the block names them: its manifest points at each one it has. */
+export type Shipped = { readonly readme: boolean; readonly licenseFile: boolean }
+
+/** What `metadata` ships beside the code. */
+export const shippedOf = (metadata: Metadata): Shipped => ({
+	licenseFile: metadata.licenseFile !== undefined,
+	readme: metadata.readme !== undefined,
+})
 
 /** The issue tracker of a repository URL: `<repository>/issues`, as GitHub, GitLab and Codeberg serve it. */
 export const issuesUrl = (repository: string): string => `${repository.replace(/\.git$/, "")}/issues`
