@@ -1,8 +1,9 @@
 /**
  * Every TypeScript code block in docs/ compiles against `@lovrozagar/honey` (bit 20), and every `ts run` block runs to
  * its `// prints:` lines. A block's info string says what it is: `ts` type-checks, `ts run` type-checks and runs,
- * `ts v0`, `sh v0` and `text v0` are v0 "before" blocks shown as text only, and `sh`, `json`, `yaml`, `text` and `http`
- * are shown as they are.
+ * `ts v0`, `sh v0` and `text v0` are v0 "before" blocks shown as text only, `ts rc.20` and `sh rc.20` the same for a
+ * 1.0 release candidate's code (the migration guide's rc.20 -> rc.21 section), and `sh`, `json`, `yaml`, `text` and
+ * `http` are shown as they are.
  * The SDK and per-language blocks are compiled by gen's examples-compile tests, against the SDKs they call.
  */
 import { spawnSync } from "node:child_process"
@@ -16,7 +17,7 @@ const TSC = join(REPO, "node_modules/typescript/bin/tsc")
 /* the block languages c compiles here, the SDK and per-language ones gen compiles, and the ones shown as text */
 const COMPILED = new Set(["ts", "ts run"])
 const ELSEWHERE = new Set(["ts sdk", "go", "rust", "python", "csharp", "java"])
-const SHOWN = new Set(["ts v0", "sh v0", "text v0", "sh", "json", "yaml", "text", "http"])
+const SHOWN = new Set(["ts v0", "sh v0", "text v0", "ts rc.20", "sh rc.20", "sh", "json", "yaml", "text", "http"])
 
 /* inside core, so `@lovrozagar/honey` resolves through the workspace link with core's honey-source condition */
 mkdirSync(join(CORE, ".tmp"), { recursive: true })

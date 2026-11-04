@@ -69,10 +69,10 @@ generator.
 
 ## @lovrozagar/honey-clients
 
-| Export                          | What it holds                                        |
-| ------------------------------- | ---------------------------------------------------- |
-| `@lovrozagar/honey-clients`     | `generateRouteTree`, `generateTypes`, `extractTypes` |
-| `@lovrozagar/honey-clients/cli` | the `honey-clients` command's `main`                 |
+| Export                          | What it holds                                                                                                                                                                                     |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@lovrozagar/honey-clients`     | `generated`, `writeTarget`, `TARGETS`, `targetOptionSchemas`, `METADATA_FIELDS`: a run as data, its files and packages; `generateRouteTree`, `generateTypes`, `extractTypes` for the build plugin |
+| `@lovrozagar/honey-clients/cli` | the `honey-clients` command's `main`                                                                                                                                                              |
 
 The SDK, CLI and MCP generators run through `honey-clients generate` ([code generation](codegen.md)).
 

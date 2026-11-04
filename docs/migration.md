@@ -7,6 +7,120 @@ generated from a small example API (`Kitchen`); yours is named after your docume
 The SDK sections cover the four SDKs 0.7.3 shipped: TypeScript, Python, Go and Rust. The C# and Java SDKs are new
 in 1.0, so they migrate nothing; their client is documented in [the generated clients page](client.md).
 
+## From 1.0.0-rc.20 to 1.0.0-rc.21
+
+An app already on a 1.0 release candidate starts here. Each row is one break, what rc.20 wrote and what rc.21
+writes. Where a section of this guide already shows it, the row names that section, whose "before" block is the
+same code an rc.20 app has; the breaks no section shows follow the table, each with its example. A `ts rc.20` or
+`sh rc.20` block is rc.20 code, shown as text.
+
+| rc.20                                                                                                                                          | rc.21                                                                                                                                           | Shown in                                                                                 |
+| ---------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `defineMiddleware({ errors, fn })`                                                                                                             | `createMiddleware(fn, { errors, meta })`                                                                                                        | `defineMiddleware` is `createMiddleware(fn, { errors, meta })`                           |
+| `DefaultMeta`, `OpenApiMeta`                                                                                                                   | `HoneyMeta`, and `HoneyMeta<RouteMeta>` for your own keys                                                                                       | `DefaultMeta` and `OpenApiMeta` are `HoneyMeta`                                          |
+| `app.meta<T>(values)`, one call declaring and setting                                                                                          | `metaType<T>()` declares, `meta(values)` sets                                                                                                   | `meta<T>()` is `metaType<T>()`, and a route need not repeat a meta default               |
+| any `x-` key in `meta.extensions`                                                                                                              | the keys your meta type and a strict metaSpec list                                                                                              | `meta.extensions` keys are checked                                                       |
+| any `Response` from a handler, `ctx.res.raw` under `.output()`                                                                                 | what `.output()` declares; a stream through the declared type's helper                                                                          | A handler returns only what `.output()` declares                                         |
+| `ctx.res.json("ok", body, { status: 201 })`, `ctx.res.redirect(url, { status })`                                                               | the status key alone: `ctx.res.json("created", body)`, `redirect(statusKey, url)`                                                               | A status is a key: no `status` option, and `redirect(statusKey, url)`                    |
+| `.input({ params: z.object({...}) })`, read on `ctx.input.params`                                                                              | `.input({ params: { name: schema } })`, read on `ctx.params`                                                                                    | `params` is a schema per path param, onto `ctx.params`                                   |
+| `readableStream()`, `ReadableStreamSchema`, on any source; `proxy({ rewriteUrl: (url) => … })`                                                 | `streamed()`, `StreamedSchema`, on a body only; `rewriteUrl: (ctx, url) => …`                                                                   | `readableStream()` is `streamed()`, for a body only                                      |
+| `app.routeTree(tree)` loads the tree into `app`, before any route                                                                              | `routeTree(tree)` returns a new app, at any point                                                                                               | `routeTree()` returns a new app, callable at any point                                   |
+| `@lovrozagar/honey/errors`: `defineErrors`, `ERROR_META`, `ErrorMetaEntry`, `ErrorFactories`                                                   | the root's `defineErrors`, `ERROR_META`, `ErrorMetaEntry`; `typeof errors` for a factory's type                                                 | One import path per name                                                                 |
+| `@lovrozagar/honey/openapi`'s `scalar`, `swagger`, `serveStaticOpenApi` and its types                                                          | `@lovrozagar/honey/openapi/scalar`, `@lovrozagar/honey/openapi/swagger`, `@lovrozagar/honey/openapi/static`                                     | One import path per name                                                                 |
+| `@lovrozagar/honey/tree`'s tree builders                                                                                                       | the tree's types only; honey builds the tree                                                                                                    | One import path per name                                                                 |
+| `honey()` from `@lovrozagar/honey/plugin` or `@lovrozagar/honey/build`, its config types from `@lovrozagar/honey/build`                        | `honeyPlugin()` and its config types from `@lovrozagar/honey/plugin`                                                                            | The Vite plugin is `honeyPlugin()`                                                       |
+| `customErrorFormatter()`, `CustomErrorFormatter`, `createErrorResponse`                                                                        | `payloadErrorFormatter()`, `PayloadErrorFormatter`; an error answers through `throw`                                                            | `customErrorFormatter()` is `payloadErrorFormatter()`, and `createErrorResponse` is gone |
+| an output's `securitySchemes`, `sanitize.stripSecurityRequirements`, `sanitize.stripSecuritySchemes`, a YAML twin                              | `codegen.securitySchemes` once, each output's `security`, its `formats`                                                                         | Codegen declares security schemes once; each document lists the ones it shows            |
+| `sign`, `verify`, `SignOptions`, `VerifyOptions`, `legacy`                                                                                     | `createCookieSigner({ name, secrets })`, `CookieSignerOptions`                                                                                  | `createCookieSigner({ name, secrets })` signs one cookie                                 |
+| `errorI18n(config)`, `ErrorI18nConfig`                                                                                                         | `createErrorTranslator(config)`, `ErrorTranslatorConfig`                                                                                        | `.errorI18n(config)` takes `createErrorTranslator(config)`                               |
+| `InferInputMap` from `@lovrozagar/honey/input`                                                                                                 | `InferInputMap` from `@lovrozagar/honey`                                                                                                        | below                                                                                    |
+| `memoryStore`, `MemoryStore`, `MemoryStoreOptions`                                                                                             | `memoryRateLimitStore`, `MemoryRateLimitStore`, `MemoryRateLimitStoreOptions`                                                                   | below                                                                                    |
+| `@lovrozagar/honey/serve`'s `serve`, `ServeOptions`, `ServeHandle`, `DEFAULT_MAX_REQUEST_BODY`; `detectRuntime`, `ServeRuntime`, `HoneyServer` | `serve` from `@lovrozagar/honey/node` (`NodeServeOptions`) or `@lovrozagar/honey/bun` (`BunServeOptions`, `BunServer`), each with `ServeHandle` | below                                                                                    |
+| `RouteTreeV2` from `@lovrozagar/honey-clients`                                                                                                 | `RouteTree`                                                                                                                                     | below                                                                                    |
+| `generated()` answering `GeneratedFiles`, each target's files                                                                                  | `generated()` answering `Generated`, each target's `files` and `packages`; `writeTarget(dir, files, packages)`                                  | below                                                                                    |
+| any Go or CLI module path                                                                                                                      | one Go would publish: a domain first, and a major suffix only from `/v2`                                                                        | below                                                                                    |
+| the Java target's own default group, artifact, package and client                                                                              | `com.example`, `sdk` and `ExampleClient`                                                                                                        | below                                                                                    |
+
+### `memoryStore` is `memoryRateLimitStore`, and `InferInputMap` comes from the root
+
+Both are renamed or moved, nothing else: the store's options and answers are the same.
+
+```ts rc.20
+import { type InferInputMap } from "@lovrozagar/honey/input"
+import { memoryStore, rateLimit } from "@lovrozagar/honey/rate-limit"
+const limited = rateLimit({ limit: 60, store: memoryStore({ windowMs: 60_000 }) })
+```
+
+```ts
+import type { InferInputMap } from "@lovrozagar/honey"
+import { memoryRateLimitStore, rateLimit } from "@lovrozagar/honey/rate-limit"
+
+export type Inputs<T> = InferInputMap<T>
+export const limited = rateLimit({ limit: 60, store: memoryRateLimitStore({ windowMs: 60_000 }) })
+```
+
+### `@lovrozagar/honey/serve` is gone: serve from your runtime's entry
+
+`serve` comes from `@lovrozagar/honey/node` or `@lovrozagar/honey/bun`, which no longer detect the runtime, and each
+answers a `ServeHandle` with the runtime's own server on `server`. `HoneyServer` is that handle, and `detectRuntime`
+and `ServeRuntime` go with the detection. A test client's `transport` takes that `serve` instead of `"serve"`.
+
+```ts rc.20
+import { serve } from "@lovrozagar/honey/serve"
+const server = await serve(app, { port: 3000 })
+const client = testClient(app, { env, transport: "serve" })
+```
+
+```ts
+import { honey } from "@lovrozagar/honey"
+import { serve } from "@lovrozagar/honey/node"
+import { testClient } from "@lovrozagar/honey/testing"
+
+const app = honey()
+const server = await serve(app, { port: 0 })
+await server.close()
+export const client = testClient(app, { env: {}, transport: serve })
+```
+
+### `RouteTreeV2` is `RouteTree`, and `generated()` answers each target's files and packages
+
+`@lovrozagar/honey-clients` names the route tree `RouteTree`, as core does. `generated()` answers `Generated`, a
+`GeneratedTarget` per target: its `files` by path, and the `packages` it makes on each registry it publishes to, which
+`writeTarget(dir, files, packages)` records in the directory's `.honey-generated.json`. `GeneratedFiles` is gone.
+
+```ts rc.20
+import { generated, type GeneratedFiles, type RouteTreeV2, writeTarget } from "@lovrozagar/honey-clients"
+const files: GeneratedFiles = await generated(run, document, ctx)
+writeTarget("sdk/ts", files.ts ?? {})
+```
+
+```ts
+import { generated, type GenerateRun, type RouteTree, writeTarget } from "@lovrozagar/honey-clients"
+
+export type Tree = RouteTree
+const run: GenerateRun = { options: { ts: { name: "ShopSDK", stem: "shop" } }, targets: ["ts"] }
+const document = { info: { title: "Shop", version: "1.0.0" }, openapi: "3.1.0", paths: {} }
+const out = await generated(run, document, { env: {}, report: () => undefined })
+if (out.ts !== undefined) writeTarget("sdk/ts", out.ts.files, out.ts.packages)
+```
+
+### Java defaults to `com.example`, and a Go module path is one Go would publish
+
+The Java target's defaults are the neutral `com.example` group and package, the `sdk` artifact and `ExampleClient`;
+pass yours. A Go or CLI module path is checked as Go checks one: a domain first, and a major suffix only from `/v2`.
+`--go-version` (and `--cli-version`) is new: from v2 on it adds the suffix to the base path, so a path that already
+carries one is refused beside it.
+
+```sh rc.20
+npx honey-clients generate --spec openapi.json --target java
+```
+
+```sh
+npx honey-clients generate --spec openapi.json --target java --java-group-id com.acme --java-artifact-id shop-sdk \
+  --java-package-name com.acme.shop --java-client-name ShopClient
+npx honey-clients generate --spec openapi.json --target go --go-module-path github.com/acme/shop/sdk --go-version 2.1.0
+```
+
 ## Code generation moved to `@lovrozagar/honey-clients`
 
 The `@lovrozagar/honey/codegen` export is gone. Its SDK, CLI and MCP generators are the `honey-clients generate` bin
@@ -772,8 +886,9 @@ honey-clients generate --spec src/_gen/openapi.gen.json --target ts --ts-name Sh
 ## `honey-clients` generates from its own entry too
 
 The bin writes each target under `<out>/<target>/`. A consumer that writes the files itself — a flat layout, or a
-document patched in memory — calls `generated()` from the package entry, which answers every file by target and
-path and writes nothing. `writeGenerated()` is the bin's own writer, with its stale-file handling.
+document patched in memory — calls `generated()` from the package entry, which answers each target's files by path
+and the package they make, and writes nothing. `writeTarget()` writes one target's files into a directory you pick,
+and `writeGenerated()` is the bin's own writer; both keep the stale-file handling.
 
 ```ts v0
 import { generateSDK } from "@lovrozagar/honey/codegen"
@@ -785,7 +900,7 @@ import { generated, type GenerateRun } from "@lovrozagar/honey-clients"
 const run: GenerateRun = { options: { ts: { name: "ShopSDK", stem: "shop" } }, targets: ["ts"] }
 const document = { info: { title: "Shop", version: "1.0.0" }, openapi: "3.1.0", paths: {} }
 const files = await generated(run, document, { env: {}, report: () => undefined })
-export const names = Object.keys(files.ts ?? {})
+export const names = Object.keys(files.ts?.files ?? {})
 ```
 
 ## A gateway config works unchanged
