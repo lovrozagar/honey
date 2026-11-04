@@ -1,5 +1,9 @@
+import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
-import { GUARDS, guardNamed, runSuite, survivors } from "./mutation-harness.ts"
+import { CHILD_FLAGS, GUARDS, guardNamed, runSuite, survivors } from "./mutation-harness.ts"
+import { runVitest } from "./suite-run.ts"
+
+const POOLS = resolve(import.meta.dirname, "fixtures/pools")
 
 describe("the guard registry", () => {
 	it("names each guard once, with the module it lives in", () => {
@@ -28,6 +32,16 @@ describe("survivors", () => {
 			]),
 		).toEqual(["b"])
 	})
+})
+
+describe("the suite's child run", () => {
+	it("holds at most four forks at once, so a coverage run that runs the harness does not double its own", () => {
+		const pools = runVitest(POOLS, CHILD_FLAGS, process.env).failures.map((f) =>
+			Number(/expected '(\d+)'/.exec(f)?.[1]),
+		)
+		expect(pools).toHaveLength(8)
+		expect(Math.max(...pools)).toBeLessThanOrEqual(4)
+	}, 60_000)
 })
 
 describe("the adversarial suite against each guard", () => {

@@ -482,6 +482,12 @@ export const GUARDS: readonly Guard[] = [
 
 const CORE = resolve(import.meta.dirname, "../..")
 const SUITE = "tests/integration/security"
+/**
+ * The child run's flags. It runs inside one worker of its parent's run, which already holds a fork per core: left to
+ * vitest's default (a core less than the machine's) it doubles the live forks of a coverage run (39 on 16 cores,
+ * plan 39). Four is the knee: the suite takes 1.65 s at 4, 1.38 s at 15, 2.6 s at 2.
+ */
+export const CHILD_FLAGS: readonly string[] = ["--maxWorkers=4"]
 
 export function guardNamed(id: string | undefined): Guard | undefined {
 	if (id === undefined || id === "") return undefined
@@ -492,7 +498,7 @@ export function guardNamed(id: string | undefined): Guard | undefined {
 
 /** The adversarial suite's run, with `mutant` disabled when given: its exit status and what failed, by name. */
 export function runSuite(mutant: string | undefined): SuiteRun {
-	return runVitest(CORE, [SUITE], { ...process.env, HONEY_MUTANT: mutant ?? "" })
+	return runVitest(CORE, [SUITE, ...CHILD_FLAGS], { ...process.env, HONEY_MUTANT: mutant ?? "" })
 }
 
 export function survivors(results: ReadonlyArray<{ id: string; status: number }>): string[] {
