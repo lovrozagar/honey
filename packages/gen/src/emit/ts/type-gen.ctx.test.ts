@@ -180,6 +180,17 @@ ctx.input = { search: { q: "" } }`
 		expect(check(app, consumer, null).diagnostics).toEqual([])
 	})
 
+	it("types ctx.params by the extracted type where a param schema declares one, else the path's strings", () => {
+		const app = honeyDoc([
+			{ method: "POST", pattern: "/scans/:scan" },
+			{ method: "GET", pattern: "/items/:id" },
+		])
+		const consumer = `expectType<Equal<RouteCtx<"/scans/:scan", "post">["params"]["scan"], "daily" | "weekly">>()
+expectType<Equal<RouteCtx<"/items/:id", "get">["params"]["id"], string>>()`
+		const types = extracted({ params: { "POST /scans/:scan": '{ scan: "daily" | "weekly"; [key: string]: string }' } })
+		expect(check(app, consumer, types).diagnostics).toEqual([])
+	})
+
 	it("falls back to the document's wire input when the route has no extracted input", () => {
 		const app = honeyDoc([{ input: { search: object({ q: STRING }) }, method: "GET", pattern: "/find" }])
 		const consumer = `expectType<Same<RouteCtx<"/find", "get">["input"], { search: { q: string } }>>()`

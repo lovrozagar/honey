@@ -228,6 +228,7 @@ describe("routes: keyed by the caller's route id", () => {
 				inputs: {},
 				meta: null,
 				middleware: [],
+				params: {},
 				routes: {},
 				taps: null,
 			})
@@ -440,6 +441,29 @@ describe("inputs: each route's ctx.input as the handler gets it (O3)", () => {
 				),
 			)
 			expect(extract(entryPath, { routeId: refusing }).types.inputs).toEqual({ "POST /count": "{ json: number }" })
+		},
+		SLOW,
+	)
+})
+
+describe("params: each route's ctx.params where a declared schema types it", () => {
+	it(
+		"keeps the type a param schema produces, and has no entry for a route whose params are the path's strings",
+		() => {
+			const entryPath = project.write(
+				"routes/params.ts",
+				lines(
+					'import { honey } from "@lovrozagar/honey"',
+					"/** a Standard schema reading a string and producing one of two scans */",
+					'const scan = { \'~standard\': { types: undefined as unknown as { input: string; output: "daily" | "weekly" }, validate: (v: unknown) => ({ value: v as "daily" }), vendor: \'x\', version: 1 as const } }',
+					"export const app = honey<{}>()",
+					'app.post("/scans/:scan").input({ params: { scan } }).handler((c) => c.res.text("ok", c.params.scan))',
+					'app.get("/items/:id").handler((c) => c.res.text("ok", c.params.id))',
+				),
+			)
+			expect(extract(entryPath).types.params).toEqual({
+				"POST /scans/:scan": '{ scan: "daily" | "weekly"; [key: string]: string }',
+			})
 		},
 		SLOW,
 	)

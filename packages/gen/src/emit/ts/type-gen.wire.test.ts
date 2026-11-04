@@ -79,6 +79,7 @@ expectType<Equal<RouteInput<"/note", "post">, {}>>()`
 			inputs: {},
 			meta: null,
 			middleware: [{ name: "user", optional: true, type: "string" }],
+			params: {},
 			routes: {},
 			taps: null,
 		}

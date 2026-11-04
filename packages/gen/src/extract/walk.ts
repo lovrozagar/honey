@@ -42,6 +42,8 @@ export type Registration = {
 	ctx: ts.Type
 	/** `ctx.input` as the handler receives it (parsed), or null when the route declares no input */
 	input: ts.Type | null
+	/** `ctx.params` as the handler receives it, or null when every param is the path's string */
+	params: ts.Type | null
 	methods: string[]
 	path: string | null
 }
@@ -104,6 +106,12 @@ function registrationOf(entry: LoadedEntry, call: ts.CallExpression): Registrati
 	const handler = checker.getResolvedSignature(call)?.parameters[0]
 	const param = handler && checker.getTypeOfSymbol(handler).getCallSignatures()[0]?.parameters[0]
 	const input = param && checker.getTypeOfSymbol(param).getProperty("input")
+	const params = param && checker.getTypeOfSymbol(param).getProperty("params")
+	const paramsType = params && checker.getTypeOfSymbol(params)
+	/* a param schema shows as a key that is not a string: only then does the path's own typing fall short */
+	const typed = paramsType
+		?.getProperties()
+		.some((key) => !(checker.getTypeOfSymbol(key).flags & compiler.TypeFlags.String))
 	const file = call.getSourceFile()
 	const line = file.getLineAndCharacterOfPosition(call.getStart(file)).line + 1
 	const paths = literals(path as ts.Type)
@@ -111,6 +119,7 @@ function registrationOf(entry: LoadedEntry, call: ts.CallExpression): Registrati
 		at: `${file.fileName}:${line}`,
 		ctx: ctx as ts.Type,
 		input: input ? checker.getTypeOfSymbol(input) : null,
+		params: typed === true ? (paramsType as ts.Type) : null,
 		/* `.on()`'s methods are literals by its signature; a path is one only as a single literal */
 		methods: literals(method as ts.Type),
 		path: paths.length === 1 && !(path as ts.Type).isUnion() ? (paths[0] as string) : null,

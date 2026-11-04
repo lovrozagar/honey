@@ -178,13 +178,18 @@ function ctxMeta(extracted: ExtractedTypes | null | undefined, literal: string):
 	return declared === null ? literal : `Partial<Omit<HoneyMeta, keyof ${declared}>> & ${declared}`
 }
 
+/** `ctx.params`: the type a param schema gives it as extracted, else each of the pattern's params a string. */
+function ctxParams(extracted: ExtractedTypes | null | undefined, id: string, pattern: string): string {
+	return extracted?.params[id] ?? objectText(paramsOf(pattern))
+}
+
 /** One `Routes[pattern][method]` entry. */
 function routeEntry(id: string, op: IROperation, options: GenerateTypesOptions, ctx: Ctx): string {
 	const pattern = id.slice(id.indexOf(" ") + 1)
 	const { extracted } = options
 	const wire = objectText(wireInput(op, ctx))
 	const input = extracted?.inputs[id] ?? wire
-	const params = paramsOf(pattern)
+	const params = ctxParams(extracted, id, pattern)
 	const { factories, fields } = errorsOf(op, ctx)
 	const mt = options.tree.routes[id]?.mt
 	/* the values the tree carries, as literals: what a consumer reads a route's configuration from */
@@ -193,7 +198,7 @@ function routeEntry(id: string, op: IROperation, options: GenerateTypesOptions, 
 	const output = outputOf(op, ctx)
 	const own: Field[] = []
 	if (input !== "{}") own.push(["readonly input", input])
-	if (params.length > 0) own.push(["readonly params", objectText(params)])
+	if (params !== "{}") own.push(["readonly params", params])
 	if (factories.length > 0) own.push(["readonly errors", objectText(factories)])
 	own.push(["readonly meta", `Readonly<${meta}>`], ["readonly routePattern", tsString(pattern)])
 	const base = options.baseCtxName ?? "BaseCtx"

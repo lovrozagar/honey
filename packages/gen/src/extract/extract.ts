@@ -39,6 +39,8 @@ export type ExtractedTypes = {
 	middleware: ExtractedProp[]
 	/** per route id, `ctx.input` as the handler gets it (the parsed type); a route without input has none */
 	inputs: Record<string, string>
+	/** per route id, `ctx.params` where a param schema types a key; a route of the path's strings has none */
+	params: Record<string, string>
 	/** the meta type the app declares (`metaType<AppMeta>()`), or null when it declares none */
 	meta: string | null
 	/** per route id, what the route's middleware added beyond `middleware`; a route that added nothing has none */
@@ -146,16 +148,19 @@ function resolvable(text: string, outputDir: string | undefined, cache: Packages
 	)
 }
 
-/** Each route's parsed `ctx.input` text by route id; an id two registrations type differently is left out. */
-function routeInputs(
+/** Each route's `pick` type (its parsed `ctx.input`, its `ctx.params`) as text by route id; an id two registrations type differently is left out. */
+function routeTypes(
 	found: readonly Registration[],
+	pick: (found: Registration) => ts.Type | null,
 	serialize: (type: ts.Type) => string,
 	routeId: (method: string, path: string) => string,
 ): Record<string, string> {
 	const byId = new Map<string, string | null>()
-	for (const { input, methods, path } of found) {
-		if (input === null || path === null) continue
-		const text = serialize(input)
+	for (const registration of found) {
+		const { methods, path } = registration
+		const type = pick(registration)
+		if (type === null || path === null) continue
+		const text = serialize(type)
 		for (const method of methods) {
 			let id: string
 			try {
@@ -216,9 +221,20 @@ export function extractTypes(options: ExtractOptions): ExtractedTypes | null {
 	const props = (list: readonly ExtractedProp[]) => list.map((p) => ({ ...p, type: text(p.type) }))
 	return {
 		env: text(ser.serialize(env as ts.Type)),
-		inputs: routeInputs(found, (type) => text(ser.shape(type)), routeId),
+		inputs: routeTypes(
+			found,
+			(r) => r.input,
+			(type) => text(ser.shape(type)),
+			routeId,
+		),
 		meta: meta === "{}" ? null : text(meta),
 		middleware: props(middleware),
+		params: routeTypes(
+			found,
+			(r) => r.params,
+			(type) => text(ser.shape(type)),
+			routeId,
+		),
 		routes: Object.fromEntries(Object.entries(routes).map(([id, list]) => [id, props(list)])),
 		taps: taps === "{}" ? null : text(taps),
 	}

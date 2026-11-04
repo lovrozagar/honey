@@ -702,7 +702,8 @@ both to the template before you look one up.
 `RouteCtx<"/items", "get">`. Its `meta` is the meta type the app declares with `metaType<AppMeta>()` plus the OpenAPI
 keys a route may add — not the route's configured values, which are narrower than what the handler holds (a
 route's `operationId` is `string` there, not `"items.list"`). Read a route's values from the sibling
-`RouteMeta<"/items", "get">`, which still types them as literals.
+`RouteMeta<"/items", "get">`, which still types them as literals. Its `params` are the path's strings, except where
+`.input({ params })` gives a key a schema: then that key is the schema's output, as the handler has it.
 
 `InferRouteCtx<typeof app, …>` is the same ctx read off the app type, for a module the app does **not** import; a
 service the app imports would be a cycle, and the generic then resolves to `never`.
