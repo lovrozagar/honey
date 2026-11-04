@@ -66,7 +66,17 @@ export const TARGET_OPTIONS = {
 	],
 	mcp: ["envPrefix", "name", "version"],
 	python: ["packageName", "version"],
-	rust: ["crateName", "description", "homepage", "keywords", "license", "repository", "version"],
+	rust: [
+		"categories",
+		"crateName",
+		"description",
+		"documentation",
+		"homepage",
+		"keywords",
+		"license",
+		"repository",
+		"version",
+	],
 	ts: ["name", "packageName", "stem", "tanstackQuery", "version"],
 } as const satisfies { readonly [T in Target]: readonly string[] }
 
@@ -192,6 +202,7 @@ type FromMetadata = (metadata: Metadata) => string | undefined
 
 const description: FromMetadata = (metadata) => metadata.description
 const homepage: FromMetadata = (metadata) => metadata.homepage
+const documentation: FromMetadata = (metadata) => metadata.documentation
 const license: FromMetadata = (metadata) => metadata.license
 const repository: FromMetadata = (metadata) => metadata.repository
 const firstAuthor: FromMetadata = (metadata) => metadata.authors?.[0]
@@ -213,7 +224,14 @@ const FROM_METADATA: {
 		repository,
 	},
 	java: { description, developer: firstAuthor, homepage, license, repository },
-	rust: { description, homepage, keywords: (metadata) => metadata.keywords?.join(","), license, repository },
+	rust: {
+		description,
+		documentation,
+		homepage,
+		keywords: (metadata) => metadata.keywords?.join(","),
+		license,
+		repository,
+	},
 }
 
 /** `target`'s options: those `metadata` fills, under the ones the run gives the target itself, checked. */

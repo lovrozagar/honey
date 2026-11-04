@@ -14,34 +14,19 @@ import { compareCodeUnits, rustTypeIdent } from "../shared/lang.ts"
 import { renameNotice } from "../shared/mirror.ts"
 import { rustErrorKeys } from "./errors.ts"
 import { needsWebSocket, publicItems, runtimeFiles } from "./http.ts"
-import { cargoLock, cargoToml, validateCrateName, validateCrateVersion } from "./sdk-cargo.ts"
+import { cargoLock, cargoToml, crateIdentity, type CrateOptions } from "./sdk-cargo.ts"
 import { clientDecls } from "./sdk-client.ts"
 import type { RustCallPlan } from "./sdk-plan.ts"
 import { type RustTypeContext, rustTopLevel, rustTypeContext } from "./types.ts"
 
-export type RustSdkOptions = {
-	/** the crate name; `honey-sdk` by default */
-	readonly crateName?: string
-	/** the crate version; `0.1.0` by default */
-	readonly version?: string
-	/** what crates.io shows: `cargo publish` refuses a crate with no description and no license */
-	readonly description?: string
-	readonly homepage?: string
-	/** the crates.io keywords: a list, or the CLI's comma-separated value */
-	readonly keywords?: readonly string[] | string
-	readonly license?: string
-	readonly repository?: string
-}
+/**
+ * The crate's options: its name (`honey-sdk` by default), version (`0.1.0` by default) and what crates.io shows,
+ * `keywords` and `categories` each a list or the CLI's comma-separated value. `cargo publish` refuses a crate with
+ * no description and no license.
+ */
+export type RustSdkOptions = CrateOptions
 
 /** The crate's files by path, and what the generation reports: a component or a root member renamed (never silently). */
-/** The keywords as a list: a CLI value arrives as one comma-separated string. */
-function keywordsOf(keywords: readonly string[] | string | undefined): readonly string[] | undefined {
-	if (keywords === undefined) return undefined
-	const list = typeof keywords === "string" ? keywords.split(",") : keywords
-	const kept = list.map((word) => word.trim()).filter((word) => word !== "")
-	return kept.length === 0 ? undefined : kept
-}
-
 export type GeneratedRustSdk = { readonly files: Readonly<Record<string, string>>; readonly notices: readonly string[] }
 
 /* the marker rustfmt and linguist read */
@@ -94,15 +79,7 @@ function libFile(info: IRInfo, runtime: readonly (readonly [module: string, sour
 
 /** The crate's files for `document`, and the call plan of every method in them. */
 function emitRust(document: Record<string, unknown>, options: RustSdkOptions) {
-	const crate = {
-		description: options.description,
-		homepage: options.homepage,
-		keywords: keywordsOf(options.keywords),
-		license: options.license,
-		name: validateCrateName(options.crateName ?? "honey-sdk"),
-		repository: options.repository,
-		version: validateCrateVersion(options.version ?? "0.1.0"),
-	}
+	const crate = crateIdentity(options)
 	const ir = toIR(document as OpenApiDocument, { deriveOperationIds: true })
 	const model = sdkModel(ir)
 	const at = rustTypeContext(ir)

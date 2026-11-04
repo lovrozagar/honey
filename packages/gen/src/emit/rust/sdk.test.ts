@@ -257,12 +257,13 @@ describe("generateRustSdk: the crate's files", () => {
 
 describe("generateRustSdk: the package", () => {
 	// v0: deeff6549d
-	it("declares honey-sdk 0.1.0, edition 2024 and the toolchain floor as rust-version by default", () => {
+	it("declares honey-sdk 0.1.0, edition 2024 and the toolchain floor as rust-version by default, packing src", () => {
 		/* V0BUG: v0 declared rust-version 1.75, which no resolution of the dependency set builds (contract 18 §3) */
 		const { files } = generateRustSdk(minimal, {})
 		expect({ package: manifest(files).package, roots: roots(lockOf(files)).map(named) }).toEqual({
 			package: {
 				edition: "2024",
+				include: ["/src"],
 				name: "honey-sdk",
 				"rust-version": RUST_FLOOR.replace(/\.0$/, ""),
 				version: "0.1.0",

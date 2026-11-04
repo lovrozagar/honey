@@ -129,7 +129,9 @@ One table, since a flag that is not written down is a flag nobody finds:
 | `--rust-license`           | rust   | its SPDX license; `cargo publish` needs one                                       |
 | `--rust-repository`        | rust   | the repository crates.io links                                                    |
 | `--rust-homepage`          | rust   | the home page crates.io links                                                     |
-| `--rust-keywords`          | rust   | its crates.io keywords, comma separated                                           |
+| `--rust-keywords`          | rust   | its crates.io keywords, comma separated: five at most, each 20 ASCII characters   |
+| `--rust-categories`        | rust   | its crates.io category slugs, comma separated: five at most                       |
+| `--rust-documentation`     | rust   | the https documentation crates.io links; docs.rs by default                       |
 | `--python-package-name`    | python | the Python package's name                                                         |
 | `--python-version`         | python | the package's version                                                             |
 | `--csharp-client-name`     | csharp | the client class's name                                                           |
