@@ -290,3 +290,45 @@ describe("letters", () => {
 		expect(onDeadLetter.mock.calls).toEqual([[letter, ENV]])
 	})
 })
+
+describe("deliver: a retry is logged", () => {
+	/** A run whose logger's warn and the delivery's settling land in one ordered list. */
+	const logged = async (job: Handler, body?: unknown, config: Partial<QueueConsumerConfig<Env, never>> = {}) => {
+		const { calls, delivery } = recording(body)
+		const warn = (...args: unknown[]) => void calls.push(["warn", ...args])
+		const logger = { ...SILENT, child: () => ({ ...SILENT, warn }) }
+		await deliver(consumerOf(job, { ...config, logger }), delivery, ENV, () => {})
+		return calls
+	}
+
+	it("warns with the error, attempts and delay before a throw retries", async () => {
+		const error = new Error("upstream down")
+		const calls = await logged(
+			() => {
+				throw error
+			},
+			undefined,
+			{ retryDelay: () => 7 },
+		)
+		expect(calls).toEqual([
+			["warn", { attempts: 2, delaySeconds: 7, err: error }, "queue: message retrying"],
+			["retry", { delaySeconds: 7, reason: "upstream down" }],
+		])
+	})
+
+	it("warns for a body past its contract, with its 60 s", async () => {
+		const calls = await logged(async () => {}, { data: 1, type: "nope" })
+		expect(calls.map(([kind, fields]) => [kind, (fields as { delaySeconds?: number }).delaySeconds])).toEqual([
+			["warn", 60],
+			["retry", 60],
+		])
+	})
+
+	it("warns for neither a handler's own retry nor a dead letter: neither has an error to show", async () => {
+		const own = await logged(({ message }) => message.retry())
+		const dead = await logged(() => {
+			throw deadLetter("no account")
+		})
+		expect([own, dead]).toEqual([[["retry", { reason: "retried by the handler" }]], [["deadLetter", "no account"]]])
+	})
+})

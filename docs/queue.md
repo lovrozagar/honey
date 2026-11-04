@@ -65,6 +65,9 @@ A handler receives `data`, `env`, `log`, `traceId`, `background(promise)` and `m
 
 `retryDelay(error)` answers seconds to hold a retry back. A handler's throw retries at once by default.
 
+Each throw that retries is logged at warn, `queue: message retrying`, with the error, `attempts` and `delaySeconds`, so
+every failed attempt shows its stack; a letter keeps only the last attempt's reason.
+
 `background(promise)` keeps the runtime alive for work past the message, and logs a rejection.
 
 ## A body past its contract

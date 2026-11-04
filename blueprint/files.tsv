@@ -1175,7 +1175,7 @@ tests/build/fixture/worker-cron.ts	core	test	21	a Worker entry exporting a cron 
 src/cron/define.test.ts	core	test	21	a definition that could never run	cron.ts
 src/cron/run.test.ts	core	test	21	the bound logger and a throw before the first await	cron.ts
 src/queue/define.ts	core	src	21	queueContract, queueMessage, defineConsumer and deadLetter, ./queue; plan 39 6.10: QueueLetter.kept, whether the message still exists on the platform after the report	queue.ts
-src/queue/deliver.ts	core	src	21	one message's run: bodies, settling, delays and letters, shared; plan 39 6.10: letterOf(delivery, reason, kept = false)	queue.ts
+src/queue/deliver.ts	core	src	21	one message's run: bodies, settling, delays and letters, shared; plan 39 6.10: letterOf(delivery, reason, kept = false); plan 39 6.11: a throw that retries (a handler's or a bad body's) is logged at warn, queue: message retrying, with err, attempts and delaySeconds	queue.ts
 src/queue/workers.ts	core	src	21	workersQueue: a binding's batch, and reporting a dead-letter queue; plan 39 6.10: maxRetries (the consumer's max_retries, a whole number from 0): the last failed delivery is reported kept: true, then retried so the platform moves it to its DLQ	queue.ts
 src/queue/serve.ts	core	src	21	serveQueue and QueueStore: one claim loop with leases for Node and Bun	queue.ts
 src/queue/memory-store.ts	core	src	21	memoryQueueStore: a leased store in memory, for development	queue.ts

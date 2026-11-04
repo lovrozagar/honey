@@ -108,7 +108,8 @@ export async function reportLetter<Env>(consumer: QueueConsumer<Env>, letter: Qu
 
 /**
  * Runs one message to its settling. It never rejects: every failure settles the message or is
- * logged. `background` receives a promise that cannot reject.
+ * logged, and a throw that retries is logged at warn with its error. `background` receives a
+ * promise that cannot reject.
  */
 export async function deliver<Env>(
 	consumer: QueueConsumer<Env>,
@@ -149,6 +150,8 @@ export async function deliver<Env>(
 		else if (error instanceof QueueDeadLetter) settle(() => delivery.deadLetter(reason))
 		else {
 			const delay = delayFor(consumer, error, bad ? BAD_BODY_DELAY_SECONDS : undefined, log)
+			/* each failed attempt shows its error; a letter keeps only the last one's reason */
+			log.warn({ attempts: delivery.attempts, delaySeconds: delay.delaySeconds, err: error }, "queue: message retrying")
 			settle(() => delivery.retry({ ...delay, reason }))
 		}
 	}
