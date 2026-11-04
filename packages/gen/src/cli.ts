@@ -75,7 +75,7 @@ function filesOf(
 ): Readonly<Record<string, string>> {
 	if (target === "cli") return generateGoCli(document, options).files
 	if (target === "mcp") {
-		const server = generateMcpServer(document, options)
+		const server = generateMcpServer(document, options, metadata)
 		for (const op of server.skipped) report(`honey-clients: mcp: no tool serves ${op} yet: skipped\n`)
 		return server.files
 	}

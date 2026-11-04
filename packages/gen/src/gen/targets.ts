@@ -66,7 +66,7 @@ export const TARGET_OPTIONS = {
 		"repository",
 		"version",
 	],
-	mcp: ["envPrefix", "name", "version"],
+	mcp: ["envPrefix", "mcpName", "name", "packageName", "version"],
 	python: ["packageName", "version"],
 	rust: [
 		"categories",

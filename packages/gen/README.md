@@ -175,6 +175,8 @@ One table, since a flag that is not written down is a flag nobody finds:
 | `--mcp-name`               | mcp    | the server's name, and the stem of its bin                                        |
 | `--mcp-env-prefix`         | mcp    | the prefix of the environment variables it reads                                  |
 | `--mcp-version`            | mcp    | its server info and package version; the document's by default                    |
+| `--mcp-package-name`       | mcp    | the npm name it publishes under; `<name>-mcp` by default                          |
+| `--mcp-mcp-name`           | mcp    | its MCP registry name (`io.github.acme/shop`), package.json's `mcpName`           |
 | `--metadata-description`   | all    | what every registry shows                                                         |
 | `--metadata-homepage`      | all    | the https home page the registries link                                           |
 | `--metadata-repository`    | all    | the https URL of its git repository                                               |
@@ -488,6 +490,10 @@ default, and Streamable HTTP with `--http`.
 ```sh
 honey-clients generate --spec openapi.json --target mcp --out ./mcp --mcp-name anyrow
 ```
+
+Its package publishes to npm as written. `--mcp-package-name @acme/shop-mcp` names it (its bin keeps the server's
+name), the metadata block fills its description, license, repository and the rest as it does the TS SDK's, and
+`--mcp-mcp-name io.github.acme/shop` writes the `mcpName` the MCP registry checks the npm package by.
 
 ```json
 {

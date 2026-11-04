@@ -1,14 +1,17 @@
 /**
  * The generated MCP server's package (bit 18 phase a): its files byte for byte; the vendored runtime as one module in
- * order; `dist/` the types-erased CommonJS of every `src/` file, the same whichever runtime generates; the options
+ * order; `dist/` the types-erased ES modules of every `src/` file, the same whichever runtime generates; the options
  * refused unless they match their grammar (F2); the TypeScript strict and erasable-only; the compiled server under
- * node and the source under bun answering alike, and both official clients connecting to it.
+ * node and the source under bun answering alike, and both official clients connecting to it. Plan 39 8.6: its npm
+ * name, its MCP registry name (`mcpName`, which the registry checks the npm package by) and the run's metadata block in
+ * its package.json.
  */
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import { SPAWN_TIMEOUT } from "../../gen/__fixtures__/spawn-timeout.ts"
 import { clientCheck, withClients } from "./__fixtures__/clients.ts"
 import { exchange, initialize, request, typeErrors, written } from "./__fixtures__/written.ts"
+import { generated } from "../../index.ts"
 import { compiled } from "../ts/package.ts"
 import { erased, generateMcpServer } from "./server.ts"
 
@@ -47,6 +50,57 @@ describe("the package's files (phase a)", () => {
 			type: "module",
 			version: "1.2.0",
 		})
+	})
+})
+
+describe("the package as it publishes (plan 39 8.6)", () => {
+	const metadata = {
+		authors: ["Acme Inc <oss@acme.dev>"],
+		description: "Shop's tools for agents",
+		homepage: "https://acme.dev",
+		keywords: ["shop", "mcp"],
+		license: "MIT",
+		repository: "https://github.com/acme/shop-mcp",
+	}
+
+	it("takes its npm name, its MCP registry name and the run's metadata, the bin still the server's", async () => {
+		const run = await generated(
+			{
+				metadata,
+				options: { mcp: { mcpName: "io.github.acme/shop", packageName: "@acme/shop-mcp" } },
+				targets: ["mcp"],
+			},
+			document(),
+			{ env: {}, report: () => undefined },
+		)
+		expect(JSON.parse(run.mcp?.["package.json"] ?? "null")).toEqual({
+			author: "Acme Inc <oss@acme.dev>",
+			bin: { "shop-mcp": "dist/server.js" },
+			bugs: "https://github.com/acme/shop-mcp/issues",
+			description: "Shop's tools for agents",
+			engines: { node: ">=22" },
+			files: ["dist", "src"],
+			homepage: "https://acme.dev",
+			keywords: ["shop", "mcp"],
+			license: "MIT",
+			mcpName: "io.github.acme/shop",
+			name: "@acme/shop-mcp",
+			repository: { type: "git", url: "git+https://github.com/acme/shop-mcp.git" },
+			type: "module",
+			version: "1.2.0",
+		})
+	})
+
+	it.each([
+		["packageName", "@Acme/shop-mcp"],
+		["packageName", "shop mcp"],
+		["mcpName", "shop"],
+		["mcpName", "io.github.acme/shop/server"],
+		["mcpName", "io github/shop"],
+	])("refuses %s %j before generating anything", (option, value) => {
+		expect(() => generateMcpServer(document(), { [option]: value })).toThrow(
+			`Invalid ${option}: ${JSON.stringify(value)}`,
+		)
 	})
 })
 

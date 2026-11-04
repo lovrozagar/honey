@@ -6,7 +6,7 @@
  * resolution and bundler maps to the `.ts` file and a consumer compiles under any flags; JSR is told to map them the
  * same way (sloppy imports). oxc's transform compiles both in one in-process pass that is the same
  * whichever runtime generates; no type checker runs, since the sources declare every exported type (isolated
- * declarations). The MCP server's `dist/` goes through the same pass.
+ * declarations). The MCP server's `dist/` goes through the same pass, and its package.json takes the same metadata.
  */
 import { transformSync } from "oxc-transform"
 import { checked, issuesUrl, type Metadata, NPM_NAME, SEMVER } from "../shared/metadata.ts"
@@ -51,8 +51,8 @@ function exportsOf(files: Readonly<Record<string, string>>, stem: string, target
 	return Object.fromEntries(kinds.map(([kind, subpath]) => [subpath, target(`${stem}.${kind}.gen`)]))
 }
 
-/** The package.json fields the metadata fills, each only when given. */
-function described(metadata: Metadata) {
+/** The package.json fields the metadata fills, each only when given: the TS SDK's and the MCP server's. */
+export function npmFields(metadata: Metadata) {
 	const { authors, description, homepage, keywords, license, repository } = metadata
 	return {
 		...(description === undefined ? {} : { description }),
@@ -73,7 +73,7 @@ function packageJson(sdk: GeneratedSdk, name: string, version: string, metadata:
 	const manifest = {
 		name,
 		version,
-		...described(metadata),
+		...npmFields(metadata),
 		type: "module",
 		exports: exportsOf(sdk.files, sdk.stem, (file) => ({ types: `./dist/${file}.d.ts`, default: `./dist/${file}.js` })),
 		files: ["dist"],
