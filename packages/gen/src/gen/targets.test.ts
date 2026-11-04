@@ -68,8 +68,10 @@ describe("targetOptionSchemas (plan 39 8.1)", () => {
 		expectTypeOf<TargetOptions<"go">>().toEqualTypeOf<{ readonly modulePath?: string }>()
 		expectTypeOf<TargetOptions<"ts">>().toEqualTypeOf<{
 			readonly name?: string
+			readonly packageName?: string
 			readonly stem?: string
 			readonly tanstackQuery?: "true" | "false"
+			readonly version?: string
 		}>()
 		expectTypeOf(targetOptionSchemas.python["~standard"].validate).returns.toExtend<
 			{ readonly value: TargetOptions<"python"> } | { readonly issues: readonly unknown[] }

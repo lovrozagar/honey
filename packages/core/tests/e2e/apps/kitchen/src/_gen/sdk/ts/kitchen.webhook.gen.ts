@@ -1,11 +1,11 @@
-import type { WebhookEvent } from "./kitchen.types.gen"
+import type { WebhookEvent } from "./kitchen.types.gen.js"
 
 export type {
 	OrderPaidWebhookEvent,
 	OrderRefundedWebhookEvent,
 	UnknownWebhookEvent,
 	WebhookEvent,
-} from "./kitchen.types.gen"
+} from "./kitchen.types.gen.js"
 
 /** A webhook delivery that is not genuine: unsigned, signed by no key the receiver holds, stale, or not an event. */
 export class WebhookVerificationError extends Error {

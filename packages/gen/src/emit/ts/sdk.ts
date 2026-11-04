@@ -27,11 +27,15 @@ export type SdkOptions = {
 	readonly tanstackQuery?: boolean
 }
 
-/** The SDK's files, its stem, and what the generation tells its caller: a root group renamed off the safe mirror. */
+/**
+ * The SDK's files, its stem, the document's own version, and what the generation tells its caller: a root group
+ * renamed off the safe mirror.
+ */
 export type GeneratedSdk = {
 	readonly files: Readonly<Record<string, string>>
 	readonly notices: readonly string[]
 	readonly stem: string
+	readonly version: string | undefined
 }
 
 const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/
@@ -154,9 +158,9 @@ function validated(options: SdkOptions): { name: string; stem: string } {
 function clientText(name: string, stem: string, server: string | undefined, auth: IRAuth): string {
 	const based = server === undefined ? "config" : `{ ...config, baseURL: config.baseURL ?? ${tsString(server)} }`
 	const config = `schemeAuth(${based}, ${tsString(auth.headerName)}, ${tsString(auth.prefix)})`
-	return `import { SDKClient, schemeAuth } from "./${stem}.runtime.gen"
-import { serviceMap } from "./${stem}.map.gen"
-import type { ${name}Config, ${name}Operations, ${name}Safe } from "./${stem}.types.gen"
+	return `import { SDKClient, schemeAuth } from "./${stem}.runtime.gen.js"
+import { serviceMap } from "./${stem}.map.gen.js"
+import type { ${name}Config, ${name}Operations, ${name}Safe } from "./${stem}.types.gen.js"
 
 export class ${name} extends SDKClient {
 	constructor(config: ${name}Config) {
@@ -172,11 +176,11 @@ export interface ${name} extends ${name}Operations {
 }
 
 function indexText(name: string, stem: string, features: TsRuntimeFeatures): string {
-	return `export { ${name} } from "./${stem}.client.gen"
-export { serviceMap } from "./${stem}.map.gen"
-export type * from "./${stem}.types.gen"
-export { ${shipped(RUNTIME_EXPORTS, features).join(", ")} } from "./${stem}.runtime.gen"
-export type { ${shipped(RUNTIME_TYPES, features).join(", ")} } from "./${stem}.runtime.gen"
+	return `export { ${name} } from "./${stem}.client.gen.js"
+export { serviceMap } from "./${stem}.map.gen.js"
+export type * from "./${stem}.types.gen.js"
+export { ${shipped(RUNTIME_EXPORTS, features).join(", ")} } from "./${stem}.runtime.gen.js"
+export type { ${shipped(RUNTIME_TYPES, features).join(", ")} } from "./${stem}.runtime.gen.js"
 `
 }
 
@@ -202,5 +206,5 @@ export function generateSdk(document: Record<string, unknown>, options: SdkOptio
 	if (ir.webhooks.some((webhook) => webhook.event)) files[`${stem}.webhook.gen.ts`] = webhooksText(ir, stem)
 	/* the index never names it: its text must not vary by option, and it must never name query-core */
 	if (options.tanstackQuery === true) files[`${stem}.tanstack-query.gen.ts`] = tanstackQueryText(ir, name, stem)
-	return { files, notices, stem }
+	return { files, notices, stem, version: ir.info.version }
 }

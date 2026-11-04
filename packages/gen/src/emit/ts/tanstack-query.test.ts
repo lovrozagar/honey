@@ -45,7 +45,7 @@ describe("tanstackQuerySource: the vendored adapter, pointed at the emitted runt
 	const source = tanstackQuerySource("api.runtime.gen")
 
 	it("rewrites honey's runtime imports to the emitted runtime module", () => {
-		expect(source).toContain('from "./api.runtime.gen"')
+		expect(source).toContain('from "./api.runtime.gen.js"')
 		expect(source).not.toContain('from "../ts/sdk.ts"')
 	})
 
@@ -64,7 +64,7 @@ describe("tanstackQuerySource: the vendored adapter, pointed at the emitted runt
 	it("names each imported symbol once, however many modules asked for it", () => {
 		const lines = source.split("\n").filter((line) => line.includes('from "@tanstack/query-core"'))
 		expect(lines).toHaveLength(1)
-		const runtime = source.split("\n").filter((line) => line.includes('from "./api.runtime.gen"'))
+		const runtime = source.split("\n").filter((line) => line.includes('from "./api.runtime.gen.js"'))
 		expect(runtime).toHaveLength(1)
 		expect(runtime[0]).toContain("ServiceEntry")
 		expect(runtime[0]).toContain("ServiceMap")
@@ -105,8 +105,8 @@ describe("tanstackQueryText: the key trees come from the service map, not from m
 	})
 
 	it("imports the client's own map and class, and exports the one entry point", () => {
-		expect(text).toContain('import { serviceMap } from "./api.map.gen"')
-		expect(text).toContain('from "./api.client.gen"')
+		expect(text).toContain('import { serviceMap } from "./api.map.gen.js"')
+		expect(text).toContain('from "./api.client.gen.js"')
 		expect(text).toContain("export function createQueryHelpers")
 		/* the name heads every key, so it is baked in rather than passed */
 		expect(text).toContain('"Shop"')

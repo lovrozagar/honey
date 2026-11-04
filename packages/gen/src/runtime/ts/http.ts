@@ -23,11 +23,11 @@ type Prepared = { body: BodyInit | undefined; headers: Headers; url: URL }
 export type Call = { method: string; opts: RequestOptions; path: string; refreshes?: false | undefined }
 
 /** The realtime loop's refresh key, exported by the SDK under no name. */
-export const REFRESH_AUTH = /* @__PURE__ */ Symbol("honey.refreshAuth")
+export const REFRESH_AUTH: unique symbol = /* @__PURE__ */ Symbol("honey.refreshAuth")
 
 /** The send and the config, for the stream functions beside the client. */
-export const SEND = /* @__PURE__ */ Symbol("honey.send")
-export const CONFIG = /* @__PURE__ */ Symbol("honey.config")
+export const SEND: unique symbol = /* @__PURE__ */ Symbol("honey.send")
+export const CONFIG: unique symbol = /* @__PURE__ */ Symbol("honey.config")
 
 /** One operation of a generated SDK: the call, how it is read, and its stale view for the hooks. */
 export type Operation = Call & {
@@ -121,16 +121,17 @@ export class HTTPClient {
 		return this.#refreshing
 	}
 
+	/** @internal */
 	get [CONFIG](): ClientConfig {
 		return this.#config
 	}
 
-	/** One request sent: its hooks run, its auth refreshed, its redirects followed. */
+	/** @internal One request sent: its hooks run, its auth refreshed, its redirects followed. */
 	[SEND](call: Call, kind: RequestKind, meta?: RequestMeta): Promise<Sent> {
 		return this.#send(call, kind, meta)
 	}
 
-	/** The client's one shared refresh; whether a new token is in place. */
+	/** @internal The client's one shared refresh; whether a new token is in place. */
 	async [REFRESH_AUTH](): Promise<boolean> {
 		return (await this.#refresh(this.#token)) !== null
 	}

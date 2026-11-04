@@ -1,6 +1,6 @@
-import { SDKClient, schemeAuth } from "./kitchen.runtime.gen"
-import { serviceMap } from "./kitchen.map.gen"
-import type { KitchenConfig, KitchenOperations, KitchenSafe } from "./kitchen.types.gen"
+import { SDKClient, schemeAuth } from "./kitchen.runtime.gen.js"
+import { serviceMap } from "./kitchen.map.gen.js"
+import type { KitchenConfig, KitchenOperations, KitchenSafe } from "./kitchen.types.gen.js"
 
 export class Kitchen extends SDKClient {
 	constructor(config: KitchenConfig) {

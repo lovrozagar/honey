@@ -1,4 +1,4 @@
-import type { Result, SDKConfig, SSEEvent, TypedWebSocket } from "./kitchen.runtime.gen"
+import type { Result, SDKConfig, SSEEvent, TypedWebSocket } from "./kitchen.runtime.gen.js"
 
 export type CreateApiV1OrganizationResponse409 = {
 	error_key: "org_slug_taken"

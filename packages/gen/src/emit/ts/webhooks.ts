@@ -75,9 +75,9 @@ export function webhooksText(ir: IR, stem: string): string {
 	const named = namedEvents(ir)
 	const known = named.map(({ event }) => tsString(event.type))
 	const types = [...named.map(({ name }) => name), ...WEBHOOK_TYPES].sort(compareCodeUnits)
-	return `import type { WebhookEvent } from "./${stem}.types.gen"
+	return `import type { WebhookEvent } from "./${stem}.types.gen.js"
 
-export type { ${types.join(", ")} } from "./${stem}.types.gen"
+export type { ${types.join(", ")} } from "./${stem}.types.gen.js"
 
 ${webhookSource().replace(INTERNAL, "$1")}
 

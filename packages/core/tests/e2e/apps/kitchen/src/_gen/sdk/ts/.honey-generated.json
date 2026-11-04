@@ -1,10 +1,23 @@
 {
 	"files": {
-		"kitchen.client.gen.ts": "500608b0fde1d050a4ab5f25a37305635bd7d0e4fc2cc4edc3fdce4d4abd0789",
-		"kitchen.index.gen.ts": "bbc5bbccd561090ba4ba5fc4cd25d4b23a97ac70c80f952d95a12db2c208f990",
-		"kitchen.map.gen.ts": "13b41eb52a58f66630caf3c8b4f6abf9d261afdb17e953ef7d64ec2a4456eead",
-		"kitchen.runtime.gen.ts": "c7ac09df5c64dda0aeb2413ead6707a26f42e6c31be1f3dd74b9e2b05a5a633f",
-		"kitchen.types.gen.ts": "41bc75aed9376fed90329ae62e3c0b66cea90a2cdfb0b048b908d361d0bf67f3",
-		"kitchen.webhook.gen.ts": "741ae098bc8ce15810ea016c2a7d0ba325ce6dc7cf6d2a36e1f4ce23eff9717e"
+		"dist/kitchen.client.gen.d.ts": "a1e7621dbb14f74bf1360f2f1f67c1a82f083cbdec8aba6368f11cc99c4dfdf6",
+		"dist/kitchen.client.gen.js": "2fd99feb8bab494506b5502a5d973e8565e9f0315b85773ce83ed3217da136e5",
+		"dist/kitchen.index.gen.d.ts": "15d70c443ab5b8e8bf43a37a7cf5327dbc87bcf601706ee87f9254e91e6939de",
+		"dist/kitchen.index.gen.js": "7882214f67c2fd4a9eaf4bc1593d81e043e0d8176171b561ad905eb715d53fae",
+		"dist/kitchen.map.gen.d.ts": "c5bce87d0d7920a9446c41e07daa679322ca10c0573f526b44318ddb49e6398d",
+		"dist/kitchen.map.gen.js": "b94d4949d4982ce76bf8aa94d3c1c6a734736dd8deb8185d2d09df02bde811d9",
+		"dist/kitchen.runtime.gen.d.ts": "87886545b6a263b52b641282b7b5945202525cd1b23dcb59c4c0472f5573651f",
+		"dist/kitchen.runtime.gen.js": "7bc18ae363f14b3c83966f872bd5078343038563654e7fe6f30402aeb59a3405",
+		"dist/kitchen.types.gen.d.ts": "a716a3e69d3d298e7667c2d88938854b2b972b62dcd2e67a93df35529e153e9c",
+		"dist/kitchen.types.gen.js": "8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881",
+		"dist/kitchen.webhook.gen.d.ts": "64f25d2a159711373eee153087804796e023c333b22c5a461061010fad59aac6",
+		"dist/kitchen.webhook.gen.js": "1feea9cceff1c21c6a5cce7a534f487d9404b3c2e53a8bcc17222a5292cb7d1f",
+		"kitchen.client.gen.ts": "3844f40ca1d94c78f1008797546d9c89a83303762b2e4ac01af81582c44f9c42",
+		"kitchen.index.gen.ts": "15d70c443ab5b8e8bf43a37a7cf5327dbc87bcf601706ee87f9254e91e6939de",
+		"kitchen.map.gen.ts": "bead9c950ded4dd523ea98f8580dfac4e77a3884fb16e2624501e8bd044f63e5",
+		"kitchen.runtime.gen.ts": "3a5170c4aae894f1d0b00fb5cdcf1d4ce75b256cd1ba257162f13ca26e260840",
+		"kitchen.types.gen.ts": "7a4e6c68e2bb48a64f74653d93e4ddf62376d3912c2df20c7c1986f1225deab2",
+		"kitchen.webhook.gen.ts": "7cbe85c30b35ef8d52c32fb301b54dad5565836aa080b61cd6065d43e5dc35bb",
+		"package.json": "646208797a5010fd88b758f4a68d3e7217ae9f904a2490945a8bf8ad878dfedc"
 	}
 }

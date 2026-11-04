@@ -141,7 +141,7 @@ function pollAdapter(at: Target): TransportAdapter {
 }
 
 /** An x-realtime op's chain, as Go's: WebSocket, SSE, long-poll; no JSON keepalive unless set. */
-export function realtimeConnection(http: HTTPClient, path: string, input: RequestOptions & RealtimeOptions) {
+export function realtimeConnection(http: HTTPClient, path: string, input: RequestOptions & RealtimeOptions): Resumable {
 	const { baseURL, cookies, headers, params, search, signal, ...opts } = input
 	const at = { http, opts: { baseURL, cookies, headers, params, search }, path }
 	const transports = [wsAdapter(at), sseAdapter(at), pollAdapter(at)]

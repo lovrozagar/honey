@@ -17,7 +17,7 @@ import { generated, type GenerateContext, type GenerateRun, main } from "./cli.t
 import { findGofmt, loadOxfmt } from "./gen/formatters.ts"
 import { shop } from "./emit/cli/__fixtures__/shop.ts"
 import { EMIT_STYLE } from "./emit/shared/format.ts"
-import { generateSdk } from "./emit/ts/sdk.ts"
+import { generateSdkPackage } from "./emit/ts/package.ts"
 import { goCacheDir, gofmtPath, withGo } from "./emit/go/__fixtures__/go-env.ts"
 import { type Generate, usage } from "./gen/args.ts"
 import { pinnedBunVersion, withPinnedBun } from "./gen/__fixtures__/pinned-bun.ts"
@@ -71,6 +71,9 @@ const filesUnder = (dir: string) =>
 		.map((entry) => join(entry.parentPath, entry.name).slice(dir.length + 1))
 		.sort()
 
+/* the five modules every TS SDK writes; the package compiles each into dist/ (plan 39 8.3) */
+const PARTS = ["client", "index", "map", "runtime", "types"]
+
 describe("generated: a run with no options bag (bit 22 a)", () => {
 	it(
 		"takes the generator's own defaults for a target whose options are left out",
@@ -82,11 +85,9 @@ describe("generated: a run with no options bag (bit 22 a)", () => {
 			}
 			const files = await generated({ targets: ["ts"] }, document, { env: {}, report: () => undefined })
 			expect(Object.keys(files.ts ?? {}).sort()).toEqual([
-				"sdk.client.gen.ts",
-				"sdk.index.gen.ts",
-				"sdk.map.gen.ts",
-				"sdk.runtime.gen.ts",
-				"sdk.types.gen.ts",
+				...PARTS.flatMap((part) => [`dist/sdk.${part}.gen.d.ts`, `dist/sdk.${part}.gen.js`]),
+				"package.json",
+				...PARTS.map((part) => `sdk.${part}.gen.ts`),
 			])
 		},
 		SPAWN_TIMEOUT,
@@ -193,14 +194,12 @@ describe("generate's files (phase h)", { timeout: SPAWN_TIMEOUT }, () => {
 		const ran = await run(["generate", "--spec", spec, "--target", "ts", "--ts-name", "Shop", "--out", out])
 		expect([ran.status, ran.out, filesUnder(out)]).toEqual([
 			0,
-			`honey-clients: generated 5 files into ${out}\n`,
+			`honey-clients: generated 16 files into ${out}\n`,
 			[
 				"ts/.honey-generated.json",
-				"ts/shop.client.gen.ts",
-				"ts/shop.index.gen.ts",
-				"ts/shop.map.gen.ts",
-				"ts/shop.runtime.gen.ts",
-				"ts/shop.types.gen.ts",
+				...PARTS.flatMap((part) => [`ts/dist/shop.${part}.gen.d.ts`, `ts/dist/shop.${part}.gen.js`]),
+				"ts/package.json",
+				...PARTS.map((part) => `ts/shop.${part}.gen.ts`),
 			],
 		])
 	})
@@ -217,7 +216,7 @@ describe("generate's files (phase h)", { timeout: SPAWN_TIMEOUT }, () => {
 })
 
 /** The shop's ts target as its generator emits it, before any post-pass. */
-const emitted = () => generateSdk(shop(), { name: "Shop" }).files
+const emitted = () => generateSdkPackage(shop(), { name: "Shop" }, {}).files
 
 /** A loadOxfmt's outcome as a value, a rejection as its message, so a wrong one is a mismatch, never a throw. */
 const settled = (specifier?: string) =>
@@ -230,7 +229,8 @@ describe("the ts tree through oxfmt (bit 19 i, Q12)", () => {
 	it("writes the ts target's files byte for byte as oxfmt formats them", { timeout: SPAWN_TIMEOUT }, async () => {
 		const { out, spec } = specDir()
 		const ran = await run(["generate", "--spec", spec, "--target", "ts", "--ts-name", "Shop", "--out", out])
-		const raw = Object.entries(emitted())
+		/* the sources oxfmt formats; dist/ is the package's compiled twin of them */
+		const raw = Object.entries(emitted()).filter(([name]) => /^shop\.[\w-]+\.gen\.ts$/.test(name))
 		const formatted = await Promise.all(
 			raw.map(async ([name, text]) => [name, (await format(name, text, EMIT_STYLE)).code] as const),
 		)

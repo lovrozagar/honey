@@ -5,11 +5,11 @@
  * node and the source under bun answering alike, and both official clients connecting to it.
  */
 import { join } from "node:path"
-import { createJiti } from "jiti"
 import { describe, expect, it } from "vitest"
 import { SPAWN_TIMEOUT } from "../../gen/__fixtures__/spawn-timeout.ts"
 import { clientCheck, withClients } from "./__fixtures__/clients.ts"
 import { exchange, initialize, request, typeErrors, written } from "./__fixtures__/written.ts"
+import { compiled } from "../ts/package.ts"
 import { erased, generateMcpServer } from "./server.ts"
 
 const CLIENTS = withClients()
@@ -33,7 +33,7 @@ describe("the package's files (phase a)", () => {
 		const sdk = ["client", "index", "map", "runtime", "types"].map((part) => `sdk/api.${part}.gen`)
 		const modules = ["mcp.runtime", "server", "tools.gen", ...sdk]
 		expect(Object.keys(files).sort()).toEqual(
-			["package.json", "dist/package.json", ...modules.flatMap((name) => [`src/${name}.ts`, `dist/${name}.js`])].sort(),
+			["package.json", ...modules.flatMap((name) => [`src/${name}.ts`, `dist/${name}.js`])].sort(),
 		)
 	})
 
@@ -66,10 +66,10 @@ const ENTRY = `${MARKER}
 // --no-auth, which --expose refuses. The token is never sent to the API. A browser Origin other than the server's own is
 // refused unless listed in $SHOP_MCP_ORIGINS (comma-separated); a body is read at most
 // $SHOP_MAX_BODY_BYTES, 4 MiB by default. A file argument over HTTP is inline: no path is read.
-import { BYTES_MAX, bindTools, configHeaders, createProtocol, listenHttp, serveHttp, serveStdio } from "./mcp.runtime"
-import { Api } from "./sdk/api.index.gen"
-import { headerValue } from "./sdk/api.runtime.gen"
-import { toolSpecs } from "./tools.gen"
+import { BYTES_MAX, bindTools, configHeaders, createProtocol, listenHttp, serveHttp, serveStdio } from "./mcp.runtime.js"
+import { Api } from "./sdk/api.index.gen.js"
+import { headerValue } from "./sdk/api.runtime.gen.js"
+import { toolSpecs } from "./tools.gen.js"
 
 const refuse = (message: string): never => {
 	process.stderr.write(message + "\\n")
@@ -163,7 +163,7 @@ describe("the entry (phases a–e)", () => {
 	// v0: e2c533b3fe
 	it("writes the entry: the SDK client by the environment, the key as the API's scheme says, the tools served over stdio", () => {
 		const files = generateMcpServer(document()).files
-		expect([files["src/server.ts"], files["dist/package.json"]]).toEqual([ENTRY, '{\n\t"type": "commonjs"\n}\n'])
+		expect([files["src/server.ts"], files["dist/package.json"]]).toEqual([ENTRY, undefined])
 	})
 })
 
@@ -171,7 +171,7 @@ describe("the tools file (phase b)", () => {
 	it("writes each tool's spec into tools.gen.ts as data the runtime binds", () => {
 		expect(generateMcpServer(document()).files["src/tools.gen.ts"]).toBe(`${MARKER}
 
-import type { ToolSpec } from "./mcp.runtime"
+import type { ToolSpec } from "./mcp.runtime.js"
 
 export const toolSpecs: readonly ToolSpec[] = [
 	{
@@ -200,17 +200,16 @@ export const toolSpecs: readonly ToolSpec[] = [
 })
 
 describe("the compiled twin (phase a)", () => {
-	/* jiti erases types over every source file, which runs past vitest's 5 s default on a loaded machine */
+	/* the erasure runs over every source file, past vitest's 5 s default on a loaded machine */
 	it(
-		"is each source file with its types erased by jiti, the entry a bin with its shebang, the same generated twice",
+		"is each source file with its types erased by oxc, the entry a bin with its shebang, the same generated twice",
 		{ timeout: SPAWN_TIMEOUT },
 		() => {
 			const files = generateMcpServer(document()).files
-			const jiti = createJiti(import.meta.url, { fsCache: false, moduleCache: false })
 			const drift = Object.entries(files)
 				.filter(([path]) => path.startsWith("src/"))
 				.filter(([path, source]) => {
-					const code = jiti.transform({ filename: path, source, ts: true }).trimEnd()
+					const code = compiled(path, source, false).code.trimEnd()
 					const shebang = path === "src/server.ts" ? "#!/usr/bin/env node\n" : ""
 					return files[path.replace(/^src\//, "dist/").replace(/\.ts$/, ".js")] !== `${shebang}${code}\n`
 				})
@@ -250,7 +249,7 @@ describe("what the generator refuses (phase b)", () => {
 	})
 
 	it("refuses source the erasure cannot parse, writing no broken twin", () => {
-		expect(() => erased("src/x.ts", "const a = ;\n")).toThrow("src/x.ts does not parse:")
+		expect(() => erased("src/x.ts", "const a = ;\n")).toThrow("src/x.ts does not compile:")
 	})
 })
 
@@ -303,7 +302,7 @@ describe("the options (F2, phase a)", () => {
 		expect({
 			package: (JSON.parse(files["package.json"] as string) as { version: string }).version,
 			served: [files["src/server.ts"], files["dist/server.js"]].map((text) =>
-				text?.includes('{ name: "shop", version: "2.3.0-rc.1" }'),
+				/\{\s*name: "shop",\s*version: "2\.3\.0-rc\.1"\s*\}/.test(text ?? ""),
 			),
 		}).toEqual({ package: "2.3.0-rc.1", served: [true, true] })
 	})

@@ -827,8 +827,12 @@ describe("the C# runtime within its byte budget (bit 15, G14)", () => {
  * Standard Webhooks events, and there in its own webhooks file, outside runtime.gen.ts: WebhookVerificationError, verifyStandardWebhook (headers read in any case, the five
  * minute window, every v1 signature checked by subtle.verify under every key) and the envelope parse, with their
  * docs. Nothing else moved: an SDK without events ships byte-identical runtime text.
+ * Plan 39 8.3, +112 B to 132,257, all types, which compile away: the annotations isolated declarations need so the
+ * package's .d.ts and JSR's no-slow-types check read the runtime without a type checker (`: unique symbol` on the
+ * three internal symbols, `: number` on MAX_RESPONSE_BYTES, the stale maps' field types, realtimeConnection's
+ * `: Resumable`), and `@internal` on the three symbol-keyed HTTPClient members the declarations leave out.
  */
-const TS_RUNTIME_BYTES = 132_145
+const TS_RUNTIME_BYTES = 132_257
 
 describe("the TS runtime within its byte budget (bit 11, G14)", () => {
 	it(

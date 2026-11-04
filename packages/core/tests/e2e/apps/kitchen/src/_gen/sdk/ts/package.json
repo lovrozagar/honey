@@ -1,0 +1,22 @@
+{
+	"name": "kitchen",
+	"version": "0.0.1",
+	"type": "module",
+	"exports": {
+		".": {
+			"types": "./dist/kitchen.index.gen.d.ts",
+			"default": "./dist/kitchen.index.gen.js"
+		},
+		"./webhook": {
+			"types": "./dist/kitchen.webhook.gen.d.ts",
+			"default": "./dist/kitchen.webhook.gen.js"
+		}
+	},
+	"files": [
+		"dist"
+	],
+	"sideEffects": false,
+	"engines": {
+		"node": ">=22"
+	}
+}

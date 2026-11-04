@@ -62,7 +62,7 @@ function sanitizeMessage(message: string, max: number): string {
 export type Limits = { readonly maxErrorMessageChars?: number; readonly maxResponseBytes?: number }
 
 /** The most bytes a body may hold, decoded, before its read is refused: 100 MiB, as every other SDK's. */
-export const MAX_RESPONSE_BYTES = 100 * 1024 * 1024
+export const MAX_RESPONSE_BYTES: number = 100 * 1024 * 1024
 
 /** `response`'s body, read in the chunks it arrives in, refused past `max` decoded bytes with the body cancelled. */
 async function bodyBytes(response: Response, max = MAX_RESPONSE_BYTES): Promise<Uint8Array> {

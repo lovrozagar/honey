@@ -1,6 +1,6 @@
-export { Kitchen } from "./kitchen.client.gen"
-export { serviceMap } from "./kitchen.map.gen"
-export type * from "./kitchen.types.gen"
+export { Kitchen } from "./kitchen.client.gen.js"
+export { serviceMap } from "./kitchen.map.gen.js"
+export type * from "./kitchen.types.gen.js"
 export {
 	APIConnectionError,
 	BadGatewayError,
@@ -21,7 +21,7 @@ export {
 	ServiceUnavailableError,
 	UnauthorizedError,
 	UnprocessableEntityError,
-} from "./kitchen.runtime.gen"
+} from "./kitchen.runtime.gen.js"
 export type {
 	ClientConfig,
 	InvalidationConfig,
@@ -30,4 +30,4 @@ export type {
 	Result,
 	SSEEvent,
 	TypedWebSocket,
-} from "./kitchen.runtime.gen"
+} from "./kitchen.runtime.gen.js"

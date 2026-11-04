@@ -66,7 +66,7 @@ export const TARGET_OPTIONS = {
 	mcp: ["envPrefix", "name", "version"],
 	python: ["packageName", "version"],
 	rust: ["crateName", "description", "homepage", "keywords", "license", "repository", "version"],
-	ts: ["name", "stem", "tanstackQuery"],
+	ts: ["name", "packageName", "stem", "tanstackQuery", "version"],
 } as const satisfies { readonly [T in Target]: readonly string[] }
 
 /**

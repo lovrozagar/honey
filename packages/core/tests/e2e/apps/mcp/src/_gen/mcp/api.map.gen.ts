@@ -1,4 +1,4 @@
-import { sseOp, type ServiceMap } from "./api.runtime.gen"
+import { sseOp, type ServiceMap } from "./api.runtime.gen.js"
 
 export const serviceMap: ServiceMap = {
 	extract: {

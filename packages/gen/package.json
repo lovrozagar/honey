@@ -42,7 +42,8 @@
 	},
 	"dependencies": {
 		"@lovrozagar/installgen": "0.3.0",
-		"jiti": "2.7.0"
+		"jiti": "2.7.0",
+		"oxc-transform": "0.155.0"
 	},
 	"devDependencies": {
 		"@tanstack/query-core": "5.104.5",

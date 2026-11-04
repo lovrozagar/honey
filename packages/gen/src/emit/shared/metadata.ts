@@ -12,6 +12,10 @@ export const HTTPS_URL = /^https:\/\/[A-Za-z0-9.-]+(?::\d+)?(?:\/[A-Za-z0-9._~%!
 export const SPDX_EXPRESSION = /^[A-Za-z0-9.+-]+(?: (?:AND|OR|WITH) [A-Za-z0-9.+-]+)*$/
 /** One SPDX license list id, which spdx.org has a page for: not an expression, not a `LicenseRef-`. */
 export const SPDX_ID = /^(?!LicenseRef-)[A-Za-z0-9][A-Za-z0-9.+-]*$/
+/** A version npm and JSR accept: `major.minor.patch`, then an optional prerelease. */
+export const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/
+/** An npm package name: lowercase and URL-safe, `@scope/` optional, at most 214 characters. */
+export const NPM_NAME = /^(?=.{1,214}$)(?:@[a-z0-9-][a-z0-9._-]*\/)?[a-z0-9-][a-z0-9._-]*$/
 /** A person: `Name <email>`. */
 export const PERSON = /^[^<>\p{Cc}]+ <[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+>$/u
 

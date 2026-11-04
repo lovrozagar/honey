@@ -133,5 +133,5 @@ export function importText(body: string, runtime: string, aliases: Readonly<Reco
 		if (!new RegExp(`\\b${local}\\b`).test(body)) return []
 		return local === type ? [type] : [`${type} as ${local}`]
 	})
-	return `import type { ${used.join(", ")} } from "./${runtime}"\n`
+	return `import type { ${used.join(", ")} } from "./${runtime}.js"\n`
 }

@@ -49,8 +49,8 @@ export type StaleLimits = { maxEntries: number; maxSources: number }
  * `:`), and a lookup scans only patterns for its own method.
  */
 export class StaleIndex {
-	readonly exact = new Map<string, StaleEntry>()
-	readonly patterns = new Map<string, Map<string, StaleEntry>>()
+	readonly exact: Map<string, StaleEntry> = new Map()
+	readonly patterns: Map<string, Map<string, StaleEntry>> = new Map()
 	readonly #compiled = new Map<string, RegExp>()
 	readonly #limits: StaleLimits
 

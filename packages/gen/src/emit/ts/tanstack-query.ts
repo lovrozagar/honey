@@ -56,7 +56,7 @@ export function tanstackQuerySource(runtime: string): string {
 	})
 	const imports = [
 		`import type { ${namesOf(core).join(", ")} } from "@tanstack/query-core"`,
-		`import type { ${namesOf(honey).join(", ")} } from "./${runtime}"`,
+		`import type { ${namesOf(honey).join(", ")} } from "./${runtime}.js"`,
 	]
 	return `${imports.join("\n")}\n\n${bodies.join("\n\n")}\n`
 }
@@ -109,8 +109,8 @@ export function tanstackQueryText(ir: IR, name: string, stem: string): string {
 	const queries = treeOf(tree, (op) => ops.get(op.id) === true, ops)
 	const mutations = treeOf(tree, (op) => ops.get(op.id) === false, ops)
 	return `${tanstackQuerySource(`${stem}.runtime.gen`)}
-import { serviceMap } from "./${stem}.map.gen"
-import type { ${name} } from "./${stem}.client.gen"
+import { serviceMap } from "./${stem}.map.gen.js"
+import type { ${name} } from "./${stem}.client.gen.js"
 
 /** Every operation of this API a cache can hold, nested as the client nests them. */
 type TanstackQueryTree = ${treeText(queries)}

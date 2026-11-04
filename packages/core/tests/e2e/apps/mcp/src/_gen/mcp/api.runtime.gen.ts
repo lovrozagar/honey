@@ -667,7 +667,7 @@ function sanitizeMessage(message: string, max: number): string {
 export type Limits = { readonly maxErrorMessageChars?: number; readonly maxResponseBytes?: number }
 
 /** The most bytes a body may hold, decoded, before its read is refused: 100 MiB, as every other SDK's. */
-export const MAX_RESPONSE_BYTES = 100 * 1024 * 1024
+export const MAX_RESPONSE_BYTES: number = 100 * 1024 * 1024
 
 /** `response`'s body, read in the chunks it arrives in, refused past `max` decoded bytes with the body cancelled. */
 async function bodyBytes(response: Response, max = MAX_RESPONSE_BYTES): Promise<Uint8Array> {
@@ -1292,11 +1292,11 @@ type Prepared = { body: BodyInit | undefined; headers: Headers; url: URL }
 export type Call = { method: string; opts: RequestOptions; path: string; refreshes?: false | undefined }
 
 /** The realtime loop's refresh key, exported by the SDK under no name. */
-export const REFRESH_AUTH = /* @__PURE__ */ Symbol("honey.refreshAuth")
+export const REFRESH_AUTH: unique symbol = /* @__PURE__ */ Symbol("honey.refreshAuth")
 
 /** The send and the config, for the stream functions beside the client. */
-export const SEND = /* @__PURE__ */ Symbol("honey.send")
-export const CONFIG = /* @__PURE__ */ Symbol("honey.config")
+export const SEND: unique symbol = /* @__PURE__ */ Symbol("honey.send")
+export const CONFIG: unique symbol = /* @__PURE__ */ Symbol("honey.config")
 
 /** One operation of a generated SDK: the call, how it is read, and its stale view for the hooks. */
 export type Operation = Call & {
@@ -1390,16 +1390,17 @@ export class HTTPClient {
 		return this.#refreshing
 	}
 
+	/** @internal */
 	get [CONFIG](): ClientConfig {
 		return this.#config
 	}
 
-	/** One request sent: its hooks run, its auth refreshed, its redirects followed. */
+	/** @internal One request sent: its hooks run, its auth refreshed, its redirects followed. */
 	[SEND](call: Call, kind: RequestKind, meta?: RequestMeta): Promise<Sent> {
 		return this.#send(call, kind, meta)
 	}
 
-	/** The client's one shared refresh; whether a new token is in place. */
+	/** @internal The client's one shared refresh; whether a new token is in place. */
 	async [REFRESH_AUTH](): Promise<boolean> {
 		return (await this.#refresh(this.#token)) !== null
 	}
@@ -1625,8 +1626,8 @@ export type StaleLimits = { maxEntries: number; maxSources: number }
  * `:`), and a lookup scans only patterns for its own method.
  */
 export class StaleIndex {
-	readonly exact = new Map<string, StaleEntry>()
-	readonly patterns = new Map<string, Map<string, StaleEntry>>()
+	readonly exact: Map<string, StaleEntry> = new Map()
+	readonly patterns: Map<string, Map<string, StaleEntry>> = new Map()
 	readonly #compiled = new Map<string, RegExp>()
 	readonly #limits: StaleLimits
 

@@ -19,7 +19,7 @@ import { generateMcpServer } from "./emit/mcp/server.ts"
 import { generatePythonSdk } from "./emit/python/sdk.ts"
 import { generateRustSdk } from "./emit/rust/sdk.ts"
 import { formatFiles } from "./emit/shared/format.ts"
-import { generateSdk } from "./emit/ts/sdk.ts"
+import { generateSdkPackage } from "./emit/ts/package.ts"
 import { type Generate, parseGenerate, usage, UsageError } from "./gen/args.ts"
 import { FORMATTERS, formatterFor, missingFormatter } from "./gen/formatters.ts"
 import { runCli } from "./gen/process.ts"
@@ -29,16 +29,27 @@ import { type Options, optionsFor, type Target, type TargetOptions } from "./gen
 import { writeTarget } from "./gen/write.ts"
 
 /** One SDK target's generation: its files and what it reports (a name it renamed). */
-function sdkOf(target: Exclude<Target, "cli" | "mcp">, document: Record<string, unknown>, options: Options) {
+function sdkOf(
+	target: Exclude<Target, "cli" | "mcp">,
+	document: Record<string, unknown>,
+	options: Options,
+	metadata: Metadata,
+) {
 	switch (target) {
 		case "ts":
 			/* mapped key by key, never spread: `options` holds strings, and `tanstackQuery` is a boolean —
 			   a spread under a cast would make "false" as truthy as "true" */
-			return generateSdk(document, {
-				name: options.name ?? "SDK",
-				...(options.stem === undefined ? {} : { stem: options.stem }),
-				tanstackQuery: options.tanstackQuery === "true",
-			})
+			return generateSdkPackage(
+				document,
+				{
+					name: options.name ?? "SDK",
+					...(options.packageName === undefined ? {} : { packageName: options.packageName }),
+					...(options.stem === undefined ? {} : { stem: options.stem }),
+					tanstackQuery: options.tanstackQuery === "true",
+					...(options.version === undefined ? {} : { version: options.version }),
+				},
+				metadata,
+			)
 		case "go":
 			return generateGoSdk(document, options)
 		case "rust":
@@ -52,11 +63,14 @@ function sdkOf(target: Exclude<Target, "cli" | "mcp">, document: Record<string, 
 	}
 }
 
-/** One target's files for `document`, by their path under the target's directory; what it leaves out to `report`. */
+/**
+ * One target's files for `document`, by their path under the target's directory; what it leaves out to `report`. The
+ * metadata reaches the targets whose package files read it whole, the others through their options.
+ */
 function filesOf(
 	target: Target,
 	document: Record<string, unknown>,
-	options: Options,
+	{ metadata, options }: { readonly metadata: Metadata; readonly options: Options },
 	report: (line: string) => void,
 ): Readonly<Record<string, string>> {
 	if (target === "cli") return generateGoCli(document, options).files
@@ -65,7 +79,7 @@ function filesOf(
 		for (const op of server.skipped) report(`honey-clients: mcp: no tool serves ${op} yet: skipped\n`)
 		return server.files
 	}
-	const sdk = sdkOf(target, document, options)
+	const sdk = sdkOf(target, document, options, metadata)
 	for (const notice of sdk.notices) report(`honey-clients: ${notice}\n`)
 	return sdk.files
 }
@@ -128,7 +142,7 @@ export async function generated(
 	)
 	const out: GeneratedFiles = {}
 	for (const [target, checked] of options) {
-		let files = filesOf(target, document, checked, report)
+		let files = filesOf(target, document, { metadata, options: checked }, report)
 		const pass = FORMATTERS[target]
 		if (pass !== undefined) {
 			const formatter = await formatterFor(target, { env, oxfmt })

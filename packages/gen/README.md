@@ -118,6 +118,8 @@ One table, since a flag that is not written down is a flag nobody finds:
 | `-h`, `--help`             | —      | the usage text                                                                    |
 | `--ts-name`                | ts     | the client class's name (default `SDK`)                                           |
 | `--ts-stem`                | ts     | the file stem the generated modules share                                         |
+| `--ts-package-name`        | ts     | the npm name, and the JSR name when scoped; the stem by default                   |
+| `--ts-version`             | ts     | the version both registries carry; the document's by default                      |
 | `--ts-tanstack-query`      | ts     | also write the TanStack Query adapter; takes no value                             |
 | `--go-module-path`         | go     | the Go module path the SDK is imported by                                         |
 | `--rust-crate-name`        | rust   | the crate's name                                                                  |
@@ -226,6 +228,21 @@ export async function health(client: Kitchen): Promise<string> {
 	if (result.error instanceof DecodeError) return `unreadable answer: ${result.error.message}`
 	return `answered ${result.error.status}`
 }
+```
+
+#### Publishing it to npm and JSR
+
+The target writes a package around the SDK, so the output directory publishes as it is. The sources stay where a
+workspace imports them; they import each other as `.js`, which every TypeScript resolution and bundler maps to the
+`.ts` file. Node will not strip types under `node_modules`, so `dist/` holds each source compiled to ES module
+JavaScript beside its declarations, and `package.json` exports those: the root, `./webhook` when the document has
+webhook events, and `./tanstack-query` with `@tanstack/query-core` as an optional peer. A scoped `--ts-package-name`
+also gets a `jsr.json` that publishes the sources themselves, its `.js` imports mapped to their `.ts` files.
+`--metadata-*` fills description, keywords, homepage, bugs, license, author and repository.
+
+```sh
+honey-clients generate --spec openapi.json --target ts --out generated --ts-name Kitchen \
+  --ts-package-name @acme/kitchen --ts-version 1.4.0 --metadata-license MIT
 ```
 
 #### TanStack Query, from the same document

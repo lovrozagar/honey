@@ -12,8 +12,10 @@ const TABLE = "packages/core/tests/docs/removed-exports.ts"
 
 /* History stays where it is (blueprint README): the changelog and old specs record what v0 did, and v0
  * itself is in git history at 1a968f1. The blueprint and agent tooling are not honey source, and the vendored
- * tokenizer is third-party data kept byte-identical (its BPE table holds the letters by chance). */
+ * tokenizer is third-party data kept byte-identical (its BPE table holds the letters by chance). JSR's publish
+ * check is Deno's CLI, which gen's JSR leg runs as a tool, never as a runtime honey serves (plan 39 8.3). */
 const EXEMPT = [
+	/^packages\/gen\/src\/emit\/ts\/package\.jsr\.test\.ts$/,
 	/^packages\/gen\/src\/_tokenizer\//,
 	/^CHANGELOG\.md$/,
 	/^blueprint\//,

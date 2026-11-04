@@ -202,7 +202,7 @@ describe("a receiver of the SDK's webhook events", () => {
 			events.index === plain.index,
 			"api.webhook.gen.ts" in plain.files,
 			imports,
-		]).toEqual([true, true, false, ['import type { WebhookEvent } from "./api.types.gen"']])
+		]).toEqual([true, true, false, ['import type { WebhookEvent } from "./api.types.gen.js"']])
 	})
 
 	/* minified, the receiver's bytes are the verifier's: 2,406 at plan 37, with room for one small fix */

@@ -1,4 +1,4 @@
-import { sseOp, wsOp, type ServiceMap } from "./kitchen.runtime.gen"
+import { sseOp, wsOp, type ServiceMap } from "./kitchen.runtime.gen.js"
 
 export const serviceMap: ServiceMap = {
 	deleteApiEcho: {

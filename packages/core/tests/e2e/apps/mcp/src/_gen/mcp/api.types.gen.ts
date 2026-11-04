@@ -1,4 +1,4 @@
-import type { Result, SDKConfig, SSEEvent } from "./api.runtime.gen"
+import type { Result, SDKConfig, SSEEvent } from "./api.runtime.gen.js"
 
 export type CreateProjectsExtractRequest = { columns?: string; file?: string; instruction?: string; schema?: string; strictness?: "strict" | "balanced" | "flexible"; text?: string }
 export type CreateProjectsExtractResponse200 = { files: { file_name: string; sha256: string; size: number }[]; status: string; texts: Record<string, string> }

@@ -188,7 +188,7 @@ export function serviceMapText(ir: IR, runtime: string): string {
 	const map = valueText(mapOf(ir, true), "", used)
 	const calls = [...used].sort(compareCodeUnits)
 	const names = calls.length === 0 ? "type { ServiceMap }" : `{ ${calls.join(", ")}, type ServiceMap }`
-	return `import ${names} from "./${runtime}"
+	return `import ${names} from "./${runtime}.js"
 
 export const serviceMap: ServiceMap = ${map}
 `

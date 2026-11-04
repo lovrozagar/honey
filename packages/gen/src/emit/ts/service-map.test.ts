@@ -92,7 +92,7 @@ describe("serviceMapText: the map module", () => {
 			}),
 			"sdk.runtime.gen",
 		)
-		expect(text).toBe(`import type { ServiceMap } from "./sdk.runtime.gen"
+		expect(text).toBe(`import type { ServiceMap } from "./sdk.runtime.gen.js"
 
 export const serviceMap: ServiceMap = {
 	Z: {
