@@ -32,7 +32,7 @@ const object = (properties: Json, required: string[] = []): Json => ({ propertie
 
 /** The declaration of `name` for `schema`, and every declaration it hoisted (the wrappers, payloads), by name. */
 function declare(name: string, schema: Json, components: Record<string, Json> = {}) {
-	const ctx = javaTypeContext(toIR(doc(components)), ["AnyrowClient"])
+	const ctx = javaTypeContext(toIR(doc(components)), ["ExampleClient"])
 	const text = javaTopLevel(name, schemaToIR(schema), ctx)
 	return { decls: Object.fromEntries(ctx.decls), text }
 }

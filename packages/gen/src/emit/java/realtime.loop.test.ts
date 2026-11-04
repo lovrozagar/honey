@@ -195,7 +195,7 @@ final class Held implements TransportAdapter {
  * connection bounded at `ms`.
  */
 function probed(body: string, seconds = 20): string[] {
-	const source = `package ai.anyrow;
+	const source = `package com.example;
 
 import java.time.Duration;
 import java.util.List;
@@ -228,7 +228,7 @@ ${body
   }
 }
 ${DECLS}`
-	const run = sdk().run("ai.anyrow.LoopProbe", source)
+	const run = sdk().run("com.example.LoopProbe", source)
 	expect({ diagnostics: run.diagnostics, status: run.status }, run.stderr).toEqual({ diagnostics: [], status: 0 })
 	return run.stdout.split("\n").filter((line) => line !== "")
 }

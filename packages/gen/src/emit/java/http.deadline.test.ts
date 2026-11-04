@@ -104,8 +104,8 @@ const lapsed = (text: string): Partial<JavaError> => ({
  */
 const probe = (url: string, builder: string) => `package probe;
 
-import ai.anyrow.AnyrowClient;
-import ai.anyrow.UsersGetParams;
+import com.example.ExampleClient;
+import com.example.UsersGetParams;
 import java.time.Duration;
 
 public class Probe {
@@ -118,7 +118,7 @@ public class Probe {
   }
 
   public static void main(String[] args) {
-    AnyrowClient client = AnyrowClient.builder()
+    ExampleClient client = ExampleClient.builder()
         .baseUrl("${url}")
         ${builder}
         .build();
@@ -138,9 +138,9 @@ public class Probe {
  */
 const pairProbe = (url: string) => `package probe;
 
-import ai.anyrow.AnyrowClient;
-import ai.anyrow.RequestOptions;
-import ai.anyrow.UsersGetParams;
+import com.example.ExampleClient;
+import com.example.RequestOptions;
+import com.example.UsersGetParams;
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -148,7 +148,7 @@ public class Probe {
   static final AtomicInteger CALLS = new AtomicInteger();
 
   public static void main(String[] args) {
-    AnyrowClient client = AnyrowClient.builder()
+    ExampleClient client = ExampleClient.builder()
         .baseUrl("${url}")
         .timeout(Duration.ofMillis(500))
         .onRequest(context -> {
@@ -403,7 +403,7 @@ describe.skipIf(!JAVA)("each of the decode's read loops checks the deadline, in-
 	/* new: one leg per loop, each red with its own check removed (the served leg stays green on either alone) */
 	it("ends the counting pass and the decoding pass under a lapsed deadline as ApiTimeoutException, with no cause", () => {
 		const files = generateJavaSdk(FIXTURES.http.document()).files
-		const pkg = /^package ([\w.]+);/m.exec(files["src/main/java/ai/anyrow/Decode.java"] ?? "")?.[1]
+		const pkg = /^package ([\w.]+);/m.exec(files["src/main/java/com/example/Decode.java"] ?? "")?.[1]
 		const run = compiledJavaSdk(files).run(`${pkg}.DecodeProbe`, `package ${pkg};\n${DECODE_PROBE}`)
 		expect(
 			{ diagnostics: run.diagnostics, status: run.status, stdout: run.stdout.trim().split("\n") },

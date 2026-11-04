@@ -51,7 +51,7 @@ describe("generateJavaSdk: an operation without an operationId (item 0)", () => 
 	/* new: a flat derived id is a method on the client itself (C#'s root placement) */
 	it("puts a flat derived id on the client's root and a dotted one on its resource", () => {
 		const plans = javaCallPlans(derivedIds()) as Record<string, { accessors: readonly string[]; method: string }>
-		const client = generateJavaSdk(derivedIds()).files["src/main/java/ai/anyrow/AnyrowClient.java"] ?? ""
+		const client = generateJavaSdk(derivedIds()).files["src/main/java/com/example/ExampleClient.java"] ?? ""
 		expect({
 			dotted: [plans["deleteUsers.all"]?.accessors, plans["deleteUsers.all"]?.method],
 			root: [plans.getRoot?.accessors, plans.getRoot?.method],

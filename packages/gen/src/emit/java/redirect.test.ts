@@ -283,14 +283,14 @@ describe.skipIf(!JAVA)("redirects: where the SDK's loop stops", SLOW, () => {
 })
 
 /** A consumer program that fills RawResponse across a same-origin 302 and prints its status and its URL. */
-const rawUrl = (base: string) => `import ai.anyrow.AnyrowClient;
-import ai.anyrow.HopGetParams;
-import ai.anyrow.RawResponse;
-import ai.anyrow.RequestOptions;
+const rawUrl = (base: string) => `import com.example.ExampleClient;
+import com.example.HopGetParams;
+import com.example.RawResponse;
+import com.example.RequestOptions;
 
 public class RawUrl {
   public static void main(String[] args) {
-    AnyrowClient client = AnyrowClient.builder().baseUrl("${base}").build();
+    ExampleClient client = ExampleClient.builder().baseUrl("${base}").build();
     RawResponse raw = new RawResponse();
     client.hop().get(HopGetParams.builder().build(), RequestOptions.builder().raw(raw).build());
     System.out.println(raw.status() + " " + raw.url());

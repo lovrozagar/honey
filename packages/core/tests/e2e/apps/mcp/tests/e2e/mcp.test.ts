@@ -1,5 +1,5 @@
 /**
- * MCP mounted in the app (bit 21 e), on each host: Anyrow's five multipart operations driven over Streamable HTTP by
+ * MCP mounted in the app (bit 21 e), on each host: Acme's five multipart operations driven over Streamable HTTP by
  * the official clients (sdk 1.32.2 at 2025-11-25, client 2.4.0 pinned to 2026-07-28; gen's pinned install). Inline
  * files reach the routes intact (their SHA-256 read back), the streams are bounded collects, a request with no ApiKey
  * credential is refused before any dispatch, and a key the inner route rejects is the endpoint's HTTP 401.

@@ -16,7 +16,7 @@ import { putFile } from "./sdk-models.ts"
 const JAVA = withJava()
 
 const info = { title: "Edge", version: "1" }
-const CLIENT = "src/main/java/ai/anyrow/AnyrowClient.java"
+const CLIENT = "src/main/java/com/example/ExampleClient.java"
 
 /** A document of `paths` under the OpenAPI 3.1 envelope, with `extra` members beside them. */
 const doc = (paths: Record<string, unknown>, extra: Record<string, unknown> = {}) => ({
@@ -99,7 +99,7 @@ describe("an operation's own types beside a component spelled like one (B3)", ()
 		() => {
 			const document = withComponents(SPELLED_LIKE_OPS)
 			const files = generateJavaSdk(document).files
-			const at = (name: string) => files[`src/main/java/ai/anyrow/${name}.java`] ?? ""
+			const at = (name: string) => files[`src/main/java/com/example/${name}.java`] ?? ""
 			const kinds = SPELLED_LIKE_OPS.map((name) => ({
 				model: /\bzz\b/.test(at(name)),
 				name,
@@ -118,11 +118,11 @@ describe("an operation's own types beside a component spelled like one (B3)", ()
 
 	it("refuses a second declaration of one file, naming the path", () => {
 		const files: Record<string, string> = {}
-		putFile(files, "src/main/java/ai/anyrow/Item.java", "a")
-		expect(() => putFile(files, "src/main/java/ai/anyrow/Item.java", "b")).toThrow(
-			"two declarations claim src/main/java/ai/anyrow/Item.java",
+		putFile(files, "src/main/java/com/example/Item.java", "a")
+		expect(() => putFile(files, "src/main/java/com/example/Item.java", "b")).toThrow(
+			"two declarations claim src/main/java/com/example/Item.java",
 		)
-		expect(files).toEqual({ "src/main/java/ai/anyrow/Item.java": "a" })
+		expect(files).toEqual({ "src/main/java/com/example/Item.java": "a" })
 	})
 })
 
@@ -134,7 +134,7 @@ describe("a resource whose segment an Object member holds (B3)", () => {
 		)
 		const files = generateJavaSdk(document).files
 		const spelled = [...(files[CLIENT] ?? "").matchAll(/private final (\w+Resource) (\w+);/g)].map(
-			([, type, field]) => ({ declared: files[`src/main/java/ai/anyrow/${type}.java`] !== undefined, field, type }),
+			([, type, field]) => ({ declared: files[`src/main/java/com/example/${type}.java`] !== undefined, field, type }),
 		)
 		expect(spelled).toEqual([{ declared: true, field: "wait2", type: "WaitResource" }])
 	})

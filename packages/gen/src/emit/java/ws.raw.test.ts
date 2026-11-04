@@ -64,7 +64,7 @@ const failed = (error: { type: string; text: string; via: string } | undefined) 
  */
 const RAW = (url: string) => `package probe;
 
-import ai.anyrow.*;
+import com.example.*;
 
 public class Probe {
   static String shown(RawResponse box) {
@@ -75,7 +75,7 @@ public class Probe {
   }
 
   public static void main(String[] args) {
-    AnyrowClient c = AnyrowClient.builder().baseUrl("${url}").build();
+    ExampleClient c = ExampleClient.builder().baseUrl("${url}").build();
     RawResponse raw = new RawResponse();
     TypedWebSocket w = c.rooms().socket(RoomsSocketParams.builder().room("r").since(3L).build(),
         RequestOptions.builder().raw(raw).build());

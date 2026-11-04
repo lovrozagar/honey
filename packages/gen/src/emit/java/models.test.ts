@@ -43,10 +43,10 @@ const doc = (schemas: Record<string, Json>): OpenApiDocument => ({
 
 const STRING = { type: "string" }
 const OBJECT: Json = { properties: { id: STRING }, required: ["id"], type: "object" }
-const CLIENT = "AnyrowClient"
+const CLIENT = "ExampleClient"
 
 /** The zero-op document: no path, so no operation. */
-const ZERO: Json = { info: { title: "Anyrow", version: "1" }, openapi: "3.1.0", paths: {} }
+const ZERO: Json = { info: { title: "Acme", version: "1" }, openapi: "3.1.0", paths: {} }
 
 /** The Java type at a use position and the names of every declaration it hoisted. */
 function use({ schema, at = ["T", "v"], components = {}, taken = [] }: UseRow) {
@@ -224,7 +224,7 @@ describe("names: a type name is reserved only where it collides (B3, refined)", 
 		["Opt", "OptModel"],
 		["Json", "JsonModel"],
 		["Transport", "TransportModel"],
-		["AnyrowClient", "AnyrowClientModel"],
+		["ExampleClient", "ExampleClientModel"],
 	])("a component named %s is %s: the emitted or runtime text spells it", (name, expected) => {
 		expect(nameOf(name)).toBe(expected)
 	})
@@ -302,7 +302,7 @@ describe("names: SPELLED is derived by a scan of the emitted client and the runt
 		expect(renamed).toEqual(Object.fromEntries(names.map((name) => [name, `${name}Model`])))
 		expect(names).toEqual(
 			expect.arrayContaining([
-				"AnyrowClient",
+				"ExampleClient",
 				"Builder",
 				"Deadline",
 				"Hops",

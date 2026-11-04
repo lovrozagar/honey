@@ -27,15 +27,19 @@ const JAVA = withJava()
 const SLOW = { timeout: 600_000 }
 
 /** The zero-op document: no path, so no operation. */
-const ZERO: Json = { info: { title: "Anyrow", version: "1" }, openapi: "3.1.0", paths: {} }
+const ZERO: Json = { info: { title: "Acme", version: "1" }, openapi: "3.1.0", paths: {} }
 
 /** The three jars the SDK compiles against, by file name, sorted. */
 const JARS = ["jackson-annotations-2.22.jar", "jackson-core-3.2.4.jar", "jackson-databind-3.2.4.jar"]
 /** The class files javac writes for the zero-op SDK, sorted. */
-const CLASSES = ["ai/anyrow/AnyrowClient$Builder.class", "ai/anyrow/AnyrowClient.class", "ai/anyrow/Transport.class"]
+const CLASSES = [
+	"com/example/ExampleClient$Builder.class",
+	"com/example/ExampleClient.class",
+	"com/example/Transport.class",
+]
 
-const TRANSPORT = "src/main/java/ai/anyrow/Transport.java"
-const FORMAT_PATH = "ai/anyrow/Transport.java"
+const TRANSPORT = "src/main/java/com/example/Transport.java"
+const FORMAT_PATH = "com/example/Transport.java"
 
 /** The emitted files, with `name`'s text replaced by `text`. */
 const withFile = (name: string, text: string): Files => ({ ...generateJavaSdk(ZERO).files, [name]: text })
@@ -132,7 +136,7 @@ const LONG_NAMES: Json = {
 }
 /** The mirror client's body line of `name`'s widest twin and the lines after it, to its closing brace. */
 const twinBody = (files: Files, name: string) => {
-	const lines = (files["src/main/java/ai/anyrow/SafeAnyrowClient.java"] ?? "").split("\n")
+	const lines = (files["src/main/java/com/example/SafeExampleClient.java"] ?? "").split("\n")
 	const at = lines.findIndex(
 		(line, i) =>
 			line.startsWith("    return Answer.safe(") &&
@@ -162,7 +166,7 @@ describe("generateJavaSdk: a twin's body in each of google-java-format's lambda 
 
 	it.skipIf(!JAVA)("lays each body as google-java-format's own output of the file does, and compiles", SLOW, () => {
 		const built = compiledJavaSdk(generateJavaSdk(LONG_NAMES).files)
-		const formatted = runGjf([join(built.dir, "src/main/java/ai/anyrow/SafeAnyrowClient.java")]).stdout
+		const formatted = runGjf([join(built.dir, "src/main/java/com/example/SafeExampleClient.java")]).stdout
 		const ours = generateJavaSdk(LONG_NAMES).files
 		expect({
 			bodies: [LONG.a, LONG.b, LONG.c].map((name) => formatted.includes(twinBody(ours, name).join("\n"))),
@@ -188,7 +192,7 @@ describe.skipIf(!JAVA)("google-java-format --dry-run on the long-name SDK (bit 2
 			format: built.format(),
 			/* not vacuous: a name alone passes the width, and every kind of file is among those held */
 			past: longest > 100 && Math.max(...LONG_LENGTHS) > 100,
-			reached: ["AnyrowClient.java", "SafeAnyrowClient.java", "Resource.java", "Params.java", "Headers.java"].map(
+			reached: ["ExampleClient.java", "SafeExampleClient.java", "Resource.java", "Params.java", "Headers.java"].map(
 				(end) => sources.some((name) => name.endsWith(end)),
 			),
 		}).toEqual({ diagnostics: [], format: [], past: true, reached: [true, true, true, true, true] })
@@ -201,7 +205,7 @@ describe.skipIf(!JAVA)("google-java-format --dry-run on the long-name SDK (bit 2
  */
 describe.skipIf(!JAVA)("google-java-format on the shapes SDK's long strings (bit 21 i7a)", SLOW, () => {
 	it("reflows each one as GJF reflows the literal whole", () => {
-		const emitted = generateJavaSdk(FIXTURES.shapes.document()).files["src/main/java/ai/anyrow/Prose.java"] ?? ""
+		const emitted = generateJavaSdk(FIXTURES.shapes.document()).files["src/main/java/com/example/Prose.java"] ?? ""
 		const dir = mkdtempSync(join(tmpdir(), "honey-gjf-"))
 		try {
 			const path = join(dir, "Prose.java")

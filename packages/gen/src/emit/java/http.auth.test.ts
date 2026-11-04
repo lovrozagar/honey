@@ -236,8 +236,8 @@ describe.skipIf(!JAVA)("the auth refresh: a failing OnAuthExpired is the call's 
  * attempts reached the server before it returns (the `overlap` line), then sleeps 100 ms. A client without
  * single-flight would refresh once per call, and fail the one-refresh line.
  */
-const SINGLE = `import ai.anyrow.AnyrowClient;
-import ai.anyrow.UsersGetParams;
+const SINGLE = `import com.example.ExampleClient;
+import com.example.UsersGetParams;
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -252,7 +252,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class Single {
-  private static String outcome(AnyrowClient client) {
+  private static String outcome(ExampleClient client) {
     try {
       client.users().get(UsersGetParams.builder().id("1").build());
       return "answered";
@@ -284,7 +284,7 @@ public class Single {
         exchange.close();
       });
       server.start();
-      AnyrowClient client = AnyrowClient.builder()
+      ExampleClient client = ExampleClient.builder()
           .baseUrl("http://127.0.0.1:" + server.getAddress().getPort())
           .bearerToken("old")
           .onAuthExpired(() -> {

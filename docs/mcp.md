@@ -47,9 +47,9 @@ The standalone server runs over stdio, started by the client. Generate it, then 
 honey-clients generate --spec openapi.json --target mcp --out ./mcp
 ```
 
-The server's name is the document's title, lower case and hyphenated (`Anyrow` gives `anyrow`, its bin
-`anyrow-mcp`), or the mcp target's `name` option. Its environment variables are that name upper case with `_` for
-`-` (`ANYROW_…`), or the target's `envPrefix` option. The version it reports to clients, and its package's, is the
+The server's name is the document's title, lower case and hyphenated (`Acme` gives `acme`, its bin
+`acme-mcp`), or the mcp target's `name` option. Its environment variables are that name upper case with `_` for
+`-` (`ACME_…`), or the target's `envPrefix` option. The version it reports to clients, and its package's, is the
 document's `info.version` (`0.0.0` in `package.json` when npm would refuse it), or the target's `version` option,
 which must be one npm accepts: the API's version is rarely the server package's.
 
@@ -69,13 +69,13 @@ which must be one npm accepts: the API's version is rarely the server package's.
 ```json
 {
 	"mcpServers": {
-		"anyrow": {
+		"acme": {
 			"command": "node",
-			"args": ["/Users/me/anyrow/mcp/dist/server.js"],
+			"args": ["/Users/me/acme/mcp/dist/server.js"],
 			"env": {
-				"ANYROW_API_KEY": "ak_…",
-				"ANYROW_FILE_ROOT": "/Users/me/Documents/invoices",
-				"ANYROW_MAX_FILE_BYTES": "10485760"
+				"ACME_API_KEY": "ak_…",
+				"ACME_FILE_ROOT": "/Users/me/Documents/invoices",
+				"ACME_MAX_FILE_BYTES": "10485760"
 			}
 		}
 	}
@@ -85,9 +85,9 @@ which must be one npm accepts: the API's version is rarely the server package's.
 **Claude Code** adds it from the command line:
 
 ```sh
-claude mcp add --transport stdio anyrow \
-  --env ANYROW_API_KEY=ak_… --env ANYROW_FILE_ROOT="$HOME/Documents/invoices" \
-  -- node "$HOME/anyrow/mcp/dist/server.js"
+claude mcp add --transport stdio acme \
+  --env ACME_API_KEY=ak_… --env ACME_FILE_ROOT="$HOME/Documents/invoices" \
+  -- node "$HOME/acme/mcp/dist/server.js"
 ```
 
 **Set `$<PREFIX>_FILE_ROOT` to the narrowest directory the agent needs.** A desktop client starts the server in a
@@ -116,7 +116,7 @@ Which credential each client can send decides how a remote endpoint must authent
 Claude Code against a mounted endpoint:
 
 ```sh
-claude mcp add --transport http anyrow https://api.example.com/mcp --header "Authorization: ApiKey ak_…"
+claude mcp add --transport http acme https://api.example.com/mcp --header "Authorization: ApiKey ak_…"
 ```
 
 ## File arguments
@@ -469,7 +469,7 @@ export default {
 	plugins: [
 		honeyPlugin({
 			app: "src/app.ts",
-			codegen: { mcp: true, openApi: { title: "Anyrow", version: "1.0.0" }, securitySchemes: { apiKey } },
+			codegen: { mcp: true, openApi: { title: "Acme", version: "1.0.0" }, securitySchemes: { apiKey } },
 		}),
 	],
 }
@@ -570,7 +570,7 @@ app
 mcp(app, "/mcp", mcpHandler, {
 	authenticate: (request) => /^ApiKey \S+$/.test(request.headers.get("authorization") ?? ""),
 	uploads: uploads({ secret: env.UPLOAD_SECRET, store }),
-	urlFiles: urlFiles({ hosts: ["files.anyrow.example"] }),
+	urlFiles: urlFiles({ hosts: ["files.acme.example"] }),
 })
 
 export default app
@@ -586,7 +586,7 @@ since the Worker's default is honey's fetch. Its config binds the class, the mig
 {
 	"durable_objects": { "bindings": [{ "class_name": "UploadClaim", "name": "UPLOAD_CLAIMS" }] },
 	"migrations": [{ "new_sqlite_classes": ["UploadClaim"], "tag": "v1" }],
-	"r2_buckets": [{ "binding": "UPLOADS", "bucket_name": "anyrow-uploads" }]
+	"r2_buckets": [{ "binding": "UPLOADS", "bucket_name": "acme-uploads" }]
 }
 ```
 
@@ -600,7 +600,7 @@ What each part does:
 - **Uploads** are claimed and taken in one Durable Object an upload, their bytes in R2. `UPLOAD_SECRET` is a Worker
   secret of at least 32 characters (`wrangler secret put UPLOAD_SECRET`). Bytes past their expiry are left behind in
   R2: an R2 lifecycle rule deletes them.
-- **URL files** come only from `files.anyrow.example`, over https, with no redirect followed and the size counted as
+- **URL files** come only from `files.acme.example`, over https, with no redirect followed and the size counted as
   the body streams. List your own storage host, or an `*.` entry for the hosts under it.
 - **The app's `bodyLimit`**, if you set one, applies to the endpoint and to the upload route too, so set it to fit
   the uploads' `maxBytes`.

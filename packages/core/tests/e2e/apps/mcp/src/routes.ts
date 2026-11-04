@@ -1,7 +1,7 @@
 /**
- * The MCP e2e app's routes (bit 21 e): Anyrow's five public multipart operations, each `mcp: true` and requiring the
+ * The MCP e2e app's routes (bit 21 e): Acme's five public multipart operations, each `mcp: true` and requiring the
  * `apiKey` scheme, behind a per-route guard taking `Authorization: ApiKey <KEY>` alone (else 401 with its challenge),
- * as Anyrow's gateway guards them. Under `/api`, which the app strips. Each answer names every part it read: a file's
+ * as Acme's gateway guards them. Under `/api`, which the app strips. Each answer names every part it read: a file's
  * name, size and SHA-256, a text part as sent. The streams send a batch, one progress per file, then the completion.
  * No mount here: gen-app.ts documents these routes, so generation never imports the handler it writes.
  */
@@ -41,7 +41,7 @@ async function readOf(form: Record<string, unknown>) {
 	return { files, status: "complete", texts }
 }
 
-/** Anyrow's guard: the one key, else 401 naming the ApiKey scheme. */
+/** Acme's guard: the one key, else 401 naming the ApiKey scheme. */
 const apiKeyAccess = createMiddleware(async (ctx: { req: Request }, next) =>
 	ctx.req.headers.get("authorization") === `ApiKey ${KEY}`
 		? next()
@@ -96,7 +96,7 @@ export function createRoutes(options?: AppOptions) {
 /** An event stream as the route writes it. */
 type Events = { send(event: { data: string; event: string }): Promise<void>; close(): void }
 
-/** Anyrow's stream: the batch, a progress event per file read, the completion. */
+/** Acme's stream: the batch, a progress event per file read, the completion. */
 async function streamed(stream: Events, answer: Awaited<ReturnType<typeof readOf>>) {
 	await stream.send({ data: JSON.stringify({ batch_id: "b1", total: answer.files.length }), event: "batch" })
 	for (const file of answer.files) await stream.send({ data: JSON.stringify(file), event: "progress" })

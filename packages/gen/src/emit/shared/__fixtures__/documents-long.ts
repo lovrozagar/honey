@@ -158,7 +158,7 @@ function streams(length: number): Record<string, Json> {
 export function longNames(): Json {
 	return {
 		components: { schemas: Object.assign({}, ...LONG_LENGTHS.map(schemas)) },
-		info: { title: "Anyrow", version: "1" },
+		info: { title: "Acme", version: "1" },
 		openapi: "3.1.0",
 		paths: Object.assign({}, ...LONG_LENGTHS.flatMap((length) => [item(length), streams(length)])),
 	}

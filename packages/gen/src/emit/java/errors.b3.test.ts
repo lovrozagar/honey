@@ -45,7 +45,7 @@ function document(componentsFirst: boolean): Json {
 
 /** The record a file declares, as `name(components)`. */
 const recordOf = (files: Readonly<Record<string, string>>, name: string) => {
-	const text = files[`src/main/java/ai/anyrow/${name}.java`] ?? ""
+	const text = files[`src/main/java/com/example/${name}.java`] ?? ""
 	const match = /public record (\w+)\(([^{]*)\)\s*\{/.exec(text.replace(/@\w+(?:\.\w+)*(?:\([^)]*\))?\s*/g, ""))
 	return match === null ? null : `${match[1]}(${match[2]?.replace(/\s+/g, " ").trim()})`
 }
@@ -53,11 +53,11 @@ const recordOf = (files: Readonly<Record<string, string>>, name: string) => {
 /** The consumer: the component through `locks.get`, the key's data through the 423's `decodeBody`. */
 const PROBE = (url: string) => `package probe;
 
-import ai.anyrow.*;
+import com.example.*;
 
 public final class Probe {
   public static void main(String[] args) {
-    AnyrowClient client = AnyrowClient.builder().baseUrl("${url}").build();
+    ExampleClient client = ExampleClient.builder().baseUrl("${url}").build();
     ItemLockedData lock = client.locks().get(LocksGetParams.builder().build());
     System.out.println(lock.getClass().getSimpleName() + " " + lock.owner());
     try {

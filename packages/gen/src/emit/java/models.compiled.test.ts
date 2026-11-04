@@ -52,44 +52,44 @@ const DOC: Json = {
 
 /** Every .java file DOC's SDK emits, code-unit sorted: the models, the runtime and the client. */
 const SOURCES = [
-	"src/main/java/ai/anyrow/AnyrowClient.java",
-	"src/main/java/ai/anyrow/Cat.java",
-	"src/main/java/ai/anyrow/Color.java",
-	"src/main/java/ai/anyrow/Dog.java",
-	"src/main/java/ai/anyrow/Json.java",
-	"src/main/java/ai/anyrow/Level.java",
-	"src/main/java/ai/anyrow/Opt.java",
-	"src/main/java/ai/anyrow/Pet.java",
-	"src/main/java/ai/anyrow/PetCat.java",
-	"src/main/java/ai/anyrow/PetDog.java",
-	"src/main/java/ai/anyrow/PetUnknown.java",
-	"src/main/java/ai/anyrow/Thing.java",
-	"src/main/java/ai/anyrow/Transport.java",
+	"src/main/java/com/example/Cat.java",
+	"src/main/java/com/example/Color.java",
+	"src/main/java/com/example/Dog.java",
+	"src/main/java/com/example/ExampleClient.java",
+	"src/main/java/com/example/Json.java",
+	"src/main/java/com/example/Level.java",
+	"src/main/java/com/example/Opt.java",
+	"src/main/java/com/example/Pet.java",
+	"src/main/java/com/example/PetCat.java",
+	"src/main/java/com/example/PetDog.java",
+	"src/main/java/com/example/PetUnknown.java",
+	"src/main/java/com/example/Thing.java",
+	"src/main/java/com/example/Transport.java",
 ]
 
 /** The classes javac writes for DOC's SDK, code-unit sorted. */
 const CLASSES = [
-	"ai/anyrow/AnyrowClient$Builder.class",
-	"ai/anyrow/AnyrowClient.class",
-	"ai/anyrow/Cat.class",
-	"ai/anyrow/Color.class",
-	"ai/anyrow/Dog.class",
-	"ai/anyrow/Json.class",
-	"ai/anyrow/Level.class",
-	"ai/anyrow/Opt$Reader.class",
-	"ai/anyrow/Opt$Writer.class",
-	"ai/anyrow/Opt.class",
-	"ai/anyrow/Pet$Deserializer.class",
-	"ai/anyrow/Pet.class",
-	"ai/anyrow/PetCat.class",
-	"ai/anyrow/PetDog.class",
-	"ai/anyrow/PetUnknown.class",
-	"ai/anyrow/Thing.class",
-	"ai/anyrow/Transport.class",
+	"com/example/Cat.class",
+	"com/example/Color.class",
+	"com/example/Dog.class",
+	"com/example/ExampleClient$Builder.class",
+	"com/example/ExampleClient.class",
+	"com/example/Json.class",
+	"com/example/Level.class",
+	"com/example/Opt$Reader.class",
+	"com/example/Opt$Writer.class",
+	"com/example/Opt.class",
+	"com/example/Pet$Deserializer.class",
+	"com/example/Pet.class",
+	"com/example/PetCat.class",
+	"com/example/PetDog.class",
+	"com/example/PetUnknown.class",
+	"com/example/Thing.class",
+	"com/example/Transport.class",
 ]
 
 /** The driver: one line per check, `<label> <answer>`. */
-const DRIVER = `package ai.anyrow;
+const DRIVER = `package com.example;
 
 /** One line per check: its label, then its answer. */
 public final class Driver {
@@ -218,8 +218,8 @@ function once<T>(make: () => T): () => T {
 	return () => (value ??= make())
 }
 
-/** The driver run on the SDK: compiled with it, then run as `ai.anyrow.Driver`. */
-const run = once((): JavaRun => sdk().run("ai.anyrow.Driver", DRIVER))
+/** The driver run on the SDK: compiled with it, then run as `com.example.Driver`. */
+const run = once((): JavaRun => sdk().run("com.example.Driver", DRIVER))
 
 /** A run's stdout, one line each. */
 const lines = (stdout: string): string[] => stdout.split("\n").filter((line) => line !== "")

@@ -16,7 +16,7 @@ const JAVA = withJava()
 const SLOW = { timeout: 600_000 }
 
 /** The `sse` SDK's package (the emitter's default), where the probe sits beside the package-private pump. */
-const PACKAGE = "ai.anyrow"
+const PACKAGE = "com.example"
 
 /** The `sse` SDK, which must build. */
 function sdk(): DrivenJavaSdk {

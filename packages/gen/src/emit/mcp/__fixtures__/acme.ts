@@ -1,6 +1,6 @@
 /**
- * An Anyrow-shaped API (bit 21 c's acceptance): its five public multipart operations as its public document has them
- * (the extract once and as a stream, per project and per table, and suggest-schema), each `x-mcp` as Anyrow's codegen
+ * An Acme-shaped API (bit 21 c's acceptance): its five public multipart operations as its public document has them
+ * (the extract once and as a stream, per project and per table, and suggest-schema), each `x-mcp` as Acme's codegen
  * marks them. Every request body is required, offered as multipart/form-data and as a urlencoded form, both one `$ref`
  * with no required part: `file` a binary (format and contentEncoding both binary) beside text parts. The streams answer
  * text/event-stream typed as a plain string. The credential is the `apiKey` scheme, a header `Authorization` whose
@@ -115,10 +115,10 @@ const components = () => ({
 	},
 })
 
-/** Anyrow's public document, cut to the five multipart operations, every one marked x-mcp. */
-export const anyrow = () => ({
+/** Acme's public document, cut to the five multipart operations, every one marked x-mcp. */
+export const acme = () => ({
 	components: components(),
-	info: { title: "Anyrow API", version: "1.0.0" },
+	info: { title: "Acme API", version: "1.0.0" },
 	openapi: "3.1.0",
 	paths: {
 		"/v1/projects/{project_id}/extract": post(

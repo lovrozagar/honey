@@ -71,7 +71,7 @@ const document = {
 	},
 } as unknown as OpenApiDocument
 
-/* a consumer's own module: the shapes anyrow's ~40 call sites use, so this fails if one of them breaks */
+/* a consumer's own module: the shapes a consumer's ~40 call sites use, so this fails if one of them breaks */
 const consumer = `import { Shop } from "./shop.client.gen"
 import { createQueryHelpers } from "./shop.tanstack-query.gen"
 

@@ -45,7 +45,7 @@ const object = (properties: Json, required: string[] = []): Json => ({ propertie
 
 /** A component's declaration text and the names of the declarations it hoisted, its name claimed as `name`. */
 function top({ name, schema, components = {} }: Pick<TopRow, "components" | "name" | "schema">) {
-	const ctx = javaTypeContext(toIR(doc(components)), ["AnyrowClient"])
+	const ctx = javaTypeContext(toIR(doc(components)), ["ExampleClient"])
 	const text = javaTopLevel(name, schemaToIR(schema), ctx)
 	return { decls: [...ctx.decls.keys()], text }
 }

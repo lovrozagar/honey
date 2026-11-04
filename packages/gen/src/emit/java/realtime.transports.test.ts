@@ -34,7 +34,7 @@ try (ResumableConnection<Payload> setup = c.feed().live(feed())) {
 }`
 /** A client with `config` and a request hook recording each dial as `[URL sent, its path]` into `hooked`. */
 const hooked = (config = "") => `List<String[]> hooked = Collections.synchronizedList(new ArrayList<>());
-AnyrowClient c = AnyrowClient.builder().baseUrl(BASE).bearerToken("tok")${config}.onRequest(Rt.hook(hooked)).build();`
+ExampleClient c = ExampleClient.builder().baseUrl(BASE).bearerToken("tok")${config}.onRequest(Rt.hook(hooked)).build();`
 /** A connection over the setup's adapter `i` with `options`, connected, then `text` on it. */
 const alone = (i: number, options: string, text: string) =>
 	`try (ResumableConnection<JsonNode> rc = new ResumableConnection<>(url, List.of(adapters.get(${i})), Rt.ELEMENT${options})) {
@@ -61,7 +61,7 @@ note(Rt.j(o.lastEventId(), o.reconnectToken(), o.protocols(), o.maxReconnectAtte
 TransportOptions t = TransportOptions.builder().lastEventId("42").reconnectToken("tok").protocols(List.of("v1")).maxReconnectAttempts(3).reconnectDelay(Duration.ofMillis(500)).build();
 note(Rt.j(t.lastEventId(), t.reconnectToken(), t.protocols(), t.maxReconnectAttempts(), t.reconnectDelay().toString()));
 note(Rt.json(TransportKind.values()));
-AnyrowClient c = AnyrowClient.builder().baseUrl(BASE).bearerToken("tok").build();
+ExampleClient c = ExampleClient.builder().baseUrl(BASE).bearerToken("tok").build();
 try (ResumableConnection<Payload> conn = c.feed().live(feed())) {
   List<Object[]> named = new ArrayList<>();
   for (TransportAdapter a : conn.adapters()) {
@@ -72,7 +72,7 @@ try (ResumableConnection<Payload> conn = c.feed().live(feed())) {
 		replies: [upgraded],
 	},
 	defaults: {
-		body: `AnyrowClient c = AnyrowClient.builder().baseUrl(BASE).bearerToken("tok").build();
+		body: `ExampleClient c = ExampleClient.builder().baseUrl(BASE).bearerToken("tok").build();
 try (ResumableConnection<Payload> first = c.feed().live(feed())) {
   note(Rt.proven(first));
   List<TransportAdapter> a = first.adapters();
@@ -115,7 +115,7 @@ note(Rt.json(hooked));`,
 		replies: [refused, refused, refused, refused, POLLED, { status: 204 }, PAIR, posted, unposted, LATE],
 	},
 	refused: {
-		body: `AnyrowClient c = AnyrowClient.builder().baseUrl(BASE).bearerToken("tok").build();
+		body: `ExampleClient c = ExampleClient.builder().baseUrl(BASE).bearerToken("tok").build();
 ${SETUP}
 ${alone(2, NO_RETRY, "  note(Rt.json(Rt.take(rc, 2)));")}
 try {

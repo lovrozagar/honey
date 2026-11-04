@@ -87,7 +87,7 @@ export function derivedIds(): Json {
 		responses: { 200: { content: { "application/json": { schema: { type: "object" } } }, description: "ok" } },
 	}
 	return {
-		info: { title: "Anyrow", version: "1" },
+		info: { title: "Acme", version: "1" },
 		openapi: "3.1.0",
 		paths: {
 			"/": { get: ok },

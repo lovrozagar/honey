@@ -82,7 +82,7 @@ const PROBE = `public final class Probe {
 
 /**
  * The client class's simple name and its package, read from the emitted sources: the one its javadoc names the client
- * (a Params record or RequestOptions holds a `builder()` too, and `AnyGetParams` sorts before `AnyrowClient`).
+ * (a Params record or RequestOptions holds a `builder()` too, and `AnyGetParams` sorts before `ExampleClient`).
  */
 export function clientOf(files: Readonly<Record<string, string>>): { client: string; pkg: string } {
 	const path = Object.keys(files).find(

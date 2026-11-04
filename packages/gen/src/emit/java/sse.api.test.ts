@@ -33,7 +33,7 @@ function driven(): DrivenJavaSdk {
 /** A consumer program on the `sse` client at `url` running `body`, each `note(…)` one line of its output. */
 const consumer = (url: string, body: string) => `package probe;
 
-import ai.anyrow.*;
+import com.example.*;
 import java.util.Iterator;
 
 public class Probe {
@@ -42,7 +42,7 @@ public class Probe {
   }
 
   public static void main(String[] args) throws Exception {
-    AnyrowClient c = AnyrowClient.builder().baseUrl("${url}").build();
+    ExampleClient c = ExampleClient.builder().baseUrl("${url}").build();
 ${body
 	.split("\n")
 	.map((line) => `    ${line}`)
@@ -147,7 +147,7 @@ describe.skipIf(!JAVA)("a refused SSE open's error body", SLOW, () => {
 
 /** The `sse` SDK's files. */
 const files = () => generateJavaSdk(FIXTURES.sse.document()).files
-const TICKS_RESOURCE = "src/main/java/ai/anyrow/TicksResource.java"
+const TICKS_RESOURCE = "src/main/java/com/example/TicksResource.java"
 /** Each method's lines answering `type` in the files: every line from its signature to its closing brace. */
 const methodsOf = (all: Readonly<Record<string, string>>, type: string) =>
 	Object.values(all).flatMap((source) =>
@@ -177,7 +177,7 @@ describe("generateJavaSdk: an SSE method's safe twin, and its javadoc", () => {
 		const all = files()
 		const docs = (all[TICKS_RESOURCE] ?? "").split("\n").filter((line) => line.includes("try-with-resources"))
 		expect({
-			eventStream: (all["src/main/java/ai/anyrow/EventStream.java"] ?? "").replace(/\s*\n\s*\*\s*/g, " "),
+			eventStream: (all["src/main/java/com/example/EventStream.java"] ?? "").replace(/\s*\n\s*\*\s*/g, " "),
 			method: docs.length,
 		}).toEqual({ eventStream: expect.stringContaining(RELEASE), method: 3 })
 	})

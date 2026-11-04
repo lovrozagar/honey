@@ -23,8 +23,7 @@ const redirectLine = (text: string) => text.split("\n").find((each) => each.star
 
 /** `config`'s base_url and target lines. */
 const targetLines = (text: string) => text.split("\n").filter((line) => /^(base_url|target) /.test(line))
-const zero = () =>
-	builtCli(generateGoCli({ info: { title: "Anyrow", version: "1" }, openapi: "3.1.0", paths: {} }).files)
+const zero = () => builtCli(generateGoCli({ info: { title: "Acme", version: "1" }, openapi: "3.1.0", paths: {} }).files)
 
 /** The commands a help group lists, by its title. */
 const group = (help: string, title: string) => {

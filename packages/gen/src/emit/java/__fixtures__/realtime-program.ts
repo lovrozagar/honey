@@ -191,7 +191,7 @@ final class Rt {
 `
 
 /** A consumer program in the SDK's package against `url`: `GUARDED` sections, the notes printed as JSON. */
-export const program = (url: string, sections: Readonly<Record<string, string>>) => `package ai.anyrow;
+export const program = (url: string, sections: Readonly<Record<string, string>>) => `package com.example;
 
 import java.net.URI;
 import java.time.Duration;
@@ -259,7 +259,7 @@ export function runner() {
 		const run =
 			runs.get(name) ??
 			served(replies, async (server) => {
-				const ran = await drivenRealtime().exec("ai.anyrow.Probe", program(server.url, sections))
+				const ran = await drivenRealtime().exec("com.example.Probe", program(server.url, sections))
 				const out = ran.status === 0 ? (JSON.parse(ran.stdout) as Record<string, string[]>) : undefined
 				const stderr = `${ran.diagnostics.join("\n")}${ran.stderr}`
 				return { hops: [...server.hops], run: { out, ran: ran.status === 0, stderr } }

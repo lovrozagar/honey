@@ -1,5 +1,5 @@
 /**
- * Bit 21 c's acceptance: an Anyrow-shaped API's five multipart operations as tools, driven over stdio by each era's
+ * Bit 21 c's acceptance: an Acme-shaped API's five multipart operations as tools, driven over stdio by each era's
  * official client (sdk 1.32.2 at 2025-11-25; client 2.4.0 pinned to 2026-07-28). Each call reaches the API as
  * multipart/form-data under `Authorization: ApiKey <key>`, the scheme's own prefix: every text part as given and the
  * file's bytes intact (their SHA-256 checked where the API reads them), read from the file root or sent inline. The
@@ -10,7 +10,7 @@ import { mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import { type RecordingServer, type Reply, served } from "../shared/__fixtures__/recording-server.ts"
-import { anyrow } from "./__fixtures__/anyrow.ts"
+import { acme } from "./__fixtures__/acme.ts"
 import { clientSession, type Step, withClients } from "./__fixtures__/clients.ts"
 import { scratchDir, written } from "./__fixtures__/written.ts"
 import { FILE_SCHEMA } from "./files.ts"
@@ -36,7 +36,7 @@ const inline = (bytes: Buffer, name: string, mimeType: string) => ({
 	size: bytes.length,
 })
 
-/** An Anyrow event stream: a batch, a heartbeat, a file's progress, the completion. */
+/** An Acme event stream: a batch, a heartbeat, a file's progress, the completion. */
 const STREAM: Reply = {
 	sse: {
 		end: "close",
@@ -129,7 +129,7 @@ async function partsOf(body: Uint8Array, contentType: string | null) {
 
 /** `client`'s session against the server in `dir` with its files in `root`: what it saw, and what the API received. */
 async function session(client: "sdk" | "modern", [dir, root]: readonly [string, string], api: RecordingServer) {
-	const env = [`ANYROW_BASE_URL=${api.url}`, `ANYROW_API_KEY=${KEY}`, `ANYROW_FILE_ROOT=${root}`]
+	const env = [`ACME_BASE_URL=${api.url}`, `ACME_API_KEY=${KEY}`, `ACME_FILE_ROOT=${root}`]
 	const [negotiated, listed, ...called] = await clientSession(
 		client,
 		["env", ...env, process.execPath, join(dir, "dist", "server.js")],
@@ -153,11 +153,11 @@ async function session(client: "sdk" | "modern", [dir, root]: readonly [string, 
 	}
 }
 
-describe.skipIf(!CLIENTS)("Anyrow's multipart operations through each era's official client (bit 21 c)", SLOW, () => {
-	const root = scratchDir("anyrow-root")
+describe.skipIf(!CLIENTS)("Acme's multipart operations through each era's official client (bit 21 c)", SLOW, () => {
+	const root = scratchDir("acme-root")
 	mkdirSync(root, { recursive: true })
 	writeFileSync(join(root, "invoice.pdf"), INVOICE)
-	const dir = written(generateMcpServer(anyrow(), { envPrefix: "ANYROW", name: "anyrow" }).files)
+	const dir = written(generateMcpServer(acme(), { envPrefix: "ACME", name: "acme" }).files)
 
 	it.each([
 		["sdk", "2025-11-25"],

@@ -228,11 +228,11 @@ describe.skipIf(!JAVA)("client.safe(): each Result its own", SLOW, () => {
  */
 const RESULT = (url: string) => `package probe;
 
-import ai.anyrow.*;
+import com.example.*;
 
 public final class Probe {
   public static void main(String[] args) {
-    AnyrowClient client = AnyrowClient.builder().baseUrl("${url}").build();
+    ExampleClient client = ExampleClient.builder().baseUrl("${url}").build();
     Result<UsersGetResponse> missing =
         client.safe().users().get(UsersGetParams.builder().id("missing").build());
     if (missing instanceof Result.Err<UsersGetResponse> err) {
@@ -287,11 +287,11 @@ describe.skipIf(!JAVA)("Result<T> from a consumer program (http)", SLOW, () => {
  */
 const OLD = `package probe;
 
-import ai.anyrow.*;
+import com.example.*;
 
 public final class Old {
   public static void main(String[] args) {
-    AnyrowClient client = AnyrowClient.builder().baseUrl("http://127.0.0.1:9").build();
+    ExampleClient client = ExampleClient.builder().baseUrl("http://127.0.0.1:9").build();
     UsersGetParams params = UsersGetParams.builder().id("1").build();
     Result<UsersGetResponse> old = client.users().get(params);
     int status = client.safe().users().get(params).status();

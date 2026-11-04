@@ -51,7 +51,7 @@ function gatewayProject(): Project {
 	const made = project({
 		"src/down.ts": downSource(),
 		"src/gateway.ts": GATEWAY_SOURCE,
-		/* the served gateway, as anyrow.gateway.app.ts: it loads the tree generation writes */
+		/* the served gateway, as a consumer's gateway app module: it loads the tree generation writes */
 		"src/gateway.app.ts":
 			'import { routeTree } from "./_gen/routes.gen.ts"\nimport { app as gateway } from "./gateway.ts"\nexport const app = gateway.routeTree(routeTree)\n',
 		/* the merge entry that also exports the gateway built without its tree */
@@ -188,7 +188,7 @@ async function seeded(): Promise<Project> {
 
 const SERVED = { app: "src/gateway.app.ts", codegen: { ...OUTPUTS, mergeTree: "src/route-tree.ts" } }
 
-describe("a gateway over its own tree (bit 19 h2, Anyrow's shape)", () => {
+describe("a gateway over its own tree (bit 19 h2, a consumer's shape)", () => {
 	it(
 		"writes the merged tree plus its own routes, and documents both with its errors, through config.app",
 		async () => {
@@ -249,7 +249,7 @@ describe("a gateway over its own tree on Bun (bit 20 k-fix)", () => {
 	)
 })
 
-describe("a gateway over its own tree (bit 19 h2, Anyrow's shape), continued (2)", () => {
+describe("a gateway over its own tree (bit 19 h2, a consumer's shape), continued (2)", () => {
 	it(
 		"refuses a new own route its stale tree cannot hold, naming the merge entry's tree-less app as the fix",
 		async () => {

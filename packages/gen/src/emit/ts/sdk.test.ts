@@ -262,7 +262,7 @@ describe("generateSdk: names it refuses, and renames that collide", () => {
 		)
 		expect([
 			types.match(/^export type ApiConfig\b/gm)?.length,
-			Object.keys(generateSdk(doc(USERS), { name: "AnyrowSDK" }).files).length,
+			Object.keys(generateSdk(doc(USERS), { name: "AcmeSDK" }).files).length,
 		]).toEqual([1, 5])
 	})
 

@@ -13,7 +13,7 @@ import { emittedTanstackQuery } from "./__fixtures__/emitted.ts"
 import { queryHelpers } from "../../runtime/ts-tanstack-query/query.ts"
 
 const ORG = "org_1"
-const SDK_NAME = "anyrow"
+const SDK_NAME = "acme"
 
 /* the shape serviceMapOf emits: `{p}` kept in `path`, `params` naming the path slots, flags only when set */
 const serviceMap: ServiceMap = {

@@ -15,13 +15,13 @@ const OK = { json: { ok: true }, status: 200 }
 const V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 
 /** Three sends: an empty map and no key, a non-empty map and a declared key, nothing set. */
-const program = (base: string) => `package ai.anyrow;
+const program = (base: string) => `package com.example;
 
 import java.util.Map;
 
 public class Keyed {
   public static void main(String[] args) {
-    AnyrowClient client = AnyrowClient.builder().baseUrl("${base}").build();
+    ExampleClient client = ExampleClient.builder().baseUrl("${base}").build();
     client.keyed().send(KeyedSendParams.builder().xMeta(Map.of()).build());
     client.keyed().send(KeyedSendParams.builder().xMeta(Map.of("a", "1")).idempotencyKey("declared-k").build());
     client.keyed().send(KeyedSendParams.builder().build());
@@ -38,7 +38,7 @@ describe.skipIf(!JAVA)(
 			const sdk = drivenJavaSdk("http")
 			expect(sdk.built, sdk.diagnostics.join("\n")).toBe(true)
 			const { hops, ran } = await served([OK, OK, OK], async (server) => {
-				const out = await sdk.exec("ai.anyrow.Keyed", program(server.url))
+				const out = await sdk.exec("com.example.Keyed", program(server.url))
 				return { hops: [...server.hops], ran: out }
 			})
 			expect(

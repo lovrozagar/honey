@@ -34,9 +34,10 @@ import { toIR, type OpenApiDocument } from "../../ir/build.ts"
 
 /** The package's options, each defaulted and validated. */
 export type JavaSdkOptions = {
-	/** the Maven group id; `ai.anyrow` by default */
+	/** the Maven group id; `com.example` by default, the reserved example domain as the Go SDK's `example.com/sdk`: Maven
+	 * Central publishes only under a group you own */
 	readonly groupId?: string
-	/** the Maven artifact id and the root project's name; `anyrow` by default */
+	/** the Maven artifact id and the root project's name; `sdk` by default */
 	readonly artifactId?: string
 	/** the package of every type; the group id by default */
 	readonly packageName?: string
@@ -65,11 +66,11 @@ const RUNTIME_PACKAGE = /^package honey\.runtime;$/m
 
 /** The validated package for `options`. */
 function packageOf(options: JavaSdkOptions): JavaPackage {
-	const groupId = validateGroupId(options.groupId ?? "ai.anyrow")
+	const groupId = validateGroupId(options.groupId ?? "com.example")
 	const packageName = validatePackageName(options.packageName ?? groupId)
 	const last = packageName.split(".").at(-1) as string
 	return {
-		artifactId: validateArtifactId(options.artifactId ?? "anyrow"),
+		artifactId: validateArtifactId(options.artifactId ?? "sdk"),
 		clientName: validateClientName(options.clientName ?? `${last.charAt(0).toUpperCase()}${last.slice(1)}Client`),
 		groupId,
 		packageName,

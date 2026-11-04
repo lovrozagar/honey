@@ -30,7 +30,7 @@ export const frame = (n: number) => ({ n, reconnect_token: `rt-${n}` })
 export const FEED_URL = "/feed?channel=c"
 export const AT_1 = "/feed?channel=c&last_event_id=1&reconnect_token=rt-1"
 
-export const consumer = (url: string, body: string, types = "") => `package ai.anyrow;
+export const consumer = (url: string, body: string, types = "") => `package com.example;
 
 import java.time.Duration;
 import java.util.*;
@@ -50,8 +50,8 @@ public class Probe {
     OUT.computeIfAbsent(at, k -> new ArrayList<>()).add(String.valueOf(value));
   }
 
-  static AnyrowClient client() {
-    return AnyrowClient.builder().baseUrl(BASE).build();
+  static ExampleClient client() {
+    return ExampleClient.builder().baseUrl(BASE).build();
   }
 
   static String read(ResumableConnection<?> rc) {
@@ -80,7 +80,7 @@ ${types}`
 export async function consumed(replies: readonly Reply[], body: string, types = "") {
 	const sdk = drivenRealtime()
 	return served(replies, async (server) => {
-		const ran = await sdk.exec("ai.anyrow.Probe", consumer(server.url, body, types))
+		const ran = await sdk.exec("com.example.Probe", consumer(server.url, body, types))
 		const out = ran.status === 0 ? (JSON.parse(ran.stdout) as Record<string, string[]>) : undefined
 		return { hops: server.hops.map((hop) => hop.url), out, stderr: `${ran.diagnostics.join("\n")}${ran.stderr}` }
 	})

@@ -35,7 +35,7 @@ function driven(): DrivenJavaSdk {
 /** A consumer program on the `ws` client at `url` running `body`, each `note(…)` one line of its output. */
 const consumer = (url: string, body: string) => `package probe;
 
-import ai.anyrow.*;
+import com.example.*;
 import java.util.List;
 import java.util.concurrent.*;
 
@@ -47,7 +47,7 @@ public class Probe {
   }
 
   public static void main(String[] args) throws Exception {
-    AnyrowClient c = AnyrowClient.builder().baseUrl(BASE).build();
+    ExampleClient c = ExampleClient.builder().baseUrl(BASE).build();
 ${body
 	.split("\n")
 	.map((line) => `    ${line}`)
@@ -181,7 +181,7 @@ note(w.receive());`
 
 	/* new: C# ws.test.ts:388 (W6: the timeout bounds the handshake alone; the keepalive's 20 s is far past the idle) */
 	it("lets an open socket idle past the timeout: no read bound once it opened", async () => {
-		const body = `AnyrowClient timed = AnyrowClient.builder().baseUrl(BASE).timeout(java.time.Duration.ofMillis(300)).build();
+		const body = `ExampleClient timed = ExampleClient.builder().baseUrl(BASE).timeout(java.time.Duration.ofMillis(300)).build();
 TypedWebSocket warm = timed.rooms().socket(${ROOMS}.build(), RequestOptions.builder().timeout(java.time.Duration.ZERO).build());
 warm.close();
 TypedWebSocket w = timed.rooms().socket(${ROOMS}.build());
@@ -214,7 +214,7 @@ pool.shutdown();`
 const socketMethods = (...files: readonly string[]) =>
 	files.flatMap((file) =>
 		[
-			...(generateJavaSdk(FIXTURES.ws.document()).files[`src/main/java/ai/anyrow/${file}.java`] ?? "").matchAll(
+			...(generateJavaSdk(FIXTURES.ws.document()).files[`src/main/java/com/example/${file}.java`] ?? "").matchAll(
 				/^ {2}public TypedWebSocket[\s\S]*?^ {2}\}$/gm,
 			),
 		].map((match) => match[0]),

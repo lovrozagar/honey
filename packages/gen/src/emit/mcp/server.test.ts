@@ -343,12 +343,10 @@ describe("what no tool serves yet (phase d)", () => {
 describe("the options (F2, phase a)", () => {
 	it("names the server by the title's words, and its version 0.0.0 when the document's is none npm accepts or none at all", () => {
 		const untagged = { ...document(), info: { title: "Shop" } }
-		expect([pkg(document("9 Anyrow's API!", "v1")), pkg(untagged)].map(({ name, version }) => [name, version])).toEqual(
-			[
-				["anyrow-s-api-mcp", "0.0.0"],
-				["shop-mcp", "0.0.0"],
-			],
-		)
+		expect([pkg(document("9 Acme's API!", "v1")), pkg(untagged)].map(({ name, version }) => [name, version])).toEqual([
+			["acme-s-api-mcp", "0.0.0"],
+			["shop-mcp", "0.0.0"],
+		])
 	})
 
 	it("versions the server and its package by the version option, not the document's", () => {

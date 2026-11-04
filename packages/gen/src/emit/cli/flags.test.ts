@@ -214,7 +214,7 @@ describe("a body's flags and a keyword's (phase b)", () => {
 
 	it("flags a field or a parameter published as a one-member anyOf by its member's kind, the wrapper's default shown", () => {
 		const list = { items: STR, minItems: 1, type: "array" }
-		/* anyrow's request: comb's x- keys beside the inner anyOf and on its member */
+		/* a consumer's request: comb's x- keys beside the inner anyOf and on its member */
 		const merge = { anyOf: [{ anyOf: [{ ...list, "x-comb-text": "t" }], "x-comb-text": "t" }, { type: "null" }] }
 		const body = JSON_BODY({ properties: { merge_columns_json: merge }, type: "object" })
 		const parameters = [queryParam("limit", { anyOf: [{ type: "integer" }], default: 20 })]

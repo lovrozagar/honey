@@ -62,7 +62,7 @@ async function drove(replies: readonly Reply[], o: { script?: Script; setup?: Se
  * it once, then fails every connect with ApiConnectionException "reset"), no long-poll, so every adapter of a pass fails
  * at its connect: the setup call's two refused dials, the chain opening (OPENED), then two reads and the state after.
  */
-const chain = (second: string) => `AnyrowClient c = AnyrowClient.builder().baseUrl(BASE).bearerToken("tok").build();
+const chain = (second: string) => `ExampleClient c = ExampleClient.builder().baseUrl(BASE).bearerToken("tok").build();
 String url;
 List<TransportAdapter> adapters;
 try (ResumableConnection<Payload> setup = c.feed().live(feed())) {

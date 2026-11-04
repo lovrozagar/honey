@@ -130,7 +130,7 @@ const boundaryOf = (type: string | undefined) =>
 /** A consumer program on the served client at the app's URL running `body`, each `note(…)` one output line. */
 const consumer = (url: string, body: string) => `package probe;
 
-import ai.anyrow.*;
+import com.example.*;
 import java.nio.charset.StandardCharsets;
 
 public class Probe {
@@ -228,7 +228,7 @@ javaDescribe("onAuthExpired", () => {
 		const { hops, out } = await consumed(
 			[
 				'FilePart file = new FilePart("hello.txt", "hello multipart".getBytes(StandardCharsets.UTF_8), "text/plain");',
-				'AnyrowClient c = AnyrowClient.builder().baseUrl(base).bearerToken("expired-token").onAuthExpired(() -> "valid-token").build();',
+				'ExampleClient c = ExampleClient.builder().baseUrl(base).bearerToken("expired-token").onAuthExpired(() -> "valid-token").build();',
 				"var r = c.uploads().form(UploadsFormParams.builder().body(new UploadsFormBody(file)).build());",
 				'note("size " + r.size());',
 			].join("\n"),

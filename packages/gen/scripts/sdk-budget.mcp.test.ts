@@ -143,7 +143,7 @@ type Tools = { readonly total: number; readonly largest: number }
  *   `file` part a file argument, 98 tokens of the file schema: the extension's FileInput marked and required, its
  *   digest's algorithm, or a path); surface 2,127 -> 2,304 total, its largest still the SSE tool's 205, so ceilings
  *   2,553 -> 2,765 total, 246 largest unchanged. The other four apps have no multipart operation and are unchanged.
- * - bit 21 e, a sixth app, mcp (MCP mounted in the app): Anyrow's five multipart operations as tools, 1,509 tokens
+ * - bit 21 e, a sixth app, mcp (MCP mounted in the app): Acme's five multipart operations as tools, 1,509 tokens
  *   (1,525 in 2026-07-28), its largest extract_stream's 355 (a file argument, five text arguments, the collect's two and
  *   its events), under H6's ~400; ceilings 1,811 total, 426 largest. The other five apps are unchanged.
  * - bit 21 e fold-in: H6 is a gate. Every app's largest-tool ceiling is min(ceilingOf(measured, 0.2), 400), one rule
@@ -151,7 +151,7 @@ type Tools = { readonly total: number; readonly largest: number }
  *   170, kitchen 225, surface 246) and unchanged.
  * - bit 21 g, remote files: no standalone tool changes. A mounted tool's file argument shows the URL value in place of
  *   the path (97 tokens, one fewer), or, on a mount without urlFiles, the FileInput alone (64, 34 fewer); so no mounted
- *   tool costs more than its standalone one (Anyrow's extract_once 393 -> 392 mounted, 359 without urlFiles).
+ *   tool costs more than its standalone one (Acme's extract_once 393 -> 392 mounted, 359 without urlFiles).
  */
 const MEASURED: Readonly<Record<string, Tools>> = {
 	compose: { largest: 72, total: 363 },

@@ -7,7 +7,7 @@
 import { describe, expect, it } from "vitest"
 import { toIR, type OpenApiDocument } from "../../ir/build.ts"
 import { erased, generateMcpServer } from "./server.ts"
-import { anyrow } from "./__fixtures__/anyrow.ts"
+import { acme } from "./__fixtures__/acme.ts"
 import { FILE_SCHEMA } from "./files.ts"
 import { NAME_MAX, toolName, toolsOf } from "./tools.ts"
 
@@ -281,8 +281,8 @@ describe("a multipart form's parts, by the form (bit 21 c)", () => {
 		expect([tool?.inputSchema.properties, tool?.parts]).toEqual([{}, []])
 	})
 
-	it("makes each of Anyrow's five multipart operations a tool, its form a ref, its path parameters first", () => {
-		const listed = toolsOf(toIR(anyrow() as unknown as OpenApiDocument, { deriveOperationIds: true }))
+	it("makes each of Acme's five multipart operations a tool, its form a ref, its path parameters first", () => {
+		const listed = toolsOf(toIR(acme() as unknown as OpenApiDocument, { deriveOperationIds: true }))
 		const parts = (kind: string) =>
 			listed.map((tool) => (tool.parts ?? []).filter((part) => part[2] === kind).map(([, name]) => name))
 		expect([

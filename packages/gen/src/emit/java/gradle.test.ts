@@ -12,7 +12,7 @@ type Json = Record<string, unknown>
 type Files = Readonly<Record<string, string>>
 
 /** The zero-op document: no path, so no operation. */
-const ZERO: Json = { info: { title: "Anyrow", version: "1" }, openapi: "3.1.0", paths: {} }
+const ZERO: Json = { info: { title: "Acme", version: "1" }, openapi: "3.1.0", paths: {} }
 
 const filesOf = (options?: JavaSdkOptions): Files => generateJavaSdk(ZERO, options).files
 
@@ -39,12 +39,12 @@ const block = (files: Files, name: string): string[] =>
 		.filter((line) => line !== "") ?? []
 
 describe("generateJavaSdk: the defaults (D4)", () => {
-	it("defaults to group ai.anyrow, artifact anyrow, version 0.1.0, the package ai.anyrow and the client AnyrowClient", () => {
+	it("defaults to group com.example, artifact sdk, version 0.1.0, the package com.example and the client ExampleClient", () => {
 		expect(summary(filesOf())).toEqual({
-			artifact: "anyrow",
-			classes: ["AnyrowClient", "Transport"],
-			group: "ai.anyrow",
-			sources: ["ai/anyrow/AnyrowClient.java", "ai/anyrow/Transport.java"],
+			artifact: "sdk",
+			classes: ["ExampleClient", "Transport"],
+			group: "com.example",
+			sources: ["com/example/ExampleClient.java", "com/example/Transport.java"],
 			version: "0.1.0",
 		})
 	})
@@ -82,19 +82,19 @@ describe("generateJavaSdk: the options' effects (D4)", () => {
 		const files = filesOf({ clientName: "AcmeClient" })
 		expect({ classes: summary(files).classes, sources: summary(files).sources }).toEqual({
 			classes: ["AcmeClient", "Transport"],
-			sources: ["ai/anyrow/AcmeClient.java", "ai/anyrow/Transport.java"],
+			sources: ["com/example/AcmeClient.java", "com/example/Transport.java"],
 		})
 	})
 })
 
 describe("generateJavaSdk: the options' refusals (D4)", () => {
 	it.each([
-		["groupId", "Ai.anyrow"],
-		["groupId", "ai..anyrow"],
+		["groupId", "Ai.sdk"],
+		["groupId", "ai..sdk"],
 		["groupId", "ai.any row"],
 		["groupId", "1ai"],
-		["artifactId", "Anyrow"],
-		["artifactId", "anyrow-"],
+		["artifactId", "Acme"],
+		["artifactId", "sdk-"],
 		["artifactId", "any row"],
 		["artifactId", "a'b"],
 		["packageName", "class"],
@@ -118,14 +118,14 @@ describe("generateJavaSdk: the options' refusals (D4)", () => {
 	})
 
 	it("refuses as clientName every type the emitted client file imports, so a class never clashes with its import", () => {
-		const client = generateJavaSdk(ZERO).files["src/main/java/ai/anyrow/AnyrowClient.java"] ?? ""
+		const client = generateJavaSdk(ZERO).files["src/main/java/com/example/ExampleClient.java"] ?? ""
 		const imported = [...client.matchAll(/^import [\w.]+\.(\w+);$/gm)].map((match) => match[1] as string)
 		expect(imported.length).toBeGreaterThan(0)
 		for (const name of imported) expect(() => generateJavaSdk(ZERO, { clientName: name })).toThrow(`Invalid clientName`)
 	})
 
 	it.each([
-		["packageName", "ai.anyrow_v2"],
+		["packageName", "com.example_v2"],
 		["clientName", "My_apiClient"],
 		["version", "1.2.3+build.7"],
 	] as const)("takes the %s %j, a legal value the refusals must not cover", (option, value) => {

@@ -1,6 +1,6 @@
 import { honeyPlugin } from "@lovrozagar/honey/plugin"
 
-/* Anyrow's public scheme: an API key in Authorization, its prefix in the description */
+/* Acme's public scheme: an API key in Authorization, its prefix in the description */
 const apiKey = {
 	description: "API key authentication. Format: ApiKey {your_api_key}",
 	in: "header",

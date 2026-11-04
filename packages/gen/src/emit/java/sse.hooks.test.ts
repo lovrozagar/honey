@@ -132,11 +132,11 @@ describe.skipIf(!JAVA)("an SSE open's typed response headers and request hooks",
  */
 const HOOK_FAILS = (url: string) => `package probe;
 
-import ai.anyrow.*;
+import com.example.*;
 
 public class Probe {
   public static void main(String[] args) {
-    AnyrowClient hooked = AnyrowClient.builder().baseUrl("${url}")
+    ExampleClient hooked = ExampleClient.builder().baseUrl("${url}")
         .onResponse(context -> {
           throw new IllegalStateException("bad");
         })
@@ -147,7 +147,7 @@ public class Probe {
     } catch (HookException error) {
       System.out.println(error.getClass().getSimpleName() + ": " + error.getMessage());
     }
-    AnyrowClient plain = AnyrowClient.builder().baseUrl("${url}").build();
+    ExampleClient plain = ExampleClient.builder().baseUrl("${url}").build();
     try (EventStream<Tick> s = plain.ticks().stream(TicksStreamParams.builder().build())) {
       for (SseEvent<Tick> next : s) {
         System.out.println(next.data().n());

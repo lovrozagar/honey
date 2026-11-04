@@ -308,11 +308,11 @@ describe.skipIf(!JAVA)(
 /** The item's `until` in each body the program decodes, read through `decodeBody(Class)` by a compiled consumer. */
 const PROBE = (url: string) => `package probe;
 
-import ai.anyrow.*;
+import com.example.*;
 
 public final class Probe {
   public static void main(String[] args) {
-    AnyrowClient client = AnyrowClient.builder().baseUrl("${url}").build();
+    ExampleClient client = ExampleClient.builder().baseUrl("${url}").build();
     try {
       client.items().get(ItemsGetParams.builder().id("i3").build());
     } catch (ApiException e) {

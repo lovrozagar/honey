@@ -117,7 +117,7 @@ const THING = {
 	required: ["tags", "attrs"],
 	type: "object",
 }
-/* anyrow's request: a nullable one-member anyOf with comb's x- keys beside the inner anyOf and on its member */
+/* a consumer's request: a nullable one-member anyOf with comb's x- keys beside the inner anyOf and on its member */
 const LIST = { items: STRING, minItems: 1, type: "array" }
 const EXTRACTION = {
 	properties: {

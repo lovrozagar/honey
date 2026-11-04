@@ -1,14 +1,14 @@
 /**
  * The MCP handler an app mounts (bit 21 e): its entry (the tool table, `mcpHandler` over the portable runtime and the
  * API's own SDK, each in the companion directory) type-checked strict, whether it is secured and which headers it
- * carries, read from each tool's security; and the written handler serving Anyrow's five operations in process: a file
+ * carries, read from each tool's security; and the written handler serving Acme's five operations in process: a file
  * inline reaches the API intact under `ApiKey <key>`, a stream is collected, and with no credential the call is the
  * endpoint's 401, its challenge the scheme's.
  */
 import { createHash } from "node:crypto"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
-import { anyrow } from "./__fixtures__/anyrow.ts"
+import { acme } from "./__fixtures__/acme.ts"
 import { typeErrors, written } from "./__fixtures__/written.ts"
 import { MOUNTED_FILE_SCHEMA } from "./files.ts"
 import { generateMcpHandler } from "./mounted.ts"
@@ -59,7 +59,7 @@ const stated = (document: Record<string, unknown>) => {
 
 describe("the mounted handler's files (bit 21 e)", { timeout: SPAWN_TIMEOUT }, () => {
 	it("writes the tool table and mcpHandler over the portable runtime and the SDK, strict tsc clean", async () => {
-		const document = anyrow()
+		const document = acme()
 		const { entry, files, skipped } = generateMcpHandler(document)
 		const specs = toolsOf(toIR(document as OpenApiDocument, { deriveOperationIds: true }))
 		const { dir } = await mounted(document)
@@ -124,7 +124,7 @@ describe("the mounted handler's files (bit 21 e), continued (2)", () => {
 
 	it("refuses a directory no import can name and a document with no tool, naming each skipped operation", () => {
 		const refusals = [
-			() => generateMcpHandler(anyrow(), { dir: "../out" }),
+			() => generateMcpHandler(acme(), { dir: "../out" }),
 			() => generateMcpHandler(oneTool(), { name: "Not A Name" }),
 			() => generateMcpHandler({ ...oneTool(), paths: {} }),
 		].map((generate) => {
@@ -135,7 +135,7 @@ describe("the mounted handler's files (bit 21 e), continued (2)", () => {
 				return (error as Error).message
 			}
 		})
-		const document = anyrow() as { paths: Record<string, unknown> }
+		const document = acme() as { paths: Record<string, unknown> }
 		document.paths["/v1/live"] = { get: { operationId: "live", responses: {}, "x-mcp": true, "x-websocket": true } }
 		document.paths["/v1/quiet"] = { get: { operationId: "quiet", responses: {} } }
 		expect([refusals, generateMcpHandler(document).skipped]).toEqual([
@@ -149,8 +149,8 @@ describe("the mounted handler's files (bit 21 e), continued (2)", () => {
 	})
 })
 
-/** Anyrow, in process: each request recorded by its line, credential and parts; extract answers, the stream streams. */
-function anyrowApp() {
+/** Acme, in process: each request recorded by its line, credential and parts; extract answers, the stream streams. */
+function acmeApp() {
 	const received: unknown[] = []
 	const dispatch = async (request: Request) => {
 		const { pathname } = new URL(request.url)
@@ -170,7 +170,7 @@ function anyrowApp() {
 
 /** A 2025-11-25 tools/call of `name` with `args`, `headers` beside a conforming client's. */
 const calling = (name: string, args: object, headers: Record<string, string> = {}) =>
-	new Request("https://anyrow.example/mcp", {
+	new Request("https://acme.example/mcp", {
 		body: JSON.stringify({ id: 1, jsonrpc: "2.0", method: "tools/call", params: { arguments: args, name } }),
 		headers: {
 			accept: "application/json, text/event-stream",
@@ -181,10 +181,10 @@ const calling = (name: string, args: object, headers: Record<string, string> = {
 		method: "POST",
 	})
 
-describe("the mounted handler serving Anyrow in process (bit 21 e)", () => {
+describe("the mounted handler serving Acme in process (bit 21 e)", () => {
 	it("sends an inline file intact and collects a stream, each under the caller's ApiKey; with none, HTTP 401", async () => {
-		const { handler } = await mounted(anyrow())
-		const app = anyrowApp()
+		const { handler } = await mounted(acme())
+		const app = acmeApp()
 		const file = {
 			data: Buffer.from(CSV).toString("base64"),
 			digest: { algorithm: "sha-256", value: createHash("sha256").update(CSV).digest("base64url") },
@@ -238,7 +238,7 @@ const EXTENSION = ["io.modelcontextprotocol", "files"].join("/")
 async function answerOf(handler: Mounted, method: string, params: Record<string, unknown>, mount = {}) {
 	const modern = "_meta" in params
 	const answer = await handler.fetch(
-		new Request("https://anyrow.example/mcp", {
+		new Request("https://acme.example/mcp", {
 			body: JSON.stringify({ id: 1, jsonrpc: "2.0", method, params }),
 			headers: {
 				accept: "application/json, text/event-stream",
@@ -270,7 +270,7 @@ const capabilities = async (handler: Mounted) => [
 
 describe("the mounted handler's files and their advertisement (bit 21 g)", () => {
 	it("shows each file argument as the mounted schema with a URL fetch, the FileInput alone without one", async () => {
-		const { handler } = await mounted(anyrow())
+		const { handler } = await mounted(acme())
 		const fileOf = async (mount: object) => {
 			const { tools } = (await answerOf(handler, "tools/list", {}, mount)) as {
 				tools: { inputSchema: { properties: { file?: unknown } } }[]
@@ -285,7 +285,7 @@ describe("the mounted handler's files and their advertisement (bit 21 g)", () =>
 	})
 
 	it("advertises the extension with its 1 MiB inline cap in both eras when a tool takes a file; else nothing", async () => {
-		const [files, none] = await Promise.all([mounted(anyrow()), mounted(oneTool())])
+		const [files, none] = await Promise.all([mounted(acme()), mounted(oneTool())])
 		const advertised = { extensions: { [EXTENSION]: { maxInlineBytes: 1_048_576 } }, tools: {} }
 		expect([await capabilities(files.handler), await capabilities(none.handler)]).toEqual([
 			[advertised, advertised],

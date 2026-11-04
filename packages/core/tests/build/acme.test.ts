@@ -1,5 +1,5 @@
 /**
- * Anyrow's gateway, in shape (bit 19 h2, §9 item 10 and its conditions, the gateway contract as re-ruled): three
+ * Acme's gateway, in shape (bit 19 h2, §9 item 10 and its conditions, the gateway contract as re-ruled): three
  * services merged by `mergeTree`; a served gateway app with its own routes and errors that loads its own generated
  * tree, stale in one service's leaves as on a new downstream route; and its Vite config's three OpenAPI outputs
  * (internal: every route and scheme; contract: a filterRoutes subset reading `route.meta`, the one scheme its routes
@@ -48,7 +48,7 @@ const FILES = {
 		["/extract/jobs", ["apiKey", "jwt"], "public"],
 		["/extract/admin", "iaKey", "internal"],
 	]),
-	/* anyrow.gateway.app.ts: its own routes and errors, and the catch-all its services' routes delegate to */
+	/* acme.gateway.app.ts: its own routes and errors, and the catch-all its services' routes delegate to */
 	"src/gateway.ts": [
 		'import { defineErrors, honey } from "@lovrozagar/honey"',
 		'export const app = honey().errorFactory(defineErrors({ maintenance: "service_unavailable" }))',
@@ -58,7 +58,7 @@ const FILES = {
 		'app.all("/*").handler((c) => c.res.text("ok", "forwarded"))',
 		"",
 	].join("\n"),
-	/* anyrow.gateway.app.ts:22,87: the served gateway loads its own generated tree */
+	/* acme.gateway.app.ts:22,87: the served gateway loads its own generated tree */
 	"src/gateway.app.ts":
 		'import { routeTree } from "./_gen/routes.gen.ts"\nimport { app as gateway } from "./gateway.ts"\nexport const app = gateway.routeTree(routeTree)\n',
 	"src/growth.ts": service("growth", [
@@ -99,11 +99,11 @@ export default {
 			codegen: {
 				mergeTree: "src/route-tree.ts",
 				openApi: [
-					{ path: "src/_gen/openapi.gen.json", title: "Anyrow API (internal)", version: "1.0.0" },
+					{ path: "src/_gen/openapi.gen.json", title: "Acme API (internal)", version: "1.0.0" },
 					{
 						filterRoutes: (route) => isContractRoute(route.meta),
 						path: "src/_gen/openapi.contract.gen.json",
-						title: "Anyrow API (contract)",
+						title: "Acme API (contract)",
 						version: "1.0.0",
 					},
 					{
@@ -111,7 +111,7 @@ export default {
 						path: "src/_gen/openapi.public.gen.json",
 						sanitize: { stripXExtensions: true },
 						security: ["apiKey"],
-						title: "Anyrow API",
+						title: "Acme API",
 						version: "1.0.0",
 					},
 				],
@@ -142,7 +142,7 @@ const operations = (document: Document) =>
 		.sort(([a], [b]) => (a < b ? -1 : 1))
 const schemes = (document: Document) => Object.keys(document.components?.securitySchemes ?? {})
 
-/** The project with its served gateway's tree seeded, stale in saas's leaves alone (Anyrow's state on a new route). */
+/** The project with its served gateway's tree seeded, stale in saas's leaves alone (Acme's state on a new route). */
 async function seeded(): Promise<Project> {
 	const made = project(FILES)
 	projects.push(made)
@@ -159,7 +159,7 @@ async function seeded(): Promise<Project> {
 	return made
 }
 
-describe("an Anyrow-shaped gateway (bit 19 h2)", () => {
+describe("an Acme-shaped gateway (bit 19 h2)", () => {
 	it("writes its tree and three documents from the served gateway, each with only its own routes, schemes and sanitizing", async () => {
 		const made = await seeded()
 		let err = ""
@@ -208,9 +208,9 @@ describe("an Anyrow-shaped gateway (bit 19 h2)", () => {
 			["apiKey"],
 		])
 		expect([internal, contract, published].map((document) => document.info.title)).toEqual([
-			"Anyrow API (internal)",
-			"Anyrow API (contract)",
-			"Anyrow API",
+			"Acme API (internal)",
+			"Acme API (contract)",
+			"Acme API",
 		])
 	}, 60_000)
 

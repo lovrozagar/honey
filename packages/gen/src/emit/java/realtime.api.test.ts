@@ -23,7 +23,7 @@ const LIVE = 'c.feed().live(FeedLiveParams.builder().channel("c")'
 const WRONG = `ResumableConnection<JsonNode> wrong = ${LIVE}.build());`
 const CLAIMED = 'c.feed().resume(FeedResumeParams.builder().reconnectToken2("x").build());'
 const TYPES = [
-	"AnyrowClient c = client();",
+	"ExampleClient c = client();",
 	`ResumableConnection<Payload> x = ${LIVE}.build());`,
 	'ResumableConnection<JsonNode> r = c.feed().resume(FeedResumeParams.builder().protocols2("p").lastEventId("5").reconnectToken("rt").build());',
 	WRONG,
@@ -44,7 +44,7 @@ rc.close();
 note(rc.state());`
 		const { hops, out, stderr } = await consumed([refused, sse([ev(1)], "hold")], body)
 		expect({ hops: hops.length, out: out?.main }, stderr).toEqual({ hops: 2, out: ["CONNECTED", "DISCONNECTED"] })
-		const run = drivenRealtime().run("ai.anyrow.Probe", consumer("http://127.0.0.1:1", TYPES.join("\n")))
+		const run = drivenRealtime().run("com.example.Probe", consumer("http://127.0.0.1:1", TYPES.join("\n")))
 		const errors = run.diagnostics.filter((line) => / error: /.test(line)).map((line) => line.replace(/^.*error: /, ""))
 		expect(errors).toEqual([
 			expect.stringMatching(
@@ -260,7 +260,7 @@ describe("the emitted realtime surface: the stream fields reserved, a clashing d
 	/* new: C# realtime.test.ts:493 */
 	it("emits the methods and fields, the javadoc on each overload, and claims max_reconnect_attempts and reconnect_delay as …2", () => {
 		const files = generateJavaSdk(FIXTURES.realtime.document()).files
-		const lines = (name: string) => (files[`src/main/java/ai/anyrow/${name}`] ?? "").split("\n")
+		const lines = (name: string) => (files[`src/main/java/com/example/${name}`] ?? "").split("\n")
 		const missing = Object.entries(EMITTED).flatMap(([name, want]) => want.filter((l) => !lines(name).includes(l)))
 		const prose = (name: string) =>
 			lines(name)

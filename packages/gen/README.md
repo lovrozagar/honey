@@ -145,8 +145,8 @@ One table, since a flag that is not written down is a flag nobody finds:
 | `--csharp-repository`      | csharp | the https URL of its git repository                                               |
 | `--csharp-copyright`       | csharp | the copyright notice nuget.org shows                                              |
 | `--csharp-tags`            | csharp | its NuGet tags, comma separated                                                   |
-| `--java-artifact-id`       | java   | the Maven artifact id                                                             |
-| `--java-group-id`          | java   | the Maven group id                                                                |
+| `--java-artifact-id`       | java   | the Maven artifact id; `sdk` by default                                           |
+| `--java-group-id`          | java   | the Maven group id; `com.example` by default, yours to publish                    |
 | `--java-package-name`      | java   | the Java package name                                                             |
 | `--java-client-name`       | java   | the client class's name                                                           |
 | `--java-version`           | java   | the publication's version                                                         |
@@ -496,7 +496,7 @@ status and key, never as a successful result. Read-only operations are annotated
 default, and Streamable HTTP with `--http`.
 
 ```sh
-honey-clients generate --spec openapi.json --target mcp --out ./mcp --mcp-name anyrow
+honey-clients generate --spec openapi.json --target mcp --out ./mcp --mcp-name acme
 ```
 
 Its package publishes to npm as written. `--mcp-package-name @acme/shop-mcp` names it (its bin keeps the server's

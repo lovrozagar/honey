@@ -21,7 +21,7 @@ async function call(app: Fetcher, path: string, init?: RequestInit): Promise<[nu
 	return [res.status, await res.text()]
 }
 
-/** anyrow's gateway shape: its own routes and a root /:slug beside the catch-all its downstream routes delegate to. */
+/** a consumer's gateway shape: its own routes and a root /:slug beside the catch-all its downstream routes delegate to. */
 function own(tree?: RouteTree) {
 	const app = tree === undefined ? honey<{}>() : honey<{}>().routeTree(tree)
 	app.get("/health").handler((c) => c.res.text("ok", "up"))

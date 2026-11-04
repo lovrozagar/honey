@@ -7,7 +7,7 @@ import { expect } from "vitest"
 import type { DrivenJavaSdk } from "./driven.ts"
 
 /** The `ws` SDK's package (the emitter's default), where the probes sit beside the package-private socket. */
-const PACKAGE = "ai.anyrow"
+const PACKAGE = "com.example"
 
 /**
  * The strict fake: every frame it is asked to send is recorded; a send's future completes at once unless `hold` is set,

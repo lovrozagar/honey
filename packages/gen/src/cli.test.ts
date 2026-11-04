@@ -300,7 +300,7 @@ describe("the generate report (bit 18 phase d)", () => {
 const WRITTEN = {
 	csharp: "/Client.cs",
 	go: "/client.go",
-	java: "/AnyrowClient.java",
+	java: "/ExampleClient.java",
 	python: "/src/honey_sdk/client.py",
 	rust: "/src/client.rs",
 	ts: ".types.gen.ts",

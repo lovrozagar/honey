@@ -14,7 +14,7 @@ function makeReq(url = "http://localhost/test", headers?: Record<string, string>
 	return new Request(url, { headers })
 }
 
-/* Anyrow's saas derived `Object.assign(Object.create(ctx), { shardDb })`: on 1.0.0-rc.4 every lazy getter threw
+/* A consumer's service derived `Object.assign(Object.create(ctx), { shardDb })`: on 1.0.0-rc.4 every lazy getter threw
    "Cannot read private member", since a private field lives only on the instance the constructor built. */
 function derive(ctx: HoneyContext<{ DB: string }>) {
 	return Object.assign(Object.create(ctx) as typeof ctx, { shardDb: "s1" })

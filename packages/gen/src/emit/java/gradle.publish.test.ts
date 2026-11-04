@@ -23,7 +23,7 @@ const JAVA = withJava()
 const SLOW = { timeout: 600_000 }
 
 /** Spec text a build must never read as Groovy: both quotes, a `$`, a backslash, a newline. */
-const HOSTILE = { description: 'It\'s "one" line\nand ${System.exit(1)} \\u0041 another', title: "Anyrow's API" }
+const HOSTILE = { description: 'It\'s "one" line\nand ${System.exit(1)} \\u0041 another', title: "Acme's API" }
 const DOCUMENT = { info: { ...HOSTILE, version: "1" }, openapi: "3.1.0", paths: {} }
 
 const build = (options: JavaSdkOptions = {}) => generateJavaSdk(DOCUMENT, options).files["build.gradle"] ?? ""
@@ -58,7 +58,7 @@ describe("build.gradle: the publication (item 6)", () => {
 	/* new: spec text is a single-quoted Groovy string: nothing in it interpolates or ends it */
 	it("writes the POM's name and description from info as single-quoted Groovy strings, escaped", () => {
 		expect(build()).toContain(
-			"name = 'Anyrow\\'s API'\n                description = 'It\\'s \\\"one\\\" line\\nand ${System.exit(1)} \\\\u0041 another'",
+			"name = 'Acme\\'s API'\n                description = 'It\\'s \\\"one\\\" line\\nand ${System.exit(1)} \\\\u0041 another'",
 		)
 	})
 
@@ -66,7 +66,7 @@ describe("build.gradle: the publication (item 6)", () => {
 	it("names and describes the POM by the artifact id when info has no title or description", () => {
 		const untitled = { info: { version: "1" }, openapi: "3.1.0", paths: {} }
 		expect(generateJavaSdk(untitled).files["build.gradle"]).toContain(
-			"name = 'anyrow'\n                description = 'anyrow'",
+			"name = 'sdk'\n                description = 'sdk'",
 		)
 	})
 })
@@ -133,7 +133,7 @@ describe.skipIf(!JAVA)("the publication, built offline on Gradle's JDK 21 (item 
 		const sdk = compiledJavaSdk(generateJavaSdk(DOCUMENT, METADATA).files)
 		const repo = join(dirname(sdk.out), "m2")
 		const ran = runGradle(["-q", `-Dmaven.repo.local=${repo}`, "publishToMavenLocal"], { cwd: dirname(sdk.out) })
-		const base = join(repo, "ai/anyrow/anyrow/0.1.0/anyrow-0.1.0")
+		const base = join(repo, "com/example/sdk/0.1.0/sdk-0.1.0")
 		const pom = existsSync(`${base}.pom`) ? readFileSync(`${base}.pom`, "utf8") : ""
 		const tag = (name: string) => new RegExp(`<${name}>([\\s\\S]*?)</${name}>`).exec(pom)?.[1]
 		expect(
@@ -149,8 +149,8 @@ describe.skipIf(!JAVA)("the publication, built offline on Gradle's JDK 21 (item 
 			ran.stderr,
 		).toEqual({
 			artifacts: [true, true, true, true],
-			coordinates: ["ai.anyrow", "anyrow", "0.1.0"],
-			info: ["Anyrow's API", 'It\'s "one" line\nand ${System.exit(1)} \\u0041 another'],
+			coordinates: ["com.example", "sdk", "0.1.0"],
+			info: ["Acme's API", 'It\'s "one" line\nand ${System.exit(1)} \\u0041 another'],
 			metadata: [
 				"https://shop.example.com",
 				"<license><name>Apache-2.0</name><url>https://spdx.org/licenses/Apache-2.0.html</url></license>",
@@ -168,7 +168,7 @@ describe.skipIf(!JAVA)("the publication, built offline on Gradle's JDK 21 (item 
 		const project = mkdtempSync(join(dirname(dirname(sdk.out)), "broken-link-"))
 		cpSync(dirname(sdk.out), project, { recursive: true })
 		/* the public client: javadoc documents, and so lints, public types alone */
-		const client = join(project, "src/main/java/ai/anyrow/AnyrowClient.java")
+		const client = join(project, "src/main/java/com/example/ExampleClient.java")
 		writeFileSync(client, readFileSync(client, "utf8").replace(/\/\*\*/, "/** See {@link Nowhere}."))
 		const ran = runGradle(["-q", "javadocJar"], { cwd: project })
 		rmSync(project, { force: true, recursive: true })

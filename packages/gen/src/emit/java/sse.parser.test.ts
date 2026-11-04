@@ -23,7 +23,7 @@ function sdk(): DrivenJavaSdk {
 }
 
 /** The `sse` SDK's package (the emitter's default), where the probes sit beside the package-private parser. */
-const PACKAGE = "ai.anyrow"
+const PACKAGE = "com.example"
 
 /**
  * Beside the probe, in the SDK's package: an InputStream handing out the given chunks one per read (a chunk larger than

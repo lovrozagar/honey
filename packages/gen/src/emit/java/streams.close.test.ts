@@ -41,7 +41,7 @@ function sdk(): DrivenJavaSdk {
  */
 const program = (url: string, body: string) => `package probe;
 
-import ai.anyrow.*;
+import com.example.*;
 import java.lang.ref.Reference;
 import java.util.Iterator;
 import java.util.concurrent.*;
@@ -68,7 +68,7 @@ public class Probe {
   }
 
   public static void main(String[] args) throws Exception {
-    AnyrowClient c = AnyrowClient.builder().baseUrl(BASE).build();
+    ExampleClient c = ExampleClient.builder().baseUrl(BASE).build();
 ${body
 	.split("\n")
 	.map((line) => `    ${line}`)
@@ -163,7 +163,7 @@ ${NEXT}
 Reference.reachabilityFence(s);`
 
 /** R5: an onResponse hook that throws on the 2xx open, so no stream is ever returned; the next open on a plain client. */
-const HOOKED = `AnyrowClient hooked = AnyrowClient.builder().baseUrl(BASE)
+const HOOKED = `ExampleClient hooked = ExampleClient.builder().baseUrl(BASE)
     .onResponse(context -> {
       throw new IllegalStateException("bad");
     })

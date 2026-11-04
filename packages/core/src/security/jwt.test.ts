@@ -177,7 +177,7 @@ describe("verifyJwt issuer and audience", () => {
 		const several = ["https://facebook.com", "https://www.facebook.com"]
 		expect((await verifyHs256(token, { issuer: several })).success).toBe(true)
 		expect(await verifyHs256(token, { issuer: "https://evil.test" })).toEqual(failure("invalid_claims"))
-		expect(await verifyHs256(await hs256({ exp: FUTURE }), { issuer: "anyrow" })).toEqual(failure("invalid_claims"))
+		expect(await verifyHs256(await hs256({ exp: FUTURE }), { issuer: "acme" })).toEqual(failure("invalid_claims"))
 	})
 
 	it("matches the audience in a string or an array", async () => {

@@ -16,7 +16,7 @@ import { sse, ws } from "./__fixtures__/documents-streams.ts"
 type Paths = { paths: Record<string, unknown> }
 /* one document with an SSE and a WebSocket operation, so every target emits both runtimes */
 const DOCUMENT = { ...sse(), paths: { ...(sse() as Paths).paths, ...(ws() as Paths).paths } }
-const JAVA = "src/main/java/ai/anyrow"
+const JAVA = "src/main/java/com/example"
 const PYTHON = "src/honey_sdk/_honey"
 
 const FILES = {

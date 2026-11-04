@@ -76,7 +76,7 @@ async function consume(replies: readonly Reply[], source: (url: string) => strin
 /** A `probe.Probe` program running `statements` in its main, with the imports every consumer here needs. */
 const program = (statements: readonly string[]) => `package probe;
 
-import ai.anyrow.*;
+import com.example.*;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -295,10 +295,10 @@ describe.skipIf(!JAVA)("typed response headers: <Op>Headers fills the declared h
 /* pin: the multipart body is built into memory and resent on a 401 (Body.multipart, Flight.answer) */
 const MULTIPART_STATEMENTS = (url: string) => [
 	'FilePart file = new FilePart("a.txt", "file-bytes".getBytes(StandardCharsets.UTF_8), "text/plain");',
-	`AnyrowClient client = AnyrowClient.builder().baseUrl("${url}").bearerToken("old").onAuthExpired(() -> "fresh").build();`,
+	`ExampleClient client = ExampleClient.builder().baseUrl("${url}").bearerToken("old").onAuthExpired(() -> "fresh").build();`,
 	'client.files().upload(new FilesUploadParams(new FilesUploadBody(file, "multipart-value", List.of("a", "b"))));',
 	'System.out.println("uploaded");',
-	`AnyrowClient bare = AnyrowClient.builder().baseUrl("${url}").build();`,
+	`ExampleClient bare = ExampleClient.builder().baseUrl("${url}").build();`,
 	"bare.files().batch(new FilesBatchParams(new FilesBatchBody(3L,",
 	'  List.of(new FilePart("a.txt", "A".getBytes(StandardCharsets.UTF_8), "text/plain"),',
 	'          new FilePart("b.bin", "B".getBytes(StandardCharsets.UTF_8), "application/octet-stream")),',
