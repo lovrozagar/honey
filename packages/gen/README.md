@@ -501,7 +501,11 @@ honey-clients generate --spec openapi.json --target mcp --out ./mcp --mcp-name a
 
 Its package publishes to npm as written. `--mcp-package-name @acme/shop-mcp` names it (its bin keeps the server's
 name), the metadata block fills its description, license, repository and the rest as it does the TS SDK's, and
-`--mcp-mcp-name io.github.acme/shop` writes the `mcpName` the MCP registry checks the npm package by.
+`--mcp-mcp-name io.github.acme/shop` writes the `mcpName` the MCP registry checks the npm package by. With it the
+server also gets the `server.json` that `mcp-publisher publish` reads from the package's root, on the registry's
+2025-12-11 schema: that name, the description (100 characters at most, else refused), the version npm publishes, the
+npm package over stdio with every environment variable the server reads, the home page as `websiteUrl`, and a GitHub
+or GitLab repository. Where a hosted server runs is yours, so it lists no `remotes`.
 
 ```json
 {

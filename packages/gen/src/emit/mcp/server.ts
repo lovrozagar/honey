@@ -4,7 +4,7 @@
  * the same code with its types erased under `dist/`, ES modules, which the package's bin runs: node refuses to strip
  * types under an installed package's folder, so an installed server must ship JavaScript. The erasure is oxc's
  * transform, the one the TS package compiles with (plan 39 8.3), deterministic whichever runtime generates. No
- * dependency, no build step.
+ * dependency, no build step. With an `mcpName`, the MCP registry's server.json beside package.json (registry.ts).
  */
 import { type OpenApiDocument, toIR } from "../../ir/build.ts"
 import type { IR } from "../../ir/model.ts"
@@ -14,6 +14,7 @@ import { tsString } from "../shared/escape.ts"
 import { compiled, npmFields } from "../ts/package.ts"
 import { generateSdk } from "../ts/sdk.ts"
 import { literal } from "./literal.ts"
+import { serverJson } from "./registry.ts"
 import { mcpRuntimeSource } from "./runtime.ts"
 import { toolsOf, type ToolSpec, untoolable } from "./tools.ts"
 
@@ -217,7 +218,7 @@ const packageJson = (name: string, version: string, published: Published, metada
 	`${JSON.stringify(
 		{
 			name: published.packageName,
-			version: SEMVER.test(version) ? version : "0.0.0",
+			version,
 			...(published.mcpName === undefined ? {} : { mcpName: published.mcpName }),
 			description: `The ${name} API as MCP tools`,
 			...npmFields(metadata),
@@ -235,6 +236,25 @@ export function erased(path: string, source: string): string {
 	return `${path === "src/server.ts" ? "#!/usr/bin/env node\n" : ""}${compiled(path, source, false).code.trimEnd()}\n`
 }
 
+/**
+ * What a publish reads, `app` at the version npm takes: package.json, server.json when it has an `mcpName`, and the
+ * package on each registry.
+ */
+function released(app: App, published: Published, ir: IR, metadata: Metadata) {
+	const { mcpName, packageName } = published
+	const listing = mcpName === undefined ? undefined : { ...app, mcpName, packageName }
+	return {
+		files: {
+			"package.json": packageJson(app.name, app.version, published, metadata),
+			...(listing === undefined ? {} : { "server.json": serverJson(listing, ir, metadata) }),
+		},
+		packages: [
+			packageOn("npm", packageName, app.version),
+			...(mcpName === undefined ? [] : [packageOn("mcp-registry", mcpName, app.version)]),
+		],
+	}
+}
+
 /** The MCP server for `document`, as its package's files, its package.json carrying `metadata`. */
 export function generateMcpServer(
 	document: Record<string, unknown>,
@@ -248,6 +268,8 @@ export function generateMcpServer(
 		packageName: checked("packageName", options.packageName ?? `${name}-mcp`, NPM_NAME) as string,
 	}
 	const version = options.version ?? ir.info.version ?? "0.0.0"
+	/* what npm and the registries take: the version when it is semver, else 0.0.0 */
+	const publishable = SEMVER.test(version) ? version : "0.0.0"
 	const specs = toolsOf(ir)
 	if (specs.length === 0)
 		throw new Error(
@@ -255,16 +277,15 @@ export function generateMcpServer(
 				? "No operation marked x-mcp is one a tool can call yet: nothing to serve"
 				: "No operation is marked x-mcp: nothing to serve",
 		)
+	const files = specs.some((spec) => spec.parts?.some(([, , kind]) => kind !== "text"))
 	const sdk = generateSdk(document, { name: "Api", stem: "api" })
 	const source: Record<string, string> = {
 		"src/mcp.runtime.ts": mcpRuntimeSource(),
-		"src/server.ts": entrySource(
-			{ envPrefix, files: specs.some((spec) => spec.parts?.some(([, , kind]) => kind !== "text")), name, version },
-			ir,
-		),
+		"src/server.ts": entrySource({ envPrefix, files, name, version }, ir),
 		"src/tools.gen.ts": toolsSource(specs),
 		...Object.fromEntries(Object.entries(sdk.files).map(([file, text]) => [`src/sdk/${file}`, text])),
 	}
+	const release = released({ envPrefix, files, name, version: publishable }, published, ir, metadata)
 	const compiled = Object.fromEntries(
 		Object.entries(source).map(([path, text]) => [
 			path.replace(/^src\//, "dist/").replace(/\.ts$/, ".js"),
@@ -272,15 +293,8 @@ export function generateMcpServer(
 		]),
 	)
 	return {
-		files: {
-			"package.json": packageJson(name, version, published, metadata),
-			...source,
-			...compiled,
-		},
-		packages: [
-			packageOn("npm", published.packageName, version),
-			...(published.mcpName === undefined ? [] : [packageOn("mcp-registry", published.mcpName, version)]),
-		],
+		files: { ...release.files, ...source, ...compiled },
+		packages: release.packages,
 		skipped: ir.operations.flatMap((op) => {
 			const what = op.extensions.mcp === true ? untoolable(op) : undefined
 			return what === undefined ? [] : [`${op.id} (${what})`]

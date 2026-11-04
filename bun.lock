@@ -252,6 +252,8 @@
         "@total-typescript/ts-reset": "catalog:",
         "@types/node": "catalog:",
         "@vitest/coverage-v8": "4.1.10",
+        "ajv": "8.20.0",
+        "ajv-formats": "3.0.1",
         "oxfmt": "0.63.0",
         "standardwebhooks": "1.1.1",
         "ts-morph": "catalog:",
